@@ -23,6 +23,7 @@
  *
  * ## Methods
  * * [add](#add)
+ * * [remove](#remove)
  * * [get](#get)
  * * [getAll](#getall)
  * * [extend](#extend)
@@ -36,42 +37,77 @@
  */
 
 import { isFunction, includes } from 'underscore';
-import CommandAbstract, { Command, CommandOptions, CommandObject, CommandFunction } from './view/CommandAbstract';
+import CommandAbstract, { Command, CommandConstructor, CommandOptions, CommandStored } from './view/CommandAbstract';
+import CanvasClear from './view/CanvasClear';
+import CanvasMove from './view/CanvasMove';
+import ComponentDelete from './view/ComponentDelete';
+import ComponentDrag from './view/ComponentDrag';
+import ComponentEnter from './view/ComponentEnter';
+import ComponentExit from './view/ComponentExit';
+import ComponentNext from './view/ComponentNext';
+import ComponentPrev from './view/ComponentPrev';
+import ComponentStyleClear from './view/ComponentStyleClear';
+import CopyComponent from './view/CopyComponent';
+import ExportTemplate from './view/ExportTemplate';
+import CommandFullscreen from './view/Fullscreen';
+import MoveComponent from './view/MoveComponent';
+import OpenAssets from './view/OpenAssets';
+import OpenBlocks from './view/OpenBlocks';
+import OpenLayers from './view/OpenLayers';
+import OpenStyleManager from './view/OpenStyleManager';
+import OpenTraitManager from './view/OpenTraitManager';
+import PasteComponent from './view/PasteComponent';
+import Preview from './view/Preview';
+import Resize from './view/Resize';
+import SelectComponent from './view/SelectComponent';
+import ShowOffset from './view/ShowOffset';
+import SwitchVisibility from './view/SwitchVisibility';
 import defConfig, { CommandsConfig } from './config/config';
 import { Module } from '../abstract';
 import Component from '../dom_components/model/Component';
 import { ComponentsEvents } from '../dom_components/types';
 import type Editor from '../editor/model/Editor';
 import type { ObjectAny } from '../common';
+import type {
+  CommandDefinitionById,
+  CommandObjectById,
+  CommandRunArgs,
+  CommandRunResult,
+  CommandStopArgs,
+  CommandStopResult,
+} from './registry';
 import CommandsEvents from './types';
 export type { CommandEvent } from './types';
 
+const isCommandConstructor = (command: Command): command is CommandConstructor =>
+  isFunction(command) && (command === CommandAbstract || command.prototype instanceof CommandAbstract);
+
 const commandsDef = [
-  ['preview', 'Preview', 'preview'],
-  ['resize', 'Resize', 'resize'],
-  ['fullscreen', 'Fullscreen', 'fullscreen'],
-  ['copy', 'CopyComponent'],
-  ['paste', 'PasteComponent'],
-  ['canvas-move', 'CanvasMove'],
-  ['canvas-clear', 'CanvasClear'],
-  ['open-code', 'ExportTemplate', 'export-template'],
-  ['open-layers', 'OpenLayers', 'open-layers'],
-  ['open-styles', 'OpenStyleManager', 'open-sm'],
-  ['open-traits', 'OpenTraitManager', 'open-tm'],
-  ['open-blocks', 'OpenBlocks', 'open-blocks'],
-  ['open-assets', 'OpenAssets', 'open-assets'],
-  ['component-select', 'SelectComponent', 'select-comp'],
-  ['component-outline', 'SwitchVisibility', 'sw-visibility'],
-  ['component-offset', 'ShowOffset', 'show-offset'],
-  ['component-move', 'MoveComponent', 'move-comp'],
-  ['component-next', 'ComponentNext'],
-  ['component-prev', 'ComponentPrev'],
-  ['component-enter', 'ComponentEnter'],
-  ['component-exit', 'ComponentExit', 'select-parent'],
-  ['component-delete', 'ComponentDelete'],
-  ['component-style-clear', 'ComponentStyleClear'],
-  ['component-drag', 'ComponentDrag'],
-];
+  ['preview', Preview, 'preview'],
+  ['resize', Resize, 'resize'],
+  ['fullscreen', CommandFullscreen, 'fullscreen'],
+  ['copy', CopyComponent],
+  ['paste', PasteComponent],
+  ['canvas-move', CanvasMove],
+  ['canvas-clear', CanvasClear],
+  ['open-code', ExportTemplate, 'export-template'],
+  ['open-layers', OpenLayers, 'open-layers'],
+  ['open-styles', OpenStyleManager, 'open-sm'],
+  ['open-traits', OpenTraitManager, 'open-tm'],
+  ['open-blocks', OpenBlocks, 'open-blocks'],
+  ['open-assets', OpenAssets, 'open-assets'],
+  ['component-select', SelectComponent, 'select-comp'],
+  ['component-outline', SwitchVisibility, 'sw-visibility'],
+  ['component-offset', ShowOffset, 'show-offset'],
+  ['component-move', MoveComponent, 'move-comp'],
+  ['component-next', ComponentNext],
+  ['component-prev', ComponentPrev],
+  ['component-enter', ComponentEnter],
+  ['component-exit', ComponentExit, 'select-parent'],
+  ['component-delete', ComponentDelete],
+  ['component-style-clear', ComponentStyleClear],
+  ['component-drag', ComponentDrag],
+] as const;
 
 const defComOptions = { preserveSelected: 1 };
 
@@ -99,7 +135,7 @@ export const getOnComponentDragEnd =
 export default class CommandsModule extends Module<CommandsConfig & { pStylePrefix?: string }> {
   CommandAbstract = CommandAbstract;
   defaultCommands: Record<string, Command> = {};
-  commands: Record<string, CommandObject> = {};
+  commands: Record<string, CommandStored> = {};
   active: Record<string, any> = {};
   events = CommandsEvents;
 
@@ -119,7 +155,7 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
     // Load commands passed via configuration
     Object.keys(config.defaults!).forEach((k) => {
       const obj = config.defaults![k];
-      if (obj.id) this.add(obj.id, obj);
+      if (obj.id) this.add(obj.id, obj as CommandDefinitionById<typeof obj.id>);
     });
 
     defaultCommands['tlb-delete'] = {
@@ -180,7 +216,7 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
             //sel.set('status', 'freezed');
           }
 
-          const cmdMove = ed.Commands.get('move-comp')!;
+          const cmdMove = ed.Commands.get('move-comp') as any;
           cmdMove.onStart = onStart;
           cmdMove.onDrag = onDrag;
           cmdMove.onEndMoveFromModel = onEnd;
@@ -197,7 +233,7 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
     defaultCommands['core:redo'] = (e) => e.UndoManager.redo();
     commandsDef.forEach((item) => {
       const oldCmd = item[2];
-      const cmd = require(`./view/${item[1]}`).default;
+      const cmd = item[1];
       const cmdName = `core:${item[0]}`;
       defaultCommands[cmdName] = cmd;
       if (oldCmd) {
@@ -237,8 +273,19 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    * // As a function
    * commands.add('myCommand2', editor => { ... });
    * */
-  add<T extends ObjectAny = {}>(id: string, command: CommandFunction | CommandObject<any, T>) {
-    let result: CommandObject = isFunction(command) ? { run: command } : command;
+  add<const TId extends string, T extends ObjectAny = {}>(id: TId, command: CommandDefinitionById<TId, T>) {
+    if (isCommandConstructor(command)) {
+      const { prototype } = command;
+      const noStop = prototype.stop === CommandAbstract.prototype.stop;
+
+      prototype.noStop = noStop;
+      prototype.id = id;
+      this.commands[id] = command;
+
+      return this;
+    }
+
+    let result = (isFunction(command) ? { run: command } : command) as CommandObjectById<string, T>;
 
     if (!result.stop) {
       result.noStop = true;
@@ -247,7 +294,23 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
     delete result.initialize;
 
     result.id = id;
-    this.commands[id] = CommandAbstract.extend(result);
+    this.commands[id] = CommandAbstract.extend(result) as CommandConstructor;
+
+    return this;
+  }
+
+  /**
+   * Remove command from the collection
+   * @param {string} id Command's ID
+   * @return {this}
+   */
+  remove(id: string) {
+    if (this.isActive(id)) {
+      this.stopCommand(this.get(id), { force: true });
+    }
+
+    delete this.active[id];
+    delete this.commands[id];
 
     return this;
   }
@@ -260,8 +323,8 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    * var myCommand = commands.get('myCommand');
    * myCommand.run();
    * */
-  get(id: string): CommandObject | undefined {
-    let command: any = this.commands[id];
+  get(id: string): CommandAbstract | undefined {
+    let command = this.commands[id];
 
     if (isFunction(command)) {
       command = new command(this.config);
@@ -285,7 +348,10 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    *  }
    * });
    * */
-  extend(id: string, cmd: CommandObject = {}) {
+  extend<const TId extends string>(
+    id: TId,
+    cmd: CommandObjectById<TId, ObjectAny> = {} as CommandObjectById<TId, ObjectAny>,
+  ) {
     const command = this.get(id);
 
     if (command) {
@@ -296,7 +362,8 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
       this.add(id, cmdObj);
       // Extend also old name commands if exist
       const oldCmd = commandsDef.filter((cmd) => `core:${cmd[0]}` === id && cmd[2])[0];
-      oldCmd && this.add(oldCmd[2], cmdObj);
+      const oldCmdId = oldCmd?.[2];
+      oldCmdId && this.add(oldCmdId, cmdObj);
     }
 
     return this;
@@ -327,8 +394,8 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    * @example
    * commands.run('myCommand', { someOption: 1 });
    */
-  run(id: string, options: CommandOptions = {}) {
-    return this.runCommand(this.get(id), options);
+  run<const TId extends string>(id: TId, ...args: CommandRunArgs<TId>): CommandRunResult<TId> {
+    return this.runCommand(this.get(id), args[0] as CommandOptions) as CommandRunResult<TId>;
   }
 
   /**
@@ -339,8 +406,8 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    * @example
    * commands.stop('myCommand', { someOption: 1 });
    */
-  stop(id: string, options: CommandOptions = {}) {
-    return this.stopCommand(this.get(id), options);
+  stop<const TId extends string>(id: TId, ...args: CommandStopArgs<TId>): CommandStopResult<TId> {
+    return this.stopCommand(this.get(id), args[0] as CommandOptions) as CommandStopResult<TId>;
   }
 
   /**
@@ -380,7 +447,7 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    * @return {*} Result of the command
    * @private
    */
-  runCommand(command?: CommandObject, options: CommandOptions = {}) {
+  runCommand(command?: CommandAbstract, options: CommandOptions = {}) {
     let result;
 
     if (command?.run) {
@@ -405,7 +472,7 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    * @return {*} Result of the command
    * @private
    */
-  stopCommand(command?: CommandObject, options: CommandOptions = {}) {
+  stopCommand(command?: CommandAbstract, options: CommandOptions = {}) {
     let result;
 
     if (command?.run) {
@@ -429,9 +496,9 @@ export default class CommandsModule extends Module<CommandsConfig & { pStylePref
    * @return {Command}
    * @private
    * */
-  create(command: CommandObject) {
+  create(command: CommandObjectById<string, ObjectAny>) {
     if (!command.stop) command.noStop = true;
-    const cmd = CommandAbstract.extend(command);
+    const cmd = CommandAbstract.extend(command) as CommandConstructor;
     return new cmd(this.config);
   }
 
