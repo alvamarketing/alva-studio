@@ -1,11 +1,17 @@
 import { isString } from 'underscore';
 import { CssRuleJSON } from '../../css_composer/model/CssRule';
 import EditorModel from '../../editor/model/Editor';
-import { ParsedCssRule, ParserConfig } from '../config/config';
+import { ParserConfig } from '../config/config';
+import { ParsedCssRule } from '../types';
 import BrowserCssParser, { parseSelector, createNode } from './BrowserParserCss';
 import { ParserEvents } from '../types';
 
-const ParserCss = (em?: EditorModel, config: ParserConfig = {}) => ({
+export default class ParserCss {
+  constructor(
+    private em?: EditorModel,
+    private config: ParserConfig = {},
+  ) {}
+
   /**
    * Parse CSS string to a desired model object
    * @param  {String} str CSS string
@@ -13,11 +19,11 @@ const ParserCss = (em?: EditorModel, config: ParserConfig = {}) => ({
    */
   parse(str: string, opts: { throwOnError?: boolean } = {}) {
     let output: CssRuleJSON[] = [];
-    const { parserCss } = config;
-    const editor = em?.Editor;
+    const { parserCss } = this.config;
+    const editor = this.em?.Editor;
     let nodes: CssRuleJSON[] | ParsedCssRule[] = [];
     let error: unknown;
-    const Parser = em?.Parser;
+    const Parser = this.em?.Parser;
     const inputOptions = { input: str };
     Parser?.__emitEvent(ParserEvents.cssBefore, inputOptions);
     const { input } = inputOptions;
@@ -33,7 +39,7 @@ const ParserCss = (em?: EditorModel, config: ParserConfig = {}) => ({
     Parser?.__emitEvent(ParserEvents.css, { input, output, nodes, error });
 
     return output;
-  },
+  }
 
   /**
    * Check the returned node from a custom parser and transforms it to
@@ -69,7 +75,5 @@ const ParserCss = (em?: EditorModel, config: ParserConfig = {}) => ({
     }
 
     return result;
-  },
-});
-
-export default ParserCss;
+  }
+}

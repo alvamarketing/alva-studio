@@ -5,13 +5,13 @@ import Editor from '../../../../src/editor/model/Editor';
 import { CSS_BG_OBJ, CSS_BG_STR } from './ParserCss';
 
 describe('ParserHtml', () => {
-  let obj: ReturnType<typeof ParserHtml>;
+  let obj: ParserHtml;
   let em: Editor;
 
   beforeEach(() => {
     em = new Editor({});
     const dom = new DomComponents(em);
-    obj = ParserHtml(em, {
+    obj = new ParserHtml(em, {
       textTags: ['br', 'b', 'i', 'u'],
       textTypes: ['text', 'textnode', 'comment'],
       returnArray: true,
@@ -438,7 +438,7 @@ describe('ParserHtml', () => {
         style: { color: 'blue' },
       },
     ];
-    const res = obj.parse(str, ParserCss());
+    const res = obj.parse(str, new ParserCss());
     expect(res.html).toEqual(resHtml);
     expect(res.css).toEqual(resCss);
   });
@@ -458,7 +458,7 @@ describe('ParserHtml', () => {
       <div>a div</div>
     `;
 
-    const css = obj.parse(str, ParserCss()).css || [];
+    const css = obj.parse(str, new ParserCss()).css || [];
     expect(css).toHaveLength(2);
     expect(css[0]).toEqual({
       selectors: [],
@@ -910,7 +910,7 @@ describe('ParserHtml', () => {
         },
       });
 
-      obj = ParserHtml(em, {
+      obj = new ParserHtml(em, {
         textTags: ['br', 'b', 'i', 'u'],
         textTypes: ['text', 'textnode', 'comment'],
         returnArray: true,
@@ -964,7 +964,7 @@ describe('ParserHtml', () => {
         },
       });
 
-      obj = ParserHtml(em, {
+      obj = new ParserHtml(em, {
         returnArray: true,
         optionsHtml: { convertDataGjsAttributesHyphens: true },
       });
@@ -1059,7 +1059,7 @@ describe('ParserHtml', () => {
 
   describe('with keepEmptyTextNodes ON', () => {
     beforeEach(() => {
-      obj = ParserHtml(em, {
+      obj = new ParserHtml(em, {
         returnArray: true,
         optionsHtml: { keepEmptyTextNodes: true },
       });
@@ -1093,6 +1093,220 @@ describe('ParserHtml', () => {
         },
       ];
       expect(obj.parse(str).html).toEqual(result);
+    });
+  });
+
+  describe('with custom code parser', () => {
+    test('parses nodes from parserCode', () => {
+      em.Parser.addParserCode('custom-html', () => [{ nodeType: 1, tagName: 'section' }]);
+
+      expect(obj.parse('<div></div>', null, { parserCode: 'custom-html' }).html).toEqual([{ tagName: 'section' }]);
+    });
+
+    test('prefers isParsedNode even on DOM parser runs', () => {
+      em.Components.addType('parsed-dom-cmp', {
+        isParsedNode: (node) => node.tagName === 'DIV' && { type: 'parsed-dom-cmp', parsed: true },
+        isComponent: () => ({ type: 'legacy-dom-cmp' }),
+      });
+      obj.compTypes = em.Components.componentTypes;
+
+      expect(obj.parse('<div></div>').html).toEqual([
+        {
+          tagName: 'div',
+          type: 'parsed-dom-cmp',
+          parsed: true,
+        },
+      ]);
+    });
+
+    test('uses isParsedNode when available', () => {
+      em.Components.addType('parsed-cmp', {
+        isParsedNode: (node) => node.tagName === 'parsed-node' && { type: 'parsed-cmp', parsed: true },
+        isComponent: () => false,
+      });
+      obj.compTypes = em.Components.componentTypes;
+      em.Parser.addParserCode('custom-html', () => [{ nodeType: 1, tagName: 'parsed-node' }]);
+
+      expect(obj.parse('', null, { parserCode: 'custom-html' }).html).toEqual([
+        {
+          tagName: 'parsed-node',
+          type: 'parsed-cmp',
+          parsed: true,
+        },
+      ]);
+    });
+
+    test('falls back to synthetic element for legacy isComponent', () => {
+      em.Components.addType('legacy-cmp', {
+        isComponent: (el: any) =>
+          el.tagName === 'A'
+            ? {
+                type: 'legacy-cmp',
+                hrefProp: el.getAttribute('href'),
+                hasTextChild: !!el.childNodes.length,
+              }
+            : false,
+      });
+      obj.compTypes = em.Components.componentTypes;
+      em.Parser.addParserCode('custom-html', () => [
+        {
+          nodeType: 1,
+          tagName: 'a',
+          attributes: { href: 'https://grapesjs.com' },
+          childNodes: [{ nodeType: 3, textContent: 'Read more' }],
+        },
+      ]);
+
+      expect(obj.parse('', null, { parserCode: 'custom-html' }).html).toEqual([
+        {
+          tagName: 'a',
+          type: 'legacy-cmp',
+          hrefProp: 'https://grapesjs.com',
+          hasTextChild: true,
+          attributes: { href: 'https://grapesjs.com' },
+          components: {
+            type: 'textnode',
+            content: 'Read more',
+          },
+        },
+      ]);
+    });
+
+    test('supports custom synthetic element extensions', () => {
+      em.destroy();
+      em = new Editor({
+        parser: {
+          customSyntheticElement: (SyntheticElement) =>
+            class CustomSyntheticElement extends SyntheticElement {
+              get foo() {
+                return this.getAttribute('data-foo') || '';
+              }
+            },
+        },
+      });
+      em.Components.addType('custom-synthetic', {
+        isComponent: (el: any) => el.foo === 'bar' && { type: 'custom-synthetic' },
+      });
+      obj = new ParserHtml(em, {
+        returnArray: true,
+      });
+      obj.compTypes = em.Components.componentTypes;
+      em.Parser.addParserCode('custom-html', () => [
+        {
+          nodeType: 1,
+          tagName: 'div',
+          attributes: { 'data-foo': 'bar' },
+        },
+      ]);
+
+      expect(obj.parse('', null, { parserCode: 'custom-html' }).html).toEqual([
+        {
+          tagName: 'div',
+          type: 'custom-synthetic',
+          attributes: { 'data-foo': 'bar' },
+        },
+      ]);
+    });
+
+    test('normalizes documents from parserCode', () => {
+      em.Parser.addParserCode('custom-html', () => [
+        {
+          nodeType: 1,
+          tagName: 'html',
+          attributes: { lang: 'en', class: 'cls-html' },
+          childNodes: [
+            {
+              nodeType: 1,
+              tagName: 'head',
+              childNodes: [{ nodeType: 1, tagName: 'title', childNodes: [{ nodeType: 3, textContent: 'Test' }] }],
+            },
+            {
+              nodeType: 1,
+              tagName: 'body',
+              attributes: { class: 'cls-body' },
+              childNodes: [{ nodeType: 1, tagName: 'h1', childNodes: [{ nodeType: 3, textContent: 'H1' }] }],
+            },
+          ],
+        },
+      ]);
+
+      expect(obj.parse('', null, { parserCode: 'custom-html', asDocument: true })).toEqual({
+        root: {
+          classes: ['cls-html'],
+          attributes: { lang: 'en' },
+        },
+        head: {
+          type: 'head',
+          tagName: 'head',
+          components: [
+            {
+              tagName: 'title',
+              type: 'text',
+              components: { type: 'textnode', content: 'Test' },
+            },
+          ],
+        },
+        html: {
+          tagName: 'body',
+          classes: ['cls-body'],
+          components: [
+            {
+              tagName: 'h1',
+              type: 'text',
+              components: { type: 'textnode', content: 'H1' },
+            },
+          ],
+        },
+      });
+    });
+
+    test('extracts styles, strips scripts, sanitizes attrs, and emits normalized root', () => {
+      let rootNode: any;
+      em.on(em.Parser.events.htmlRoot, ({ root }) => {
+        rootNode = root;
+      });
+      em.Parser.addParserCode('custom-html', () => [
+        {
+          nodeType: 1,
+          tagName: 'style',
+          childNodes: [{ nodeType: 3, textContent: '.cls { color: red }' }],
+        },
+        {
+          nodeType: 1,
+          tagName: 'a',
+          attributes: {
+            href: 'javascript:alert(1)',
+            onload: 'alert(1)',
+            'data-safe': 'yes',
+          },
+        },
+        {
+          nodeType: 1,
+          tagName: 'script',
+          childNodes: [{ nodeType: 3, textContent: 'alert(1)' }],
+        },
+      ]);
+
+      expect(obj.parse('', new ParserCss(), { parserCode: 'custom-html' })).toEqual({
+        html: [
+          {
+            tagName: 'a',
+            type: 'link',
+            attributes: {
+              'data-safe': 'yes',
+            },
+          },
+        ],
+        css: [
+          {
+            selectors: ['cls'],
+            style: { color: 'red' },
+          },
+        ],
+      });
+      expect(rootNode.nodeType).toBe(11);
+      expect(rootNode.childNodes).toHaveLength(1);
+      expect(rootNode.childNodes?.[0].tagName).toBe('a');
     });
   });
 });

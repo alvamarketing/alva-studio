@@ -62,12 +62,15 @@ editor.on('parse', ({ event, ... }) => { ... });
 *   [getConfig][2]
 *   [parseHtml][3]
 *   [parseCss][4]
+*   [addParserCode][5]
+*   [getParserCode][6]
+*   [removeParserCode][7]
 
 ## getConfig
 
 Get configuration object
 
-Returns **[Object][5]**&#x20;
+Returns **[Object][8]**&#x20;
 
 ## parseHtml
 
@@ -75,19 +78,20 @@ Parse HTML string and return the object containing the Component Definition
 
 ### Parameters
 
-*   `input` **[String][6]** HTML string to parse
-*   `options` **[Object][5]?** Options (optional, default `{}`)
+*   `input` **[String][9]** HTML string to parse
+*   `options` **[Object][8]?** Options (optional, default `{}`)
 
-    *   `options.htmlType` **[String][6]?** [HTML mime type][7] to parse
-    *   `options.allowScripts` **[Boolean][8]** Allow `<script>` tags (optional, default `false`)
-    *   `options.allowUnsafeAttr` **[Boolean][8]** Allow unsafe HTML attributes (eg. `on*` inline event handlers) (optional, default `false`)
-    *   `options.allowUnsafeAttrValue` **[Boolean][8]** Allow unsafe HTML attribute values (eg. `src="javascript:..."`) (optional, default `false`)
-    *   `options.keepEmptyTextNodes` **[Boolean][8]** Keep whitespaces regardless of whether they are meaningful (optional, default `false`)
-    *   `options.asDocument` **[Boolean][8]?** Treat the HTML string as document
-    *   `options.detectDocument` **([Boolean][8] | [Function][9])?** Indicate if or how to detect if the HTML string should be treated as document
-    *   `options.preParser` **[Function][9]?** How to pre-process the HTML string before parsing
-    *   `options.convertDataGjsAttributesHyphens` **[Boolean][8]** Convert `data-gjs-*` attributes from hyphenated to camelCase (eg. `data-gjs-my-component` to `data-gjs-myComponent`) (optional, default `false`)
-    *   `options.convertAttributeValues` **([Boolean][8] | [Array][10]<[String][6]> | [Function][9])** Convert regular HTML attribute values using the same parser used by `data-gjs-*` attributes (optional, default `false`)
+    *   `options.htmlType` **[String][9]?** [HTML mime type][10] to parse
+    *   `options.allowScripts` **[Boolean][11]** Allow `<script>` tags (optional, default `false`)
+    *   `options.allowUnsafeAttr` **[Boolean][11]** Allow unsafe HTML attributes (eg. `on*` inline event handlers) (optional, default `false`)
+    *   `options.allowUnsafeAttrValue` **[Boolean][11]** Allow unsafe HTML attribute values (eg. `src="javascript:..."`) (optional, default `false`)
+    *   `options.keepEmptyTextNodes` **[Boolean][11]** Keep whitespaces regardless of whether they are meaningful (optional, default `false`)
+    *   `options.asDocument` **[Boolean][11]?** Treat the HTML string as document
+    *   `options.detectDocument` **([Boolean][11] | [Function][12])?** Indicate if or how to detect if the HTML string should be treated as document
+    *   `options.parserCode` **[String][9]?** Use a specific parser from the code parser registry. Pass an empty string to force the built-in/legacy parser path.
+    *   `options.preParser` **[Function][12]?** How to pre-process the HTML string before parsing
+    *   `options.convertDataGjsAttributesHyphens` **[Boolean][11]** Convert `data-gjs-*` attributes from hyphenated to camelCase (eg. `data-gjs-my-component` to `data-gjs-myComponent`) (optional, default `false`)
+    *   `options.convertAttributeValues` **([Boolean][11] | [Array][13]<[String][9]> | [Function][12])** Convert regular HTML attribute values using the same parser used by `data-gjs-*` attributes (optional, default `false`)
 
 ### Examples
 
@@ -103,7 +107,7 @@ const resXml = Parser.parseHtml(`<table><div>Hi</div></table>`, {
 // This will preserve the original format as, from the XML point of view, is a valid format
 ```
 
-Returns **[Object][5]** Object containing the result `{ html: ..., css: ... }`
+Returns **[Object][8]** Object containing the result `{ html: ..., css: ... }`
 
 ## parseCss
 
@@ -111,7 +115,7 @@ Parse CSS string and return an array of valid definition objects for CSSRules
 
 ### Parameters
 
-*   `input` **[String][6]** CSS string to parse
+*   `input` **[String][9]** CSS string to parse
 
 ### Examples
 
@@ -120,7 +124,41 @@ const res = Parser.parseCss('.cls { color: red }');
 // [{ ... }]
 ```
 
-Returns **[Array][10]<[Object][5]>** Array containing the result
+Returns **[Array][13]<[Object][8]>** Array containing the result
+
+## addParserCode
+
+Add a new HTML code parser to the registry.
+
+### Parameters
+
+*   `id` **[string][9]** Parser ID
+*   `parse` **[Function][12]** Parser function
+*   `options` **[Object][8]** Parser options (optional, default `{}`)
+
+    *   `options.skipSelect` **[Boolean][11]** Avoid selecting the added parser as default (optional, default `false`)
+
+Returns **[Object][8]** Added parser definition
+
+## getParserCode
+
+Get an HTML code parser by id.
+
+### Parameters
+
+*   `id` **[string][9]** Parser ID
+
+Returns **([Object][8] | [undefined][14])** Parser definition
+
+## removeParserCode
+
+Remove an HTML code parser from the registry.
+
+### Parameters
+
+*   `id` **[string][9]** Parser ID
+
+Returns **([Object][8] | [undefined][14])** Removed parser definition
 
 [1]: https://github.com/GrapesJS/grapesjs/blob/master/src/parser/config/config.ts
 
@@ -130,14 +168,22 @@ Returns **[Array][10]<[Object][5]>** Array containing the result
 
 [4]: #parsecss
 
-[5]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object
+[5]: #addparsercode
 
-[6]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String
+[6]: #getparsercode
 
-[7]: https://developer.mozilla.org/en-US/docs/Web/API/DOMParser/parseFromString#Argument02
+[7]: #removeparsercode
 
-[8]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean
+[8]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object
 
-[9]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function
+[9]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String
 
-[10]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array
+[10]: https://developer.mozilla.org/en-US/docs/Web/API/DOMParser/parseFromString#Argument02
+
+[11]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean
+
+[12]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function
+
+[13]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array
+
+[14]: https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/undefined
