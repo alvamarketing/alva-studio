@@ -47,81 +47,9 @@ const editor = grapesjs.init({
 });
 ```
 
-<!--
-## Named plugin
-
-If you're distributing your plugin globally, you may want to make a named plugin. To keep thing cleaner, so you'll probably get a similar structure:
-
-```
-/your/path/to/grapesjs.min.js
-/your/path/to/grapesjs-plugin.js
-```
-
-**Important:** The order that you load files matters. GrapesJS has to be loaded before the plugin. This sets up the `grapejs` global variable.
-
-So, in your `grapesjs-plugin.js` file:
-
-```js
-export default grapesjs.plugins.add('my-plugin-name', (editor, options) => {
-  /*
-  * Here you should rely on GrapesJS APIs, so check 'API Reference' for more info
-  * For example, you could do something like this to add some new command:
-  *
-  * editor.Commands.add(...);
-  */
-})
-```
-
-The name `my-plugin-name` is an ID of your plugin and you'll use it to tell your editor to grab it.
-
-Here is a complete generic example:
-
-```html
-<script src="http://code.jquery.com/jquery-2.2.0.min.js"></script>
-<link rel="stylesheet" href="path/to/grapes.min.css">
-<script src="path/to/grapes.min.js"></script>
-<script src="path/to/grapesjs-plugin.js"></script>
-
-<div id="gjs"></div>
-
-<script type="text/javascript">
-  var editor = grapesjs.init({
-      container : '#gjs',
-      plugins: ['my-plugin-name']
-  });
-</script>
-```
--->
-
 ## Plugins with options
 
 It's also possible to pass custom parameters to plugins in to make them more flexible.
-
-<!--
-```js
-  var editor = grapesjs.init({
-      container : '#gjs',
-      plugins: ['my-plugin-name'],
-      pluginsOpts: {
-        'my-plugin-name': {
-          customField: 'customValue'
-        }
-      }
-  });
-```
-
-Inside you plugin you'll get those options via `options` argument
-
-```js
-export default grapesjs.plugins.add('my-plugin-name', (editor, options) => {
-  console.log(options);
-  //{ customField: 'customValue' }
-})
-```
-
-This also works with plugins that aren't named.
-
--->
 
 ```js
 const myPluginWithOptions = (editor, options) => {
@@ -139,19 +67,6 @@ const editor = grapesjs.init({
   },
 });
 ```
-
-<!--
-## Named Plugins vs Non-Named Plugins
-
-When you use a named plugin, then that name must be unique across all other plugins.
-
-```js
-grapesjs.plugins.add('my-plugin-name', fn);
-```
-
-In this example, the plugin name is `my-plugin-name` and can't be used by other plugins. To avoid namespace restrictions use basic plugins that are purely functional.
-
--->
 
 ## Usage with TS
 
@@ -177,6 +92,70 @@ grapesjs.init({
     usePlugin(myPlugin, { opt1: 'A', opt2: 1 }),
   ],
 });
+```
+
+## Dynamic plugin management
+
+::: warning
+Available from GrapesJS v0.23.1
+:::
+
+Plugins can also be added and removed dynamically at runtime via `editor.Plugins`.
+
+This is useful when:
+
+- you want to enable/disable editor features on demand
+- you need to inspect which plugins are currently active
+- you want automatic cleanup of editor-level registrations added by a plugin
+
+```ts
+const editor = grapesjs.init({
+  // ...
+  plugins: [
+    // Load plugin on init...
+    { id: 'my-plugin-1', plugin: usePlugin(myPlugin, { opt1: 'A' }) }
+  ],
+});
+
+// ... or add it dynamically
+const plugin = editor.Plugins.add({
+  id: 'my-plugin-2',
+  plugin: usePlugin(myPlugin, { opt1: 'A' }),
+});
+
+const hasPlugin = !!editor.Plugins.get('my-plugin-2');
+editor.Plugins.getAll();
+editor.Plugins.remove('my-plugin-2');
+```
+
+GrapesJS stores active plugins inside `editor.Plugins` module, so the plugin can be identified and removed later.
+
+For this reason, the object descriptor form requires an explicit `id`.
+
+```ts
+editor.Plugins.add({
+  id: 'my-plugin',
+  plugin: usePlugin(myPlugin, { opt1: 'A' }),
+});
+```
+
+When possible, GrapesJS also tracks editor-level entities added during plugin execution and removes them automatically when the plugin is removed. This currently applies to runtime/editor configuration features such as blocks, component types, keymaps, etc.
+
+The automatic cleanup is intentionally limited to editor-level registrations. It does not remove project data such as pages, components already added to the canvas, or any other persisted content.
+
+If a plugin needs additional teardown logic, it can return a cleanup function.
+
+```ts
+const myPlugin: Plugin = (editor) => {
+  const interval = setInterval(() => {
+    // ...
+  }, 1000);
+
+  return ({ cleanup }) => {
+    cleanup();
+    clearInterval(interval);
+  };
+};
 ```
 
 ## Boilerplate
