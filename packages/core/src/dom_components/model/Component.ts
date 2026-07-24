@@ -1025,7 +1025,7 @@ export default class Component extends StyleableModel<ComponentProperties> {
    * Returns component's classes as an array of strings
    * @return {Array}
    */
-  getClasses() {
+  getClasses(): string[] {
     const attr = this.getAttributes();
     const classStr = attr.class;
     return classStr ? classStr.split(' ') : [];
@@ -1426,17 +1426,14 @@ export default class Component extends StyleableModel<ComponentProperties> {
    * Override original clone method
    * @private
    * @ts-ignore */
-  clone(opt: { symbol?: boolean; symbolInv?: boolean } = {}): this {
+  clone(opt: { symbol?: boolean; symbolInv?: boolean; frame?: Frame } = {}): this {
     const em = this.em;
     const attr = this.dataResolverWatchers.getProps(this.attributes);
-    const opts = { ...this.opt };
+    const opts = { ...this.opt, frame: opt.frame ?? undefined };
     const id = this.getId();
     const cssc = em?.Css;
-    // @ts-ignore
     attr.components = [];
-    // @ts-ignore
     attr.classes = [];
-    // @ts-ignore
     attr.traits = [];
 
     if (isSymbolRoot(this)) {
@@ -1448,11 +1445,9 @@ export default class Component extends StyleableModel<ComponentProperties> {
       attr.components[i] = md.clone({ ...opt, _inner: 1 });
     });
     this.get('traits')!.each((md, i) => {
-      // @ts-ignore
       attr.traits[i] = md.clone();
     });
     this.get('classes')!.each((md, i) => {
-      // @ts-ignore
       attr.classes[i] = md.get('name');
     });
 
@@ -1520,7 +1515,7 @@ export default class Component extends StyleableModel<ComponentProperties> {
    * @param {Boolean} [opts.noCustom] Avoid custom name assigned to the component.
    * @returns {String}
    * */
-  getName(opts: { noCustom?: boolean } = {}) {
+  getName(opts: { noCustom?: boolean } = {}): string {
     const { em } = this;
     const { type, tagName, name } = this.attributes;
     const defName = type || tagName;
