@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, scrypt as scryptCallback } from 'node:crypto';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -21,10 +21,18 @@ const SUBMISSION_IDS = [
   '55555555-5555-4555-8555-555555555555',
 ];
 
-async function localFixture(root, { ownerEmail = 'dono@local.test', firstPageName = 'Página principal' } = {}) {
+async function localFixture(root, { ownerEmail = 'dono@local.test', firstPageName = '!!!' } = {}) {
   const dir = await mkdtemp(join(root, 'studio-local-'));
   const salt = '00112233445566778899aabbccddeeff';
   const hash = (await scrypt(OWNER_PASSWORD, salt, 64)).toString('hex');
+  const legacyDeployment = {
+    id: 'dpl_legacy123',
+    projectId: 'prj_legacy456',
+    url: 'legacy-page.vercel.app',
+    state: 'READY',
+    revision: 7,
+    createdAt: '2026-08-05T12:00:00.000Z',
+  };
   const data = {
     owner: { name: 'Dono Local', email: ownerEmail, password: { salt, hash } },
     pages: [
@@ -32,18 +40,18 @@ async function localFixture(root, { ownerEmail = 'dono@local.test', firstPageNam
         id: PAGE_IDS[0],
         name: firstPageName,
         template: 'services',
-        project: { pages: [{ frames: [{ component: { type: 'wrapper' } }] }] },
+        project: null,
         html: '<main>Principal</main>',
         revision: 7,
         createdAt: '2026-08-01T10:00:00.000Z',
         updatedAt: '2026-08-05T11:00:00.000Z',
-        domain: '',
-        webhook: '',
-        deployment: null,
+        domain: 'lp.example.com',
+        webhook: 'https://hooks.example.com/page',
+        deployment: legacyDeployment,
       },
       {
         id: PAGE_IDS[1],
-        name: 'Obrigado',
+        name: 'Admin',
         template: 'thanks',
         project: { pages: [{ frames: [{ component: { tagName: 'section' } }] }] },
         html: '<main>Obrigado</main>',
@@ -59,7 +67,7 @@ async function localFixture(root, { ownerEmail = 'dono@local.test', firstPageNam
       {
         id: FORM_ID,
         name: 'Diagnóstico comercial',
-        slug: 'diagnostico-comercial',
+        slug: 'pagina-22222222',
         headerElements: [],
         steps: [
           {
@@ -82,7 +90,7 @@ async function localFixture(root, { ownerEmail = 'dono@local.test', firstPageNam
           },
         ],
         completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' },
-        webhook: '',
+        webhook: 'https://hooks.example.com/form',
         revision: 4,
         createdAt: '2026-08-03T10:00:00.000Z',
         updatedAt: '2026-08-07T11:00:00.000Z',
@@ -107,7 +115,19 @@ async function localFixture(root, { ownerEmail = 'dono@local.test', firstPageNam
 }
 
 async function counts(database) {
-  const names = ['users', 'companies', 'projects', 'pages', 'forms', 'form_versions', 'form_submissions', 'local_imports'];
+  const names = [
+    'users',
+    'companies',
+    'projects',
+    'pages',
+    'forms',
+    'form_versions',
+    'form_submissions',
+    'project_domains',
+    'project_integrations',
+    'deployment_runs',
+    'local_imports',
+  ];
   const entries = await Promise.all(names.map(async (name) => {
     const result = await database.query(`SELECT count(*)::integer AS count FROM ${name}`);
     return [name, result.rows[0].count];
@@ -152,6 +172,43 @@ test('rejeita dados inválidos antes de abrir transação', async (t) => {
     /dados locais.*inválidos/i,
   );
   assert.equal(transactions, 0);
+
+  const invalidSettings = [
+    { domain: 'https://lp.example.com' },
+    { webhook: 'http://hooks.example.com/page' },
+    { deployment: { id: 123 } },
+  ];
+  for (const patch of invalidSettings) {
+    const pages = structuredClone(fixture.data.pages);
+    Object.assign(pages[0], patch);
+    await writeFile(join(fixture.dir, 'pages.json'), JSON.stringify(pages));
+    await assert.rejects(
+      () => importLocalData({ dir: fixture.dir, database, ownerPassword: OWNER_PASSWORD }),
+      /dados locais.*inválidos/i,
+    );
+  }
+  assert.equal(transactions, 0);
+});
+
+test('listas locais ausentes equivalem a listas vazias, mas owner continua obrigatório', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'alva-import-missing-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const fixture = await localFixture(root);
+  await Promise.all([
+    unlink(join(fixture.dir, 'pages.json')),
+    unlink(join(fixture.dir, 'forms.json')),
+    unlink(join(fixture.dir, 'form-submissions.json')),
+  ]);
+
+  const withoutLists = await inspectLocalData(fixture.dir);
+  assert.equal(withoutLists.valid, true);
+  assert.deepEqual(withoutLists.counts, { pages: 0, forms: 0, submissions: 0 });
+  assert.deepEqual(withoutLists.files['pages.json'], { size: 0, sha256: null });
+
+  await unlink(join(fixture.dir, 'owner.json'));
+  const withoutOwner = await inspectLocalData(fixture.dir);
+  assert.equal(withoutOwner.valid, false);
+  assert.ok(withoutOwner.problems.some((problem) => problem.includes('owner.json')));
 });
 
 test('importa conteúdo uma vez, preserva metadados e retorna o relatório existente na repetição', async (t) => {
@@ -178,6 +235,9 @@ test('importa conteúdo uma vez, preserva metadados e retorna o relatório exist
       forms: 1,
       form_versions: 1,
       form_submissions: 2,
+      project_domains: 1,
+      project_integrations: 1,
+      deployment_runs: 1,
       local_imports: 1,
     });
 
@@ -185,7 +245,7 @@ test('importa conteúdo uma vez, preserva metadados e retorna o relatório exist
       'SELECT id, editor_state, lock_version, created_at, updated_at FROM pages ORDER BY created_at',
     );
     assert.deepEqual(pages.rows.map(({ id }) => id), PAGE_IDS);
-    assert.deepEqual(pages.rows[0].editor_state, fixture.data.pages[0].project);
+    assert.equal(pages.rows[0].editor_state, null);
     assert.equal(pages.rows[0].lock_version, fixture.data.pages[0].revision);
     assert.equal(pages.rows[0].created_at.toISOString(), fixture.data.pages[0].createdAt);
     assert.equal(pages.rows[0].updated_at.toISOString(), fixture.data.pages[0].updatedAt);
@@ -207,6 +267,49 @@ test('importa conteúdo uma vez, preserva metadados e retorna o relatório exist
     assert.ok(submissions.rows.every((row) => row.form_id === FORM_ID));
     assert.ok(submissions.rows.every((row) => row.form_version_id === form.published_version_id));
     assert.equal(submissions.rows[0].submitted_at.toISOString(), fixture.data.submissions[0].submittedAt);
+
+    const routes = await database.query('SELECT path, content_type FROM project_routes ORDER BY path');
+    assert.deepEqual(routes.rows, [
+      { path: '/formulario-33333333', content_type: 'form' },
+      { path: '/pagina-11111111', content_type: 'page' },
+      { path: '/pagina-22222222', content_type: 'page' },
+    ]);
+    const domain = (await database.query(
+      'SELECT domain, environment, is_canonical, verification_status FROM project_domains',
+    )).rows[0];
+    assert.deepEqual(domain, {
+      domain: fixture.data.pages[0].domain,
+      environment: 'production',
+      is_canonical: false,
+      verification_status: 'pending',
+    });
+    const integration = (await database.query(
+      'SELECT provider, environment, configuration FROM project_integrations',
+    )).rows[0];
+    assert.equal(integration.provider, 'local-studio');
+    assert.equal(integration.environment, 'production');
+    assert.equal(integration.configuration.requiresReconnect, true);
+    assert.equal(integration.configuration.connectionStatus, 'pending');
+    assert.deepEqual(integration.configuration.pages[0], {
+      pageId: PAGE_IDS[0],
+      domain: fixture.data.pages[0].domain,
+      webhook: fixture.data.pages[0].webhook,
+      deployment: fixture.data.pages[0].deployment,
+    });
+    assert.deepEqual(integration.configuration.forms[0], {
+      formId: FORM_ID,
+      webhook: fixture.data.forms[0].webhook,
+    });
+    const deployment = (await database.query(
+      `SELECT status, external_deployment_id, external_project_id, expected_revision
+       FROM deployment_runs`,
+    )).rows[0];
+    assert.deepEqual(deployment, {
+      status: 'requires_reconnect',
+      external_deployment_id: fixture.data.pages[0].deployment.id,
+      external_project_id: fixture.data.pages[0].deployment.projectId,
+      expected_revision: fixture.data.pages[0].revision,
+    });
   } finally {
     await database.close();
   }

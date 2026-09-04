@@ -69,6 +69,13 @@ function validatePage(page, index, problems, ids) {
   if (!Number.isInteger(page.revision) || page.revision < 0) addProblem(problems, location, 'revisão inválida');
   if (!validDate(page.createdAt)) addProblem(problems, location, 'data de criação inválida');
   if (!validDate(page.updatedAt)) addProblem(problems, location, 'data de atualização inválida');
+  try {
+    domain(page.domain);
+    webhook(page.webhook);
+    deployment(page.deployment);
+  } catch (error) {
+    addProblem(problems, location, error.message);
+  }
 }
 
 function completion(value) {
@@ -85,6 +92,33 @@ function webhook(value) {
   const url = new URL(value);
   if (url.protocol !== 'https:' || url.username || url.password) throw new Error('webhook inválido');
   return value;
+}
+
+function domain(value) {
+  if (value === undefined || value === '') return '';
+  if (
+    typeof value !== 'string' ||
+    !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(value)
+  ) throw new Error('domínio inválido');
+  return value;
+}
+
+function deployment(value) {
+  if (value === undefined || value === null) return null;
+  if (!isObject(value)) throw new Error('publicação inválida');
+  const copy = JSON.parse(JSON.stringify(value));
+  for (const field of ['id', 'projectId']) {
+    if (copy[field] !== undefined && (typeof copy[field] !== 'string' || copy[field].length > 120))
+      throw new Error('publicação inválida');
+  }
+  if (copy.url !== undefined && (typeof copy.url !== 'string' || copy.url.length > 2000))
+    throw new Error('publicação inválida');
+  if (copy.state !== undefined && (typeof copy.state !== 'string' || copy.state.length > 100))
+    throw new Error('publicação inválida');
+  if (copy.revision !== undefined && (!Number.isInteger(copy.revision) || copy.revision < 0))
+    throw new Error('publicação inválida');
+  if (copy.createdAt !== undefined && !validDate(copy.createdAt)) throw new Error('publicação inválida');
+  return copy;
 }
 
 function validateForm(form, index, problems, ids, normalizedForms) {
@@ -120,12 +154,14 @@ function validateSubmission(submission, index, problems, ids, formIds) {
   if (!validDate(submission.submittedAt)) addProblem(problems, location, 'data de envio inválida');
 }
 
-function allocateRoute(value, used, suffix) {
-  let path = normalizeRoute(`/${normalizeProjectSlug(value)}`);
-  if (used.has(path.toLowerCase())) {
-    const ending = `-${suffix}`;
-    path = normalizeRoute(`${path.slice(0, 120 - ending.length)}${ending}`);
+function allocateRoute(value, used, suffix, type) {
+  let path;
+  try {
+    path = normalizeRoute(`/${normalizeProjectSlug(value)}`);
+  } catch {
+    path = null;
   }
+  if (!path || used.has(path.toLowerCase())) path = normalizeRoute(`/${type}-${suffix}`);
   if (used.has(path.toLowerCase())) throw new Error(`rota repetida: ${path}`);
   used.add(path.toLowerCase());
   return path;
@@ -148,7 +184,8 @@ async function readAndInspect(dir) {
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
       files[name] = { size: 0, sha256: null };
-      addProblem(problems, name, 'arquivo ausente');
+      if (name === 'owner.json') addProblem(problems, name, 'arquivo ausente');
+      else parsed[name] = [];
     }
   }
   const checksumSource = LOCAL_FILES.map((name) => {
@@ -182,7 +219,7 @@ async function readAndInspect(dir) {
     pages.forEach((page, index) => {
       if (!isObject(page) || !validName(page.name) || !UUID.test(page.id ?? '')) return;
       try {
-        routes.pages.set(page.id, allocateRoute(page.name, used, page.id.slice(0, 8)));
+        routes.pages.set(page.id, allocateRoute(page.name, used, page.id.slice(0, 8), 'pagina'));
       } catch (error) {
         addProblem(problems, `pages.json[${index}]`, error.message);
       }
@@ -190,7 +227,7 @@ async function readAndInspect(dir) {
     forms.forEach((form, index) => {
       if (!isObject(form) || typeof form.slug !== 'string' || !UUID.test(form.id ?? '')) return;
       try {
-        routes.forms.set(form.id, allocateRoute(form.slug, used, form.id.slice(0, 8)));
+        routes.forms.set(form.id, allocateRoute(form.slug, used, form.id.slice(0, 8), 'formulario'));
       } catch (error) {
         addProblem(problems, `forms.json[${index}]`, error.message);
       }
@@ -286,7 +323,7 @@ export async function importLocalData({ dir, database, ownerPassword } = {}) {
           page.name.trim(),
           routeId,
           page.template || null,
-          JSON.stringify(page.project ?? {}),
+          JSON.stringify(page.project === undefined ? null : page.project),
           page.html,
           page.revision,
           userId,
@@ -347,6 +384,64 @@ export async function importLocalData({ dir, database, ownerPassword } = {}) {
           formVersions.get(submission.formId),
           JSON.stringify(submission.answers),
           submission.submittedAt,
+        ],
+      );
+    }
+
+    const importedDomains = new Set();
+    for (const page of pages) {
+      if (!page.domain || importedDomains.has(page.domain.toLowerCase())) continue;
+      importedDomains.add(page.domain.toLowerCase());
+      await client.query(
+        `INSERT INTO project_domains
+           (company_id, project_id, environment, domain, is_canonical, verification_status)
+         VALUES ($1, $2, 'production', $3, false, 'pending')`,
+        [companyId, projectId, page.domain],
+      );
+    }
+
+    const hasLegacySettings = pages.some((page) => page.domain || page.webhook || page.deployment)
+      || forms.some((form) => form.webhook);
+    if (hasLegacySettings) {
+      const legacyConfiguration = {
+        source: 'local-json',
+        connectionStatus: 'pending',
+        requiresReconnect: true,
+        pages: pages.map((page) => ({
+          pageId: page.id,
+          domain: page.domain ?? '',
+          webhook: page.webhook ?? '',
+          deployment: page.deployment ?? null,
+        })),
+        forms: forms.map((form) => ({ formId: form.id, webhook: form.webhook ?? '' })),
+      };
+      await client.query(
+        `INSERT INTO project_integrations
+           (company_id, project_id, provider, environment, configuration)
+         VALUES ($1, $2, 'local-studio', 'production', $3::jsonb)`,
+        [companyId, projectId, JSON.stringify(legacyConfiguration)],
+      );
+    }
+
+    for (const page of pages) {
+      if (!page.deployment) continue;
+      const snapshotHash = digest(JSON.stringify({ editorState: page.project ?? null, renderedHtml: page.html }));
+      await client.query(
+        `INSERT INTO deployment_runs
+           (company_id, project_id, environment, snapshot_hash, idempotency_key,
+            expected_revision, status, external_deployment_id, external_project_id,
+            requested_by, created_at)
+         VALUES ($1, $2, 'production', $3, $4, $5, 'requires_reconnect', $6, $7, $8, $9)`,
+        [
+          companyId,
+          projectId,
+          snapshotHash,
+          `local-import-${page.id}`,
+          page.revision,
+          page.deployment.id || null,
+          page.deployment.projectId || null,
+          userId,
+          page.deployment.createdAt || page.updatedAt,
         ],
       );
     }
