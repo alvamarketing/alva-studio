@@ -50,7 +50,7 @@ export function createUIPreferences({
     root.dataset.colorScheme = resolveTheme(theme, media.matches);
     if (themeButton) {
       const labels = { system: 'Sistema', light: 'Claro', dark: 'Escuro' };
-      const icons = { system: 'brightness_auto', light: 'light_mode', dark: 'dark_mode' };
+      const icons = { system: 'computer', light: 'light_mode', dark: 'dark_mode' };
       const label = `Aparência: ${labels[theme]}. Clique para mudar.`;
       themeButton.setAttribute('aria-label', label);
       themeButton.title = label;
@@ -66,6 +66,8 @@ export function createUIPreferences({
     sidebarToggle.title = expanded ? 'Recolher menu' : 'Expandir menu';
     const label = sidebarToggle.querySelector('.sidebar-label');
     if (label) label.textContent = expanded ? 'Recolher menu' : 'Expandir menu';
+    const icon = sidebarToggle.querySelector('.sidebar-toggle-icon');
+    if (icon) icon.textContent = expanded ? 'left_panel_close' : 'left_panel_open';
   };
   const onSystemChange = () => {
     if (theme === 'system') applyTheme();

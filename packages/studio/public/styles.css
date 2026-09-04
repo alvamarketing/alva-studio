@@ -185,7 +185,7 @@ select:focus {
 .sidebar-footer {
   margin-top: auto;
   display: grid;
-  grid-template-columns: repeat(3, 44px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   gap: 6px;
   color: var(--alva-muted);
@@ -209,12 +209,12 @@ select:focus {
 }
 .sidebar-settings,
 .sidebar-toggle {
-  width: 44px;
+  width: 100%;
   justify-content: center;
   padding: 0;
 }
 .sidebar-theme {
-  width: 44px;
+  width: 100%;
   justify-content: center;
   padding: 0;
   cursor: pointer;
@@ -230,6 +230,7 @@ select:focus {
 }
 .sidebar-toggle-icon {
   transition: transform var(--motion);
+  font-size: 20px;
 }
 main {
   margin-left: 226px;
@@ -316,9 +317,6 @@ main {
 :root[data-sidebar-collapsed='true'] .sidebar-theme {
   justify-content: center;
   padding-inline: 0;
-}
-:root[data-sidebar-collapsed='true'] .sidebar-toggle-icon {
-  transform: rotate(180deg);
 }
 :root[data-sidebar-collapsed='true'] .sidebar-footer {
   grid-template-columns: 44px;

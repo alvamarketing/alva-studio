@@ -96,8 +96,10 @@ test('rodapé do menu concentra configurações, aparência e recolhimento', asy
   assert.doesNotMatch(html, /class="aside-bottom"/);
   assert.match(css, /data-sidebar-collapsed=['"]true['"]/);
   assert.match(css, /data-color-scheme=['"]dark['"]/);
-  assert.match(css, /\.sidebar-footer\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*44px\)/s);
+  assert.match(css, /\.sidebar-footer\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(css, /\.sidebar-footer \.sidebar-label\s*\{[^}]*display:\s*none/s);
+  assert.match(footer, />computer<\/span>/);
+  assert.match(footer, />left_panel_close<\/span>/);
 });
 
 test('formulários dinâmicos permanecem como destino principal do menu', async () => {
