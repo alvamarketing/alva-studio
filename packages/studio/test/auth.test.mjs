@@ -121,6 +121,9 @@ test('todas as rotas de página e credenciais exigem sessão', async (t) => {
     ['/api/pages/id/publish', 'POST'],
     ['/api/pages/id/status', 'GET'],
     ['/api/pages/id/domain', 'POST'],
+    ['/api/companies', 'GET'],
+    ['/api/projects', 'GET'],
+    ['/api/projects/id/pages', 'GET'],
   ]) {
     assert.equal((await f.request(path, method, method === 'GET' ? undefined : {})).status, 401, path);
   }

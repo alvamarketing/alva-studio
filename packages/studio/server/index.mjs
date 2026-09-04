@@ -7,6 +7,11 @@ import { Publisher } from './publisher.mjs';
 import { Auth } from './auth.mjs';
 import { FormStore } from './form-store.mjs';
 import { renderDynamicForm, renderCompletion } from './dynamic-form.mjs';
+import { SessionService } from './session-service.mjs';
+import { createProjectApi } from './project-api.mjs';
+import { CompanyRepository } from './repositories/company-repository.mjs';
+import { ProjectRepository } from './repositories/project-repository.mjs';
+import { ContentRepository } from './repositories/content-repository.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 async function body(req) {
@@ -43,6 +48,8 @@ export function createApp({
   dataDir = process.env.DATA_DIR || join(root, '.data'),
   publisher: injectedPublisher,
   authOptions,
+  database,
+  sessionOptions,
   publicOrigin = process.env.PUBLIC_ORIGIN,
   webhookFetch = fetch,
 } = {}) {
@@ -55,6 +62,16 @@ export function createApp({
   const getPublisher = async () => injectedPublisher || new Publisher(await auth.credentials());
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
+  const projectApi = database
+    ? createProjectApi({
+      sessionService: new SessionService(database, sessionOptions),
+      companies: new CompanyRepository(database),
+      projects: new ProjectRepository(database),
+      content: new ContentRepository(database),
+      body,
+      secure: Boolean(publicOrigin),
+    })
+    : null;
   const publishing = new Set();
   const files = {
     '/': ['public/index.html', 'text/html'],
@@ -98,6 +115,10 @@ export function createApp({
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
+      if (projectApi && path.startsWith('/api/') && !path.startsWith('/api/public/')) {
+        const handled = await projectApi({ req, res, path, method: req.method, json });
+        if (handled !== false) return handled;
+      }
       if (req.method === 'GET' && path === '/api/session') return json(await auth.state(req));
       if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {
         auth.limit(req.socket.remoteAddress);
@@ -242,7 +263,7 @@ export function createApp({
       throw error('Não encontrado.', 404);
     } catch (e) {
       if (!res.headersSent)
-        json({ error: e.status ? e.message : 'Não foi possível concluir. Tente novamente.' }, e.status || 500);
+        json({ error: (e.status || e.statusCode) ? e.message : 'Não foi possível concluir. Tente novamente.' }, e.status || e.statusCode || 500);
       else res.end();
     }
   });
