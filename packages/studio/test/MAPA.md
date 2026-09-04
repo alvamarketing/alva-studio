@@ -10,3 +10,4 @@
 - `auth*.test.mjs`: conta, sessões e proteção das configurações.
 - `owner.test.mjs`: contrato do fluxo de acesso e administração.
 - `editor-header.test.mjs`: ícones acessíveis e tokens oficiais da Alva no cabeçalho.
+- `ui-preferences.test.mjs`: aparência claro/escuro/sistema e estado recolhido da barra lateral.

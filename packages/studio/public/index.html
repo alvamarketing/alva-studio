@@ -36,28 +36,43 @@
           <span>Studio</span>
         </a>
         <div class="workspace-label">ESPAÇO DE CRIAÇÃO</div>
-        <div class="nav-active">
+        <div class="nav-active" title="Minhas páginas">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <rect x="3" y="3" width="7" height="7" rx="1" />
             <rect x="14" y="3" width="7" height="7" rx="1" />
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          Minhas páginas
+          <span class="sidebar-label">Minhas páginas</span>
         </div>
-        <button class="sidebar-settings" id="app-settings">
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="3" />
-            <path
-              d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21h-4v-.08a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3v-4h.08a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3h4v.08a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21v4h-.08a1.7 1.7 0 0 0-1.52 1Z"
-            />
-          </svg>
-          Configurações do app
-        </button>
-        <div class="aside-bottom">
-          <span class="dot"></span> Seu espaço de criação<br /><small
-            >Páginas e configurações salvas no servidor do Studio.</small
-          ><span class="sidebar-account" id="owner-name">Minha conta</span>
+        <div class="sidebar-footer">
+          <button class="sidebar-settings" id="app-settings" title="Configurações do app">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21h-4v-.08a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3v-4h.08a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3h4v.08a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21v4h-.08a1.7 1.7 0 0 0-1.52 1Z"
+              />
+            </svg>
+            <span class="sidebar-label">Configurações do app</span>
+          </button>
+          <label class="sidebar-theme" title="Aparência do Studio">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+            <span class="sidebar-label">Aparência</span>
+            <select id="appearance-theme" aria-label="Aparência do Studio">
+              <option value="system">Sistema</option>
+              <option value="light">Claro</option>
+              <option value="dark">Escuro</option>
+            </select>
+          </label>
+          <button class="sidebar-toggle" id="sidebar-toggle" aria-expanded="true" title="Recolher menu">
+            <svg class="sidebar-toggle-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m14 7-5 5 5 5" />
+            </svg>
+            <span class="sidebar-label">Recolher menu</span>
+          </button>
         </div>
       </aside>
       <main>

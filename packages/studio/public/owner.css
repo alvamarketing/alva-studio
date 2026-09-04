@@ -35,7 +35,7 @@
   color: var(--alva-blue);
 }
 .access-story .eyebrow {
-  color: #1655c9;
+  color: var(--alva-blue-strong);
 }
 .access-story h1 {
   font-size: clamp(42px, 5vw, 78px);
@@ -224,30 +224,6 @@
   color: var(--alva-muted);
   font-weight: 400;
 }
-.sidebar-settings {
-  border: 0;
-  background: transparent;
-  text-align: left;
-  width: 100%;
-  margin-top: 9px;
-  padding: 13px 12px;
-  color: var(--alva-muted);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.sidebar-settings:hover {
-  background: var(--alva-highlight);
-}
-.sidebar-account {
-  display: block;
-  font-size: 11px;
-  margin-top: 12px;
-  color: var(--alva-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .template-gallery {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -282,7 +258,7 @@
   top: 8px;
   right: 8px;
   background: var(--alva-blue);
-  color: var(--alva-white);
+  color: var(--alva-on-blue);
   border-radius: 50%;
   height: 22px;
   width: 22px;
@@ -352,7 +328,7 @@
   margin-top: 12px;
 }
 .domain-result a {
-  color: #1655c9;
+  color: var(--alva-blue-strong);
 }
 .domain-records {
   width: 100%;

@@ -2,7 +2,9 @@ import { flushChanges } from './save-cycle.js';
 import { templates, getTemplate, normalizeForms } from './templates.js';
 import { createFriendlyEditor } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
+import { createUIPreferences } from './ui-preferences.js';
 const $ = (s) => document.querySelector(s);
+createUIPreferences();
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,

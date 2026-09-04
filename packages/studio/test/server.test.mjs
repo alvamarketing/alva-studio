@@ -74,3 +74,11 @@ test('locale português é executável no navegador sem CommonJS', async (t) => 
   runInNewContext(await response.text(), context);
   assert.ok(context.window.alvaLocale.assetManager);
 });
+
+test('controlador de aparência é entregue como módulo do Studio', async (t) => {
+  const { base } = await setup(t);
+  const response = await fetch(base + '/ui-preferences.js');
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /text\/javascript/);
+  assert.match(await response.text(), /createUIPreferences/);
+});

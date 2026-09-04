@@ -44,7 +44,7 @@ test('textos pequenos essenciais usam Slate e Soft fica apenas decorativo', asyn
   const [css, ownerCss] = await Promise.all([readFile(cssPath, 'utf8'), readFile(ownerCssPath, 'utf8')]);
   const essentialSelectors = [
     '.workspace-label',
-    '.aside-bottom small',
+    '.sidebar-footer',
     '.list-tools span',
     '.card-content p',
     'footer',
@@ -80,4 +80,20 @@ test('menu do dashboard não interfere no painel lateral do editor', async () =>
 
   assert.doesNotMatch(css, /(?:^|\})\s*aside\s*\{/m);
   assert.match(css, /#dashboard\s*>\s*aside\s*\{/);
+});
+
+test('rodapé do menu concentra configurações, aparência e recolhimento', async () => {
+  const [html, css] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(cssPath, 'utf8')]);
+  const footer = html.match(/<div class="sidebar-footer">[\s\S]*?<\/div>\s*<\/aside>/)?.[0];
+
+  assert.ok(footer, 'rodapé da barra lateral existe');
+  assert.match(footer, /id="app-settings"/);
+  assert.match(footer, /id="appearance-theme"/);
+  assert.match(footer, /value="system"/);
+  assert.match(footer, /value="light"/);
+  assert.match(footer, /value="dark"/);
+  assert.match(footer, /id="sidebar-toggle"[^>]*aria-expanded="true"/);
+  assert.doesNotMatch(html, /class="aside-bottom"/);
+  assert.match(css, /data-sidebar-collapsed=['"]true['"]/);
+  assert.match(css, /data-color-scheme=['"]dark['"]/);
 });

@@ -44,6 +44,7 @@ export function createApp({
     '/editor-shell.js': ['public/editor-shell.js', 'text/javascript'],
     '/editor-shell.css': ['public/editor-shell.css', 'text/css'],
     '/app.js': ['public/app.js', 'text/javascript'],
+    '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],
     '/save-cycle.js': ['public/save-cycle.js', 'text/javascript'],
     '/styles.css': ['public/styles.css', 'text/css'],
     '/templates.js': ['public/templates.js', 'text/javascript'],
