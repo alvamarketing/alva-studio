@@ -185,8 +185,13 @@ select:focus {
 .sidebar-footer {
   margin-top: auto;
   display: grid;
+  grid-template-columns: repeat(3, 44px);
+  align-items: center;
   gap: 6px;
   color: var(--alva-muted);
+}
+.sidebar-footer .sidebar-label {
+  display: none;
 }
 .sidebar-settings,
 .sidebar-toggle,
@@ -204,8 +209,9 @@ select:focus {
 }
 .sidebar-settings,
 .sidebar-toggle {
-  width: 100%;
-  text-align: left;
+  width: 44px;
+  justify-content: center;
+  padding: 0;
 }
 .sidebar-theme {
   width: 44px;
@@ -313,6 +319,14 @@ main {
 }
 :root[data-sidebar-collapsed='true'] .sidebar-toggle-icon {
   transform: rotate(180deg);
+}
+:root[data-sidebar-collapsed='true'] .sidebar-footer {
+  grid-template-columns: 44px;
+  justify-content: center;
+}
+:root[data-sidebar-collapsed='true'] .sidebar-settings,
+:root[data-sidebar-collapsed='true'] .sidebar-theme {
+  display: none;
 }
 .page-card:hover {
   transform: translateY(-3px);

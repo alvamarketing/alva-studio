@@ -96,6 +96,8 @@ test('rodapé do menu concentra configurações, aparência e recolhimento', asy
   assert.doesNotMatch(html, /class="aside-bottom"/);
   assert.match(css, /data-sidebar-collapsed=['"]true['"]/);
   assert.match(css, /data-color-scheme=['"]dark['"]/);
+  assert.match(css, /\.sidebar-footer\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*44px\)/s);
+  assert.match(css, /\.sidebar-footer \.sidebar-label\s*\{[^}]*display:\s*none/s);
 });
 
 test('formulários dinâmicos permanecem como destino principal do menu', async () => {
