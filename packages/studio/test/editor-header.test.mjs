@@ -89,11 +89,19 @@ test('rodapé do menu concentra configurações, aparência e recolhimento', asy
   assert.ok(footer, 'rodapé da barra lateral existe');
   assert.match(footer, /id="app-settings"/);
   assert.match(footer, /id="appearance-theme"/);
-  assert.match(footer, /value="system"/);
-  assert.match(footer, /value="light"/);
-  assert.match(footer, /value="dark"/);
+  assert.match(footer, /class="sidebar-theme"/);
+  assert.match(footer, /aria-label="Aparência: Sistema"/);
+  assert.doesNotMatch(footer, /<select/);
   assert.match(footer, /id="sidebar-toggle"[^>]*aria-expanded="true"/);
   assert.doesNotMatch(html, /class="aside-bottom"/);
   assert.match(css, /data-sidebar-collapsed=['"]true['"]/);
   assert.match(css, /data-color-scheme=['"]dark['"]/);
+});
+
+test('formulários dinâmicos permanecem como destino principal do menu', async () => {
+  const html = await readFile(htmlPath, 'utf8');
+  const sidebar = html.match(/<section id="dashboard"[\s\S]*?<\/aside>/)?.[0] || '';
+  assert.match(sidebar, /id="nav-pages"/);
+  assert.match(sidebar, /id="nav-forms"/);
+  assert.match(sidebar, /Formulários Dinâmicos/);
 });

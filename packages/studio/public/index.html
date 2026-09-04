@@ -63,18 +63,9 @@
             </svg>
             <span class="sidebar-label">Configurações do app</span>
           </button>
-          <label class="sidebar-theme" title="Aparência do Studio">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
-              <circle cx="12" cy="12" r="4" />
-            </svg>
-            <span class="sidebar-label">Aparência</span>
-            <select id="appearance-theme" aria-label="Aparência do Studio">
-              <option value="system">Sistema</option>
-              <option value="light">Claro</option>
-              <option value="dark">Escuro</option>
-            </select>
-          </label>
+          <button class="sidebar-theme" id="appearance-theme" type="button" aria-label="Aparência: Sistema" title="Aparência: Sistema">
+            <span class="material-symbols-outlined" aria-hidden="true">brightness_auto</span>
+          </button>
           <button class="sidebar-toggle" id="sidebar-toggle" aria-expanded="true" title="Recolher menu">
             <svg class="sidebar-toggle-icon" aria-hidden="true" viewBox="0 0 24 24">
               <path d="m14 7-5 5 5 5" />

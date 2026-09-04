@@ -11,6 +11,10 @@ export function resolveTheme(preference, systemIsDark) {
   return normalized === 'system' ? (systemIsDark ? 'dark' : 'light') : normalized;
 }
 
+export function nextTheme(value) {
+  return { system: 'light', light: 'dark', dark: 'system' }[normalizeTheme(value)];
+}
+
 export function nextSidebarState(collapsed) {
   return !collapsed;
 }
@@ -35,7 +39,7 @@ export function createUIPreferences({
   root = document.documentElement,
   storage = window.localStorage,
   media = window.matchMedia('(prefers-color-scheme: dark)'),
-  themeSelect = document.querySelector('#appearance-theme'),
+  themeButton = document.querySelector('#appearance-theme'),
   sidebarToggle = document.querySelector('#sidebar-toggle'),
 } = {}) {
   let theme = normalizeTheme(read(storage, THEME_KEY));
@@ -44,7 +48,15 @@ export function createUIPreferences({
   const applyTheme = () => {
     root.dataset.themePreference = theme;
     root.dataset.colorScheme = resolveTheme(theme, media.matches);
-    if (themeSelect) themeSelect.value = theme;
+    if (themeButton) {
+      const labels = { system: 'Sistema', light: 'Claro', dark: 'Escuro' };
+      const icons = { system: 'brightness_auto', light: 'light_mode', dark: 'dark_mode' };
+      const label = `Aparência: ${labels[theme]}. Clique para mudar.`;
+      themeButton.setAttribute('aria-label', label);
+      themeButton.title = label;
+      const icon = themeButton.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = icons[theme];
+    }
   };
   const applySidebar = () => {
     root.dataset.sidebarCollapsed = String(collapsed);
@@ -59,8 +71,8 @@ export function createUIPreferences({
     if (theme === 'system') applyTheme();
   };
 
-  themeSelect?.addEventListener('change', () => {
-    theme = normalizeTheme(themeSelect.value);
+  themeButton?.addEventListener('click', () => {
+    theme = nextTheme(theme);
     write(storage, THEME_KEY, theme);
     applyTheme();
   });

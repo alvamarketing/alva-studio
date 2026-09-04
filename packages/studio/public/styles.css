@@ -172,7 +172,6 @@ select:focus {
 }
 .nav-active svg,
 .sidebar-settings svg,
-.sidebar-theme svg,
 .sidebar-toggle svg {
   width: 18px;
   height: 18px;
@@ -209,17 +208,14 @@ select:focus {
   text-align: left;
 }
 .sidebar-theme {
-  position: relative;
+  width: 44px;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
 }
-.sidebar-theme select {
-  min-width: 0;
-  margin-left: auto;
-  border: 0;
-  border-radius: 8px;
-  padding: 5px 6px;
-  background: var(--alva-cloud);
-  color: var(--alva-ink);
-  font-size: 11px;
+.sidebar-theme .material-symbols-outlined {
+  color: currentColor;
+  font-size: 20px;
 }
 .sidebar-settings:hover,
 .sidebar-toggle:hover,
@@ -314,14 +310,6 @@ main {
 :root[data-sidebar-collapsed='true'] .sidebar-theme {
   justify-content: center;
   padding-inline: 0;
-}
-:root[data-sidebar-collapsed='true'] .sidebar-theme select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
 }
 :root[data-sidebar-collapsed='true'] .sidebar-toggle-icon {
   transform: rotate(180deg);
