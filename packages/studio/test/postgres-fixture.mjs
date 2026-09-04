@@ -40,6 +40,8 @@ export async function postgresFixture(t) {
     'POSTGRES_DB=studio_test',
     '--publish',
     '127.0.0.1::5432',
+    '--tmpfs',
+    '/var/lib/postgresql:rw,noexec,nosuid,size=64m',
     'postgres:alpine',
   );
   const containerId = stdout.trim();
