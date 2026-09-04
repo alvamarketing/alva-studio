@@ -238,6 +238,10 @@ test('sessão exige membership ativa e rotas são compartilhadas entre páginas 
     await database.query("UPDATE company_memberships SET status = 'invited' WHERE id = $1", [seed.membership.id]);
     const revoked = await row(database, 'SELECT revoked_at FROM sessions WHERE membership_id = $1', [seed.membership.id]);
     assert.ok(revoked.revoked_at);
+    await assert.rejects(
+      () => database.query('UPDATE sessions SET revoked_at = NULL WHERE membership_id = $1', [seed.membership.id]),
+      /revogação.*permanente/i,
+    );
     const inactive = await row(
       database,
       "INSERT INTO users (email, password_hash, display_name) VALUES ('inativo@alva.test', 'hash', 'Inativo') RETURNING id",
@@ -254,8 +258,13 @@ test('sessão exige membership ativa e rotas são compartilhadas entre páginas 
       ),
       /membership ativa/i,
     );
-    await page(database, seed, '/oferta');
+    const savedPage = await page(database, seed, '/oferta');
     await assert.rejects(() => route(database, seed, '/oferta', 'form'), violates);
+    const savedRoute = await row(database, 'SELECT route_id FROM pages WHERE id = $1', [savedPage.id]);
+    await assert.rejects(
+      () => database.query("UPDATE project_routes SET content_type = 'form' WHERE id = $1", [savedRoute.route_id]),
+      /tipo.*rota.*vinculada/i,
+    );
   } finally {
     await database.close();
   }

@@ -229,6 +229,19 @@ CREATE TRIGGER memberships_revoke_sessions_when_inactive
   AFTER UPDATE OF status ON company_memberships
   FOR EACH ROW EXECUTE FUNCTION revoke_sessions_for_inactive_membership();
 
+CREATE FUNCTION prevent_session_reactivation() RETURNS trigger AS $$
+BEGIN
+  IF OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS NULL THEN
+    RAISE EXCEPTION 'A revogação da sessão é permanente.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER sessions_keep_revocation
+  BEFORE UPDATE OF revoked_at ON sessions
+  FOR EACH ROW EXECUTE FUNCTION prevent_session_reactivation();
+
 CREATE FUNCTION require_project_route_type() RETURNS trigger AS $$
 DECLARE
   actual_type varchar(20);
@@ -252,6 +265,23 @@ CREATE TRIGGER pages_require_page_route
 CREATE TRIGGER forms_require_form_route
   BEFORE INSERT OR UPDATE OF company_id, project_id, route_id ON forms
   FOR EACH ROW EXECUTE FUNCTION require_project_route_type();
+
+CREATE FUNCTION prevent_linked_route_type_change() RETURNS trigger AS $$
+BEGIN
+  IF NEW.content_type IS DISTINCT FROM OLD.content_type
+    AND (
+      EXISTS (SELECT 1 FROM pages WHERE route_id = OLD.id)
+      OR EXISTS (SELECT 1 FROM forms WHERE route_id = OLD.id)
+    ) THEN
+    RAISE EXCEPTION 'O tipo de uma rota vinculada não pode ser alterado.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER project_routes_keep_linked_type
+  BEFORE UPDATE OF content_type ON project_routes
+  FOR EACH ROW EXECUTE FUNCTION prevent_linked_route_type_change();
 
 CREATE FUNCTION prevent_version_mutation() RETURNS trigger AS $$
 BEGIN
