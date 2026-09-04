@@ -1,5 +1,7 @@
 import { flushChanges } from './save-cycle.js';
-import { services, templateCss, blocks } from './templates.js';
+import { templates, getTemplate, normalizeForms } from './templates.js';
+import { createFriendlyEditor } from './editor-shell.js';
+import { createOwnerUI } from './owner.js';
 const $ = (s) => document.querySelector(s);
 const escape = (value) =>
   String(value).replace(
@@ -15,6 +17,7 @@ let editor,
   timer,
   toastTimer,
   saving,
+  ownerUI,
   config = { vercelConnected: false };
 function toast(message) {
   $('#toast').textContent = message;
@@ -29,7 +32,10 @@ async function api(path, method = 'GET', data) {
     ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
   });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'Não foi possível concluir.');
+  if (!response.ok) {
+    if (response.status === 401 && /^\/(pages|config|settings)/.test(path)) ownerUI?.sessionExpired();
+    throw Object.assign(new Error(result.error || 'Não foi possível concluir.'), { status: response.status });
+  }
   return result;
 }
 function action(fn) {
@@ -77,6 +83,7 @@ async function saveOnce() {
   if (!page || !dirty) return page;
   loading = true;
   try {
+    normalizeForms(editor);
     editor
       .getWrapper()
       .find('form')
@@ -180,12 +187,7 @@ function renderList() {
     card.querySelector('.thumbnail').replaceChildren(frame);
     api('/pages/' + p.id)
       .then((full) => {
-        frame.srcdoc =
-          full.html ||
-          '<!doctype html><style>' +
-            templateCss +
-            '</style>' +
-            (full.template === 'blank' ? '<h1>Nova página</h1>' : services);
+        frame.srcdoc = full.html || templateDocument(getTemplate(full.template) || getTemplate('services'));
       })
       .catch(() => {
         frame.srcdoc = '<p>Prévia indisponível</p>';
@@ -203,67 +205,25 @@ async function openPage(id) {
   $('#page-name').value = page.name;
   $('#save-state').textContent = 'Salvo neste computador';
   if (editor) editor.destroy();
-  editor = grapesjs.init({
+  const template = getTemplate(page.template) || getTemplate('services');
+  editor = createFriendlyEditor({
     container: '#editor',
-    height: 'calc(100vh - 66px)',
-    width: 'auto',
-    storageManager: false,
-    noticeOnUnload: false,
-    fromElement: false,
-    assetManager: { upload: false, embedAsBase64: true },
-    i18n: { locale: 'pt', localeFallback: 'en', messages: { pt: window.alvaLocale } },
-    deviceManager: {
-      devices: [
-        { id: 'Desktop', name: 'Computador', width: '' },
-        { id: 'Tablet', name: 'Tablet', width: '768px', widthMedia: '992px' },
-        { id: 'Mobile', name: 'Celular', width: '375px', widthMedia: '760px' },
-      ],
-    },
-    blockManager: { blocks: blocks.map(([id, label, category, content]) => ({ id, label, category, content })) },
+    project: page.project,
+    html: template.html,
+    css: template.css,
+    onChange: markDirty,
+    onOpenFormSettings: () => $('#settings').click(),
   });
-  editor.DomComponents.addType('alva-field', {
-    isComponent: (el) => el.tagName === 'INPUT',
-    model: {
-      defaults: {
-        tagName: 'input',
-        void: true,
-        droppable: false,
-        traits: [
-          { type: 'text', name: 'name', label: 'Nome do campo' },
-          { type: 'text', name: 'placeholder', label: 'Texto de ajuda' },
-          {
-            type: 'select',
-            name: 'type',
-            label: 'Tipo',
-            options: [
-              { id: 'text', label: 'Texto' },
-              { id: 'email', label: 'E-mail' },
-              { id: 'tel', label: 'Telefone' },
-              { id: 'number', label: 'Número' },
-            ],
-          },
-          { type: 'checkbox', name: 'required', label: 'Obrigatório' },
-        ],
-      },
-    },
-  });
-  if (page.project) editor.loadProjectData(page.project);
-  else {
-    editor.setComponents(
-      page.template === 'blank'
-        ? '<main style="min-height:700px;padding:60px"><h1>Uma nova página começa aqui.</h1><p>Arraste os blocos ao lado e dê forma à sua ideia.</p></main>'
-        : services,
-    );
-    editor.setStyle(templateCss);
-  }
-  editor.on('update', markDirty);
   loading = false;
-  if (!page.project) markDirty();
+  if (!page.project || editor.__alvaMigrated) markDirty();
   $('#device').value = 'Desktop';
   $('#publish').disabled = !config.vercelConnected;
-  $('#publish').title = config.vercelConnected ? 'Publicar na Vercel' : 'Configure a conexão com a Vercel no servidor';
+  $('#publish').title = config.vercelConnected ? 'Publicar na Vercel' : 'Conecte sua conta em Configurações do app';
 }
-$('#new-page').onclick = () => $('#create-dialog').showModal();
+$('#new-page').onclick = () => {
+  renderTemplates();
+  $('#create-dialog').showModal();
+};
 $('#create-form').onsubmit = action(async (event) => {
   event.preventDefault();
   const button = event.submitter;
@@ -318,7 +278,16 @@ $('#download').onclick = action(async () => {
 function showDeployment() {
   const p = page.deployment;
   $('#deployment-state').textContent = p
-    ? 'Publicação: ' + p.state + ' · ' + (p.url || '')
+    ? 'Publicação: ' +
+      ({
+        READY: 'No ar',
+        BUILDING: 'Preparando a página',
+        QUEUED: 'Na fila',
+        ERROR: 'Não publicada — ocorreu um erro',
+        CANCELED: 'Cancelada',
+      }[p.state] || p.state) +
+      ' · ' +
+      (p.url || '')
     : 'Nenhuma publicação enviada.';
   $('#check-publication').disabled = !p || !config.vercelConnected;
   $('#connect-domain').disabled = !p || p.state !== 'READY' || !config.vercelConnected;
@@ -328,8 +297,9 @@ $('#settings').onclick = () => {
   form.elements.webhook.value = page.webhook;
   form.elements.domain.value = page.domain;
   $('#vercel-state').textContent = config.vercelConnected
-    ? '● Vercel conectada'
-    : '○ Vercel não conectada. Configure VERCEL_TOKEN no ambiente do servidor.';
+    ? '● Conexão Vercel salva. Você pode conferir o acesso em Configurações do app.'
+    : '○ Conecte a Vercel nas configurações do app para publicar.';
+  $('#domain-result').replaceChildren();
   showDeployment();
   $('#settings-dialog').showModal();
 };
@@ -384,6 +354,27 @@ $('#connect-domain').onclick = action(async () => {
   if (!page.domain) throw new Error('Preencha e salve um domínio primeiro.');
   if (!confirm('Conectar ' + page.domain + ' ao projeto desta página na Vercel?')) return;
   const result = await api('/pages/' + page.id + '/domain', 'POST', {});
+  const domainNode = $('#domain-result');
+  domainNode.textContent = result.verified
+    ? 'Domínio adicionado. Confira o apontamento DNS na Vercel.'
+    : 'Domínio adicionado. Verifique os registros abaixo no provedor do domínio.';
+  if (result.verification?.length) {
+    const table = document.createElement('table');
+    table.className = 'domain-records';
+    table.innerHTML = '<thead><tr><th>Tipo</th><th>Nome</th><th>Valor</th></tr></thead>';
+    const body = document.createElement('tbody');
+    for (const record of result.verification) {
+      const row = document.createElement('tr');
+      for (const value of [record.type, record.domain, record.value]) {
+        const cell = document.createElement('td');
+        cell.textContent = value || '';
+        row.append(cell);
+      }
+      body.append(row);
+    }
+    table.append(body);
+    domainNode.append(table);
+  }
   toast(
     result.verified
       ? 'Domínio adicionado. Confira o apontamento DNS na Vercel.'
@@ -399,9 +390,102 @@ window.addEventListener('beforeunload', (event) => {
     event.returnValue = '';
   }
 });
-try {
+function templateDocument(template) {
+  return (
+    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>' +
+    template.css +
+    '</style></head><body>' +
+    template.html +
+    '</body></html>'
+  );
+}
+let templateCategory = 'Todos';
+function renderTemplates() {
+  const selected = $('#create-form').elements.template.value || 'services';
+  const filter = $('#template-filter');
+  filter.replaceChildren();
+  for (const category of ['Todos', ...new Set(templates.map((t) => t.category))]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = category;
+    button.setAttribute('aria-pressed', String(category === templateCategory));
+    button.onclick = () => {
+      templateCategory = category;
+      renderTemplates();
+    };
+    filter.append(button);
+  }
+  const gallery = $('#template-gallery');
+  gallery.replaceChildren();
+  for (const template of templates.filter((t) => templateCategory === 'Todos' || t.category === templateCategory)) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'template-choice';
+    button.setAttribute('aria-pressed', String(template.id === selected));
+    button.setAttribute('aria-label', 'Usar modelo ' + template.name);
+    button.innerHTML =
+      '<span class="template-thumb"></span><span class="template-name">' +
+      escape(template.name) +
+      '</span><span class="template-description">' +
+      escape(template.description) +
+      '</span>';
+    const frame = document.createElement('iframe');
+    frame.sandbox = '';
+    frame.tabIndex = -1;
+    frame.title = 'Modelo ' + template.name;
+    frame.srcdoc = templateDocument(template);
+    button.querySelector('.template-thumb').append(frame);
+    button.onclick = () => {
+      $('#create-form').elements.template.value = template.id;
+      renderTemplates();
+    };
+    gallery.append(button);
+  }
+}
+async function refreshConfig() {
   config = await api('/config');
-  await loadList();
+  if (page) {
+    $('#publish').disabled = !config.vercelConnected;
+    $('#publish').title = config.vercelConnected ? 'Publicar na Vercel' : 'Conecte a Vercel nas configurações do app';
+  }
+}
+ownerUI = createOwnerUI({
+  api,
+  toast,
+  onAuthenticated: async () => {
+    await refreshConfig();
+    if (page) {
+      $('#editing').hidden = false;
+      $('#dashboard').hidden = true;
+    } else {
+      $('#dashboard').hidden = false;
+      await loadList();
+    }
+  },
+  beforeLogout: save,
+  onLoggedOut: async () => {
+    clearTimeout(timer);
+    editor?.destroy();
+    editor = null;
+    page = null;
+    pages = [];
+    dirty = false;
+    $('#page-list').replaceChildren();
+    $('#editing').hidden = true;
+    $('#dashboard').hidden = true;
+  },
+  onSettingsChanged: refreshConfig,
+});
+$('#app-settings').onclick = () => ownerUI.openSettings();
+$('#editor-account').onclick = () => ownerUI.openSettings();
+$('#page-vercel-settings').onclick = () => {
+  $('#settings-dialog').close();
+  ownerUI.openSettings('vercel');
+};
+try {
+  await ownerUI.initialize();
+  $('#startup').remove();
 } catch (error) {
+  $('#startup').textContent = 'Não foi possível abrir o Studio. Recarregue a página para tentar novamente.';
   toast(error.message);
 }

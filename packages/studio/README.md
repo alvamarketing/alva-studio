@@ -1,6 +1,6 @@
 # Alva Studio
 
-Original. Primeira versão local de um construtor de landing pages para a Alva Marketing. Usa GrapesJS 0.23.6 sem alterar o núcleo original do fork.
+Construtor visual de landing pages da Alva Marketing, criado sobre o GrapesJS 0.23.6 sem alterar o núcleo do fork.
 
 ## Executar
 
@@ -12,31 +12,33 @@ pnpm --ignore-workspace install --frozen-lockfile
 pnpm --ignore-workspace start
 ```
 
-Abra o endereço impresso (padrão: http://127.0.0.1:4178). O pacote possui seu próprio lockfile para executar sem instalar documentação e ferramentas de desenvolvimento do núcleo.
+Abra o endereço impresso, normalmente http://127.0.0.1:4178. No primeiro acesso local, crie a conta do dono com nome, e-mail e uma senha de pelo menos 12 caracteres. Páginas existentes são preservadas.
 
-## O que funciona nesta versão
+## O que funciona
 
-- Criar, buscar, renomear, duplicar e excluir páginas locais.
-- Editor visual, blocos, modelo de serviços, página em branco e tamanhos de tela.
-- Salvamento automático do projeto completo em `.data/pages.json`, com revisão e escrita atômica.
-- Prévia isolada sem executar scripts/formulários e download de HTML com CSS e JavaScript.
-- Campos editáveis: nome, tipo, placeholder e obrigatoriedade na aba de atributos.
-- Configurar destino HTTPS para POST direto do formulário. O receptor precisa aceitar `application/x-www-form-urlencoded` e responder com a confirmação; webhooks exclusivamente JSON exigem adaptador. Nenhuma caixa de leads é mantida neste painel.
-- Conector Vercel: enviar HTML para projeto estável por página, consultar estado e adicionar domínio.
+- Criar, buscar, renomear, duplicar e excluir páginas.
+- Seis pontos de partida: página em branco, serviços, apresentação, oferta, evento e confirmação.
+- Editor visual com blocos ilustrados, instruções em português e controles contextuais para texto, imagem, botão, formulário, aparência e espaçamento.
+- Formulários com aparência consistente em qualquer seção e destino HTTPS configurável.
+- Salvamento automático do projeto completo, prévia isolada e download do HTML.
+- Área do dono para atualizar a conta e conectar a Vercel sem editar arquivos do servidor.
+- Publicação em um projeto Vercel estável por página, consulta do estado e conexão de domínio próprio.
 
 ## Vercel
 
-Crie um arquivo `.env` neste pacote, ignorado pelo Git, com `VERCEL_TOKEN` e, se a conta usar equipe, `VERCEL_TEAM_ID`. Não insira esses valores nas páginas nem no Git. Reinicie o servidor.
+Abra **Configurações do app → Publicação · Vercel**, informe um token de acesso e, se necessário, o identificador da equipe. O token é cifrado no servidor, nunca volta para o navegador e não entra no HTML das páginas. Como alternativa de migração, o servidor ainda reconhece `VERCEL_TOKEN` e `VERCEL_TEAM_ID` do ambiente enquanto não houver configuração salva.
 
-Salvar mantém um rascunho. Publicar requer ação explícita. A publicação enviada pode estar QUEUED/BUILDING; consulte o estado em Configurar. Só READY indica conclusão informada pela Vercel. Cada página usa um projeto `alva-<id>`. O domínio deve ser de sua propriedade; o apontamento e a eventual verificação DNS são configurados no provedor e na Vercel. Os limites e custos do plano da conta continuam aplicáveis.
+Salvar mantém um rascunho. Publicar exige uma ação explícita. Só o estado `READY` confirma que a Vercel concluiu a publicação. Cada página mantém seu próprio projeto e pode receber um domínio independente. O domínio precisa pertencer à conta; eventuais registros e verificações DNS continuam sendo feitos no provedor e na Vercel.
 
-Excluir uma página local não remove projetos ou domínios da Vercel. Duplicar limpa o vínculo de publicação e o domínio, mas mantém o destino do formulário; revise-o se a cópia for para outro cliente.
+Excluir uma página local não remove o projeto ou o domínio remoto. Duplicar limpa o vínculo de publicação e de domínio, mas mantém o destino do formulário.
 
-## Limites
+## Dados e operação
 
-Painel individual, vinculado exclusivamente a 127.0.0.1. Não publique este servidor na internet: ele ainda não tem login, isolamento entre usuários ou banco remoto. A persistência local não é adequada a funções efêmeras da Vercel. Faça backup de `.data/`. Um único processo deve usar cada diretório de dados.
+Por padrão, conta, páginas e configurações ficam em `packages/studio/.data/`, ignorado pelo Git. Defina `DATA_DIR` para usar outro volume persistente e faça backup desse diretório completo, inclusive `secret.key`. Use apenas um processo por diretório de dados.
 
-O editor usa a release npm correspondente ao fork. Modificar `packages/core/src` não altera automaticamente a biblioteca servida pelo Studio; isso requer compilar/vincular o núcleo. Assets enviados pelo editor podem ser incorporados como base64; limite de salvamento de 8 MiB. Para páginas maiores, use URLs de mídia.
+O servidor escuta somente em `127.0.0.1` por padrão. Para operar atrás de um proxy HTTPS próprio, configure `HOST` e `PUBLIC_ORIGIN` com a origem pública exata. A criação da primeira conta deve ser feita localmente antes de expor o serviço. Sessões duram até 12 horas e são encerradas quando o processo reinicia. Esta versão tem uma única conta de dono e ainda não oferece recuperação de senha por e-mail.
+
+Assets enviados pelo editor podem ser incorporados como base64; o salvamento aceita até 8 MiB. Para páginas maiores, prefira URLs de mídia.
 
 ## Verificar
 
@@ -44,4 +46,4 @@ O editor usa a release npm correspondente ao fork. Modificar `packages/core/src`
 node --test test/*.test.mjs
 ```
 
-Testes de Vercel usam transporte simulado: não comprovam credencial, domínio nem deploy real. Não há teste visual automatizado nesta etapa.
+Os testes de publicação usam transporte simulado e não alteram uma conta Vercel real.

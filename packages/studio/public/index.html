@@ -6,15 +6,21 @@
     <title>Alva Studio</title>
     <link rel="stylesheet" href="/vendor/grapes.min.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/editor-shell.css" />
+    <link rel="stylesheet" href="/owner.css" />
   </head>
   <body>
-    <section id="dashboard">
+    <div id="startup" role="status" style="padding: 40px; text-align: center">Abrindo seu Studio…</div>
+    <section id="dashboard" hidden>
       <aside>
         <a class="brand" href="/">alva<span>studio</span><i>↗</i></a>
         <div class="workspace-label">ESPAÇO DE CRIAÇÃO</div>
         <div class="nav-active">▦ &nbsp; Minhas páginas</div>
+        <button class="sidebar-settings" id="app-settings">⚙ &nbsp; Configurações do app</button>
         <div class="aside-bottom">
-          <span class="dot"></span> Espaço local<br /><small>Seu trabalho é salvo neste computador.</small>
+          <span class="dot"></span> Seu espaço de criação<br /><small
+            >Páginas e configurações salvas no servidor do Studio.</small
+          ><span class="sidebar-account" id="owner-name">Minha conta</span>
         </div>
       </aside>
       <main>
@@ -46,9 +52,9 @@
             <option value="Desktop">Computador</option>
             <option value="Tablet">Tablet</option>
             <option value="Mobile">Celular</option></select
-          ><button id="settings">Configurar</button><button id="preview">Visualizar</button
-          ><button id="download">Baixar HTML</button><button id="save">Salvar</button
-          ><button id="publish" class="primary">Publicar ↗</button>
+          ><button id="settings">Configurar página</button><button id="editor-account">Minha conta</button
+          ><button id="preview">Visualizar</button><button id="download">Baixar HTML</button
+          ><button id="save">Salvar</button><button id="publish" class="primary">Publicar ↗</button>
         </div>
       </header>
       <div id="editor"></div>
@@ -58,18 +64,11 @@
         <div class="eyebrow">UMA NOVA CAMPANHA</div>
         <h2>Como vamos começar?</h2>
         <label
-          >Nome da página<input
-            name="name"
-            required
-            maxlength="100"
-            placeholder="Ex.: LP Alva Marketing"
-            autofocus /></label
-        ><label
-          >Ponto de partida<select name="template">
-            <option value="services">Serviços — apresentação, benefícios e formulário</option>
-            <option value="blank">Página em branco</option>
-          </select></label
-        >
+          >Nome da página<input name="name" required maxlength="100" placeholder="Ex.: LP Alva Marketing" autofocus
+        /></label>
+        <input name="template" type="hidden" value="services" />
+        <div class="template-filter" id="template-filter" aria-label="Filtrar modelos"></div>
+        <div class="template-gallery" id="template-gallery" aria-label="Escolher um modelo"></div>
         <div class="dialog-actions">
           <button type="button" data-close>Cancelar</button><button class="primary">Criar página</button>
         </div>
@@ -89,7 +88,11 @@
         <label>Domínio ou subdomínio<input name="domain" placeholder="lp.suaempresa.com.br" /></label>
         <p class="help">Após publicar, conecte o domínio. O apontamento DNS é configurado no provedor do domínio.</p>
         <div id="vercel-state" class="connection"></div>
+        <div class="page-connection-actions">
+          <button type="button" id="page-vercel-settings">Configurar conexão Vercel</button>
+        </div>
         <div id="deployment-state" class="help"></div>
+        <div id="domain-result" class="domain-result" role="status"></div>
         <div class="dialog-actions">
           <button type="button" id="check-publication">Consultar publicação</button
           ><button type="button" id="connect-domain">Conectar domínio</button>

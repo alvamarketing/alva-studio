@@ -14,12 +14,21 @@ async function setup(t) {
     await new Promise((r) => server.close(r));
     await rm(dataDir, { recursive: true, force: true });
   });
-  return 'http://127.0.0.1:' + server.address().port;
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const response = await fetch(base + '/api/setup', {
+    method: 'POST',
+    headers: { Origin: base, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Tai', email: 'tai@example.com', password: 'test-password-123' }),
+  });
+  const cookie = response.headers.get('set-cookie').split(';')[0];
+  const request = (path, options = {}) =>
+    fetch(base + path, { ...options, headers: { Cookie: cookie, Origin: base, ...options.headers } });
+  return { base, request };
 }
 test('API cria, edita, duplica e exclui páginas isoladas', async (t) => {
-  const base = await setup(t);
+  const { base, request } = await setup(t);
   const send = (path, method, body) =>
-    fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    request(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   let r = await send('/api/pages', 'POST', { name: 'LP Alva' });
   assert.equal(r.status, 201);
   const page = await r.json();
@@ -31,17 +40,17 @@ test('API cria, edita, duplica e exclui páginas isoladas', async (t) => {
   assert.notEqual(copy.id, page.id);
   r = await send('/api/pages/' + copy.id, 'DELETE', {});
   assert.equal(r.status, 200);
-  assert.equal((await (await fetch(base + '/api/pages')).json()).length, 1);
+  assert.equal((await (await request('/api/pages')).json()).length, 1);
 });
 test('bloqueia origem externa, corpo indevido e hostname arbitrário', async (t) => {
-  const base = await setup(t);
-  let r = await fetch(base + '/api/pages', {
+  const { base, request } = await setup(t);
+  let r = await request('/api/pages', {
     method: 'POST',
     headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' },
     body: '{}',
   });
   assert.equal(r.status, 403);
-  r = await fetch(base + '/api/pages', { method: 'POST', body: '{}' });
+  r = await request('/api/pages', { method: 'POST', body: '{}' });
   assert.equal(r.status, 415);
   const status = await new Promise((resolve, reject) => {
     get(base + '/api/pages', { headers: { Host: 'evil.example' } }, (res) => {
@@ -52,13 +61,13 @@ test('bloqueia origem externa, corpo indevido e hostname arbitrário', async (t)
   assert.equal(status, 403);
 });
 test('configuração indica desconexão e não inclui credenciais', async (t) => {
-  const base = await setup(t);
-  const result = await (await fetch(base + '/api/config')).json();
+  const { base, request } = await setup(t);
+  const result = await (await request('/api/config')).json();
   assert.deepEqual(result, { vercelConnected: false });
 });
 
 test('locale português é executável no navegador sem CommonJS', async (t) => {
-  const base = await setup(t);
+  const { base, request } = await setup(t);
   const response = await fetch(base + '/vendor/pt.js');
   assert.equal(response.status, 200);
   const context = { window: {} };

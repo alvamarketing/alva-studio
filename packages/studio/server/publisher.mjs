@@ -9,7 +9,7 @@ export class Publisher {
   }
   async request(path, body) {
     if (!this.token)
-      throw Object.assign(new Error('Conecte a Vercel no ambiente do servidor para publicar.'), { status: 400 });
+      throw Object.assign(new Error('Conecte a Vercel nas configurações para publicar.'), { status: 400 });
     const url = new URL('https://api.vercel.com' + path);
     if (this.teamId) url.searchParams.set('teamId', this.teamId);
     const response = await this.fetcher(url.toString(), {
@@ -25,10 +25,20 @@ export class Publisher {
       );
     return response.json();
   }
+  async testConnection() {
+    const { user } = await this.request('/v2/user');
+    const team = this.teamId ? await this.request('/v2/teams/' + encodeURIComponent(this.teamId)) : null;
+    return {
+      ok: true,
+      account: { name: user?.name || user?.username || '', email: user?.email || '' },
+      team: team ? { id: team.id, name: team.name || team.slug || '' } : null,
+    };
+  }
   async publish(page) {
     if (!page.html) throw Object.assign(new Error('Salve a página antes de publicar.'), { status: 400 });
     const result = await this.request('/v13/deployments', {
       name: 'alva-' + page.id,
+      project: page.deployment?.projectId || 'alva-' + page.id,
       target: 'production',
       projectSettings: { framework: null },
       files: [
@@ -38,6 +48,7 @@ export class Publisher {
     });
     return {
       id: result.id,
+      projectId: result.projectId || result.project?.id || page.deployment?.projectId || 'alva-' + page.id,
       url: result.url,
       state: result.readyState || 'QUEUED',
       revision: page.revision,
@@ -51,7 +62,10 @@ export class Publisher {
   }
   async domain(page) {
     if (!page.domain) throw Object.assign(new Error('Informe um domínio.'), { status: 400 });
-    const r = await this.request('/v10/projects/alva-' + page.id + '/domains', { name: page.domain });
+    if (!page.deployment)
+      throw Object.assign(new Error('Publique a página antes de conectar o domínio.'), { status: 400 });
+    const project = page.deployment.projectId || 'alva-' + page.id;
+    const r = await this.request('/v10/projects/' + encodeURIComponent(project) + '/domains', { name: page.domain });
     return { name: r.name, verified: r.verified, verification: r.verification || [] };
   }
 }

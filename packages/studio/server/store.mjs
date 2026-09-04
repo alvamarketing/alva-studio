@@ -50,7 +50,9 @@ export class Store {
       const p = {
         id: randomUUID(),
         name: name.trim(),
-        template: template === 'blank' ? 'blank' : 'services',
+        template: ['blank', 'services', 'presentation', 'offer', 'event', 'thanks'].includes(template)
+          ? template
+          : 'services',
         project: null,
         html: '',
         domain: '',
