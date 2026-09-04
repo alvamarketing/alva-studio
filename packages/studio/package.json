@@ -11,6 +11,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "grapesjs": "0.23.6"
+    "grapesjs": "0.23.6",
+    "pg": "^8.23.0"
   }
 }
