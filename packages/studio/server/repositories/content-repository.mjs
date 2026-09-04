@@ -92,6 +92,7 @@ function pageVersionRecord(row) {
     projectId: row.project_id,
     pageId: row.page_id,
     versionNumber: row.version_number,
+    publishedPath: row.published_path,
     editorState: row.editor_state,
     renderedHtml: row.rendered_html,
     createdBy: row.created_by,
@@ -106,6 +107,7 @@ function formVersionRecord(row) {
     projectId: row.project_id,
     formId: row.form_id,
     versionNumber: row.version_number,
+    publishedPath: row.published_path,
     schema: row.schema,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -197,6 +199,33 @@ async function createRoute(client, { companyId, projectId, path, contentType }) 
     [companyId, projectId, path, contentType],
   );
   return rows[0].id;
+}
+
+async function assertPublishedPathAvailable(client, { companyId, projectId, path, contentId, contentType }) {
+  const pageId = contentType === 'page' ? contentId : null;
+  const formId = contentType === 'form' ? contentId : null;
+  const { rowCount } = await client.query(
+    `SELECT 1
+     FROM pages page
+     JOIN page_versions version ON version.id = page.published_version_id
+     WHERE page.company_id = $1
+       AND page.project_id = $2
+       AND page.deleted_at IS NULL
+       AND lower(version.published_path) = lower($3)
+       AND ($4::uuid IS NULL OR page.id <> $4)
+     UNION ALL
+     SELECT 1
+     FROM forms form
+     JOIN form_versions version ON version.id = form.published_version_id
+     WHERE form.company_id = $1
+       AND form.project_id = $2
+       AND form.deleted_at IS NULL
+       AND lower(version.published_path) = lower($3)
+       AND ($5::uuid IS NULL OR form.id <> $5)
+     LIMIT 1`,
+    [companyId, projectId, path, pageId, formId],
+  );
+  if (rowCount) throw fail('Esta rota publicada já está em uso no projeto.', 409);
 }
 
 export class ContentRepository {
@@ -364,8 +393,20 @@ export class ContentRepository {
       const current = await scopedPage(client, { companyId, projectId, pageId, lock: true });
       if (expectedLockVersion !== undefined && current.lock_version !== lockVersion(expectedLockVersion))
         throw fail('A página mudou em outra aba. Reabra antes de excluir.', 409);
-      await client.query('UPDATE pages SET deleted_at = now(), updated_at = now() WHERE id = $1', [pageId]);
-      await client.query('UPDATE project_routes SET deleted_at = now() WHERE id = $1', [current.route_id]);
+      const page = await client.query(
+        `UPDATE pages
+         SET deleted_at = now(), updated_at = now()
+         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
+        [companyId, projectId, pageId],
+      );
+      if (page.rowCount !== 1) throw fail('Página não encontrada.', 404);
+      const route = await client.query(
+        `UPDATE project_routes
+         SET deleted_at = now()
+         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
+        [companyId, projectId, current.route_id],
+      );
+      if (route.rowCount !== 1) throw fail('Rota não encontrada.', 404);
       return { ok: true };
     });
   }
@@ -376,8 +417,20 @@ export class ContentRepository {
       const current = await scopedForm(client, { companyId, projectId, formId, lock: true });
       if (expectedLockVersion !== undefined && current.lock_version !== lockVersion(expectedLockVersion))
         throw fail('O formulário mudou em outra aba. Reabra antes de excluir.', 409);
-      await client.query('UPDATE forms SET deleted_at = now(), updated_at = now() WHERE id = $1', [formId]);
-      await client.query('UPDATE project_routes SET deleted_at = now() WHERE id = $1', [current.route_id]);
+      const form = await client.query(
+        `UPDATE forms
+         SET deleted_at = now(), updated_at = now()
+         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
+        [companyId, projectId, formId],
+      );
+      if (form.rowCount !== 1) throw fail('Formulário não encontrado.', 404);
+      const route = await client.query(
+        `UPDATE project_routes
+         SET deleted_at = now()
+         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
+        [companyId, projectId, current.route_id],
+      );
+      if (route.rowCount !== 1) throw fail('Rota não encontrada.', 404);
       return { ok: true };
     });
   }
@@ -386,15 +439,18 @@ export class ContentRepository {
     return withTransaction(this.database, async (client) => {
       await authorizedProject(client, { companyId, projectId, actorId, capability: 'deployment.publish' });
       const page = await scopedPage(client, { companyId, projectId, pageId, lock: true });
+      await assertPublishedPathAvailable(client, {
+        companyId, projectId, path: page.route, contentId: pageId, contentType: 'page',
+      });
       const number = await client.query(
         'SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number FROM page_versions WHERE page_id = $1',
         [pageId],
       );
       const { rows } = await client.query(
-        `INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html, created_by)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+        `INSERT INTO page_versions (company_id, project_id, page_id, version_number, published_path, editor_state, rendered_html, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
          RETURNING *`,
-        [companyId, projectId, pageId, number.rows[0].version_number, JSON.stringify(page.editor_state), page.rendered_html, actorId],
+        [companyId, projectId, pageId, number.rows[0].version_number, page.route, JSON.stringify(page.editor_state), page.rendered_html, actorId],
       );
       await client.query(
         `UPDATE pages
@@ -410,15 +466,18 @@ export class ContentRepository {
     return withTransaction(this.database, async (client) => {
       await authorizedProject(client, { companyId, projectId, actorId, capability: 'deployment.publish' });
       const form = await scopedForm(client, { companyId, projectId, formId, lock: true });
+      await assertPublishedPathAvailable(client, {
+        companyId, projectId, path: form.route, contentId: formId, contentType: 'form',
+      });
       const number = await client.query(
         'SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number FROM form_versions WHERE form_id = $1',
         [formId],
       );
       const { rows } = await client.query(
-        `INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema, created_by)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+        `INSERT INTO form_versions (company_id, project_id, form_id, version_number, published_path, schema, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
          RETURNING *`,
-        [companyId, projectId, formId, number.rows[0].version_number, JSON.stringify(form.draft_schema), actorId],
+        [companyId, projectId, formId, number.rows[0].version_number, form.route, JSON.stringify(form.draft_schema), actorId],
       );
       await client.query(
         `UPDATE forms
@@ -432,59 +491,47 @@ export class ContentRepository {
 
   async getPublicContent({ companyId, projectId, route: routeValue }) {
     const path = route(routeValue);
-    const { rows } = await this.database.query(
-      `SELECT route.content_type,
-              page_version.id AS page_version_id,
-              page_version.page_id,
-              page_version.version_number AS page_version_number,
-              page_version.editor_state,
-              page_version.rendered_html,
-              page_version.created_at AS page_published_at,
-              form_version.id AS form_version_id,
-              form_version.form_id,
-              form_version.version_number AS form_version_number,
-              form_version.schema,
-              form_version.created_at AS form_published_at
-       FROM project_routes route
-       LEFT JOIN pages page
-         ON page.route_id = route.id
-        AND page.company_id = route.company_id
-        AND page.project_id = route.project_id
-        AND page.deleted_at IS NULL
-       LEFT JOIN page_versions page_version ON page_version.id = page.published_version_id
-       LEFT JOIN forms form
-         ON form.route_id = route.id
-        AND form.company_id = route.company_id
-        AND form.project_id = route.project_id
-        AND form.deleted_at IS NULL
-       LEFT JOIN form_versions form_version ON form_version.id = form.published_version_id
-       WHERE route.company_id = $1
-         AND route.project_id = $2
-         AND lower(route.path) = lower($3)
-         AND route.deleted_at IS NULL`,
+    const page = await this.database.query(
+      `SELECT version.*
+       FROM pages page
+       JOIN page_versions version ON version.id = page.published_version_id
+       WHERE page.company_id = $1
+         AND page.project_id = $2
+         AND page.deleted_at IS NULL
+         AND lower(version.published_path) = lower($3)`,
       [companyId, projectId, path],
     );
-    const content = rows[0];
-    if (!content || (content.content_type === 'page' && !content.page_version_id) || (content.content_type === 'form' && !content.form_version_id))
-      throw fail('Conteúdo publicado não encontrado.', 404);
-    if (content.content_type === 'page') {
+    if (page.rowCount) {
+      const content = page.rows[0];
       return {
         type: 'page',
-        id: content.page_version_id,
+        id: content.id,
         pageId: content.page_id,
-        versionNumber: content.page_version_number,
+        versionNumber: content.version_number,
         editorState: content.editor_state,
         renderedHtml: content.rendered_html,
-        publishedAt: content.page_published_at,
+        publishedAt: content.created_at,
       };
     }
+    const form = await this.database.query(
+      `SELECT version.*
+       FROM forms form
+       JOIN form_versions version ON version.id = form.published_version_id
+       WHERE form.company_id = $1
+         AND form.project_id = $2
+         AND form.deleted_at IS NULL
+         AND lower(version.published_path) = lower($3)`,
+      [companyId, projectId, path],
+    );
+    if (!form.rowCount) throw fail('Conteúdo publicado não encontrado.', 404);
+    const content = form.rows[0];
     return {
       type: 'form',
-      id: content.form_version_id,
+      id: content.id,
       formId: content.form_id,
-      versionNumber: content.form_version_number,
+      versionNumber: content.version_number,
       schema: content.schema,
-      publishedAt: content.form_published_at,
+      publishedAt: content.created_at,
     };
   }
 }

@@ -206,6 +206,7 @@ test('rascunho de formulário não altera a versão pública publicada', async (
       actorId: owner.id,
       formId: form.id,
       lockVersion: form.lockVersion,
+      route: '/novo-diagnostico',
       draftSchema: { fields: [{ id: 'empresa', label: 'Empresa' }] },
     });
     assert.equal(updated.lockVersion, 1);
@@ -217,10 +218,26 @@ test('rascunho de formulário não altera a versão pública publicada', async (
     });
     assert.equal(publicForm.type, 'form');
     assert.deepEqual(publicForm.schema, { fields: [{ id: 'nome', label: 'Nome' }] });
+    await assert.rejects(
+      () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/novo-diagnostico' }),
+      assertStatus(404),
+    );
+
+    await content.publishForm({ companyId: company.id, projectId: project.id, actorId: owner.id, formId: form.id });
+    const republished = await content.getPublicContent({
+      companyId: company.id,
+      projectId: project.id,
+      route: '/novo-diagnostico',
+    });
+    assert.deepEqual(republished.schema, { fields: [{ id: 'empresa', label: 'Empresa' }] });
+    await assert.rejects(
+      () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/diagnostico' }),
+      assertStatus(404),
+    );
   });
 });
 
-test('página pública lê somente seu snapshot publicado', async (t) => {
+test('a rota pública só muda quando a página é republicada', async (t) => {
   await withHarness(t, async ({ database, companies, projects, content }) => {
     const owner = await createUser(database, { email: 'owner@pagina-publica.test', name: 'Owner' });
     const { company, project } = await projectFor(companies, projects, owner, 'pagina-publica');
@@ -240,6 +257,7 @@ test('página pública lê somente seu snapshot publicado', async (t) => {
       actorId: owner.id,
       pageId: page.id,
       lockVersion: 0,
+      route: '/novo',
       editorState: { title: 'Rascunho' },
       renderedHtml: '<h1>Rascunho</h1>',
     });
@@ -252,5 +270,21 @@ test('página pública lê somente seu snapshot publicado', async (t) => {
     assert.equal(published.type, 'page');
     assert.equal(published.renderedHtml, '<h1>Publicado</h1>');
     assert.deepEqual(published.editorState, { title: 'Publicado' });
+    await assert.rejects(
+      () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/novo' }),
+      assertStatus(404),
+    );
+
+    await content.publishPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
+    const republished = await content.getPublicContent({
+      companyId: company.id,
+      projectId: project.id,
+      route: '/novo',
+    });
+    assert.equal(republished.renderedHtml, '<h1>Rascunho</h1>');
+    await assert.rejects(
+      () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/oferta' }),
+      assertStatus(404),
+    );
   });
 });
