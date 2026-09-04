@@ -189,6 +189,9 @@
 }
 .fe-block-icon {
   color: #286eea;
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 500;
 }
 .fe-block-icon svg {
   display: block;
@@ -234,6 +237,25 @@
   font-size: 13px;
   margin: 0 0 14px;
   font-weight: 650;
+}
+.fe-back-library {
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #d8e5fb;
+  border-radius: 12px;
+  background: #eaf2ff;
+  color: #1655c9;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: left;
+}
+.fe-back-library:hover,
+.fe-back-library:focus-visible {
+  border-color: #5b8cff;
+  background: #eef4ff;
+  outline: 2px solid rgb(40 110 234 / 14%);
+  outline-offset: 1px;
 }
 .fe-inspector-empty {
   padding: 30px 22px;

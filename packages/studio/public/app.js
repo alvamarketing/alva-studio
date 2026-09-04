@@ -477,7 +477,6 @@ ownerUI = createOwnerUI({
   onSettingsChanged: refreshConfig,
 });
 $('#app-settings').onclick = () => ownerUI.openSettings();
-$('#editor-account').onclick = () => ownerUI.openSettings();
 $('#page-vercel-settings').onclick = () => {
   $('#settings-dialog').close();
   ownerUI.openSettings('vercel');

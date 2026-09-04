@@ -9,7 +9,7 @@ const ownerJsPath = new URL('../public/owner.js', import.meta.url);
 
 test('ações do editor usam ícones com nome acessível e ajuda no hover', async () => {
   const html = await readFile(htmlPath, 'utf8');
-  const actionIds = ['back', 'settings', 'editor-account', 'preview', 'download', 'save', 'publish'];
+  const actionIds = ['back', 'settings', 'preview', 'download', 'save', 'publish'];
 
   for (const id of actionIds) {
     const button = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
@@ -21,6 +21,7 @@ test('ações do editor usam ícones com nome acessível e ajuda no hover', asyn
   }
 
   assert.match(html, /class="device-control"[^>]*data-tooltip="[^"]+"/);
+  assert.doesNotMatch(html, /id="editor-account"/);
 });
 
 test('tema do Studio declara os tokens canônicos da Alva', async () => {

@@ -2,26 +2,20 @@ import { blocks, normalizeForms, templateCss } from './templates.js';
 
 const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
-const icons = {
-  section: svg('<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16"/>'),
-  columns: svg('<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M12 5v14"/>'),
-  heading: svg('<path d="M5 6v12M19 6v12M5 12h14"/>'),
-  text: svg('<path d="M5 7h14M5 12h11M5 17h14"/>'),
-  image: svg(
-    '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m6 17 4-4 3 3 2-2 3 3"/>',
-  ),
-  button: svg('<rect x="4" y="7" width="16" height="10" rx="3"/><path d="m11 10 3 2-3 2"/>'),
-  form: svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>'),
-  input: svg('<rect x="4" y="8" width="16" height="8" rx="2"/><path d="M8 12h5"/>'),
-  'hero-section': svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h7M7 12h10M7 16h5"/>'),
-  'benefits-section': svg('<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>'),
-  'testimonials-section': svg(
-    '<path d="M7 17H5a2 2 0 0 1-2-2v-3a5 5 0 0 1 5-5v3a2 2 0 0 0-2 2h1v5Zm10 0h-2a2 2 0 0 1-2-2v-3a5 5 0 0 1 5-5v3a2 2 0 0 0-2 2h1v5Z"/>',
-  ),
-  'faq-section': svg(
-    '<circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 1 1 3.5 2.1c-.8.4-1.3 1-1.3 1.9m0 3h.01"/>',
-  ),
-  'contact-section': svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/>'),
+export const blockIcons = {
+  section: '▤',
+  columns: '▥',
+  heading: 'T',
+  text: '≡',
+  image: '▧',
+  button: '↗',
+  form: '☷',
+  input: '▱',
+  'hero-section': '▣',
+  'benefits-section': '✓',
+  'testimonials-section': '❝',
+  'faq-section': '?',
+  'contact-section': '✉',
 };
 
 export const editorActionMeta = Object.freeze({
@@ -48,6 +42,15 @@ export function panelMode(component) {
 
 export function isCanvasBackgroundElement(element) {
   return /^(HTML|BODY|MAIN|SECTION)$/.test(String(element?.tagName || '').toUpperCase());
+}
+
+export function editorKeyboardAction(event, selected) {
+  if (event?.key === 'Escape') return 'clear';
+  if (!['Delete', 'Backspace'].includes(event?.key) || !selected || selected.is?.('wrapper')) return null;
+  const target = event.target;
+  if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(String(target?.tagName || '').toUpperCase()))
+    return null;
+  return 'delete';
 }
 const escapeText = (value) =>
   String(value ?? '').replace(
@@ -149,7 +152,7 @@ export function createFriendlyEditor({
         label,
         category,
         content,
-        media: `<span class="fe-block-icon" aria-hidden="true">${icons[id] || '+'}</span>`,
+        media: `<span class="fe-block-icon" aria-hidden="true">${blockIcons[id] || '+'}</span>`,
         attributes: {
           title: `Adicionar ${label.toLocaleLowerCase('pt-BR')}`,
           tabindex: '0',
@@ -169,16 +172,17 @@ export function createFriendlyEditor({
     policy.httpEquiv = 'Content-Security-Policy';
     policy.content = "script-src 'none'; form-action 'none'; base-uri 'none'";
     doc.head.prepend(policy);
+    const handleCanvasKey = (event) => handleEditorKey(event, true);
     const clearSelection = (event) => {
-      if (event.key === 'Escape' || isCanvasBackgroundElement(event.target)) {
+      if (isCanvasBackgroundElement(event.target)) {
         editor.select(editor.getWrapper());
         render();
       }
     };
-    doc.addEventListener('keydown', clearSelection);
+    doc.addEventListener('keydown', handleCanvasKey, true);
     doc.addEventListener('click', clearSelection);
     cleanup.push(() => {
-      doc.removeEventListener('keydown', clearSelection);
+      doc.removeEventListener('keydown', handleCanvasKey, true);
       doc.removeEventListener('click', clearSelection);
     });
   });
@@ -401,6 +405,10 @@ export function createFriendlyEditor({
     const tag = tagOf(model);
     const attrs = model.getAttributes();
     const head = section('Editar ' + componentLabel(model).toLocaleLowerCase('pt-BR'));
+    const backToLibrary = button(head, '← Adicionar elementos', () => editor.select(editor.getWrapper()), {
+      className: 'fe-back-library',
+    });
+    head.prepend(backToLibrary);
     const trail = document.createElement('div');
     trail.className = 'fe-breadcrumb';
     head.prepend(trail);
@@ -675,19 +683,28 @@ export function createFriendlyEditor({
     render();
   });
   editor.on('load', render);
-  const clearFromKeyboard = (event) => {
-    if (event.key !== 'Escape') return;
+  function handleEditorKey(event, stopImmediate = false) {
+    const action = editorKeyboardAction(event, editor.getSelected());
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (stopImmediate) event.stopImmediatePropagation();
+    if (action === 'delete') {
+      editor.getSelected().remove();
+      announce('Elemento excluído. Use Desfazer para recuperar.');
+    }
     editor.select(editor.getWrapper());
+    activeModel = null;
     render();
-  };
+  }
   const clearFromCanvasBackground = (event) => {
     if (!event.target.matches('.fe-canvas, .gjs-cv-canvas, .gjs-cv-canvas__frames')) return;
     editor.select(editor.getWrapper());
     render();
   };
-  host.addEventListener('keydown', clearFromKeyboard);
+  host.addEventListener('keydown', handleEditorKey, true);
   $('.fe-canvas').addEventListener('click', clearFromCanvasBackground);
-  cleanup.push(() => host.removeEventListener('keydown', clearFromKeyboard));
+  cleanup.push(() => host.removeEventListener('keydown', handleEditorKey, true));
   cleanup.push(() => $('.fe-canvas').removeEventListener('click', clearFromCanvasBackground));
   editor.on('destroy', () => {
     clearTimeout(repaint);
