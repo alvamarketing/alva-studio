@@ -6,9 +6,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/index.mjs';
-async function setup(t) {
+async function setup(t, options = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'alva-http-'));
-  const server = createApp({ dataDir });
+  const server = createApp({ dataDir, ...options });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   t.after(async () => {
     await new Promise((r) => server.close(r));
@@ -81,4 +81,46 @@ test('controlador de aparência é entregue como módulo do Studio', async (t) =
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /text\/javascript/);
   assert.match(await response.text(), /createUIPreferences/);
+});
+
+test('formulários dinâmicos têm administração protegida e execução pública', async (t) => {
+  const webhooks = [];
+  const { base, request } = await setup(t, {
+    webhookFetch: async (url, options) => {
+      webhooks.push({ url, payload: JSON.parse(options.body) });
+      return { ok: true };
+    },
+  });
+  const send = (path, method, body) =>
+    request(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  let response = await send('/api/forms', 'POST', { name: 'Diagnóstico de Vendas' });
+  assert.equal(response.status, 201);
+  let form = await response.json();
+  response = await send('/api/forms/' + form.id, 'PUT', {
+    revision: form.revision,
+    webhook: 'https://example.com/inlead',
+    steps: [{ id: 'email', type: 'email', title: 'Qual é o seu e-mail?', required: true }],
+  });
+  form = await response.json();
+
+  response = await fetch(base + '/f/' + form.slug);
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Qual é o seu e-mail\?/);
+
+  response = await fetch(base + '/api/public/forms/' + form.id + '/submit', {
+    method: 'POST',
+    headers: { Origin: 'https://formulario.example', 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ email: 'pessoa@example.com', campo_falso: 'ignorar' }),
+    redirect: 'manual',
+  });
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Obrigado!/);
+  assert.equal(webhooks.length, 1);
+  assert.equal(webhooks[0].payload.answers.email, 'pessoa@example.com');
+  assert.equal(webhooks[0].payload.answers.campo_falso, undefined);
+
+  const submissions = await (await request('/api/forms/' + form.id + '/submissions')).json();
+  assert.equal(submissions.length, 1);
+  assert.equal(submissions[0].answers.email, 'pessoa@example.com');
+  assert.equal((await fetch(base + '/api/forms')).status, 401);
 });

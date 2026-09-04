@@ -23,6 +23,15 @@ Abra o endereço impresso, normalmente http://127.0.0.1:4178. No primeiro acesso
 - Salvamento automático do projeto completo, prévia isolada e download do HTML.
 - Área do dono para atualizar a conta e conectar a Vercel sem editar arquivos do servidor.
 - Publicação em um projeto Vercel estável por página, consulta do estado e conexão de domínio próprio.
+- Área **Formulários Dinâmicos** para criar jornadas com uma pergunta por vez.
+- Etapas de texto, e-mail, telefone e escolha única, com prévia durante a edição.
+- Link público por formulário, armazenamento local das respostas e encaminhamento opcional por webhook HTTPS.
+
+## Formulários Dinâmicos
+
+Abra **Formulários Dinâmicos** na barra lateral e crie um formulário. Cada etapa pode ter pergunta, texto de apoio, obrigatoriedade e exemplo de resposta; escolhas usam uma opção por linha. O bloco **Finalização e integração** configura a mensagem exibida depois do envio e um webhook HTTPS opcional.
+
+O botão de link abre a experiência pública em `/f/<slug>`. O botão de respostas mostra os contatos recebidos e todas as respostas na ordem das etapas. A resposta é salva no Studio antes da tentativa de webhook; se a integração estiver indisponível, o registro local permanece preservado.
 
 ## Vercel
 
@@ -34,7 +43,7 @@ Excluir uma página local não remove o projeto ou o domínio remoto. Duplicar l
 
 ## Dados e operação
 
-Por padrão, conta, páginas e configurações ficam em `packages/studio/.data/`, ignorado pelo Git. Defina `DATA_DIR` para usar outro volume persistente e faça backup desse diretório completo, inclusive `secret.key`. Use apenas um processo por diretório de dados.
+Por padrão, conta, páginas, formulários, respostas e configurações ficam em `packages/studio/.data/`, ignorado pelo Git. Defina `DATA_DIR` para usar outro volume persistente e faça backup desse diretório completo, inclusive `secret.key`. Use apenas um processo por diretório de dados.
 
 O servidor escuta somente em `127.0.0.1` por padrão. Para operar atrás de um proxy HTTPS próprio, configure `HOST` e `PUBLIC_ORIGIN` com a origem pública exata. A criação da primeira conta deve ser feita localmente antes de expor o serviço. Sessões duram até 12 horas e são encerradas quando o processo reinicia. Esta versão tem uma única conta de dono e ainda não oferece recuperação de senha por e-mail.
 

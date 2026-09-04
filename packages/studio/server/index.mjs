@@ -5,6 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Store } from './store.mjs';
 import { Publisher } from './publisher.mjs';
 import { Auth } from './auth.mjs';
+import { FormStore } from './form-store.mjs';
+import { renderDynamicForm, renderCompletion } from './dynamic-form.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 async function body(req) {
@@ -22,11 +24,25 @@ async function body(req) {
     throw error('JSON inválido.', 400);
   }
 }
+async function publicAnswers(req) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 64 * 1024) throw error('Resposta muito grande.', 413);
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks).toString();
+  if (!req.headers['content-type']?.startsWith('application/x-www-form-urlencoded'))
+    throw error('Envie o formulário no formato esperado.', 415);
+  return { answers: Object.fromEntries(new URLSearchParams(raw)) };
+}
 export function createApp({
   dataDir = process.env.DATA_DIR || join(root, '.data'),
   publisher: injectedPublisher,
   authOptions,
   publicOrigin = process.env.PUBLIC_ORIGIN,
+  webhookFetch = fetch,
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -36,6 +52,7 @@ export function createApp({
   const auth = new Auth(dataDir, authOptions);
   const getPublisher = async () => injectedPublisher || new Publisher(await auth.credentials());
   const store = new Store(dataDir);
+  const formStore = new FormStore(dataDir);
   const publishing = new Set();
   const files = {
     '/': ['public/index.html', 'text/html'],
@@ -45,6 +62,8 @@ export function createApp({
     '/editor-shell.css': ['public/editor-shell.css', 'text/css'],
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],
+    '/forms.js': ['public/forms.js', 'text/javascript'],
+    '/forms.css': ['public/forms.css', 'text/css'],
     '/save-cycle.js': ['public/save-cycle.js', 'text/javascript'],
     '/styles.css': ['public/styles.css', 'text/css'],
     '/templates.js': ['public/templates.js', 'text/javascript'],
@@ -65,16 +84,17 @@ export function createApp({
       const expected = '127.0.0.1:' + res.socket.localPort;
       const localHost = req.headers.host === expected || req.headers.host === 'localhost:' + res.socket.localPort;
       const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
+      const path = new URL(req.url, 'http://' + expected).pathname;
+      const publicSubmission = req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/submit$/.test(path);
       if (publicOrigin ? req.headers.host !== new URL(publicOrigin).host : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))
+      if (!publicSubmission && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
-      if (req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicSubmission && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
-      const path = new URL(req.url, 'http://' + expected).pathname;
       const secure = Boolean(publicOrigin);
       if (req.method === 'GET' && path === '/api/session') return json(await auth.state(req));
       if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {
@@ -88,6 +108,34 @@ export function createApp({
         const owner = path === '/api/setup' ? await auth.setup(input) : await auth.login(input);
         auth.issue(res, secure);
         return json({ setupRequired: false, authenticated: true, owner }, path === '/api/setup' ? 201 : 200);
+      }
+      const publicForm = path.match(/^\/f\/([a-z0-9-]+)$/);
+      if (req.method === 'GET' && publicForm) {
+        const form = await formStore.getBySlug(publicForm[1]);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        return res.end(renderDynamicForm(form, `/api/public/forms/${form.id}/submit`));
+      }
+      const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
+      if (req.method === 'POST' && submission) {
+        const form = await formStore.get(submission[1]);
+        const saved = await formStore.submit(form.id, await publicAnswers(req));
+        if (form.webhook) {
+          try {
+            await webhookFetch(form.webhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ form: { id: form.id, name: form.name, slug: form.slug }, ...saved }),
+              signal: AbortSignal.timeout(5000),
+            });
+          } catch {
+            // The local response remains saved even when an integration is unavailable.
+          }
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.end(renderCompletion(form.completion.title, form.completion.message));
       }
       if (path.startsWith('/api/') && !(await auth.state(req)).authenticated)
         throw error('Entre na sua conta para continuar.', 401);
@@ -111,6 +159,25 @@ export function createApp({
       }
       if (req.method === 'GET' && path === '/api/config')
         return json({ vercelConnected: (await getPublisher()).connected });
+      if (path === '/api/forms') {
+        if (req.method === 'GET') return json(await formStore.list());
+        if (req.method === 'POST') return json(await formStore.create(await body(req)), 201);
+      }
+      const formMatch = path.match(/^\/api\/forms\/([^/]+)(?:\/(duplicate|submissions))?$/);
+      if (formMatch) {
+        const [, id, action] = formMatch;
+        if (req.method === 'GET' && !action) return json(await formStore.get(id));
+        if (req.method === 'PUT' && !action) return json(await formStore.update(id, await body(req)));
+        if (req.method === 'DELETE' && !action) {
+          await body(req);
+          return json(await formStore.remove(id));
+        }
+        if (req.method === 'POST' && action === 'duplicate') {
+          await body(req);
+          return json(await formStore.duplicate(id), 201);
+        }
+        if (req.method === 'GET' && action === 'submissions') return json(await formStore.submissions(id));
+      }
       if (path === '/api/pages') {
         if (req.method === 'GET') return json(await store.list());
         if (req.method === 'POST') return json(await store.create(await body(req)), 201);

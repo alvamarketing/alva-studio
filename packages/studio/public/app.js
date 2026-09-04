@@ -3,6 +3,7 @@ import { templates, getTemplate, normalizeForms } from './templates.js';
 import { createFriendlyEditor } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
+import { createFormsUI } from './forms.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -20,6 +21,7 @@ let editor,
   toastTimer,
   saving,
   ownerUI,
+  formsUI,
   config = { vercelConnected: false };
 function toast(message) {
   $('#toast').textContent = message;
@@ -259,6 +261,7 @@ $('#back').onclick = action(async () => {
   page = null;
   $('#editing').hidden = true;
   $('#dashboard').hidden = false;
+  formsUI.showPages();
   await loadList();
 });
 $('#device').onchange = () => editor.setDevice($('#device').value);
@@ -451,6 +454,7 @@ async function refreshConfig() {
     $('#publish').title = config.vercelConnected ? 'Publicar na Vercel' : 'Conecte a Vercel nas configurações do app';
   }
 }
+formsUI = createFormsUI({ api, toast });
 ownerUI = createOwnerUI({
   api,
   toast,
@@ -461,6 +465,7 @@ ownerUI = createOwnerUI({
       $('#dashboard').hidden = true;
     } else {
       $('#dashboard').hidden = false;
+      formsUI.showPages();
       await loadList();
     }
   },
@@ -475,6 +480,7 @@ ownerUI = createOwnerUI({
     $('#page-list').replaceChildren();
     $('#editing').hidden = true;
     $('#dashboard').hidden = true;
+    formsUI.reset();
   },
   onSettingsChanged: refreshConfig,
 });
