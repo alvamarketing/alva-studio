@@ -64,7 +64,7 @@ function exportHtml() {
   return (
     '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     title +
-    '</title><style>' +
+    '</title><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block" rel="stylesheet"><style>' +
     editor.getCss() +
     '</style></head><body>' +
     editor.getHtml() +

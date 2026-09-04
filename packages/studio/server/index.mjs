@@ -29,12 +29,14 @@ async function publicAnswers(req) {
   const chunks = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 64 * 1024) throw error('Resposta muito grande.', 413);
+    if (size > 5 * 1024 * 1024) throw error('Resposta muito grande.', 413);
     chunks.push(chunk);
   }
   const raw = Buffer.concat(chunks).toString();
-  if (!req.headers['content-type']?.startsWith('application/x-www-form-urlencoded'))
-    throw error('Envie o formulário no formato esperado.', 415);
+  if (req.headers['content-type']?.startsWith('application/json')) {
+    try { return JSON.parse(raw || '{}'); } catch { throw error('Resposta inválida.', 400); }
+  }
+  if (!req.headers['content-type']?.startsWith('application/x-www-form-urlencoded')) throw error('Envie o formulário no formato esperado.', 415);
   return { answers: Object.fromEntries(new URLSearchParams(raw)) };
 }
 export function createApp({

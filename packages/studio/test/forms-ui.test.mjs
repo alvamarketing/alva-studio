@@ -27,6 +27,17 @@ test('editor cria e reordena etapas sem alterar o array original', () => {
   assert.deepEqual(moveStep(rows, 0, -1), rows);
 });
 
+test('catálogo dinâmico oferece perguntas, mídia, conversão e gráficos com ícone e movimento', () => {
+  for (const type of ['long_text', 'multiple_choice', 'image', 'video', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart']) {
+    const step = createStep(type, `etapa-${type}`);
+    assert.equal(step.type, type);
+    assert.match(step.icon, /^[a-z_]+$/);
+    assert.equal(step.motion, 'fade-up');
+  }
+  assert.deepEqual(createStep('scale', 'escala').range, { min: 1, max: 10 });
+  assert.deepEqual(createStep('chart', 'grafico').chart.values, [72, 48, 86]);
+});
+
 test('opções eliminam linhas vazias e preservam rótulos únicos', () => {
   assert.deepEqual(parseOptions(' Empresa\n\nProfissional\nEmpresa '), ['Empresa', 'Profissional']);
 });
@@ -36,4 +47,6 @@ test('editor dinâmico tem layout responsivo e controles acessíveis', async () 
   assert.match(css, /\.dynamic-editor-grid/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)/);
   assert.match(css, /\.dynamic-step-button\[aria-current=['"]true['"]\]/);
+  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /\.material-symbols-outlined/);
 });

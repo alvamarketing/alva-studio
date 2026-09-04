@@ -12,5 +12,5 @@
 - `editor-header.test.mjs`: ícones acessíveis e tokens oficiais da Alva no cabeçalho.
 - `ui-preferences.test.mjs`: aparência claro/escuro/sistema e estado recolhido da barra lateral.
 - `form-store.test.mjs`: CRUD, schema e respostas dos formulários dinâmicos.
-- `dynamic-form.test.mjs`: geração segura da experiência pública sequencial.
-- `forms-ui.test.mjs`: navegação e operações do editor por etapas.
+- `dynamic-form.test.mjs`: geração segura da experiência pública sequencial, elementos ricos e movimento.
+- `forms-ui.test.mjs`: navegação, catálogo rico e operações do editor por etapas.

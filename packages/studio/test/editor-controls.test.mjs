@@ -80,6 +80,17 @@ test('blocos usam os símbolos visuais anteriores na cor da interface', async ()
   assert.match(css, /\.fe-block-icon\s*\{[^}]*font-size:\s*25px/s);
 });
 
+test('landing pages oferecem ícones, gráficos e movimento por elemento', async () => {
+  assert.equal(blockIcons.icon, '★');
+  assert.equal(blockIcons['bar-chart'], '▥');
+  assert.equal(blockIcons['donut-chart'], '◉');
+  const source = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
+  assert.match(source, /Movimento/);
+  assert.match(source, /data-alva-motion/);
+  assert.match(source, /Subir suavemente/);
+  assert.match(source, /Dados do gráfico/);
+});
+
 test('Escape limpa a seleção e Delete remove o elemento fora de campos editáveis', () => {
   const selected = { is: () => false };
   assert.equal(editorKeyboardAction({ key: 'Escape', target: { tagName: 'BODY' } }, selected), 'clear');

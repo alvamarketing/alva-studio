@@ -29,7 +29,9 @@ Abra o endereço impresso, normalmente http://127.0.0.1:4178. No primeiro acesso
 
 ## Formulários Dinâmicos
 
-Abra **Formulários Dinâmicos** na barra lateral e crie um formulário. Cada etapa pode ter pergunta, texto de apoio, obrigatoriedade e exemplo de resposta; escolhas usam uma opção por linha. O bloco **Finalização e integração** configura a mensagem exibida depois do envio e um webhook HTTPS opcional.
+Abra **Formulários Dinâmicos** na barra lateral e crie um formulário. Há perguntas de texto, e-mail, telefone, escolhas, data, número, escala, endereço e arquivo, além de imagem, vídeo, tela informativa, CTA e gráficos. Cada etapa pode receber um ícone do Google Material Symbols e um movimento próprio. O bloco **Finalização e integração** configura a mensagem exibida depois do envio e um webhook HTTPS opcional.
+
+No editor de landing pages, os blocos **Ícone**, **Gráfico de barras** e **Gráfico circular** ficam na biblioteca. Ao selecionar qualquer elemento, a seção **Movimento** permite escolher o efeito, a duração e o atraso.
 
 O botão de link abre a experiência pública em `/f/<slug>`. O botão de respostas mostra os contatos recebidos e todas as respostas na ordem das etapas. A resposta é salva no Studio antes da tentativa de webhook; se a integração estiver indisponível, o registro local permanece preservado.
 

@@ -128,6 +128,9 @@ test('normalização tolera canvas vazio e blocos mantêm contrato de quatro pos
     assert.ok(blocks.find((block) => block[0] === id));
   assert.match(blocks.find((block) => block[0] === 'form')[3], /class="alva-form"/);
   assert.match(blocks.find((block) => block[0] === 'testimonials-section')[3], /placeholder/);
+  for (const id of ['icon', 'bar-chart', 'donut-chart']) assert.ok(blocks.find((block) => block[0] === id));
+  assert.match(templateCss, /data-alva-motion/);
+  assert.match(templateCss, /prefers-reduced-motion/);
 });
 
 test('CSS personalizado do formulário prevalece quando GrapesJS mescla seletores', () => {

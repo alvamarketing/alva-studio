@@ -38,3 +38,25 @@ test('escapa conteúdo inserido pelo dono', () => {
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
 });
+
+test('renderiza mídia, múltipla escolha, escala, arquivo, CTA, gráfico, ícones e movimento', () => {
+  const rich = structuredClone(form);
+  rich.steps = [
+    { id: 'interesses', type: 'multiple_choice', title: 'Interesses', description: '', required: true, options: ['Sites', 'Anúncios'], icon: 'task_alt', motion: 'slide-left' },
+    { id: 'escala', type: 'scale', title: 'Nota', description: '', required: false, range: { min: 1, max: 5 }, icon: 'star', motion: 'zoom-in' },
+    { id: 'arquivo', type: 'file', title: 'Anexe', description: '', required: false, placeholder: '', icon: 'cloud_upload', motion: 'fade-up' },
+    { id: 'imagem', type: 'image', title: 'Uma imagem', description: '', required: false, mediaUrl: 'https://example.com/a.jpg', icon: 'image', motion: 'float' },
+    { id: 'grafico', type: 'chart', title: 'Resultados', description: '', required: false, chart: { type: 'bar', labels: ['A', 'B'], values: [25, 75] }, icon: 'analytics', motion: 'fade-up' },
+    { id: 'acao', type: 'cta', title: 'Vamos?', description: '', required: false, buttonLabel: 'Conversar', buttonUrl: 'https://example.com', icon: 'arrow_forward', motion: 'fade-up' },
+  ];
+  const html = renderDynamicForm(rich, '/api/public/forms/123/submit');
+  assert.match(html, /Material\+Symbols\+Outlined/);
+  assert.match(html, /data-motion="slide-left"/);
+  assert.match(html, /type="checkbox" name="interesses"/);
+  assert.match(html, /type="range"/);
+  assert.match(html, /type="file"/);
+  assert.match(html, /class="step-media"/);
+  assert.match(html, /class="chart chart-bar"/);
+  assert.match(html, /href="https:\/\/example.com"/);
+  assert.match(html, /prefers-reduced-motion/);
+});

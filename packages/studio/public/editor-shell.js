@@ -9,6 +9,9 @@ export const blockIcons = {
   text: '≡',
   image: '▧',
   button: '↗',
+  icon: '★',
+  'bar-chart': '▥',
+  'donut-chart': '◉',
   form: '☷',
   input: '▱',
   'hero-section': '▣',
@@ -172,6 +175,10 @@ export function createFriendlyEditor({
     policy.httpEquiv = 'Content-Security-Policy';
     policy.content = "script-src 'none'; form-action 'none'; base-uri 'none'";
     doc.head.prepend(policy);
+    const icons = doc.createElement('link');
+    icons.rel = 'stylesheet';
+    icons.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block';
+    doc.head.append(icons);
     const handleCanvasKey = (event) => handleEditorKey(event, true);
     const clearSelection = (event) => {
       if (isCanvasBackgroundElement(event.target)) {
@@ -466,6 +473,17 @@ export function createFriendlyEditor({
       );
       help(content, 'Você também pode dar dois cliques no texto da página.');
     }
+    if (tag === 'span' && String(attrs.class || '').includes('material-symbols-outlined')) {
+      field(content, 'Escolha o ícone', model.get('content') || model.getEl()?.textContent || 'star', (value) => model.components(escapeText(value)), {
+        choices: [
+          ['star', 'Estrela'], ['check_circle', 'Confirmação'], ['arrow_forward', 'Seta'], ['person', 'Pessoa'],
+          ['phone', 'Telefone'], ['mail', 'E-mail'], ['location_on', 'Local'], ['calendar_month', 'Calendário'],
+          ['analytics', 'Gráfico'], ['monitoring', 'Resultados'], ['play_circle', 'Vídeo'], ['image', 'Imagem'],
+          ['cloud_upload', 'Enviar arquivo'], ['task_alt', 'Tarefa'], ['home', 'Início'], ['tune', 'Ajustes'],
+        ],
+      });
+      help(content, 'Ícones fornecidos pelo Google Material Symbols.');
+    }
     if (tag === 'a') {
       field(
         content,
@@ -567,6 +585,20 @@ export function createFriendlyEditor({
       const input = model.find('input,textarea,select')[0];
       if (input) button(content, 'Editar campo', () => editor.select(input));
     }
+    if (String(attrs.class || '').includes('alva-chart-bars')) {
+      const labels = model.find('small');
+      const bars = model.find('i');
+      const value = labels.map((label, index) => {
+        const name = label.getEl()?.textContent || label.get('content') || `Item ${index + 1}`;
+        return `${name}: ${parseFloat(bars[index]?.getStyle()?.['--value']) || 0}`;
+      }).join('\n');
+      field(content, 'Dados do gráfico', value, (next) => {
+        const rows = next.split('\n').map((row) => row.match(/^\s*(.+?)\s*:\s*(\d+(?:\.\d+)?)\s*$/)).filter(Boolean).slice(0, 8);
+        if (rows.length < 2) throw new Error('Use pelo menos duas linhas no formato Nome: 72.');
+        model.components(rows.map((row) => `<div><i style="--value:${Math.min(100, Number(row[2]))}%"></i><small>${escapeText(row[1].trim())}</small></div>`).join(''));
+      }, { multiline: true });
+      help(content, 'Uma linha por barra. Exemplo: Contatos: 72');
+    }
     let form = model;
     while (form && tagOf(form) !== 'form') form = form.parent();
     if (form) {
@@ -649,6 +681,27 @@ export function createFriendlyEditor({
         model.addStyle({ 'padding-left': value + 'px', 'padding-right': value + 'px' });
     };
     styleNumber(space, model, 'Distância do próximo elemento (px)', 'margin-bottom', 0);
+    const motion = section('Movimento');
+    field(
+      motion,
+      'Como este elemento aparece',
+      attrs['data-alva-motion'] || 'none',
+      (value) => {
+        if (value === 'none') model.removeAttributes('data-alva-motion');
+        else model.addAttributes({ 'data-alva-motion': value });
+      },
+      { choices: [['none', 'Sem movimento'], ['fade-up', 'Subir suavemente'], ['slide-left', 'Entrar pela lateral'], ['zoom-in', 'Aproximar'], ['float', 'Flutuar']] },
+    );
+    field(motion, 'Duração (segundos)', parseFloat(styleValue(model, '--alva-duration')) || (attrs['data-alva-motion'] === 'float' ? 3 : 0.65), (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0.1 || number > 10) throw new Error('Use uma duração entre 0,1 e 10 segundos.');
+      model.addStyle({ '--alva-duration': number + 's' });
+    }, { type: 'number', min: 0.1, max: 10 });
+    field(motion, 'Atraso (segundos)', parseFloat(styleValue(model, '--alva-delay')) || 0, (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0 || number > 10) throw new Error('Use um atraso entre 0 e 10 segundos.');
+      model.addStyle({ '--alva-delay': number + 's' });
+    }, { type: 'number', min: 0, max: 10 });
     const advanced = document.createElement('details');
     advanced.className = 'fe-advanced';
     advanced.innerHTML = '<summary>Mais ajustes</summary>';

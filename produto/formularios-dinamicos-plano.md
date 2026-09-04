@@ -116,3 +116,12 @@
 - [x] Atualizar os três MAPAs com os novos arquivos.
 - [x] Executar `node --test test/*.test.mjs` e verificações de sintaxe.
 - [x] Validar no navegador criação, edição, envio e consulta de uma resposta.
+
+### Task 7: Elementos ricos e movimento
+
+- [x] Ampliar o schema para perguntas, mídia, CTA, tela informativa e gráficos.
+- [x] Adicionar ícone e movimento configuráveis por etapa.
+- [x] Criar envio de arquivo com tipo e tamanho limitados.
+- [x] Adicionar blocos de ícone e gráficos ao editor de páginas.
+- [x] Adicionar movimento configurável a qualquer elemento da landing page.
+- [x] Respeitar `prefers-reduced-motion` nos dois editores e nas páginas públicas.

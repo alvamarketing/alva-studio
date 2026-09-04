@@ -8,6 +8,6 @@
 
 - `editor-shell.js` e `editor-shell.css`: editor guiado com blocos e controles contextuais.
 - `owner.js` e `owner.css`: acesso do dono e configurações do aplicativo.
-- `templates.js`: catálogo de modelos e aparência independente dos formulários.
+- `templates.js`: catálogo de modelos, blocos de ícone e gráficos, movimentos e aparência independente dos formulários.
 - `ui-preferences.js`: preferências locais de aparência e largura do menu.
-- `forms.js` e `forms.css`: catálogo, editor por etapas, prévia e consulta de respostas dos formulários dinâmicos.
+- `forms.js` e `forms.css`: catálogo rico, ícones, movimentos, editor por etapas, prévia e consulta de respostas dos formulários dinâmicos.

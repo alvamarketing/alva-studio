@@ -3,7 +3,25 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
-const TYPES = new Set(['short_text', 'email', 'phone', 'single_choice']);
+const TYPES = new Set([
+  'short_text', 'long_text', 'email', 'phone', 'single_choice', 'multiple_choice',
+  'image', 'video', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart',
+]);
+const MOTIONS = new Set(['none', 'fade-up', 'slide-left', 'zoom-in', 'float']);
+const INFORMATIONAL = new Set(['image', 'video', 'cta', 'statement', 'chart']);
+const icon = (value) => (/^[a-z_]{2,40}$/.test(String(value || ''))) ? String(value) : 'arrow_forward';
+const boundedNumber = (value, fallback, min, max) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= min && number <= max ? number : fallback;
+};
+const safeUrl = (value, label = 'Endereço') => {
+  const result = text(value, 2000, label);
+  if (!result) return '';
+  let url;
+  try { url = new URL(result); } catch { throw fail(`${label} inválido.`); }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw fail(`${label} inválido.`);
+  return result;
+};
 const text = (value, max, label, required = false) => {
   if (value === undefined && !required) return '';
   if (typeof value !== 'string' || (required && !value.trim()) || value.length > max) throw fail(label + ' inválido.');
@@ -40,15 +58,31 @@ export function normalizeSteps(value) {
       type,
       title: text(input.title, 180, 'Pergunta', true),
       description: text(input.description, 500, 'Descrição'),
-      required: Boolean(input.required),
+      required: INFORMATIONAL.has(type) ? false : Boolean(input.required),
       placeholder: text(input.placeholder, 160, 'Texto de exemplo'),
+      icon: icon(input.icon),
+      motion: MOTIONS.has(input.motion) ? input.motion : 'fade-up',
     };
-    if (type === 'single_choice') {
+    if (type === 'single_choice' || type === 'multiple_choice') {
       if (!Array.isArray(input.options) || input.options.length < 2 || input.options.length > 20)
-        throw fail('A escolha única precisa de 2 a 20 opções.');
+        throw fail('A escolha precisa de 2 a 20 opções.');
       step.options = input.options.map((option) => text(option, 120, 'Opção', true));
       if (new Set(step.options).size !== step.options.length) throw fail('As opções não podem se repetir.');
     } else step.options = [];
+    step.mediaUrl = ['image', 'video'].includes(type) ? safeUrl(input.mediaUrl, 'Endereço da mídia') : '';
+    step.buttonLabel = type === 'cta' ? text(input.buttonLabel || 'Continuar', 80, 'Texto do botão', true) : '';
+    step.buttonUrl = type === 'cta' ? safeUrl(input.buttonUrl, 'Endereço do botão') : '';
+    step.range = type === 'scale'
+      ? { min: boundedNumber(input.range?.min ?? input.min, 1, 0, 100), max: boundedNumber(input.range?.max ?? input.max, 10, 1, 100) }
+      : { min: 1, max: 10 };
+    if (step.range.max <= step.range.min) throw fail('O final da escala precisa ser maior que o início.');
+    if (type === 'chart') {
+      const chart = input.chart && typeof input.chart === 'object' ? input.chart : {};
+      const labels = Array.isArray(chart.labels) ? chart.labels.slice(0, 8).map((item) => text(item, 40, 'Rótulo do gráfico', true)) : [];
+      const values = Array.isArray(chart.values) ? chart.values.slice(0, 8).map((item) => boundedNumber(item, 0, 0, 100)) : [];
+      if (labels.length < 2 || labels.length !== values.length) throw fail('O gráfico precisa de 2 a 8 rótulos e valores.');
+      step.chart = { type: chart.type === 'donut' ? 'donut' : 'bar', labels, values };
+    } else step.chart = { type: 'bar', labels: [], values: [] };
     return step;
   });
 }
@@ -209,10 +243,38 @@ export class FormStore {
       const answers = {};
       const provided = input?.answers && typeof input.answers === 'object' && !Array.isArray(input.answers) ? input.answers : {};
       for (const step of form.steps) {
-        const value = text(provided[step.id], 1000, 'Resposta');
+        if (INFORMATIONAL.has(step.type)) { answers[step.id] = ''; continue; }
+        if (step.type === 'multiple_choice') {
+          const values = Array.isArray(provided[step.id]) ? provided[step.id] : provided[step.id] ? [provided[step.id]] : [];
+          const clean = [...new Set(values.map((value) => text(value, 120, 'Resposta', true)))];
+          if (step.required && !clean.length) throw fail(`Responda “${step.title}”.`);
+          if (clean.some((value) => !step.options.includes(value))) throw fail('Escolha respostas válidas.');
+          answers[step.id] = clean;
+          continue;
+        }
+        if (step.type === 'file') {
+          const file = provided[step.id];
+          if (!file) {
+            if (step.required) throw fail(`Responda “${step.title}”.`);
+            answers[step.id] = '';
+            continue;
+          }
+          if (!file || typeof file !== 'object' || Array.isArray(file)) throw fail('Arquivo inválido.');
+          const name = text(file.name, 180, 'Nome do arquivo', true).replace(/[\\/]/g, '-');
+          const type = text(file.type, 100, 'Tipo do arquivo', true);
+          const allowed = new Set(['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
+          if (!allowed.has(type)) throw fail('Use uma imagem, PDF ou documento válido.');
+          const data = text(file.data, 4_300_000, 'Conteúdo do arquivo', true);
+          if (!data.startsWith(`data:${type};base64,`) || !/^data:[^;,]+;base64,[a-z0-9+/=]+$/i.test(data)) throw fail('Arquivo inválido.');
+          answers[step.id] = { name, type, data };
+          continue;
+        }
+        const value = text(provided[step.id], step.type === 'long_text' || step.type === 'address' ? 3000 : 1000, 'Resposta');
         if (step.required && !value) throw fail(`Responda “${step.title}”.`);
         if (step.type === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) throw fail('Informe um e-mail válido.');
         if (step.type === 'single_choice' && value && !step.options.includes(value)) throw fail('Escolha uma resposta válida.');
+        if (step.type === 'number' && value && !Number.isFinite(Number(value))) throw fail('Informe um número válido.');
+        if (step.type === 'scale' && value && (Number(value) < step.range.min || Number(value) > step.range.max)) throw fail('Escolha um valor válido na escala.');
         answers[step.id] = value;
       }
       const submission = { id: randomUUID(), formId: id, answers, submittedAt: new Date().toISOString() };

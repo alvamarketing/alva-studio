@@ -1,9 +1,25 @@
 const TYPES = {
-  short_text: { label: 'Texto curto', icon: 'T', title: 'Digite sua pergunta' },
-  email: { label: 'E-mail', icon: '@', title: 'Qual é o seu melhor e-mail?' },
-  phone: { label: 'Telefone', icon: '☎', title: 'Qual é o seu WhatsApp?' },
-  single_choice: { label: 'Escolha única', icon: '●', title: 'Escolha uma opção' },
+  short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
+  long_text: { label: 'Texto longo', icon: 'notes', title: 'Conte um pouco mais' },
+  email: { label: 'E-mail', icon: 'alternate_email', title: 'Qual é o seu melhor e-mail?' },
+  phone: { label: 'Telefone', icon: 'phone', title: 'Qual é o seu WhatsApp?' },
+  single_choice: { label: 'Escolha única', icon: 'radio_button_checked', title: 'Escolha uma opção' },
+  multiple_choice: { label: 'Múltipla escolha', icon: 'checklist', title: 'Escolha uma ou mais opções' },
+  date: { label: 'Data', icon: 'calendar_month', title: 'Escolha uma data' },
+  number: { label: 'Número', icon: 'numbers', title: 'Informe um número' },
+  scale: { label: 'Escala', icon: 'star', title: 'Como você avalia?' },
+  address: { label: 'Endereço', icon: 'location_on', title: 'Qual é o endereço?' },
+  file: { label: 'Arquivo', icon: 'cloud_upload', title: 'Envie um arquivo' },
+  image: { label: 'Imagem', icon: 'image', title: 'Veja esta imagem' },
+  video: { label: 'Vídeo', icon: 'play_circle', title: 'Assista antes de continuar' },
+  statement: { label: 'Tela informativa', icon: 'campaign', title: 'Uma informação importante' },
+  cta: { label: 'Botão / CTA', icon: 'arrow_forward', title: 'Pronto para o próximo passo?' },
+  chart: { label: 'Gráfico', icon: 'analytics', title: 'Veja os resultados' },
 };
+const ICONS = [['person', 'Pessoa'], ['phone', 'Telefone'], ['alternate_email', 'E-mail'], ['mail', 'Mensagem'], ['location_on', 'Local'], ['calendar_month', 'Calendário'], ['star', 'Estrela'], ['checklist', 'Lista'], ['task_alt', 'Confirmação'], ['arrow_forward', 'Seta'], ['send', 'Enviar'], ['analytics', 'Gráfico'], ['monitoring', 'Resultados'], ['play_circle', 'Vídeo'], ['image', 'Imagem'], ['cloud_upload', 'Enviar arquivo'], ['campaign', 'Aviso'], ['text_fields', 'Texto'], ['notes', 'Texto longo'], ['numbers', 'Número'], ['radio_button_checked', 'Escolha'], ['home', 'Início'], ['tune', 'Ajustes']];
+const MOTIONS = [['none', 'Sem movimento'], ['fade-up', 'Subir suavemente'], ['slide-left', 'Entrar pela lateral'], ['zoom-in', 'Aproximar'], ['float', 'Flutuar']];
+const INFORMATIONAL = new Set(['image', 'video', 'statement', 'cta', 'chart']);
+const displayAnswer = (value) => Array.isArray(value) ? value.join(', ') : value && typeof value === 'object' ? value.name || 'Arquivo' : value;
 
 const escape = (value) =>
   String(value ?? '').replace(
@@ -18,10 +34,38 @@ export function createStep(type = 'short_text', id = `etapa-${Date.now()}-${Math
     type: selected,
     title: TYPES[selected].title,
     description: '',
-    required: true,
-    placeholder: selected === 'single_choice' ? '' : 'Digite sua resposta',
-    options: selected === 'single_choice' ? ['Opção 1', 'Opção 2'] : [],
+    required: !INFORMATIONAL.has(selected),
+    placeholder: ['single_choice', 'multiple_choice'].includes(selected) ? '' : 'Digite sua resposta',
+    options: ['single_choice', 'multiple_choice'].includes(selected) ? ['Opção 1', 'Opção 2'] : [],
+    icon: TYPES[selected].icon,
+    motion: 'fade-up',
+    mediaUrl: '',
+    buttonLabel: selected === 'cta' ? 'Continuar' : '',
+    buttonUrl: '',
+    range: { min: 1, max: 10 },
+    chart: { type: 'bar', labels: ['Visitas', 'Contatos', 'Vendas'], values: [72, 48, 86] },
   };
+}
+
+function optionsEditor(step) {
+  if (['single_choice', 'multiple_choice'].includes(step.type)) return `<label>Opções<textarea data-field="options" rows="6">${escape((step.options || []).join('\n'))}</textarea><small>Uma opção por linha.</small></label>`;
+  if (['image', 'video'].includes(step.type)) return `<label>Endereço da ${step.type === 'image' ? 'imagem' : 'vídeo'}<input data-field="mediaUrl" type="url" placeholder="https://..." value="${escape(step.mediaUrl)}"></label>`;
+  if (step.type === 'scale') return `<div class="dynamic-inline"><label>Começa em<input data-range="min" type="number" min="0" max="99" value="${step.range?.min ?? 1}"></label><label>Termina em<input data-range="max" type="number" min="1" max="100" value="${step.range?.max ?? 10}"></label></div>`;
+  if (step.type === 'cta') return `<label>Texto do botão<input data-field="buttonLabel" maxlength="80" value="${escape(step.buttonLabel)}"></label><label>Endereço do botão<input data-field="buttonUrl" type="url" placeholder="https://..." value="${escape(step.buttonUrl)}"></label>`;
+  if (step.type === 'chart') return `<label>Formato<select data-chart="type"><option value="bar"${step.chart?.type === 'bar' ? ' selected' : ''}>Barras</option><option value="donut"${step.chart?.type === 'donut' ? ' selected' : ''}>Circular</option></select></label><label>Dados do gráfico<textarea data-chart="data" rows="6">${escape((step.chart?.labels || []).map((label, index) => `${label}: ${step.chart.values[index]}`).join('\n'))}</textarea><small>Uma linha por item. Ex.: Visitas: 72</small></label>`;
+  if (INFORMATIONAL.has(step.type)) return '';
+  return `<label>Exemplo dentro do campo<input data-field="placeholder" maxlength="160" value="${escape(step.placeholder)}"></label>`;
+}
+
+function previewAnswer(step) {
+  if (['single_choice', 'multiple_choice'].includes(step.type)) return `<div class="dynamic-preview-choices">${step.options.map((option, index) => `<div><span>${index + 1}</span>${escape(option)}</div>`).join('')}</div>`;
+  if (step.type === 'image') return step.mediaUrl ? `<img class="dynamic-preview-media" src="${escape(step.mediaUrl)}" alt="">` : `<div class="dynamic-preview-media dynamic-video-placeholder"><span class="material-symbols-outlined">image</span>Adicione a imagem</div>`;
+  if (step.type === 'video') return `<div class="dynamic-preview-media dynamic-video-placeholder"><span class="material-symbols-outlined">play_circle</span>Prévia do vídeo</div>`;
+  if (step.type === 'scale') return `<div class="dynamic-preview-scale"><span>${step.range.min}</span><input type="range" min="${step.range.min}" max="${step.range.max}" value="${step.range.min}"><span>${step.range.max}</span></div>`;
+  if (step.type === 'chart') return `<div class="dynamic-mini-chart ${step.chart.type}">${step.chart.values.map((value, index) => `<div style="--value:${value}%"><i></i><small>${escape(step.chart.labels[index])}</small></div>`).join('')}</div>`;
+  if (step.type === 'cta') return `<div class="dynamic-preview-cta">${escape(step.buttonLabel)}</div>`;
+  if (step.type === 'statement') return '<div class="dynamic-preview-statement">Continue quando estiver pronto.</div>';
+  return `<div class="dynamic-preview-input">${escape(step.placeholder || (step.type === 'file' ? 'Escolher arquivo' : 'Digite sua resposta'))}</div>`;
 }
 
 export function moveStep(steps, index, direction) {
@@ -143,11 +187,11 @@ export function createFormsUI({ api, toast }) {
         <div class="dynamic-step-list">${current.steps
           .map(
             (item, index) =>
-              `<button class="dynamic-step-button" data-index="${index}" aria-current="${index === selected}"><span>${index + 1}</span><span><strong>${escape(item.title)}</strong><small>${TYPES[item.type].label}</small></span></button>`,
+              `<button class="dynamic-step-button" data-index="${index}" aria-current="${index === selected}"><span>${index + 1}</span><span><strong>${escape(item.title)}</strong><small>${TYPES[item.type]?.label || 'Texto curto'}</small></span></button>`,
           )
           .join('')}</div>
         <div class="dynamic-add"><span>Adicionar etapa</span>${Object.entries(TYPES)
-          .map(([type, meta]) => `<button data-add-type="${type}" title="Adicionar ${meta.label}"><b>${meta.icon}</b>${meta.label}</button>`)
+          .map(([type, meta]) => `<button data-add-type="${type}" title="Adicionar ${meta.label}"><b class="material-symbols-outlined">${meta.icon}</b>${meta.label}</button>`)
           .join('')}</div>
       </aside>
       <div class="dynamic-preview-panel"><div class="dynamic-preview-toolbar"><span>PRÉVIA</span><strong>${selected + 1} / ${current.steps.length}</strong></div><div id="dynamic-preview"></div></div>
@@ -159,8 +203,9 @@ export function createFormsUI({ api, toast }) {
           .join('')}</select></label>
         <label>Pergunta<input data-field="title" maxlength="180" value="${escape(step.title)}"></label>
         <label>Texto de apoio<textarea data-field="description" maxlength="500" placeholder="Opcional">${escape(step.description)}</textarea></label>
-        ${step.type === 'single_choice' ? `<label>Opções<textarea data-field="options" rows="6">${escape(step.options.join('\n'))}</textarea><small>Uma opção por linha.</small></label>` : `<label>Exemplo dentro do campo<input data-field="placeholder" maxlength="160" value="${escape(step.placeholder)}"></label>`}
-        <label class="dynamic-check"><input data-field="required" type="checkbox"${step.required ? ' checked' : ''}> Resposta obrigatória</label>
+        ${optionsEditor(step)}
+        ${INFORMATIONAL.has(step.type) ? '' : `<label class="dynamic-check"><input data-field="required" type="checkbox"${step.required ? ' checked' : ''}> Resposta obrigatória</label>`}
+        <div class="dynamic-customize"><h3>Ícone e movimento</h3><label>Ícone<select data-field="icon">${ICONS.map(([name, label]) => `<option value="${name}"${(step.icon || TYPES[step.type].icon) === name ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label>Entrada da etapa<select data-field="motion">${MOTIONS.map(([value, label]) => `<option value="${value}"${(step.motion || 'fade-up') === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label></div>
         <details class="dynamic-finish-settings"><summary>Finalização e integração</summary><label>Título final<input data-setting="title" maxlength="120" value="${escape(current.completion.title)}"></label><label>Mensagem final<textarea data-setting="message" maxlength="500">${escape(current.completion.message)}</textarea></label><label>Webhook HTTPS<input data-setting="webhook" type="url" placeholder="https://..." value="${escape(current.webhook)}"></label></details>
       </aside>`;
     bindEditor();
@@ -169,11 +214,8 @@ export function createFormsUI({ api, toast }) {
 
   function renderPreview() {
     const step = current.steps[selected];
-    const answer =
-      step.type === 'single_choice'
-        ? `<div class="dynamic-preview-choices">${step.options.map((option, index) => `<div><span>${index + 1}</span>${escape(option)}</div>`).join('')}</div>`
-        : `<div class="dynamic-preview-input">${escape(step.placeholder || 'Digite sua resposta')}</div>`;
-    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-card"><div class="dynamic-preview-progress"><span style="width:${((selected + 1) / current.steps.length) * 100}%"></span></div><p>PERGUNTA ${selected + 1} DE ${current.steps.length}</p><h1>${escape(step.title)}</h1>${step.description ? `<div class="dynamic-preview-description">${escape(step.description)}</div>` : ''}${answer}<button>${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} →</button></div>`;
+    const answer = previewAnswer(step);
+    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-card" data-motion="${escape(step.motion || 'fade-up')}"><div class="dynamic-preview-progress"><span style="width:${((selected + 1) / current.steps.length) * 100}%"></span></div><span class="dynamic-preview-icon material-symbols-outlined">${escape(step.icon || TYPES[step.type].icon)}</span><p>ETAPA ${selected + 1} DE ${current.steps.length}</p><h1>${escape(step.title)}</h1>${step.description ? `<div class="dynamic-preview-description">${escape(step.description)}</div>` : ''}${answer}<button>${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} →</button></div>`;
   }
 
   function bindEditor() {
@@ -237,6 +279,20 @@ export function createFormsUI({ api, toast }) {
         };
       }
     });
+    document.querySelectorAll('[data-range]').forEach((input) => {
+      input.oninput = () => { current.steps[selected].range[input.dataset.range] = Number(input.value); markDirty(); renderPreview(); };
+    });
+    document.querySelectorAll('[data-chart]').forEach((input) => {
+      input.oninput = () => {
+        if (input.dataset.chart === 'type') current.steps[selected].chart.type = input.value;
+        else {
+          const rows = input.value.split('\n').map((row) => row.match(/^\s*(.+?)\s*:\s*(\d+(?:\.\d+)?)\s*$/)).filter(Boolean);
+          current.steps[selected].chart.labels = rows.map((row) => row[1].trim()).slice(0, 8);
+          current.steps[selected].chart.values = rows.map((row) => Math.min(100, Number(row[2]))).slice(0, 8);
+        }
+        markDirty(); renderPreview();
+      };
+    });
     document.querySelectorAll('[data-setting]').forEach((input) => {
       input.oninput = () => {
         const key = input.dataset.setting;
@@ -254,7 +310,7 @@ export function createFormsUI({ api, toast }) {
     if (!rows.length) content.innerHTML = '<div class="responses-empty"><h3>Nenhuma resposta ainda.</h3><p>Abra o link público e envie um teste para conferir o fluxo.</p></div>';
     else {
       content.innerHTML = `<div class="responses-table-wrap"><table><thead><tr><th>Recebida em</th>${current.steps.map((step) => `<th>${escape(step.title)}</th>`).join('')}</tr></thead><tbody>${rows
-        .map((row) => `<tr><td>${new Date(row.submittedAt).toLocaleString('pt-BR')}</td>${current.steps.map((step) => `<td>${escape(row.answers[step.id])}</td>`).join('')}</tr>`)
+        .map((row) => `<tr><td>${new Date(row.submittedAt).toLocaleString('pt-BR')}</td>${current.steps.map((step) => `<td>${escape(displayAnswer(row.answers[step.id]))}</td>`).join('')}</tr>`)
         .join('')}</tbody></table></div>`;
     }
     $('#form-responses-dialog').showModal();
