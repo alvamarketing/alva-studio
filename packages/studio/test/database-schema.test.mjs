@@ -1,14 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { postgresFixture } from './postgres-fixture.mjs';
+
+const sourceMigrations = join(fileURLToPath(new URL('../server/db/migrations/', import.meta.url)));
 
 const expectedTables = [
   'users',
   'companies',
   'company_memberships',
+  'invitations',
   'project_grants',
   'sessions',
   'projects',
@@ -117,6 +121,28 @@ test('migrador interrompe uma versão já aplicada quando o arquivo muda', async
     await writeFile(migrationPath, 'CREATE TABLE example_rows (id bigint PRIMARY KEY);');
 
     await assert.rejects(() => migrate(database, { migrationsPath }), /checksum/i);
+  } finally {
+    await database.close();
+  }
+});
+
+test('migração de convites atualiza um banco que já aplicou somente a fundação 001', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const { createDatabase, migrate } = await import('../server/db/postgres.mjs');
+  const database = createDatabase({ connectionString });
+  const temporaryMigrations = await mkdtemp(join(tmpdir(), 'alva-migrations-legacy-'));
+  t.after(() => rm(temporaryMigrations, { recursive: true, force: true }));
+
+  try {
+    await writeFile(join(temporaryMigrations, '001_saas_foundation.sql'), await readFile(join(sourceMigrations, '001_saas_foundation.sql')));
+    await migrate(database, { migrationsPath: temporaryMigrations });
+    const before = await database.query("SELECT to_regclass('public.invitations') AS invitations");
+    assert.equal(before.rows[0].invitations, null);
+
+    await writeFile(join(temporaryMigrations, '002_invitations.sql'), await readFile(join(sourceMigrations, '002_invitations.sql')));
+    await migrate(database, { migrationsPath: temporaryMigrations });
+    const after = await database.query("SELECT to_regclass('public.invitations') AS invitations");
+    assert.equal(after.rows[0].invitations, 'invitations');
   } finally {
     await database.close();
   }

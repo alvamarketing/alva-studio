@@ -214,14 +214,16 @@ export class CompanyRepository {
              status = 'active',
              joined_at = now(),
              updated_at = now()
+         WHERE company_memberships.status <> 'active'
          RETURNING id, user_id, role, status, invited_at, joined_at`,
         [invitation.company_id, user.id, invitation.role],
       );
+      if (!membership.rowCount) throw fail('Convite inválido.', 404);
       await client.query(
         `UPDATE invitations
          SET accepted_at = now(), updated_at = now()
-         WHERE id = $1 AND accepted_at IS NULL`,
-        [invitation.id],
+         WHERE company_id = $1 AND email = $2 AND accepted_at IS NULL`,
+        [invitation.company_id, invitation.email],
       );
       return {
         id: membership.rows[0].id,

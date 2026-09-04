@@ -147,3 +147,32 @@ test('convite devolve segredo uma única vez e persiste somente seu hash por set
     );
   });
 });
+
+test('convite antigo não restaura papel depois que outro convite foi aceito', async (t) => {
+  await withHarness(t, async ({ database, companies }) => {
+    const owner = await createUser(database, { email: 'owner@example.com', name: 'Owner' });
+    const invited = await createUser(database, { email: 'invited@example.com', name: 'Invited' });
+    const company = await companies.create({ ownerUserId: owner.id, name: 'Empresa', slug: 'empresa' });
+
+    const oldInvitation = await companies.invite({
+      companyId: company.id,
+      actorUserId: owner.id,
+      email: invited.email,
+      role: 'editor',
+    });
+    const currentInvitation = await companies.invite({
+      companyId: company.id,
+      actorUserId: owner.id,
+      email: invited.email,
+      role: 'admin',
+    });
+    await companies.acceptInvitation({ secret: currentInvitation.secret, userId: invited.id });
+
+    await assertNotFound(() => companies.acceptInvitation({ secret: oldInvitation.secret, userId: invited.id }));
+    const membership = await database.query(
+      'SELECT role, status FROM company_memberships WHERE company_id = $1 AND user_id = $2',
+      [company.id, invited.id],
+    );
+    assert.deepEqual(membership.rows[0], { role: 'admin', status: 'active' });
+  });
+});
