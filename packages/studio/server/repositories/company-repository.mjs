@@ -179,6 +179,18 @@ export class CompanyRepository {
     const secretHash = hashSecret(secret);
 
     return withTransaction(this.database, async (client) => {
+      const invitationIdentity = await client.query(
+        `SELECT company_id, email
+         FROM invitations
+         WHERE token_hash = $1`,
+        [secretHash],
+      );
+      const identity = invitationIdentity.rows[0];
+      if (!identity) throw fail('Convite inválido.', 404);
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+        [identity.company_id, identity.email],
+      );
       const invitationResult = await client.query(
         `SELECT id, company_id, email, role, token_hash, expires_at, accepted_at
          FROM invitations

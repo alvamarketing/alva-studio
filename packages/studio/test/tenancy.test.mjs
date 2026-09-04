@@ -176,3 +176,45 @@ test('convite antigo não restaura papel depois que outro convite foi aceito', a
     assert.deepEqual(membership.rows[0], { role: 'admin', status: 'active' });
   });
 });
+
+test('dois aceites simultâneos deixam um convite válido e outro inválido sem erro interno', async (t) => {
+  await withHarness(t, async ({ database, companies }) => {
+    const owner = await createUser(database, { email: 'owner@example.com', name: 'Owner' });
+    const invited = await createUser(database, { email: 'invited@example.com', name: 'Invited' });
+    const company = await companies.create({ ownerUserId: owner.id, name: 'Empresa', slug: 'empresa' });
+    const first = await companies.invite({
+      companyId: company.id,
+      actorUserId: owner.id,
+      email: invited.email,
+      role: 'editor',
+    });
+    const second = await companies.invite({
+      companyId: company.id,
+      actorUserId: owner.id,
+      email: invited.email,
+      role: 'admin',
+    });
+    await database.query(`
+      CREATE FUNCTION delay_concurrent_membership() RETURNS trigger AS $$
+      BEGIN
+        PERFORM pg_sleep(0.15);
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER memberships_delay_concurrent_acceptance
+        BEFORE INSERT ON company_memberships
+        FOR EACH ROW EXECUTE FUNCTION delay_concurrent_membership();
+    `);
+
+    const results = await Promise.allSettled([
+      companies.acceptInvitation({ secret: first.secret, userId: invited.id }),
+      companies.acceptInvitation({ secret: second.secret, userId: invited.id }),
+    ]);
+    const accepted = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+
+    assert.equal(accepted.length, 1);
+    assert.equal(rejected.length, 1);
+    assert.equal(rejected[0].reason.statusCode, 404);
+  });
+});
