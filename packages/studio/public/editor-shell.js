@@ -1,20 +1,54 @@
 import { blocks, normalizeForms, templateCss } from './templates.js';
 
+const svg = (body) =>
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 const icons = {
-  section: '▤',
-  columns: '▥',
-  heading: 'T',
-  text: '≡',
-  image: '▧',
-  button: '↗',
-  form: '☷',
-  input: '▱',
-  'hero-section': '▣',
-  'benefits-section': '✓',
-  'testimonials-section': '❝',
-  'faq-section': '?',
-  'contact-section': '✉',
+  section: svg('<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16"/>'),
+  columns: svg('<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M12 5v14"/>'),
+  heading: svg('<path d="M5 6v12M19 6v12M5 12h14"/>'),
+  text: svg('<path d="M5 7h14M5 12h11M5 17h14"/>'),
+  image: svg(
+    '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m6 17 4-4 3 3 2-2 3 3"/>',
+  ),
+  button: svg('<rect x="4" y="7" width="16" height="10" rx="3"/><path d="m11 10 3 2-3 2"/>'),
+  form: svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>'),
+  input: svg('<rect x="4" y="8" width="16" height="8" rx="2"/><path d="M8 12h5"/>'),
+  'hero-section': svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h7M7 12h10M7 16h5"/>'),
+  'benefits-section': svg('<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>'),
+  'testimonials-section': svg(
+    '<path d="M7 17H5a2 2 0 0 1-2-2v-3a5 5 0 0 1 5-5v3a2 2 0 0 0-2 2h1v5Zm10 0h-2a2 2 0 0 1-2-2v-3a5 5 0 0 1 5-5v3a2 2 0 0 0-2 2h1v5Z"/>',
+  ),
+  'faq-section': svg(
+    '<circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 1 1 3.5 2.1c-.8.4-1.3 1-1.3 1.9m0 3h.01"/>',
+  ),
+  'contact-section': svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/>'),
 };
+
+export const editorActionMeta = Object.freeze({
+  undo: { label: 'Desfazer', icon: svg('<path d="M9 7 4 12l5 5"/><path d="M20 17a8 8 0 0 0-13-5"/>') },
+  redo: { label: 'Refazer', icon: svg('<path d="m15 7 5 5-5 5"/><path d="M4 17a8 8 0 0 1 13-5"/>') },
+  moveUp: { label: 'Mover acima', icon: svg('<path d="m12 19V5m-6 6 6-6 6 6"/>') },
+  moveDown: { label: 'Mover abaixo', icon: svg('<path d="M12 5v14m6-6-6 6-6-6"/>') },
+  selectParent: {
+    label: 'Selecionar grupo',
+    icon: svg('<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/>'),
+  },
+  duplicate: {
+    label: 'Duplicar',
+    icon: svg(
+      '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    ),
+  },
+  delete: { label: 'Excluir', icon: svg('<path d="M4 7h16m-10 4v5m4-5v5M9 7l1-3h4l1 3m3 0-1 13H7L6 7"/>') },
+});
+
+export function panelMode(component) {
+  return !component || component.is?.('wrapper') ? 'library' : 'inspector';
+}
+
+export function isCanvasBackgroundElement(element) {
+  return /^(HTML|BODY|MAIN|SECTION)$/.test(String(element?.tagName || '').toUpperCase());
+}
 const escapeText = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -70,13 +104,24 @@ export function createFriendlyEditor({
   const host = typeof container === 'string' ? document.querySelector(container) : container;
   if (!host) throw new Error('Não foi possível abrir a área de edição.');
   host.classList.add('friendly-editor');
-  host.innerHTML = `<div class="fe-library"><div class="fe-panel-heading"><span class="fe-eyebrow">CONSTRUA SUA PÁGINA</span><h2>Adicionar elementos</h2><p>Clique para adicionar ou arraste para o lugar desejado.</p></div><div class="fe-blocks"></div><div class="fe-library-tip"><strong>Comece pelo essencial</strong><p>Um título claro, uma imagem e um convite para conversar.</p></div></div><div class="fe-workspace"><div class="fe-canvas-bar"><span>Selecione um elemento para editar</span><div><button type="button" data-undo title="Desfazer (Ctrl/Cmd + Z)">↶ Desfazer</button><button type="button" data-redo title="Refazer">↷ Refazer</button></div></div><div class="fe-canvas"></div><div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div></div><div class="fe-inspector" aria-label="Editar elemento"><div class="fe-properties"></div></div>`;
+  host.innerHTML = `<aside class="fe-sidebar"><div class="fe-library"><div class="fe-panel-heading"><span class="fe-eyebrow">CONSTRUA SUA PÁGINA</span><h2>Adicionar elementos</h2><p>Clique para adicionar ou arraste para o lugar desejado.</p></div><div class="fe-blocks"></div><div class="fe-library-tip"><strong>Comece pelo essencial</strong><p>Um título claro, uma imagem e um convite para conversar.</p></div></div><div class="fe-inspector" aria-label="Editar elemento" hidden><div class="fe-properties"></div></div></aside><div class="fe-workspace"><div class="fe-canvas-bar" aria-label="Histórico de edição"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></div><div class="fe-canvas"></div><div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div></div>`;
   const $ = (selector) => host.querySelector(selector);
   const props = $('.fe-properties');
   const status = $('.fe-status');
   let loading = true;
   let repaint;
   let activeModel;
+  const cleanup = [];
+  function applyIconButton(element, action, shortcut = '') {
+    const meta = editorActionMeta[action];
+    const label = shortcut ? `${meta.label} (${shortcut})` : meta.label;
+    element.innerHTML = meta.icon;
+    element.setAttribute('aria-label', label);
+    element.title = label;
+    element.dataset.tooltip = meta.label;
+  }
+  applyIconButton($('.fe-canvas-bar [data-undo]'), 'undo', 'Ctrl/Cmd + Z');
+  applyIconButton($('.fe-canvas-bar [data-redo]'), 'redo');
   const editor = window.grapesjs.init({
     container: $('.fe-canvas'),
     height: '100%',
@@ -124,6 +169,18 @@ export function createFriendlyEditor({
     policy.httpEquiv = 'Content-Security-Policy';
     policy.content = "script-src 'none'; form-action 'none'; base-uri 'none'";
     doc.head.prepend(policy);
+    const clearSelection = (event) => {
+      if (event.key === 'Escape' || isCanvasBackgroundElement(event.target)) {
+        editor.select(editor.getWrapper());
+        render();
+      }
+    };
+    doc.addEventListener('keydown', clearSelection);
+    doc.addEventListener('click', clearSelection);
+    cleanup.push(() => {
+      doc.removeEventListener('keydown', clearSelection);
+      doc.removeEventListener('click', clearSelection);
+    });
   });
   editor.DomComponents.addType('alva-field', {
     isComponent: (element) => element.tagName === 'INPUT',
@@ -190,7 +247,7 @@ export function createFriendlyEditor({
     const added = target.append(block.get('content'), at === undefined ? {} : { at });
     formStyles();
     if (added[0]) editor.select(added[0], { scroll: true });
-    announce(`${block.get('label')} adicionado. Ajuste o conteúdo no painel à direita.`);
+    announce(`${block.get('label')} adicionado. Ajuste o conteúdo no painel lateral.`);
   }
   $('.fe-blocks').addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -273,8 +330,11 @@ export function createFriendlyEditor({
   function button(parent, text, action, options = {}) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.textContent = text;
-    if (options.className) b.className = options.className;
+    if (options.icon) {
+      b.classList.add('fe-icon-button');
+      applyIconButton(b, options.icon);
+    } else b.textContent = text;
+    if (options.className) b.classList.add(...options.className.split(/\s+/).filter(Boolean));
     b.disabled = !!options.disabled;
     b.onclick = () => run(action);
     parent.append(b);
@@ -331,22 +391,13 @@ export function createFriendlyEditor({
     )
       return;
     activeModel = model;
+    const mode = panelMode(model);
+    $('.fe-library').hidden = mode !== 'library';
+    $('.fe-inspector').hidden = mode !== 'inspector';
     $('.fe-canvas-bar [data-undo]').disabled = !editor.UndoManager.hasUndo();
     $('.fe-canvas-bar [data-redo]').disabled = !editor.UndoManager.hasRedo();
     props.replaceChildren();
-    if (!model || model.is('wrapper')) {
-      const empty = section('Dê a sua cara à página');
-      empty.classList.add('fe-inspector-empty');
-      help(empty, 'Clique em um texto, imagem ou botão da página para personalizar.');
-      help(
-        empty,
-        '1. Adicione elementos à esquerda.\n2. Selecione o que deseja mudar.\n3. Ajuste aqui e confira na prévia.',
-      );
-      button(empty, 'Selecionar o primeiro elemento', () => editor.select(editor.getWrapper().components().at(0)), {
-        disabled: !editor.getWrapper().components().length,
-      });
-      return;
-    }
+    if (mode === 'library') return;
     const tag = tagOf(model);
     const attrs = model.getAttributes();
     const head = section('Editar ' + componentLabel(model).toLocaleLowerCase('pt-BR'));
@@ -364,18 +415,25 @@ export function createFriendlyEditor({
     actions.className = 'fe-element-actions';
     head.append(actions);
     const parent = model.parent();
-    button(actions, '↑ Mover acima', () => model.move(parent, { at: model.index() - 1 }), {
+    button(actions, 'Mover acima', () => model.move(parent, { at: model.index() - 1 }), {
       disabled: !parent || model.index() === 0,
+      icon: 'moveUp',
     });
-    button(actions, '↓ Mover abaixo', () => model.move(parent, { at: model.index() + 2 }), {
+    button(actions, 'Mover abaixo', () => model.move(parent, { at: model.index() + 2 }), {
       disabled: !parent || model.index() >= parent.components().length - 1,
+      icon: 'moveDown',
     });
-    button(actions, 'Selecionar grupo', () => editor.select(parent), { disabled: !parent });
-    button(actions, 'Duplicar', () => {
-      const copy = model.clone();
-      parent.append(copy, { at: model.index() + 1 });
-      editor.select(copy);
-    });
+    button(actions, 'Selecionar grupo', () => editor.select(parent), { disabled: !parent, icon: 'selectParent' });
+    button(
+      actions,
+      'Duplicar',
+      () => {
+        const copy = model.clone();
+        parent.append(copy, { at: model.index() + 1 });
+        editor.select(copy);
+      },
+      { icon: 'duplicate' },
+    );
     button(
       actions,
       'Excluir',
@@ -384,7 +442,7 @@ export function createFriendlyEditor({
         editor.select(parent);
         announce('Elemento excluído. Use Desfazer para recuperar.');
       },
-      { className: 'fe-danger' },
+      { className: 'fe-danger', icon: 'delete' },
     );
 
     const content = section('Conteúdo');
@@ -538,8 +596,11 @@ export function createFriendlyEditor({
     if (content.children.length === 1)
       help(content, 'Selecione um elemento dentro deste grupo para editar seu conteúdo.');
     const appearance = section('Aparência');
-    color(appearance, model, 'Cor do texto', 'color');
-    color(appearance, model, 'Cor de fundo', 'background-color');
+    const colors = document.createElement('div');
+    colors.className = 'fe-color-grid';
+    appearance.append(colors);
+    color(colors, model, 'Cor do texto', 'color');
+    color(colors, model, 'Cor de fundo', 'background-color');
     if (textTags.test(tag) || ['input', 'textarea'].includes(tag)) {
       styleNumber(appearance, model, 'Tamanho do texto (px)', 'font-size', 16, 200);
       field(
@@ -614,7 +675,24 @@ export function createFriendlyEditor({
     render();
   });
   editor.on('load', render);
-  editor.on('destroy', () => clearTimeout(repaint));
+  const clearFromKeyboard = (event) => {
+    if (event.key !== 'Escape') return;
+    editor.select(editor.getWrapper());
+    render();
+  };
+  const clearFromCanvasBackground = (event) => {
+    if (!event.target.matches('.fe-canvas, .gjs-cv-canvas, .gjs-cv-canvas__frames')) return;
+    editor.select(editor.getWrapper());
+    render();
+  };
+  host.addEventListener('keydown', clearFromKeyboard);
+  $('.fe-canvas').addEventListener('click', clearFromCanvasBackground);
+  cleanup.push(() => host.removeEventListener('keydown', clearFromKeyboard));
+  cleanup.push(() => $('.fe-canvas').removeEventListener('click', clearFromCanvasBackground));
+  editor.on('destroy', () => {
+    clearTimeout(repaint);
+    cleanup.splice(0).forEach((dispose) => dispose());
+  });
   render();
   return editor;
 }
