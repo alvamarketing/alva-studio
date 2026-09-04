@@ -1,5 +1,6 @@
 import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability, normalizeRoute } from '../domain/access.mjs';
+import { randomUUID } from 'node:crypto';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -44,6 +45,11 @@ function route(value) {
 function lockVersion(value) {
   if (!Number.isInteger(value) || value < 0) throw fail('Revisão inválida.', 400);
   return value;
+}
+
+function copyRoute(value) {
+  const suffix = `-copia-${randomUUID().slice(0, 8)}`;
+  return route(`${value.slice(0, 120 - suffix.length)}${suffix}`);
 }
 
 function routeConflict(error) {
@@ -433,6 +439,58 @@ export class ContentRepository {
       if (route.rowCount !== 1) throw fail('Rota não encontrada.', 404);
       return { ok: true };
     });
+  }
+
+  async duplicatePage({ companyId, projectId, actorId, pageId }) {
+    try {
+      return await withTransaction(this.database, async (client) => {
+        await authorizedProject(client, { companyId, projectId, actorId, capability: 'page.write' });
+        const source = await scopedPage(client, { companyId, projectId, pageId, lock: false });
+        const nextRoute = copyRoute(source.route);
+        const routeId = await createRoute(client, { companyId, projectId, path: nextRoute, contentType: 'page' });
+        const { rows } = await client.query(
+          `INSERT INTO pages (company_id, project_id, route_id, name, template, editor_state, rendered_html, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING *`,
+          [companyId, projectId, routeId, `${source.name} — cópia`.slice(0, 100), source.template,
+            JSON.stringify(source.editor_state), source.rendered_html, actorId],
+        );
+        return pageRecord({ ...rows[0], route: nextRoute });
+      });
+    } catch (error) {
+      throw routeConflict(error);
+    }
+  }
+
+  async duplicateForm({ companyId, projectId, actorId, formId }) {
+    try {
+      return await withTransaction(this.database, async (client) => {
+        await authorizedProject(client, { companyId, projectId, actorId, capability: 'form.write' });
+        const source = await scopedForm(client, { companyId, projectId, formId, lock: false });
+        const nextRoute = copyRoute(source.route);
+        const routeId = await createRoute(client, { companyId, projectId, path: nextRoute, contentType: 'form' });
+        const { rows } = await client.query(
+          `INSERT INTO forms (company_id, project_id, route_id, name, draft_schema, created_by)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING *`,
+          [companyId, projectId, routeId, `${source.name} — cópia`.slice(0, 100), JSON.stringify(source.draft_schema), actorId],
+        );
+        return formRecord({ ...rows[0], route: nextRoute });
+      });
+    } catch (error) {
+      throw routeConflict(error);
+    }
+  }
+
+  async submissions({ companyId, projectId, actorId, formId }) {
+    await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'submission.read' });
+    await scopedForm(this.database, { companyId, projectId, formId });
+    const { rows } = await this.database.query(
+      `SELECT id, answers, submitted_at
+       FROM form_submissions
+       WHERE company_id = $1 AND project_id = $2 AND form_id = $3
+       ORDER BY submitted_at DESC, id DESC`,
+      [companyId, projectId, formId],
+    );
+    return rows.map((row) => ({ id: row.id, formId, answers: row.answers, submittedAt: row.submitted_at }));
   }
 
   async publishPage({ companyId, projectId, actorId, pageId }) {

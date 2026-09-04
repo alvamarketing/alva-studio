@@ -7,6 +7,10 @@ const scrypt = promisify(scryptCallback);
 const TOKEN_BYTES = 32;
 const DEFAULT_TTL = 12 * 60 * 60 * 1000;
 const HEX = /^[a-f0-9]+$/i;
+const DUMMY_SCRYPT = Object.freeze({
+  salt: '00112233445566778899aabbccddeeff',
+  hash: '0'.repeat(128),
+});
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -63,11 +67,13 @@ async function newHash(value) {
 
 async function verifyPassword(value, stored) {
   if (typeof value !== 'string' || value.length > 256) return { valid: false, legacy: false };
-  const shape = hashShape(stored);
-  if (!shape) return { valid: false, legacy: false };
+  const shape = hashShape(stored) ?? { ...DUMMY_SCRYPT, legacy: false, dummy: true };
   const expected = Buffer.from(shape.hash, 'hex');
   const actual = await scrypt(value, shape.salt, expected.length);
-  return { valid: actual.length === expected.length && timingSafeEqual(actual, expected), legacy: shape.legacy };
+  return {
+    valid: !shape.dummy && actual.length === expected.length && timingSafeEqual(actual, expected),
+    legacy: shape.legacy,
+  };
 }
 
 export class SessionService {
@@ -92,14 +98,13 @@ export class SessionService {
   }
 
   async setup(input) {
-    const configured = await this.setupRequired();
-    if (!configured) throw fail('A conta inicial já foi configurada.', 409);
     const userName = displayName(input.name);
     const userEmail = email(input.email);
     const companyName = String(input.companyName ?? userName).trim() || userName;
     const companySlug = normalizeProjectSlug(input.companySlug ?? companyName).slice(0, 80);
     const passwordHash = await newHash(input.password);
     return withTransaction(this.database, async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock($1, $2)', [184941, 1]);
       const present = await client.query('SELECT 1 FROM users LIMIT 1 FOR UPDATE');
       if (present.rowCount) throw fail('A conta inicial já foi configurada.', 409);
       const user = (await client.query(
@@ -255,7 +260,7 @@ export class SessionService {
       if (error.status === 401) return null;
       throw error;
     });
-    if (!context) return { setupRequired, authenticated: false, user: null, companies: [], currentCompanyId: null, currentProjectId: null };
+    if (!context) return { setupRequired, authenticated: false, user: null, owner: null, companies: [], currentCompanyId: null, currentProjectId: null };
     return this.stateFor(context);
   }
 
@@ -264,6 +269,7 @@ export class SessionService {
       setupRequired: false,
       authenticated: true,
       user: context.user,
+      owner: { name: context.user.displayName, email: context.user.email },
       companies: await this.companiesFor(context.user.id),
       currentCompanyId: context.companyId,
       currentProjectId: context.projectId ?? context.currentProjectId ?? null,
@@ -309,15 +315,20 @@ export class SessionService {
           `UPDATE users SET display_name = $2, email = $3, password_hash = COALESCE($4, password_hash), updated_at = now()
            WHERE id = $1`, [context.user.id, nextName, nextEmail, nextPassword],
         );
-        await client.query('UPDATE sessions SET revoked_at = COALESCE(revoked_at, now()) WHERE user_id = $1', [context.user.id]);
+        if (nextPassword)
+          await client.query('UPDATE sessions SET revoked_at = COALESCE(revoked_at, now()) WHERE user_id = $1', [context.user.id]);
       });
     } catch (error) {
       if (error.code === '23505') throw fail('Este e-mail já está em uso.', 409);
       throw error;
     }
-    const login = await this.login({ email: nextEmail, password: input.newPassword ?? currentPassword });
-    await this.issue(res, { user: login.user, ...login }, secure);
-    return this.stateFor({ ...login, currentProjectId: login.projectId });
+    const nextContext = {
+      ...context,
+      user: { id: context.user.id, email: nextEmail, displayName: nextName },
+      projectId: context.currentProjectId,
+    };
+    if (nextPassword) await this.issue(res, nextContext, secure);
+    return this.stateFor(nextContext);
   }
 
   async clearCurrentProject(projectId) {

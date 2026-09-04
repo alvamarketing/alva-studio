@@ -15,7 +15,13 @@ async function legacyPassword(password) {
 }
 
 async function start(t, database, options = {}) {
-  const server = createApp({ database, sessionOptions: { sessionTTL: 60_000, ...options } });
+  const { publicOrigin, authOptions, sessionOptions = {} } = options;
+  const server = createApp({
+    database,
+    publicOrigin,
+    authOptions,
+    sessionOptions: { sessionTTL: 60_000, ...sessionOptions },
+  });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -140,7 +146,9 @@ test('APIs do projeto exigem sessão, ocultam recursos cruzados e aplicam capaci
   assert.deepEqual(page.editorState, { pages: [] });
   assert.equal((await alice.request(`/api/projects/${records.projectB.id}/pages`)).status, 404);
   assert.equal((await alice.request('/api/pages')).status, 200);
-  assert.equal((await alice.request('/api/pages', 'POST', { name: 'Nunca', project: {} })).status, 400);
+  assert.equal((await alice.request(`/api/projects/${records.projectA.id}/pages`, 'POST', {
+    name: 'Nunca', route: '/nunca', project: {}, editorState: {}, renderedHtml: '',
+  })).status, 400);
 
   await analyst.request('/api/login', 'POST', { email: 'analista@alva.test', password: records.password });
   assert.equal((await analyst.request(`/api/projects/${records.projectA.id}/pages`)).status, 200);
@@ -153,7 +161,159 @@ test('APIs do projeto exigem sessão, ocultam recursos cruzados e aplicam capaci
   await database.close();
 });
 
-test('expiração, senha e remoção de membro revogam sessões persistentes', async (t) => {
+test('a borda SaaS ignora identificadores de escopo enviados no corpo', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  const created = await alice.request(`/api/projects/${records.projectA.id}/pages`, 'POST', {
+    name: 'Escopo protegido', route: '/escopo-protegido', editorState: {}, renderedHtml: '',
+    companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.bob.id,
+  });
+  assert.equal(created.status, 201);
+  const page = await created.json();
+  assert.equal(page.companyId, records.companyA.id);
+  assert.equal(page.projectId, records.projectA.id);
+  const persisted = await database.query('SELECT company_id, project_id, created_by FROM pages WHERE id = $1', [page.id]);
+  assert.deepEqual(persisted.rows[0], {
+    company_id: records.companyA.id,
+    project_id: records.projectA.id,
+    created_by: records.alice.id,
+  });
+  const updated = await alice.request(`/api/pages/${page.id}`, 'PUT', {
+    name: 'Escopo ainda protegido', revision: page.lockVersion, project: { pages: ['atualizada'] }, html: '<main>ok</main>',
+    companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.bob.id,
+  });
+  assert.equal(updated.status, 200);
+  const afterUpdate = await database.query('SELECT company_id, project_id, created_by FROM pages WHERE id = $1', [page.id]);
+  assert.deepEqual(afterUpdate.rows[0], persisted.rows[0]);
+  const projectUpdate = await alice.request(`/api/projects/${records.projectA.id}`, 'PUT', {
+    name: 'Projeto A protegido', slug: 'projeto-a-protegido', companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.bob.id,
+  });
+  assert.equal(projectUpdate.status, 200);
+  assert.equal((await database.query('SELECT company_id FROM projects WHERE id = $1', [records.projectA.id])).rows[0].company_id, records.companyA.id);
+  const formCreated = await alice.request(`/api/projects/${records.projectA.id}/forms`, 'POST', {
+    name: 'Formulário protegido', route: '/formulario-protegido', draftSchema: { steps: [] },
+    companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.bob.id,
+  });
+  assert.equal(formCreated.status, 201);
+  const form = await formCreated.json();
+  const formUpdated = await alice.request(`/api/forms/${form.id}`, 'PUT', {
+    revision: form.lockVersion, webhook: 'https://example.test/webhook',
+    companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.bob.id,
+  });
+  assert.equal(formUpdated.status, 200);
+  assert.deepEqual((await database.query(
+    'SELECT company_id, project_id, created_by FROM forms WHERE id = $1', [form.id],
+  )).rows[0], {
+    company_id: records.companyA.id,
+    project_id: records.projectA.id,
+    created_by: records.alice.id,
+  });
+  await database.close();
+});
+
+test('setup SaaS permanece local, é limitado e serializa a primeira conta', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const app = await start(t, database);
+  const first = client(app.base);
+  const second = client(app.base);
+  const setup = { name: 'Primeira conta', email: 'primeira@alva.test', password: 'senha-inicial-segura' };
+  const raced = await Promise.all([
+    first.request('/api/setup', 'POST', setup),
+    second.request('/api/setup', 'POST', setup),
+  ]);
+  assert.deepEqual(raced.map((response) => response.status).sort(), [201, 409]);
+  assert.equal((await database.query('SELECT count(*)::int AS count FROM users')).rows[0].count, 1);
+  await database.close();
+});
+
+test('setup público é bloqueado e login SaaS compartilha o limitador existente', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  await seed(database);
+  const app = await start(t, database, { publicOrigin: 'https://studio.alva.test' });
+  const publicSetup = await fetch(`${app.base}/api/setup`, {
+    method: 'POST',
+    headers: {
+      Host: 'studio.alva.test', Origin: 'https://studio.alva.test', 'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: 'Bloqueado', email: 'bloqueado@alva.test', password: 'senha-inicial-segura' }),
+  });
+  assert.equal(publicSetup.status, 403);
+  await database.close();
+
+  const { connectionString: limitedConnection } = await postgresFixture(t);
+  const limitedDatabase = createDatabase({ connectionString: limitedConnection });
+  await migrate(limitedDatabase);
+  await seed(limitedDatabase);
+  const limitedApp = await start(t, limitedDatabase);
+  const unknown = client(limitedApp.base);
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    assert.equal((await unknown.request('/api/login', 'POST', {
+      email: 'ausente@alva.test', password: 'senha-inicial-segura',
+    })).status, 401);
+  }
+  assert.equal((await unknown.request('/api/login', 'POST', {
+    email: 'ausente@alva.test', password: 'senha-inicial-segura',
+  })).status, 429);
+  await limitedDatabase.close();
+});
+
+test('rotas legadas continuam o fluxo do painel sem usar Auth local nem segredo global', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  assert.deepEqual(await (await alice.request('/api/config')).json(), { vercelConnected: false, pending: true });
+  assert.equal((await alice.request('/api/settings')).status, 200);
+  assert.equal((await alice.request('/api/settings/vercel', 'PUT', { token: 'nao-persistir' })).status, 200);
+
+  const created = await alice.request('/api/pages', 'POST', { name: 'Página atual', template: 'services' });
+  assert.equal(created.status, 201);
+  let page = await created.json();
+  assert.equal(page.projectId, records.projectA.id);
+  assert.deepEqual(page.project, {});
+  page = await (await alice.request(`/api/pages/${page.id}`, 'PUT', {
+    revision: page.revision, project: { pages: [] }, html: '<main>Atualizada</main>', name: 'Página atualizada',
+  })).json();
+  assert.equal(page.revision, 1);
+  assert.deepEqual(page.project, { pages: [] });
+  assert.equal(page.html, '<main>Atualizada</main>');
+  const copied = await alice.request(`/api/pages/${page.id}/duplicate`, 'POST', {});
+  assert.equal(copied.status, 201);
+  assert.notEqual((await copied.json()).id, page.id);
+  assert.equal((await alice.request(`/api/pages/${page.id}/publish`, 'POST', { revision: page.revision })).status, 409);
+  assert.equal((await alice.request(`/api/pages/${page.id}/status`)).status, 409);
+  assert.equal((await alice.request(`/api/pages/${page.id}/domain`, 'POST', {})).status, 409);
+
+  const formCreated = await alice.request('/api/forms', 'POST', { name: 'Formulário atual' });
+  assert.equal(formCreated.status, 201);
+  let form = await formCreated.json();
+  assert.ok(Array.isArray(form.steps));
+  form = await (await alice.request(`/api/forms/${form.id}`, 'PUT', {
+    revision: form.revision, steps: [{ id: 'nome', type: 'short_text', title: 'Seu nome', required: true }],
+  })).json();
+  assert.equal(form.revision, 1);
+  assert.equal(form.steps[0].id, 'nome');
+  assert.equal((await alice.request(`/api/forms/${form.id}/duplicate`, 'POST', {})).status, 201);
+  assert.deepEqual(await (await alice.request(`/api/forms/${form.id}/submissions`)).json(), []);
+  assert.equal((await alice.request(`/api/forms/${form.id}`, 'DELETE', {})).status, 200);
+  await database.close();
+});
+
+test('expiração e remoção revogam sessões; atualização preserva contexto e troca de senha recria sessão', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
   await migrate(database);
@@ -167,16 +327,31 @@ test('expiração, senha e remoção de membro revogam sessões persistentes', a
   assert.equal((await (await alice.request('/api/session')).json()).authenticated, false);
   assert.equal((await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password })).status, 200);
 
+  const beforeUpdate = alice.cookie();
+  const update = await alice.request('/api/account', 'PUT', {
+    name: 'Alice Atualizada', email: 'alice-atualizada@alva.test', currentPassword: records.password,
+  });
+  assert.equal(update.status, 200);
+  assert.equal(alice.cookie(), beforeUpdate);
+  const afterUpdate = await (await alice.request('/api/session')).json();
+  assert.equal(afterUpdate.user.email, 'alice-atualizada@alva.test');
+  assert.equal(afterUpdate.currentCompanyId, records.companyA.id);
+  assert.equal(afterUpdate.currentProjectId, records.projectA.id);
+
   assert.equal(
     (await alice.request('/api/account', 'PUT', {
-      name: 'Alice Nova', email: 'alice@alva.test', currentPassword: records.password, newPassword: 'senha-nova-segura',
+      name: 'Alice Nova', email: 'alice-atualizada@alva.test', currentPassword: records.password, newPassword: 'senha-nova-segura',
     })).status,
     200,
   );
+  assert.notEqual(alice.cookie(), beforeUpdate);
+  const afterPassword = await (await alice.request('/api/session')).json();
+  assert.equal(afterPassword.currentCompanyId, records.companyA.id);
+  assert.equal(afterPassword.currentProjectId, records.projectA.id);
   assert.equal((await fetch(app.base + '/api/session', { headers: { Cookie: original } })).status, 200);
   assert.equal((await (await fetch(app.base + '/api/session', { headers: { Cookie: original } })).json()).authenticated, false);
 
-  const relogin = await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: 'senha-nova-segura' });
+  const relogin = await alice.request('/api/login', 'POST', { email: 'alice-atualizada@alva.test', password: 'senha-nova-segura' });
   assert.equal(relogin.status, 200);
   await database.query(
     "UPDATE company_memberships SET status = 'removed' WHERE company_id = $1 AND user_id = $2",

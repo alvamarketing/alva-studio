@@ -70,6 +70,12 @@ export function createApp({
       content: new ContentRepository(database),
       body,
       secure: Boolean(publicOrigin),
+      limit: (address) => auth.limit(address),
+      setupAllowed: (req) => {
+        const expected = `127.0.0.1:${req.socket.localPort}`;
+        const localHost = req.headers.host === expected || req.headers.host === `localhost:${req.socket.localPort}`;
+        return !publicOrigin && localHost && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+      },
     })
     : null;
   const publishing = new Set();
