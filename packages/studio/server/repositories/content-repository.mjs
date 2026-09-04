@@ -1,6 +1,7 @@
 import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability, normalizeRoute } from '../domain/access.mjs';
 import { randomUUID } from 'node:crypto';
+import { validateFormAnswers } from '../form-answer-validation.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -88,7 +89,34 @@ function formRecord(row) {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    submissionCount: Number(row.submission_count ?? 0),
   };
+}
+
+function publicSlug(value) {
+  if (!/^[a-z0-9-]{3,119}$/.test(String(value))) throw fail('Formulário não encontrado.', 404);
+  return route(`/${value}`);
+}
+
+function domain(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(normalized))
+    throw fail('Domínio inválido.', 400);
+  return normalized;
+}
+
+function webhook(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+  if (normalized.length > 2000) throw fail('Webhook inválido.', 400);
+  try {
+    const url = new URL(normalized);
+    if (url.protocol !== 'https:' || url.username || url.password) throw new Error('unsafe');
+  } catch {
+    throw fail('Informe um webhook HTTPS válido.', 400);
+  }
+  return normalized;
 }
 
 function pageVersionRecord(row) {
@@ -166,7 +194,8 @@ async function scopedPage(client, { companyId, projectId, pageId, lock }) {
 
 async function scopedForm(client, { companyId, projectId, formId, lock }) {
   const { rows } = await client.query(
-    `SELECT f.*, route.path AS route
+    `SELECT f.*, route.path AS route,
+            (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = f.id) AS submission_count
      FROM forms f
      JOIN project_routes route
        ON route.id = f.route_id
@@ -299,7 +328,8 @@ export class ContentRepository {
   async listForms({ companyId, projectId, actorId }) {
     await authorizedProject(this.database, { companyId, projectId, actorId });
     const { rows } = await this.database.query(
-      `SELECT f.*, route.path AS route
+    `SELECT f.*, route.path AS route,
+            (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = f.id) AS submission_count
        FROM forms f
        JOIN project_routes route ON route.id = f.route_id AND route.deleted_at IS NULL
        WHERE f.company_id = $1 AND f.project_id = $2 AND f.deleted_at IS NULL
@@ -468,10 +498,11 @@ export class ContentRepository {
         const source = await scopedForm(client, { companyId, projectId, formId, lock: false });
         const nextRoute = copyRoute(source.route);
         const routeId = await createRoute(client, { companyId, projectId, path: nextRoute, contentType: 'form' });
+        const schema = { ...source.draft_schema, webhook: '' };
         const { rows } = await client.query(
           `INSERT INTO forms (company_id, project_id, route_id, name, draft_schema, created_by)
            VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING *`,
-          [companyId, projectId, routeId, `${source.name} — cópia`.slice(0, 100), JSON.stringify(source.draft_schema), actorId],
+          [companyId, projectId, routeId, `${source.name} — cópia`.slice(0, 100), JSON.stringify(schema), actorId],
         );
         return formRecord({ ...rows[0], route: nextRoute });
       });
@@ -491,6 +522,153 @@ export class ContentRepository {
       [companyId, projectId, formId],
     );
     return rows.map((row) => ({ id: row.id, formId, answers: row.answers, submittedAt: row.submitted_at }));
+  }
+
+  async pageSettings({ companyId, projectId, actorId, pageId }) {
+    await authorizedProject(this.database, { companyId, projectId, actorId });
+    await scopedPage(this.database, { companyId, projectId, pageId });
+    const [domains, integrations] = await Promise.all([
+      this.database.query(
+        `SELECT domain FROM project_domains
+         WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND is_canonical
+         ORDER BY updated_at DESC LIMIT 1`, [companyId, projectId],
+      ),
+      this.database.query(
+        `SELECT configuration FROM project_integrations
+         WHERE company_id = $1 AND project_id = $2 AND provider = 'studio-page-settings' AND environment = 'production'`,
+        [companyId, projectId],
+      ),
+    ]);
+    const settings = integrations.rows[0]?.configuration?.pageWebhooks ?? {};
+    return { domain: domains.rows[0]?.domain ?? '', webhook: typeof settings[pageId] === 'string' ? settings[pageId] : '' };
+  }
+
+  validatePageSettings({ domain: domainValue, webhook: webhookValue }) {
+    if (domainValue !== undefined) domain(domainValue);
+    if (webhookValue !== undefined) webhook(webhookValue);
+  }
+
+  async updatePageSettings({ companyId, projectId, actorId, pageId, domain: domainValue, webhook: webhookValue }) {
+    if (domainValue === undefined && webhookValue === undefined) return this.pageSettings({ companyId, projectId, actorId, pageId });
+    try {
+      return await withTransaction(this.database, async (client) => {
+        await authorizedProject(client, { companyId, projectId, actorId, capability: 'page.write' });
+        await scopedPage(client, { companyId, projectId, pageId, lock: true });
+        if (domainValue !== undefined) {
+          const nextDomain = domain(domainValue);
+          if (!nextDomain) {
+            await client.query(
+              `DELETE FROM project_domains
+               WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND is_canonical`,
+              [companyId, projectId],
+            );
+          } else {
+            const existing = await client.query(
+              `SELECT id FROM project_domains
+               WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND is_canonical FOR UPDATE`,
+              [companyId, projectId],
+            );
+            if (existing.rowCount) {
+              await client.query(
+                `UPDATE project_domains SET domain = $4, verification_status = 'pending', updated_at = now()
+                 WHERE company_id = $1 AND project_id = $2 AND id = $3`,
+                [companyId, projectId, existing.rows[0].id, nextDomain],
+              );
+            } else {
+              await client.query(
+                `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical)
+                 VALUES ($1, $2, 'production', $3, true)`, [companyId, projectId, nextDomain],
+              );
+            }
+          }
+        }
+        if (webhookValue !== undefined) {
+          const nextWebhook = webhook(webhookValue);
+          const current = await client.query(
+            `SELECT id, configuration FROM project_integrations
+             WHERE company_id = $1 AND project_id = $2 AND provider = 'studio-page-settings' AND environment = 'production' FOR UPDATE`,
+            [companyId, projectId],
+          );
+          const pageWebhooks = { ...(current.rows[0]?.configuration?.pageWebhooks ?? {}) };
+          if (nextWebhook) pageWebhooks[pageId] = nextWebhook;
+          else delete pageWebhooks[pageId];
+          if (current.rowCount) {
+            await client.query(
+              `UPDATE project_integrations SET configuration = $4::jsonb, updated_at = now()
+               WHERE company_id = $1 AND project_id = $2 AND id = $3`,
+              [companyId, projectId, current.rows[0].id, JSON.stringify({ pageWebhooks })],
+            );
+          } else {
+            await client.query(
+              `INSERT INTO project_integrations (company_id, project_id, provider, environment, configuration)
+               VALUES ($1, $2, 'studio-page-settings', 'production', $3::jsonb)`,
+              [companyId, projectId, JSON.stringify({ pageWebhooks })],
+            );
+          }
+        }
+        const [domains, integrations] = await Promise.all([
+          client.query(
+            `SELECT domain FROM project_domains
+             WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND is_canonical
+             ORDER BY updated_at DESC LIMIT 1`, [companyId, projectId],
+          ),
+          client.query(
+            `SELECT configuration FROM project_integrations
+             WHERE company_id = $1 AND project_id = $2 AND provider = 'studio-page-settings' AND environment = 'production'`,
+            [companyId, projectId],
+          ),
+        ]);
+        const pageWebhooks = integrations.rows[0]?.configuration?.pageWebhooks ?? {};
+        return { domain: domains.rows[0]?.domain ?? '', webhook: typeof pageWebhooks[pageId] === 'string' ? pageWebhooks[pageId] : '' };
+      });
+    } catch (error) {
+      throw routeConflict(error);
+    }
+  }
+
+  async publishedFormBySlug(client, slug) {
+    const publishedPath = publicSlug(slug);
+    const { rows } = await client.query(
+      `SELECT form.id, form.company_id, form.project_id, form.name, version.id AS version_id, version.schema
+       FROM forms form
+       JOIN project_routes route ON route.id = form.route_id AND route.deleted_at IS NULL
+       JOIN form_versions version ON version.id = form.published_version_id
+       WHERE route.path = $1 AND form.deleted_at IS NULL
+       ORDER BY form.created_at, form.id LIMIT 2`, [publishedPath],
+    );
+    if (rows.length !== 1) throw fail('Formulário publicado não encontrado.', 404);
+    return rows[0];
+  }
+
+  async publicForm(slug) {
+    const form = await this.publishedFormBySlug(this.database, slug);
+    return {
+      id: form.id,
+      companyId: form.company_id,
+      projectId: form.project_id,
+      versionId: form.version_id,
+      name: form.name,
+      ...form.schema,
+    };
+  }
+
+  async submitPublicForm(slug, input) {
+    return withTransaction(this.database, async (client) => {
+      const form = await this.publishedFormBySlug(client, slug);
+      const answers = validateFormAnswers(form.schema, input);
+      const { rows } = await client.query(
+        `INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers)
+         VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id, submitted_at`,
+        [form.company_id, form.project_id, form.id, form.version_id, JSON.stringify(answers)],
+      );
+      return {
+        id: rows[0].id,
+        form: { id: form.id, name: form.name, slug },
+        schema: form.schema,
+        answers,
+        submittedAt: rows[0].submitted_at,
+      };
+    });
   }
 
   async publishPage({ companyId, projectId, actorId, pageId }) {

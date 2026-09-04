@@ -62,12 +62,13 @@ export function createApp({
   const getPublisher = async () => injectedPublisher || new Publisher(await auth.credentials());
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
+  const content = database ? new ContentRepository(database) : null;
   const projectApi = database
     ? createProjectApi({
       sessionService: new SessionService(database, sessionOptions),
       companies: new CompanyRepository(database),
       projects: new ProjectRepository(database),
-      content: new ContentRepository(database),
+      content,
       body,
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),
@@ -110,7 +111,7 @@ export function createApp({
       const localHost = req.headers.host === expected || req.headers.host === 'localhost:' + res.socket.localPort;
       const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
       const path = new URL(req.url, 'http://' + expected).pathname;
-      const publicSubmission = req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/submit$/.test(path);
+      const publicSubmission = req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/(?:submit|submissions)$/.test(path);
       if (publicOrigin ? req.headers.host !== new URL(publicOrigin).host : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
@@ -140,6 +141,13 @@ export function createApp({
       }
       const publicForm = path.match(/^\/f\/([a-z0-9-]+)$/);
       if (req.method === 'GET' && publicForm) {
+        if (content) {
+          const form = await content.publicForm(publicForm[1]);
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+          return res.end(renderDynamicForm(form, `/api/public/forms/${publicForm[1]}/submissions`));
+        }
         const form = await formStore.getBySlug(publicForm[1]);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
@@ -147,6 +155,28 @@ export function createApp({
         return res.end(renderDynamicForm(form, `/api/public/forms/${form.id}/submit`));
       }
       const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
+      const saasSubmission = path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/submissions$/);
+      if (req.method === 'POST' && content && saasSubmission) {
+        const saved = await content.submitPublicForm(saasSubmission[1], await publicAnswers(req));
+        const form = { ...saved.schema, id: saved.form.id, name: saved.form.name, slug: saved.form.slug };
+        if (form.webhook) {
+          try {
+            await webhookFetch(form.webhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ form: saved.form, id: saved.id, answers: saved.answers, submittedAt: saved.submittedAt }),
+              signal: AbortSignal.timeout(5000),
+            });
+          } catch {
+            // The submission remains persisted when a recipient is unavailable.
+          }
+        }
+        const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.end(renderCompletion(completion.title, completion.message));
+      }
+      if (content && submission) throw error('Formulário publicado não encontrado.', 404);
       if (req.method === 'POST' && submission) {
         const form = await formStore.get(submission[1]);
         const saved = await formStore.submit(form.id, await publicAnswers(req));

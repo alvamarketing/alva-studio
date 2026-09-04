@@ -278,7 +278,7 @@ test('rotas legadas continuam o fluxo do painel sem usar Auth local nem segredo 
 
   assert.deepEqual(await (await alice.request('/api/config')).json(), { vercelConnected: false, pending: true });
   assert.equal((await alice.request('/api/settings')).status, 200);
-  assert.equal((await alice.request('/api/settings/vercel', 'PUT', { token: 'nao-persistir' })).status, 200);
+  assert.equal((await alice.request('/api/settings/vercel', 'PUT', { token: 'nao-persistir' })).status, 409);
 
   const created = await alice.request('/api/pages', 'POST', { name: 'Página atual', template: 'services' });
   assert.equal(created.status, 201);
@@ -310,6 +310,70 @@ test('rotas legadas continuam o fluxo do painel sem usar Auth local nem segredo 
   assert.equal((await alice.request(`/api/forms/${form.id}/duplicate`, 'POST', {})).status, 201);
   assert.deepEqual(await (await alice.request(`/api/forms/${form.id}/submissions`)).json(), []);
   assert.equal((await alice.request(`/api/forms/${form.id}`, 'DELETE', {})).status, 200);
+  await database.close();
+});
+
+test('formulário SaaS publicado usa slug público, persiste respostas e mantém configurações', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  const created = await alice.request('/api/forms', 'POST', { name: 'Diagnóstico público' });
+  assert.equal(created.status, 201);
+  let form = await created.json();
+  assert.equal(form.slug.startsWith('/'), false);
+  form = await (await alice.request(`/api/forms/${form.id}`, 'PUT', {
+    revision: form.revision,
+    headerElements: [],
+    steps: [{
+      id: 'inicio', title: 'Comece', motion: 'fade-up', elements: [
+        { id: 'email', type: 'email', title: 'Seu e-mail', required: true, placeholder: 'voce@empresa.com' },
+      ],
+    }],
+    completion: { title: 'Recebemos', message: 'Logo entraremos em contato.' },
+    webhook: 'https://hooks.example.test/receber',
+  })).json();
+  assert.equal(form.webhook, 'https://hooks.example.test/receber');
+  const publicPage = await fetch(`${app.base}/f/${form.slug}`);
+  const publicHtml = await publicPage.text();
+  assert.equal(publicPage.status, 200, publicHtml);
+  assert.match(publicHtml, new RegExp(`/api/public/forms/${form.slug}/submissions`));
+  const submitted = await fetch(`${app.base}/api/public/forms/${form.slug}/submissions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: { email: 'lead@alva.test' } }),
+  });
+  const completionHtml = await submitted.text();
+  assert.equal(submitted.status, 200, completionHtml);
+  assert.match(completionHtml, /Recebemos/);
+  assert.equal((await fetch(`${app.base}/api/public/forms/${form.slug}/submissions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: {} }),
+  })).status, 400);
+  const listed = await (await alice.request('/api/forms')).json();
+  assert.equal(listed.find((row) => row.id === form.id).submissionCount, 1);
+  const persisted = await database.query(
+    'SELECT company_id, project_id, form_id, form_version_id, answers FROM form_submissions WHERE form_id = $1', [form.id],
+  );
+  assert.deepEqual(persisted.rows[0].answers, { email: 'lead@alva.test' });
+  assert.equal(persisted.rows[0].company_id, records.companyA.id);
+  assert.equal(persisted.rows[0].project_id, records.projectA.id);
+  assert.equal(persisted.rows[0].form_version_id, form.publishedVersionId);
+  const duplicate = await alice.request(`/api/forms/${form.id}/duplicate`, 'POST', {});
+  assert.equal(duplicate.status, 201);
+  assert.equal((await duplicate.json()).webhook, '');
+
+  const page = await (await alice.request('/api/pages', 'POST', { name: 'Página com ajustes' })).json();
+  const savedPage = await alice.request(`/api/pages/${page.id}`, 'PUT', {
+    revision: page.revision, project: {}, html: '', domain: 'lp.alva.test', webhook: 'https://hooks.example.test/pagina',
+  });
+  assert.equal(savedPage.status, 200);
+  assert.equal((await savedPage.json()).domain, 'lp.alva.test');
+  const reloadedPage = await (await alice.request(`/api/pages/${page.id}`)).json();
+  assert.equal(reloadedPage.domain, 'lp.alva.test');
+  assert.equal(reloadedPage.webhook, 'https://hooks.example.test/pagina');
+  assert.equal((await alice.request('/api/settings/vercel', 'PUT', { token: 'nao-salvar' })).status, 409);
   await database.close();
 });
 

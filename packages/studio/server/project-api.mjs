@@ -32,13 +32,15 @@ function formInput(input = {}) {
   };
 }
 
-function legacyPage(page) {
+function legacyPage(page, settings = {}) {
   return {
     ...page,
     project: page.editorState,
     html: page.renderedHtml,
     revision: page.lockVersion,
     deployment: null,
+    domain: settings.domain ?? '',
+    webhook: settings.webhook ?? '',
   };
 }
 
@@ -59,14 +61,14 @@ function legacyForm(form) {
   const schema = form.draftSchema ?? initialLegacyForm();
   return {
     ...form,
-    slug: form.route,
+    slug: form.route.replace(/^\//, ''),
     headerElements: schema.headerElements ?? [],
     steps: schema.steps ?? [],
     completion: schema.completion ?? initialLegacyForm().completion,
     webhook: schema.webhook ?? '',
     revision: form.lockVersion,
     stepCount: (schema.steps ?? []).length,
-    submissionCount: 0,
+    submissionCount: form.submissionCount ?? 0,
   };
 }
 
@@ -85,6 +87,20 @@ function legacyFormPatch(input, form) {
 
 function pendingVercel() {
   return { connected: false, tokenConfigured: false, teamId: '', source: null, pending: true };
+}
+
+async function legacyPageFor(content, context, page) {
+  const settings = await content.pageSettings({
+    companyId: context.companyId, projectId: page.projectId, actorId: context.user.id, pageId: page.id,
+  });
+  return legacyPage(page, settings);
+}
+
+async function publishLegacyForm(content, context, projectId, form) {
+  await content.publishForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: form.id });
+  return legacyForm(await content.getForm({
+    companyId: context.companyId, projectId, actorId: context.user.id, formId: form.id,
+  }));
 }
 
 export function createProjectApi({
@@ -126,7 +142,7 @@ export function createProjectApi({
     if (method === 'GET' && path === '/api/settings') return json({ vercel: pendingVercel() });
     if (method === 'PUT' && path === '/api/settings/vercel') {
       await body(req);
-      return json({ vercel: pendingVercel() });
+      throw fail('A conexão Vercel por projeto ainda está pendente.', 409);
     }
     if (method === 'POST' && path === '/api/settings/vercel/test') {
       await body(req);
@@ -213,7 +229,9 @@ export function createProjectApi({
         const records = isPage
           ? await content.listPages({ companyId: context.companyId, projectId, actorId: context.user.id })
           : await content.listForms({ companyId: context.companyId, projectId, actorId: context.user.id });
-        return json(records.map(isPage ? legacyPage : legacyForm));
+        return json(isPage
+          ? await Promise.all(records.map((page) => legacyPageFor(content, context, page)))
+          : records.map(legacyForm));
       }
       if (method === 'POST') {
         await sessionService.authorize(context, capability, projectId);
@@ -237,7 +255,7 @@ export function createProjectApi({
             projectId,
             actorId: context.user.id,
           });
-        return json(isPage ? legacyPage(record) : legacyForm(record), 201);
+        return json(isPage ? legacyPage(record) : await publishLegacyForm(content, context, projectId, record), 201);
       }
     }
 
@@ -246,11 +264,12 @@ export function createProjectApi({
         const record = isPage
           ? await content.getPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })
           : await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-        return json(isPage ? legacyPage(record) : legacyForm(record));
+        return json(isPage ? await legacyPageFor(content, context, record) : legacyForm(record));
       }
       if (method === 'PUT') {
         await sessionService.authorize(context, capability, projectId);
         const input = await body(req);
+        if (isPage) content.validatePageSettings({ domain: input.domain, webhook: input.webhook });
         const record = isPage
           ? await content.updatePage({
             name: input.name,
@@ -271,7 +290,13 @@ export function createProjectApi({
             actorId: context.user.id,
             formId: id,
           });
-        return json(isPage ? legacyPage(record) : legacyForm(record));
+        const settings = isPage
+          ? await content.updatePageSettings({
+            companyId: context.companyId, projectId, actorId: context.user.id, pageId: id,
+            domain: input.domain, webhook: input.webhook,
+          })
+          : null;
+        return json(isPage ? legacyPage(record, settings) : await publishLegacyForm(content, context, projectId, record));
       }
       if (method === 'DELETE') {
         await sessionService.authorize(context, capability, projectId);
@@ -279,7 +304,7 @@ export function createProjectApi({
         const record = isPage
           ? await content.removePage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })
           : await content.removeForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-        return json(isPage ? legacyPage(record) : legacyForm(record));
+        return json(record);
       }
     }
 
@@ -289,7 +314,7 @@ export function createProjectApi({
       const record = isPage
         ? await content.duplicatePage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })
         : await content.duplicateForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-      return json(isPage ? legacyPage(record) : legacyForm(record), 201);
+      return json(isPage ? legacyPage(record) : await publishLegacyForm(content, context, projectId, record), 201);
     }
     if (!isPage && method === 'GET' && action === 'submissions') {
       await sessionService.authorize(context, 'submission.read', projectId);
