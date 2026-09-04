@@ -34,19 +34,24 @@ CREATE TABLE company_memberships (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (company_id, user_id),
-  UNIQUE (company_id, id)
+  UNIQUE (company_id, id),
+  UNIQUE (company_id, user_id, id)
 );
 CREATE INDEX company_memberships_user_company ON company_memberships (user_id, company_id);
 
 CREATE TABLE sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES users(id),
-  company_id uuid NOT NULL REFERENCES companies(id),
+  user_id uuid NOT NULL,
+  company_id uuid NOT NULL,
+  membership_id uuid NOT NULL,
   token_hash char(64) NOT NULL UNIQUE,
   expires_at timestamptz NOT NULL,
   revoked_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (company_id, id)
+  UNIQUE (company_id, id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (company_id) REFERENCES companies(id),
+  FOREIGN KEY (company_id, user_id, membership_id) REFERENCES company_memberships(company_id, user_id, id)
 );
 CREATE INDEX sessions_user_active ON sessions (user_id, expires_at) WHERE revoked_at IS NULL;
 
@@ -63,6 +68,19 @@ CREATE TABLE projects (
   UNIQUE (company_id, id)
 );
 CREATE INDEX projects_creator ON projects (company_id, created_by);
+
+CREATE TABLE project_routes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  path varchar(120) NOT NULL,
+  content_type varchar(20) NOT NULL CHECK (content_type IN ('page', 'form')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz,
+  UNIQUE (company_id, project_id, id),
+  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id)
+);
+CREATE UNIQUE INDEX project_routes_active_path ON project_routes(project_id, lower(path)) WHERE deleted_at IS NULL;
 
 CREATE TABLE project_grants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,7 +99,7 @@ CREATE TABLE pages (
   company_id uuid NOT NULL,
   project_id uuid NOT NULL,
   name varchar(100) NOT NULL,
-  route varchar(120) NOT NULL,
+  route_id uuid NOT NULL,
   template varchar(80),
   editor_state jsonb NOT NULL DEFAULT '{}'::jsonb,
   rendered_html text NOT NULL DEFAULT '',
@@ -92,10 +110,12 @@ CREATE TABLE pages (
   updated_at timestamptz NOT NULL DEFAULT now(),
   deleted_at timestamptz,
   UNIQUE (company_id, id),
-  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id)
+  UNIQUE (company_id, project_id, id),
+  UNIQUE (route_id),
+  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id),
+  FOREIGN KEY (company_id, project_id, route_id) REFERENCES project_routes(company_id, project_id, id)
 );
 CREATE INDEX pages_project_active ON pages (company_id, project_id) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX pages_active_route ON pages(project_id, lower(route)) WHERE deleted_at IS NULL;
 
 CREATE TABLE page_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -109,20 +129,21 @@ CREATE TABLE page_versions (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (page_id, version_number),
   UNIQUE (company_id, id),
-  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id),
-  FOREIGN KEY (company_id, page_id) REFERENCES pages(company_id, id)
+  UNIQUE (company_id, project_id, page_id, id),
+  FOREIGN KEY (company_id, project_id, page_id) REFERENCES pages(company_id, project_id, id)
 );
 CREATE INDEX page_versions_page ON page_versions (company_id, page_id, version_number DESC);
 ALTER TABLE pages
   ADD CONSTRAINT pages_published_version_company
-  FOREIGN KEY (company_id, published_version_id) REFERENCES page_versions(company_id, id);
+  FOREIGN KEY (company_id, project_id, id, published_version_id)
+  REFERENCES page_versions(company_id, project_id, page_id, id);
 
 CREATE TABLE forms (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid NOT NULL,
   project_id uuid NOT NULL,
   name varchar(100) NOT NULL,
-  route varchar(120) NOT NULL,
+  route_id uuid NOT NULL,
   draft_schema jsonb NOT NULL DEFAULT '{}'::jsonb,
   lock_version integer NOT NULL DEFAULT 0 CHECK (lock_version >= 0),
   published_version_id uuid,
@@ -131,10 +152,12 @@ CREATE TABLE forms (
   updated_at timestamptz NOT NULL DEFAULT now(),
   deleted_at timestamptz,
   UNIQUE (company_id, id),
-  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id)
+  UNIQUE (company_id, project_id, id),
+  UNIQUE (route_id),
+  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id),
+  FOREIGN KEY (company_id, project_id, route_id) REFERENCES project_routes(company_id, project_id, id)
 );
 CREATE INDEX forms_project_active ON forms (company_id, project_id) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX forms_active_route ON forms(project_id, lower(route)) WHERE deleted_at IS NULL;
 
 CREATE TABLE form_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -147,13 +170,14 @@ CREATE TABLE form_versions (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (form_id, version_number),
   UNIQUE (company_id, id),
-  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id),
-  FOREIGN KEY (company_id, form_id) REFERENCES forms(company_id, id)
+  UNIQUE (company_id, project_id, form_id, id),
+  FOREIGN KEY (company_id, project_id, form_id) REFERENCES forms(company_id, project_id, id)
 );
 CREATE INDEX form_versions_form ON form_versions (company_id, form_id, version_number DESC);
 ALTER TABLE forms
   ADD CONSTRAINT forms_published_version_company
-  FOREIGN KEY (company_id, published_version_id) REFERENCES form_versions(company_id, id);
+  FOREIGN KEY (company_id, project_id, id, published_version_id)
+  REFERENCES form_versions(company_id, project_id, form_id, id);
 
 CREATE TABLE form_submissions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -166,11 +190,82 @@ CREATE TABLE form_submissions (
   tracking_status varchar(20) NOT NULL DEFAULT 'pending',
   submitted_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tracking_event_id),
-  FOREIGN KEY (company_id, project_id) REFERENCES projects(company_id, id),
-  FOREIGN KEY (company_id, form_id) REFERENCES forms(company_id, id),
-  FOREIGN KEY (company_id, form_version_id) REFERENCES form_versions(company_id, id)
+  FOREIGN KEY (company_id, project_id, form_id) REFERENCES forms(company_id, project_id, id),
+  FOREIGN KEY (company_id, project_id, form_id, form_version_id)
+    REFERENCES form_versions(company_id, project_id, form_id, id)
 );
 CREATE INDEX form_submissions_form_date ON form_submissions (company_id, form_id, submitted_at DESC);
+
+CREATE FUNCTION require_active_session_membership() RETURNS trigger AS $$
+DECLARE
+  membership_status varchar(20);
+BEGIN
+  SELECT status INTO membership_status
+  FROM company_memberships
+  WHERE company_id = NEW.company_id AND user_id = NEW.user_id AND id = NEW.membership_id;
+  IF membership_status IS DISTINCT FROM 'active' THEN
+    RAISE EXCEPTION 'Sessão exige membership ativa.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER sessions_require_active_membership
+  BEFORE INSERT OR UPDATE OF company_id, user_id, membership_id ON sessions
+  FOR EACH ROW EXECUTE FUNCTION require_active_session_membership();
+
+CREATE FUNCTION revoke_sessions_for_inactive_membership() RETURNS trigger AS $$
+BEGIN
+  IF NEW.status <> 'active' AND OLD.status = 'active' THEN
+    UPDATE sessions
+    SET revoked_at = COALESCE(revoked_at, now())
+    WHERE membership_id = NEW.id AND revoked_at IS NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER memberships_revoke_sessions_when_inactive
+  AFTER UPDATE OF status ON company_memberships
+  FOR EACH ROW EXECUTE FUNCTION revoke_sessions_for_inactive_membership();
+
+CREATE FUNCTION require_project_route_type() RETURNS trigger AS $$
+DECLARE
+  actual_type varchar(20);
+  expected_type varchar(20);
+BEGIN
+  expected_type := CASE TG_TABLE_NAME WHEN 'pages' THEN 'page' ELSE 'form' END;
+  SELECT content_type INTO actual_type
+  FROM project_routes
+  WHERE company_id = NEW.company_id AND project_id = NEW.project_id AND id = NEW.route_id;
+  IF actual_type IS DISTINCT FROM expected_type THEN
+    RAISE EXCEPTION 'A rota precisa pertencer ao tipo de conteúdo correto.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER pages_require_page_route
+  BEFORE INSERT OR UPDATE OF company_id, project_id, route_id ON pages
+  FOR EACH ROW EXECUTE FUNCTION require_project_route_type();
+
+CREATE TRIGGER forms_require_form_route
+  BEFORE INSERT OR UPDATE OF company_id, project_id, route_id ON forms
+  FOR EACH ROW EXECUTE FUNCTION require_project_route_type();
+
+CREATE FUNCTION prevent_version_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'Versões são imutáveis.';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER page_versions_immutable
+  BEFORE UPDATE OR DELETE ON page_versions
+  FOR EACH ROW EXECUTE FUNCTION prevent_version_mutation();
+
+CREATE TRIGGER form_versions_immutable
+  BEFORE UPDATE OR DELETE ON form_versions
+  FOR EACH ROW EXECUTE FUNCTION prevent_version_mutation();
 
 CREATE TABLE project_domains (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
