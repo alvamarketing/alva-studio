@@ -60,3 +60,93 @@ test('renderiza mídia, múltipla escolha, escala, arquivo, CTA, gráfico, ícon
   assert.match(html, /href="https:\/\/example.com"/);
   assert.match(html, /prefers-reduced-motion/);
 });
+
+test('renderiza uma tela composta com campos, escolha visual e avanço automático configurável', () => {
+  const composed = {
+    ...form,
+    steps: [{
+      id: 'inicio',
+      title: 'Começo',
+      motion: 'zoom-in',
+      autoAdvance: false,
+      elements: [
+        { id: 'headline', type: 'statement', title: 'Bem-vindo', description: 'Responda para começar.', icon: 'waving_hand' },
+        { id: 'nome', type: 'short_text', title: 'Seu nome', placeholder: 'Digite seu nome', required: true },
+        { id: 'perfil', type: 'image_choice', title: 'Escolha um perfil', required: true, options: [
+          { label: 'Empresa', imageUrl: 'https://example.com/empresa.jpg', icon: 'business' },
+          { label: 'Profissional', imageUrl: '', icon: 'person' },
+        ] },
+      ],
+    }],
+  };
+  const html = renderDynamicForm(composed, '/api/public/forms/123/submit');
+  assert.match(html, /data-screen="0"/);
+  assert.match(html, /class="screen-elements"/);
+  assert.match(html, /name="nome"/);
+  assert.match(html, /name="perfil"/);
+  assert.match(html, /choice-image/);
+  assert.match(html, /empresa\.jpg/);
+  assert.match(html, /data-auto-advance="false"/);
+});
+
+test('mantém um topo compartilhado e troca somente a microlanding de cada etapa', () => {
+  const microLanding = {
+    ...form,
+    headerElements: [
+      { id: 'marca', type: 'logo', title: 'Marca Exemplo', mediaUrl: 'https://example.com/logo.svg', altText: 'Marca da campanha', width: 144 },
+      { id: 'contexto', type: 'statement', title: 'Diagnóstico personalizado', description: 'Descubra a melhor rota para você.' },
+      { id: 'progresso', type: 'progress', title: 'Progresso', showValue: true },
+      { id: 'oferta', type: 'countdown', title: 'Oferta termina em', duration: 3600, targetAt: '2030-12-31T23:59:59.000Z', completionLabel: 'Oferta encerrada' },
+      { id: 'tempo', type: 'timer', title: 'Seu tempo', durationSeconds: 90, timerDirection: 'down', autoStart: false },
+    ],
+    steps: [
+      {
+        id: 'captura', title: 'Boas-vindas', elements: [
+          { id: 'chamada', type: 'statement', title: 'Vamos começar?', description: 'Leva menos de um minuto.', icon: 'waving_hand' },
+          { id: 'nome', type: 'short_text', title: 'Seu nome', placeholder: 'Digite seu nome', required: true },
+          { id: 'telefone', type: 'phone', title: 'Telefone', placeholder: 'DDD + número', required: true },
+        ],
+      },
+      {
+        id: 'conteudo', title: 'Seu resultado', columns: 2, elements: [
+          { id: 'video', type: 'video', title: 'Veja como funciona', mediaUrl: 'https://www.youtube.com/embed/abc' },
+          { id: 'tempo', type: 'countdown', title: 'Condição disponível por', duration: 90, icon: 'timer' },
+          { id: 'grafico', type: 'chart', title: 'Seu potencial', chart: { type: 'bar', labels: ['Agora', 'Meta'], values: [25, 80] } },
+        ],
+      },
+    ],
+  };
+  const html = renderDynamicForm(microLanding, '/submit');
+  assert.equal((html.match(/class="funnel-header"/g) || []).length, 1);
+  assert.match(html, /class="funnel-logo" src="https:\/\/example\.com\/logo\.svg"/);
+  assert.match(html, /alt="Marca da campanha" style="width:144px"/);
+  assert.match(html, /Diagnóstico personalizado/);
+  assert.equal((html.match(/role="progressbar"/g) || []).length, 1);
+  assert.match(html, /class="progress-value">1\/2/);
+  assert.match(html, /data-target-at="2030-12-31T23:59:59.000Z"/);
+  assert.match(html, /data-auto-start="false"/);
+  assert.match(html, /class="timer-toggle"/);
+  assert.match(html, /data-screen="0"/);
+  assert.match(html, /data-screen="1"/);
+  assert.match(html, /data-columns="2"/);
+  assert.match(html, /class="countdown" data-countdown="90"/);
+  assert.match(html, /function startCountdowns/);
+});
+
+test('escolha única só avança automaticamente quando é a única entrada obrigatória da tela', () => {
+  const composed = {
+    ...form,
+    steps: [
+      { id: 'agrupada', autoAdvance: true, elements: [
+        { id: 'nome', type: 'short_text', title: 'Nome', required: true },
+        { id: 'perfil', type: 'single_choice', title: 'Perfil', required: true, options: ['A', 'B'] },
+      ] },
+      { id: 'so-escolha', autoAdvance: true, elements: [
+        { id: 'objetivo', type: 'single_choice', title: 'Objetivo', required: true, options: ['C', 'D'] },
+      ] },
+    ],
+  };
+  const html = renderDynamicForm(composed, '/submit');
+  assert.match(html, /function canAutoAdvance/);
+  assert.match(html, /querySelectorAll\('\[data-answer\]'/);
+});

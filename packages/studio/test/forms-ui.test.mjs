@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStep, moveStep, parseOptions } from '../public/forms.js';
+import { createStep, createScreen, moveStep, parseOptions } from '../public/forms.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const cssPath = new URL('../public/forms.css', import.meta.url);
@@ -49,4 +49,12 @@ test('editor dinâmico tem layout responsivo e controles acessíveis', async () 
   assert.match(css, /\.dynamic-step-button\[aria-current=['"]true['"]\]/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /\.material-symbols-outlined/);
+});
+
+test('editor cria telas compostas com mais de um elemento', () => {
+  const screen = createScreen('capture', 'tela-inicial');
+  assert.equal(screen.id, 'tela-inicial');
+  assert.ok(screen.elements.length >= 3);
+  assert.ok(screen.elements.some((element) => element.type === 'short_text'));
+  assert.ok(screen.elements.some((element) => element.type === 'phone'));
 });
