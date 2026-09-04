@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Alva Studio</title>
+    <link rel="stylesheet" href="/vendor/grapes.min.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <section id="dashboard">
+      <aside>
+        <a class="brand" href="/">alva<span>studio</span><i>↗</i></a>
+        <div class="workspace-label">ESPAÇO DE CRIAÇÃO</div>
+        <div class="nav-active">▦ &nbsp; Minhas páginas</div>
+        <div class="aside-bottom">
+          <span class="dot"></span> Espaço local<br /><small>Seu trabalho é salvo neste computador.</small>
+        </div>
+      </aside>
+      <main>
+        <header class="dashboard-header">
+          <div>
+            <div class="eyebrow">DA IDEIA AO AR</div>
+            <h1>Minhas páginas<span class="accent">.</span></h1>
+            <p>Monte, edite e publique. Um espaço para cada campanha.</p>
+          </div>
+          <button class="primary" id="new-page">＋ Nova landing page</button>
+        </header>
+        <div class="list-tools">
+          <input id="search" type="search" placeholder="Buscar uma página…" aria-label="Buscar páginas" /><span
+            id="page-count"
+          ></span>
+        </div>
+        <div id="page-list" class="page-grid" aria-live="polite"></div>
+        <footer>Feito para tirar suas campanhas do papel. <span>ALVA STUDIO / 01</span></footer>
+      </main>
+    </section>
+    <section id="editing" hidden>
+      <header class="editor-header">
+        <button id="back" title="Minhas páginas">← Páginas</button
+        ><input id="page-name" aria-label="Nome da página" maxlength="100" /><span id="save-state" role="status"
+          >Salvo</span
+        >
+        <div class="editor-actions">
+          <select id="device" aria-label="Tamanho da tela">
+            <option value="Desktop">Computador</option>
+            <option value="Tablet">Tablet</option>
+            <option value="Mobile">Celular</option></select
+          ><button id="settings">Configurar</button><button id="preview">Visualizar</button
+          ><button id="download">Baixar HTML</button><button id="save">Salvar</button
+          ><button id="publish" class="primary">Publicar ↗</button>
+        </div>
+      </header>
+      <div id="editor"></div>
+    </section>
+    <dialog id="create-dialog">
+      <form id="create-form">
+        <div class="eyebrow">UMA NOVA CAMPANHA</div>
+        <h2>Como vamos começar?</h2>
+        <label
+          >Nome da página<input
+            name="name"
+            required
+            maxlength="100"
+            placeholder="Ex.: LP Alva Marketing"
+            autofocus /></label
+        ><label
+          >Ponto de partida<select name="template">
+            <option value="services">Serviços — apresentação, benefícios e formulário</option>
+            <option value="blank">Página em branco</option>
+          </select></label
+        >
+        <div class="dialog-actions">
+          <button type="button" data-close>Cancelar</button><button class="primary">Criar página</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="settings-dialog">
+      <form id="settings-form">
+        <div class="eyebrow">CONFIGURAÇÕES DA PÁGINA</div>
+        <h2>Do editor para o mundo.</h2>
+        <label
+          >Destino do formulário<input name="webhook" type="url" placeholder="https://seu-sistema.com/formulario"
+        /></label>
+        <p class="help">
+          O destino deve aceitar POST de formulário (application/x-www-form-urlencoded) e mostrar uma confirmação. Os
+          contatos são enviados diretamente para ele.
+        </p>
+        <label>Domínio ou subdomínio<input name="domain" placeholder="lp.suaempresa.com.br" /></label>
+        <p class="help">Após publicar, conecte o domínio. O apontamento DNS é configurado no provedor do domínio.</p>
+        <div id="vercel-state" class="connection"></div>
+        <div id="deployment-state" class="help"></div>
+        <div class="dialog-actions">
+          <button type="button" id="check-publication">Consultar publicação</button
+          ><button type="button" id="connect-domain">Conectar domínio</button>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" data-close>Fechar</button><button class="primary">Salvar configurações</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="preview-dialog">
+      <div class="preview-header">
+        <strong>Prévia da página</strong><span>Formulários e scripts não executam nesta prévia.</span
+        ><button data-close>Fechar</button>
+      </div>
+      <iframe title="Prévia da landing page" sandbox=""></iframe>
+    </dialog>
+    <div id="toast" role="status" hidden></div>
+    <script src="/vendor/grapes.min.js"></script>
+    <script src="/vendor/pt.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

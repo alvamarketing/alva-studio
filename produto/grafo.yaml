@@ -1,0 +1,42 @@
+versao: 1
+produto: Alva Studio — construir e publicar landing pages
+stack:
+  linguagem: JavaScript ESM
+  framework: GrapesJS 0.23.6
+  banco: JSON local com escrita atômica
+  hospedagem: Painel local; páginas na Vercel
+  testes: node:test
+  comando_teste: node --test packages/studio/test/*.test.mjs
+  porque: Aproveitar o editor existente em um painel individual sem dependências
+    de CMS.
+nos:
+  - id: paginas
+    faz: Salvar e reabrir páginas com revisão e duplicação independente
+    depende: []
+    produz: Store com create/list/get/update/duplicate/remove
+    passa_quando:
+      tipo: comando
+      comando: node --test packages/studio/test/store.test.mjs
+      espera: exit 0
+  - id: editor
+    faz: Editar visualmente o projeto salvo no GrapesJS
+    depende:
+      - paginas
+    consome:
+      paginas: Store com create/list/get/update/duplicate/remove
+    produz: Painel em localhost e HTML exportável
+    passa_quando:
+      tipo: comando
+      comando: node --test packages/studio/test/server.test.mjs
+      espera: exit 0
+  - id: publicar
+    faz: Enviar página exportada para projeto independente na Vercel
+    depende:
+      - editor
+    consome:
+      editor: Painel em localhost e HTML exportável
+    produz: Integração Vercel com consulta de estado da publicação
+    passa_quando:
+      tipo: comando
+      comando: node --test packages/studio/test/publisher.test.mjs
+      espera: exit 0

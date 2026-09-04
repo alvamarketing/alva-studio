@@ -25,7 +25,9 @@
     "release:docs": "ts-node scripts/releaseDocs latest",
     "build:cli": "pnpm --filter grapesjs-cli build",
     "build:docs:api": "pnpm --filter @grapesjs/docs docs:api",
-    "build:docs": "pnpm --filter @grapesjs/docs build"
+    "build:docs": "pnpm --filter @grapesjs/docs build",
+    "start:studio": "pnpm --dir packages/studio --ignore-workspace start",
+    "test:studio": "node --test packages/studio/test/*.test.mjs"
   },
   "devDependencies": {
     "@babel/cli": "7.27.0",
