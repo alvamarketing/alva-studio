@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchVslForEdit, vslListModel, vslStatusLabel } from '../public/vsl-ui.js';
+import { fetchVslForEdit, parseVslFormValues, vslListModel, vslStatusLabel } from '../public/vsl-ui.js';
 
 test('modelo da tela de VSL traduz rascunho, publicada e alterações pendentes', () => {
   assert.equal(vslStatusLabel({ publishedVersionId: null, lockVersion: 0 }), 'Rascunho');
@@ -14,4 +14,8 @@ test('edição por resumo busca o registro completo antes de preencher o formul�
   const video = await fetchVslForEdit({ api: async (path) => { requests.push(path); return { sourceUrl: 'https://media.test/vsl.mp4', lockVersion: 3 }; }, projectId: 'project-1', videoId: 'video-1' });
   assert.deepEqual(requests, ['/projects/project-1/videos/video-1']);
   assert.equal(video.sourceUrl, 'https://media.test/vsl.mp4');
+});
+
+test('formulário preserva CTA no segundo zero', () => {
+  assert.equal(parseVslFormValues({ ctaSeconds: '0', autoplayMuted: 'on', resumeEnabled: 'on' }).ctaSeconds, 0);
 });

@@ -13,6 +13,15 @@ export async function fetchVslForEdit({ api, projectId, videoId }) {
   return api(`/projects/${projectId}/videos/${videoId}`);
 }
 
+export function parseVslFormValues(values = {}) {
+  return {
+    ...values,
+    ctaSeconds: values.ctaSeconds === '' || values.ctaSeconds === null || values.ctaSeconds === undefined ? null : Number(values.ctaSeconds),
+    autoplayMuted: values.autoplayMuted === true || values.autoplayMuted === 'on',
+    resumeEnabled: values.resumeEnabled === true || values.resumeEnabled === 'on',
+  };
+}
+
 function field(form, name) { return form.elements.namedItem(name); }
 
 export function createVslUI({ api, shell, toast = () => {} }) {
@@ -59,7 +68,7 @@ export function createVslUI({ api, shell, toast = () => {} }) {
   const collect = () => {
     const target = form();
     const values = Object.fromEntries(new FormData(target));
-    return { ...values, sourceType: values.sourceType, ctaSeconds: values.ctaSeconds ? Number(values.ctaSeconds) : null, autoplayMuted: field(target, 'autoplayMuted').checked, resumeEnabled: field(target, 'resumeEnabled').checked };
+    return parseVslFormValues({ ...values, autoplayMuted: field(target, 'autoplayMuted').checked, resumeEnabled: field(target, 'resumeEnabled').checked });
   };
   if (typeof document !== 'undefined' && form()) {
     form().onsubmit = async (event) => {

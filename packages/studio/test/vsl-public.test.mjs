@@ -17,6 +17,7 @@ test('renderizador público escapa HTML, configura CSP por origem e usa player l
   assert.match(html, /Oferta &lt;especial&gt;/);
   assert.match(html, /src="\/vsl-player\.js"/);
   assert.match(html, /data-vsl-config=/);
+  assert.doesNotMatch(html, /versionId/);
   assert.match(html, /https:\/\/studio\.example\.test\/embed\/v\/public-vsl-123456/);
   assert.match(html, /title=&quot;Oferta &amp;lt;especial&amp;gt;&quot;/);
   assert.doesNotMatch(html, /\/video\//);
