@@ -5,6 +5,7 @@ import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
+import { createStudioContextBoundary } from './studio-context-boundary.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -24,6 +25,7 @@ let editor,
   ownerUI,
   formsUI,
   studioShell,
+  contextBoundary,
   config = { vercelConnected: false };
 function toast(message) {
   $('#toast').textContent = message;
@@ -459,21 +461,29 @@ async function refreshConfig() {
   }
 }
 async function closeOpenEditors() {
-  await save();
-  clearTimeout(timer);
-  if (editor) editor.destroy();
-  editor = null;
-  page = null;
-  pages = [];
-  dirty = false;
-  $('#editing').hidden = true;
-  $('#page-list').replaceChildren();
-  await formsUI.closeEditor();
+  await contextBoundary.close();
 }
 async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
 formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject });
+contextBoundary = createStudioContextBoundary({
+  savePage: save,
+  closePageEditor: () => {
+    clearTimeout(timer);
+    if (editor) editor.destroy();
+    editor = null;
+    page = null;
+    $('#editing').hidden = true;
+  },
+  clearPageList: () => {
+    pages = [];
+    dirty = false;
+    $('#page-list').replaceChildren();
+  },
+  closeFormEditor: () => formsUI.closeEditor(),
+  resetForms: () => formsUI.reset(),
+});
 studioShell = createStudioShell({
   api,
   beforeContextChange: closeOpenEditors,

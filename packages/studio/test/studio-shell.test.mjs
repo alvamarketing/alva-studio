@@ -110,25 +110,30 @@ test('troca de projeto persiste o contexto e não mantém dados anteriores quand
   });
 });
 
-test('chamadas antigas não sobrescrevem o contexto selecionado por último', async () => {
-  let resolveFirst;
-  let patchCount = 0;
+test('serializa PATCHes e mantém a sessão persistida na última seleção', async () => {
+  let persisted = session();
+  let resolveFirstPatch;
+  const patches = [];
   const shell = createStudioShell({
     api: async (path, method = 'GET', payload) => {
-      if (path === '/session' && method === 'GET') return session();
+      if (path === '/session' && method === 'GET') return persisted;
       if (path === '/companies') return companies;
       if (path === '/projects') {
-        return payload?.companyId === 'company-b'
+        return persisted.currentCompanyId === 'company-b'
           ? [{ id: 'project-b', companyId: 'company-b', name: 'Projeto B' }]
           : [{ id: 'project-a', companyId: 'company-a', name: 'Projeto A' }];
       }
       if (path === '/session' && method === 'PATCH') {
-        patchCount++;
-        if (patchCount === 1)
+        patches.push(payload);
+        if (patches.length === 1)
           return new Promise((resolve) => {
-            resolveFirst = () => resolve(session('company-b', 'project-b'));
+            resolveFirstPatch = () => {
+              persisted = session('company-b', 'project-b');
+              resolve(persisted);
+            };
           });
-        return session('company-a', 'project-a');
+        persisted = session('company-a', 'project-a');
+        return persisted;
       }
       throw new Error(`Chamada inesperada: ${method} ${path}`);
     },
@@ -139,12 +144,102 @@ test('chamadas antigas não sobrescrevem o contexto selecionado por último', as
   await Promise.resolve();
   await Promise.resolve();
   const latest = shell.selectCompany('company-a');
-  await latest;
-  resolveFirst();
-  await first;
+  await Promise.resolve();
+  await Promise.resolve();
+  resolveFirstPatch();
+  await Promise.all([first, latest]);
 
+  assert.deepEqual(patches, [{ companyId: 'company-b' }, { companyId: 'company-a' }]);
+  assert.equal(persisted.currentCompanyId, 'company-a');
+  assert.equal(persisted.currentProjectId, 'project-a');
   assert.equal(shell.state().currentCompany.id, 'company-a');
   assert.equal(shell.state().currentProject.id, 'project-a');
+});
+
+test('termina o callback de um contexto antes de iniciar o próximo', async () => {
+  let persisted = session();
+  let releaseCallback;
+  let callbackStarted;
+  const firstCallback = new Promise((resolve) => (callbackStarted = resolve));
+  const events = [];
+  const shell = createStudioShell({
+    api: async (path, method = 'GET', payload) => {
+      if (path === '/session' && method === 'GET') return persisted;
+      if (path === '/companies') return companies;
+      if (path === '/projects')
+        return persisted.currentCompanyId === 'company-b'
+          ? [{ id: 'project-b', companyId: 'company-b', name: 'Projeto B' }]
+          : [{ id: 'project-a', companyId: 'company-a', name: 'Projeto A' }];
+      if (path === '/session' && method === 'PATCH') {
+        persisted = payload.companyId === 'company-b' ? session('company-b', 'project-b') : session();
+        events.push(`patch-${persisted.currentCompanyId}`);
+        return persisted;
+      }
+      throw new Error(`Chamada inesperada: ${method} ${path}`);
+    },
+    onContextChanged: async (next) => {
+      events.push(`callback-${next.currentCompany.id}`);
+      if (next.currentCompany.id === 'company-b') {
+        callbackStarted();
+        await new Promise((resolve) => (releaseCallback = resolve));
+      }
+      events.push(`render-${next.currentCompany.id}`);
+    },
+  });
+  await shell.initialize();
+
+  const first = shell.selectCompany('company-b');
+  await firstCallback;
+  const latest = shell.selectCompany('company-a');
+  await Promise.resolve();
+  assert.deepEqual(events, ['patch-company-b', 'callback-company-b']);
+  releaseCallback();
+  await Promise.all([first, latest]);
+
+  assert.deepEqual(events, [
+    'patch-company-b',
+    'callback-company-b',
+    'render-company-b',
+    'patch-company-a',
+    'callback-company-a',
+    'render-company-a',
+  ]);
+});
+
+test('ignora a falha de uma seleção superada', async () => {
+  let persisted = session();
+  let rejectFirstPatch;
+  let patchCount = 0;
+  const shell = createStudioShell({
+    api: async (path, method = 'GET') => {
+      if (path === '/session' && method === 'GET') return persisted;
+      if (path === '/companies') return companies;
+      if (path === '/projects')
+        return [{ id: 'project-a', companyId: 'company-a', name: 'Projeto A' }];
+      if (path === '/session' && method === 'PATCH') {
+        patchCount++;
+        if (patchCount === 1)
+          return new Promise((_, reject) => {
+            rejectFirstPatch = () => reject(new Error('Rede indisponível'));
+          });
+        persisted = session('company-a', 'project-a');
+        return persisted;
+      }
+      throw new Error(`Chamada inesperada: ${method} ${path}`);
+    },
+  });
+  await shell.initialize();
+
+  const stale = shell.selectCompany('company-b');
+  await Promise.resolve();
+  await Promise.resolve();
+  const latest = shell.selectCompany('company-a');
+  rejectFirstPatch();
+  await Promise.all([stale, latest]);
+
+  assert.equal(shell.state().phase, 'ready');
+  assert.equal(shell.state().currentCompany.id, 'company-a');
+  assert.equal(shell.state().error, '');
 });
 
 test('deriva capacidades dos papéis conhecidos e bloqueia viewer', async () => {
@@ -155,8 +250,9 @@ test('deriva capacidades dos papéis conhecidos e bloqueia viewer', async () => 
     analyst: ['submission.read', 'analytics.read'],
     viewer: [],
   };
+  const allCapabilities = [...new Set(Object.values(expected).flat())];
   for (const [role, capabilities] of Object.entries(expected)) {
-    for (const capability of [...capabilities, 'billing.manage']) {
+    for (const capability of allCapabilities) {
       const roleShell = createStudioShell({
         api: async (path) => {
           if (path === '/session') return session();

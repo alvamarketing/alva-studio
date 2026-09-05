@@ -20,3 +20,14 @@
 
 - O seletor visual de empresa/projeto será conectado na Task 3; esta tarefa entrega o módulo e o ciclo seguro que ele consumirá.
 - Alterações concorrentes de API e repositórios foram preservadas e ficaram fora deste commit.
+
+## Fix round 1
+
+- As mudanças de contexto entram em uma fila: a última seleção é o último `PATCH /api/session` persistido. Seleções superadas antes do `PATCH` são coalescidas; uma falha superada não altera o estado saudável nem chega à interface como erro.
+- O callback de contexto faz parte da mesma fila. O próximo `PATCH` só começa depois que a atualização anterior termina de aplicar sua lista.
+- A fronteira de contexto passou a salvar/fechar os dois editores e limpar as listas de páginas e formulários antes da troca de sessão.
+- Cobertura adicionada com API stateful para a convergência cliente/servidor, callback serializado, falha superada, matriz completa de capacidades e a fronteira de limpeza sem navegador pesado.
+
+### Testes do fix round
+
+- `node --test packages/studio/test/studio-shell.test.mjs packages/studio/test/studio-context-boundary.test.mjs packages/studio/test/forms-ui.test.mjs packages/studio/test/editor-controls.test.mjs` — 26 testes aprovados.

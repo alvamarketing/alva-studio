@@ -56,6 +56,7 @@ export function createStudioShell({ api, beforeContextChange = async () => {}, o
 
   let current = emptyState();
   let requestVersion = 0;
+  let contextQueue = Promise.resolve();
 
   const update = (next) => {
     current = next;
@@ -80,7 +81,8 @@ export function createStudioShell({ api, beforeContextChange = async () => {}, o
 
   const failed = (error, version) => {
     if (version === requestVersion) update(emptyState('error', message(error)));
-    throw error;
+    if (version === requestVersion) throw error;
+    return state();
   };
 
   async function initialize() {
@@ -100,9 +102,9 @@ export function createStudioShell({ api, beforeContextChange = async () => {}, o
     }
   }
 
-  async function change(payload) {
-    const version = ++requestVersion;
+  async function change(payload, version) {
     try {
+      if (version !== requestVersion) return state();
       await beforeContextChange();
       if (version !== requestVersion) return state();
       update({ ...emptyState('loading'), companies: current.companies.map((company) => ({ ...company })) });
@@ -119,14 +121,22 @@ export function createStudioShell({ api, beforeContextChange = async () => {}, o
     }
   }
 
+  function queueChange(payload) {
+    const version = ++requestVersion;
+    const run = () => change(payload, version);
+    const result = contextQueue.then(run, run);
+    contextQueue = result.catch(() => {});
+    return result;
+  }
+
   function selectCompany(companyId) {
-    return change({ companyId });
+    return queueChange({ companyId });
   }
 
   function selectProject(projectId) {
     const companyId = current.session?.currentCompanyId ?? current.currentCompany?.id;
     if (!companyId) return Promise.reject(new Error('Escolha uma empresa antes do projeto.'));
-    return change({ companyId, projectId });
+    return queueChange({ companyId, projectId });
   }
 
   function can(capability) {

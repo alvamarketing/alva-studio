@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStep, createScreen, moveStep, parseOptions } from '../public/forms.js';
+import { createFormsUI, createStep, createScreen, moveStep, parseOptions } from '../public/forms.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const cssPath = new URL('../public/forms.css', import.meta.url);
@@ -57,4 +57,49 @@ test('editor cria telas compostas com mais de um elemento', () => {
   assert.ok(screen.elements.length >= 3);
   assert.ok(screen.elements.some((element) => element.type === 'short_text'));
   assert.ok(screen.elements.some((element) => element.type === 'phone'));
+});
+
+test('reset público remove cartões de formulários do contexto anterior', () => {
+  const previousDocument = globalThis.document;
+  const elements = new Map();
+  const element = () => ({
+    classList: { toggle() {} },
+    hidden: false,
+    children: ['cartão antigo'],
+    replaceChildren() {
+      this.children = [];
+    },
+  });
+  for (const selector of [
+    '#nav-pages',
+    '#nav-forms',
+    '#pages-view',
+    '#forms-view',
+    '#form-search',
+    '#new-form',
+    '#dynamic-create-form',
+    '#dynamic-form-name',
+    '#form-save',
+    '#form-back',
+    '#form-public-link',
+    '#form-responses',
+    '#form-list',
+    '#form-editing',
+  ]) {
+    elements.set(selector, element());
+  }
+  globalThis.document = {
+    querySelector: (selector) => elements.get(selector),
+    querySelectorAll: () => [],
+  };
+  try {
+    const formsUI = createFormsUI({ api: async () => [], toast: () => {} });
+
+    formsUI.reset();
+
+    assert.deepEqual(elements.get('#form-list').children, []);
+    assert.equal(elements.get('#form-editing').hidden, true);
+  } finally {
+    globalThis.document = previousDocument;
+  }
 });
