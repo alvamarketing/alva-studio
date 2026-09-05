@@ -1,7 +1,7 @@
 /* Original: the friendly editing shell. The canvas keeps each page's own styles. */
 .friendly-editor {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px);
+  grid-template-columns: 270px minmax(480px, 1fr) 320px;
   height: calc(100dvh - 66px);
   min-height: 520px;
   background: var(--alva-surface-alt);
@@ -12,6 +12,7 @@
   font-family: 'Instrument Sans', system-ui, sans-serif;
   font-size: 13px;
   color: var(--alva-ink);
+  letter-spacing: -0.01em;
 }
 .editor-workspace-tabs {
   display: none;
@@ -122,7 +123,7 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  padding: 5px 12px;
+  padding: 8px 18px;
   background: var(--alva-white);
   gap: 8px;
   border-bottom: 1px solid var(--alva-line);

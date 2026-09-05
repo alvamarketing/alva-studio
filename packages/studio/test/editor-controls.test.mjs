@@ -378,7 +378,8 @@ test('landing declara árvore acessível, regiões persistentes e abas móveis',
   assert.match(source, /panel\.hidden\s*=/);
   assert.match(source, /panel\.inert\s*=/);
   assert.doesNotMatch(source, /fe-breadcrumb/);
-  assert.ok(css.includes('grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px)'));
+  assert.ok(css.includes('grid-template-columns: 270px minmax(480px, 1fr) 320px'));
+  assert.match(css, /\.fe-canvas-bar\s*\{[\s\S]*background:\s*var\(--alva-white\)/);
   assert.match(css, /\.editor-workspace-tabs/);
   assert.match(css, /\[data-editor-panel\]\[hidden\]/);
 });
