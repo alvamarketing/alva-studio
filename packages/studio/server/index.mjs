@@ -37,7 +37,7 @@ function parsePublicFormRequest(path, method, domainScope) {
   } else if (method === 'POST') {
     const prefix = '/api/public/forms';
     const suffix = '/submissions';
-    if (!path.startsWith(prefix) || !path.endsWith(suffix)) return null;
+    if ((path !== prefix && !path.startsWith(`${prefix}/`)) || !path.endsWith(suffix)) return null;
     encoded = path.slice(prefix.length, -suffix.length);
     if (encoded.startsWith('/')) encoded = encoded.slice(1);
     if (encoded.endsWith('/')) encoded = encoded.slice(0, -1);
