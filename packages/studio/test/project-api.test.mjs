@@ -32,11 +32,11 @@ async function start(t, database, options = {}) {
   return { server, base };
 }
 
-async function publicRequest(base, path, host, { method = 'GET', body } = {}) {
+async function publicRequest(base, path, host, { method = 'GET', body, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
     const request = httpRequest(base + path, {
       method,
-      headers: { Host: host, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { Host: host, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers },
     }, (response) => {
       let content = '';
       response.setEncoding('utf8');
@@ -475,6 +475,15 @@ test('formulários SaaS validam o schema antes de criar, atualizar e publicar', 
   assert.deepEqual(afterInvalidUpdate.draft_schema, created.draftSchema);
   assert.equal(afterInvalidUpdate.lock_version, created.lockVersion);
 
+  for (const draftSchema of [null, 'não é objeto', []]) {
+    const current = await (await alice.request(`/api/forms/${created.id}`)).json();
+    const rejected = await alice.request(`/api/forms/${created.id}`, 'PUT', {
+      revision: current.revision,
+      draftSchema,
+    });
+    assert.equal(rejected.status, 400, `draftSchema ${JSON.stringify(draftSchema)}: ${await rejected.text()}`);
+  }
+
   await database.query("UPDATE forms SET draft_schema = '{}'::jsonb WHERE id = $1", [created.id]);
   const invalidPublish = await alice.request(`/api/forms/${created.id}/publish`, 'POST', { revision: created.lockVersion });
   assert.equal(invalidPublish.status, 400, await invalidPublish.text());
@@ -528,6 +537,49 @@ test('rotas públicas de formulário aceitam raiz, um caractere e múltiplos seg
     assert.equal(submitted.status, 200, await submitted.text());
   }
   assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions')).rows[0].count, 3);
+  await database.close();
+});
+
+test('aliases sem a fronteira do prefixo público não recebem isenção de origem', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  await database.query("UPDATE companies SET slug = 'empresa' WHERE id = $1", [records.companyA.id]);
+  await database.query("UPDATE projects SET slug = 'projeto' WHERE id = $1", [records.projectA.id]);
+
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  const created = await (await alice.request('/api/forms', 'POST', { name: 'Contato', slug: 'contato' })).json();
+  const draft = await (await alice.request(`/api/forms/${created.id}`, 'PUT', {
+    revision: created.revision,
+    steps: [{ id: 'email', type: 'email', title: 'E-mail', required: true }],
+  })).json();
+  assert.equal((await alice.request(`/api/forms/${created.id}/publish`, 'POST', { revision: draft.revision })).status, 201);
+
+  await database.query(
+    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status)
+     VALUES ($1, $2, 'production', 'formularios.local.test', true, 'verified')`,
+    [records.companyA.id, records.projectA.id],
+  );
+  const domainApp = await start(t, database, { publicOrigin: 'https://studio.local' });
+  const externalOrigin = 'https://externo.test';
+  const [projectAlias, domainAlias] = await Promise.all([
+    fetch(`${app.base}/api/public/formsempresa/projeto/contato/submissions`, {
+      method: 'POST',
+      headers: { Origin: externalOrigin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers: { email: 'namespace@alva.test' } }),
+    }),
+    publicRequest(domainApp.base, '/api/public/formscontato/submissions', 'formularios.local.test', {
+      method: 'POST',
+      headers: { Origin: externalOrigin },
+      body: { answers: { email: 'dominio@alva.test' } },
+    }),
+  ]);
+
+  assert.deepEqual([projectAlias.status, domainAlias.status], [403, 403]);
+  assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions')).rows[0].count, 0);
   await database.close();
 });
 

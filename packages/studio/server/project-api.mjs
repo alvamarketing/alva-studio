@@ -8,6 +8,13 @@ function rejectsLegacyProject(input) {
   if (Object.hasOwn(input ?? {}, 'project')) throw fail('Use editorState para o estado do editor.', 400);
 }
 
+function rejectsInvalidDraftSchema(input) {
+  if (!Object.hasOwn(input ?? {}, 'draftSchema')) return;
+  const value = input.draftSchema;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype)
+    throw fail('Rascunho do formulário inválido.', 400);
+}
+
 function routeFor(name) {
   return normalizeRoute(normalizeProjectSlug(name || `conteudo-${crypto.randomUUID().slice(0, 8)}`));
 }
@@ -289,6 +296,7 @@ export function createProjectApi({
       if (method === 'PUT') {
         await sessionService.authorize(context, capability, projectId);
         const input = await body(req);
+        if (!isPage) rejectsInvalidDraftSchema(input);
         let pageSettingsPatch = {};
         let currentForm = null;
         if (isPage && (input.domain !== undefined || input.webhook !== undefined)) {
