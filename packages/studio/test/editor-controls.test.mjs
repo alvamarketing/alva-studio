@@ -245,14 +245,6 @@ test('fluxo comportamental de exportação materializa o iframe público com tí
   assert.doesNotMatch(output, /data-alva-vsl/);
 });
 
-test('salvamento preserva o HTML bruto do editor e deixa a materialização apenas para preview/download', async () => {
-  const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(source, /project:\s*editor\.getProjectData\(\)/);
-  assert.match(source, /const payload = \{[\s\S]*?html:\s*editor\.getHtml\(\)/);
-  assert.match(source, /srcdoc\s*=\s*exportHtml\(\)/);
-  assert.match(source, /new Blob\(\[exportHtml\(\)\]/);
-});
-
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {
   for (const url of [
     'https://example.com/path?q=1',

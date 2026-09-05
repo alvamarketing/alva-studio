@@ -493,10 +493,7 @@ async function saveOnce() {
     revision: page.revision,
     name: $('#page-name').value.trim(),
     project: editor.getProjectData(),
-    // Persist the editor's canonical component HTML. VSL placeholders are
-    // materialized only by exportHtml() for local preview/download; storing
-    // that rendered document would freeze the browser origin into a draft.
-    html: editor.getHtml(),
+    html: exportHtml(),
     domain: page.domain,
     webhook: page.webhook,
   };

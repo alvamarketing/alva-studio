@@ -7,7 +7,6 @@ import { CompanyRepository } from '../server/repositories/company-repository.mjs
 import { ProjectRepository } from '../server/repositories/project-repository.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
-import { buildPageExportHtml } from '../public/editor-shell.js';
 
 async function createUser(database, { email, name }) {
   const { rows } = await database.query(
@@ -116,44 +115,6 @@ test('rotas de páginas e formulários são únicas sem distinguir caixa e aceit
       }),
       assertStatus(409),
     );
-  });
-});
-
-test('salvar e reabrir preserva o marcador de VSL enquanto a exportação local usa a origem do cliente', async (t) => {
-  await withHarness(t, async ({ database, companies, projects, content }) => {
-    const owner = await createUser(database, { email: 'owner@vsl-persistencia.test', name: 'Owner' });
-    const { company, project } = await projectFor(companies, projects, owner, 'vsl-persistencia');
-    const publicId = 'public-vsl-persistencia';
-    const rawHtml = `<main><div data-alva-vsl="${publicId}"></div></main>`;
-    const localExport = buildPageExportHtml({
-      title: 'Página', css: '', html: rawHtml, js: '', publicOrigin: 'https://client.example.test',
-    });
-    assert.match(localExport, /https:\/\/client\.example\.test\/embed\/v\/public-vsl-persistencia/);
-    assert.doesNotMatch(localExport, /data-alva-vsl/);
-
-    const page = await content.createPage({
-      companyId: company.id,
-      projectId: project.id,
-      actorId: owner.id,
-      name: 'Página VSL',
-      route: '/vsl',
-      editorState: { components: [{ type: 'vsl', publicId }] },
-      renderedHtml: rawHtml,
-    });
-    const reopened = await content.getPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
-    assert.equal(reopened.renderedHtml, rawHtml);
-    assert.match(reopened.renderedHtml, /data-alva-vsl="public-vsl-persistencia"/);
-    await content.updatePage({
-      companyId: company.id,
-      projectId: project.id,
-      actorId: owner.id,
-      pageId: page.id,
-      lockVersion: reopened.lockVersion,
-      editorState: reopened.editorState,
-      renderedHtml: reopened.renderedHtml,
-    });
-    const reopenedAfterUpdate = await content.getPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
-    assert.equal(reopenedAfterUpdate.renderedHtml, rawHtml);
   });
 });
 

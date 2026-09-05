@@ -61,7 +61,7 @@ export async function resolvePublishedVslReferences({ database, companyId, proje
 
 export function renderPublishedVslReferences(html, { vslEmbedUrls = new Map() } = {}) {
   const source = String(html ?? '');
-  const rendered = source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, _tag, _attributes, doubleId, singleId) => {
+  return source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, _tag, _attributes, doubleId, singleId) => {
     const publicId = String(doubleId ?? singleId ?? '').trim();
     const value = vslEmbedUrls instanceof Map ? vslEmbedUrls.get(publicId) : vslEmbedUrls?.[publicId];
     const embedUrl = typeof value === 'string' ? value : value?.embedUrl;
@@ -70,20 +70,6 @@ export function renderPublishedVslReferences(html, { vslEmbedUrls = new Map() } 
     }
     return `<iframe class="alva-vsl-frame" src="${escapeHtml(embedUrl)}" title="VSL" aria-label="VSL" allow="autoplay; fullscreen; picture-in-picture" loading="lazy" allowfullscreen></iframe>`;
   });
-  return rewriteKnownVslIframes(rendered, vslEmbedUrls);
-}
-
-function rewriteKnownVslIframes(html, vslEmbedUrls) {
-  let source = html;
-  const entries = vslEmbedUrls instanceof Map ? vslEmbedUrls.entries() : Object.entries(vslEmbedUrls || {});
-  for (const [publicId, value] of entries) {
-    const embedUrl = typeof value === 'string' ? value : value?.embedUrl;
-    if (!/^https?:\/\/[^\s]+$/i.test(String(embedUrl || ''))) continue;
-    const escapedId = encodeURIComponent(publicId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const iframe = new RegExp(`<iframe\\b(?=[^>]*\\bsrc\\s*=\\s*["'][^"']*\\/embed\\/v\\/${escapedId}(?:[?#"'/]|$))[^>]*>(?:[\\s\\S]*?)<\\/iframe\\s*>`, 'gi');
-    source = source.replace(iframe, `<iframe class="alva-vsl-frame" src="${escapeHtml(embedUrl)}" title="VSL" aria-label="VSL" allow="autoplay; fullscreen; picture-in-picture" loading="lazy" allowfullscreen></iframe>`);
-  }
-  return source;
 }
 
 // Public form rendering may keep a partial map so the renderer can show its
