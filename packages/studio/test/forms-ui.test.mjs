@@ -103,3 +103,51 @@ test('reset público remove cartões de formulários do contexto anterior', () =
     globalThis.document = previousDocument;
   }
 });
+
+test('resposta de formulário iniciada antes do reset não recompõe cartões antigos', async () => {
+  const previousDocument = globalThis.document;
+  const elements = new Map();
+  const element = () => ({
+    classList: { toggle() {} },
+    hidden: false,
+    value: '',
+    children: [],
+    replaceChildren(...children) {
+      this.children = children;
+    },
+    append(child) {
+      this.children.push(child);
+    },
+    querySelector() {
+      return element();
+    },
+  });
+  for (const selector of [
+    '#nav-pages', '#nav-forms', '#pages-view', '#forms-view', '#form-search', '#form-count', '#new-form',
+    '#dynamic-create-form', '#dynamic-form-name', '#form-save', '#form-back', '#form-public-link',
+    '#form-responses', '#form-list', '#form-editing',
+  ]) {
+    elements.set(selector, element());
+  }
+  let resolveForms;
+  globalThis.document = {
+    querySelector: (selector) => elements.get(selector),
+    querySelectorAll: () => [],
+    createElement: element,
+  };
+  try {
+    const formsUI = createFormsUI({
+      api: () => new Promise((resolve) => (resolveForms = resolve)),
+      toast: () => {},
+    });
+
+    const pending = formsUI.showForms();
+    formsUI.reset();
+    resolveForms([{ id: 'form-old', name: 'Formulário antigo', stepCount: 1, submissionCount: 0 }]);
+    await pending;
+
+    assert.deepEqual(elements.get('#form-list').children, []);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});

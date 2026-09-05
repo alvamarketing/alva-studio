@@ -6,6 +6,7 @@ import { createUIPreferences } from './ui-preferences.js';
 import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
+import { createContextList } from './context-list.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -131,9 +132,15 @@ async function saveOnce() {
     .finally(() => (saving = null));
   return saving;
 }
+const pageList = createContextList({
+  load: () => api('/pages'),
+  apply: (next) => {
+    pages = next;
+    renderList();
+  },
+});
 async function loadList() {
-  pages = await api('/pages');
-  renderList();
+  return pageList.refresh();
 }
 function renderList() {
   const search = $('#search').value.toLocaleLowerCase('pt-BR');
@@ -463,6 +470,12 @@ async function refreshConfig() {
 async function closeOpenEditors() {
   await contextBoundary.close();
 }
+function resetPageList() {
+  pageList.invalidate();
+  pages = [];
+  dirty = false;
+  $('#page-list').replaceChildren();
+}
 async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
@@ -476,11 +489,7 @@ contextBoundary = createStudioContextBoundary({
     page = null;
     $('#editing').hidden = true;
   },
-  clearPageList: () => {
-    pages = [];
-    dirty = false;
-    $('#page-list').replaceChildren();
-  },
+  clearPageList: resetPageList,
   closeFormEditor: () => formsUI.closeEditor(),
   resetForms: () => formsUI.reset(),
 });
@@ -513,9 +522,7 @@ ownerUI = createOwnerUI({
     editor?.destroy();
     editor = null;
     page = null;
-    pages = [];
-    dirty = false;
-    $('#page-list').replaceChildren();
+    resetPageList();
     $('#editing').hidden = true;
     $('#dashboard').hidden = true;
     formsUI.reset();

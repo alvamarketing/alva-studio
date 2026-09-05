@@ -31,3 +31,10 @@
 ### Testes do fix round
 
 - `node --test packages/studio/test/studio-shell.test.mjs packages/studio/test/studio-context-boundary.test.mjs packages/studio/test/forms-ui.test.mjs packages/studio/test/editor-controls.test.mjs` — 26 testes aprovados.
+
+## Fix round 2
+
+- Criado um controlador de geração para cada listagem de contexto. Um reset invalida requisições em voo antes que elas possam atualizar arrays ou DOM.
+- As listas de páginas e formulários usam o controlador; o reset de formulários e a limpeza de páginas durante a troca de contexto acionam a invalidação.
+- Adicionados testes para respostas pendentes de páginas e formulários e para `showForms()` concluindo depois de `reset()`.
+- `node --test packages/studio/test/context-list.test.mjs packages/studio/test/studio-shell.test.mjs packages/studio/test/studio-context-boundary.test.mjs packages/studio/test/forms-ui.test.mjs packages/studio/test/editor-controls.test.mjs` — 29 testes aprovados.

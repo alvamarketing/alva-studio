@@ -1,3 +1,5 @@
+import { createContextList } from './context-list.js';
+
 const TYPES = {
   short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
   long_text: { label: 'Texto longo', icon: 'notes', title: 'Conte um pouco mais' },
@@ -147,6 +149,13 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {} }
   let selectedElement = 0;
   let editingHeader = false;
   let dirty = false;
+  const formList = createContextList({
+    load: () => api('/forms'),
+    apply: (next) => {
+      forms = next;
+      renderList();
+    },
+  });
 
   const setActiveNav = (name) => {
     $('#nav-pages').classList.toggle('nav-active', name === 'pages');
@@ -165,8 +174,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {} }
   };
 
   async function loadList() {
-    forms = await api('/forms');
-    renderList();
+    return formList.refresh();
   }
 
   function renderList() {
@@ -390,6 +398,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {} }
       $('#form-editing').hidden = true;
     },
     reset() {
+      formList.invalidate();
       forms = [];
       current = null;
       dirty = false;
