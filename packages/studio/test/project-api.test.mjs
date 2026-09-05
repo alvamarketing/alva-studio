@@ -420,11 +420,16 @@ test('formulário SaaS mantém rascunho, publica explicitamente em rota pública
   const database = createDatabase({ connectionString });
   await migrate(database);
   const records = await seed(database);
-  let fetchCalled = false;
-  let dnsCalled = false;
+  const deliveryPayloads = [];
+  const persistedBeforeDelivery = [];
+  let failDelivery = false;
   const app = await start(t, database, {
-    dnsLookup: async () => { dnsCalled = true; throw new Error('DNS não deve executar'); },
-    webhookFetch: async () => { fetchCalled = true; throw new Error('egress não deve executar'); },
+    dnsLookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    webhookFetch: async (_url, options) => {
+      deliveryPayloads.push(JSON.parse(options.body));
+      persistedBeforeDelivery.push((await database.query('SELECT count(*)::int AS count FROM form_submissions')).rows[0].count);
+      return { ok: !failDelivery };
+    },
   });
   const alice = client(app.base);
   await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
@@ -463,9 +468,14 @@ test('formulário SaaS mantém rascunho, publica explicitamente em rota pública
   const completionHtml = await submitted.text();
   assert.equal(submitted.status, 200, completionHtml);
   assert.match(completionHtml, /Recebemos/);
-  assert.equal(fetchCalled, false);
-  assert.equal(dnsCalled, false);
-  assert.equal(submitted.headers.get('x-webhook-delivery'), 'pending');
+  assert.equal(submitted.headers.get('x-webhook-delivery'), 'delivered');
+  assert.deepEqual(persistedBeforeDelivery, [1]);
+  assert.equal(deliveryPayloads[0].event, 'form.submitted');
+  assert.equal(deliveryPayloads[0].companyId, records.companyA.id);
+  assert.equal(deliveryPayloads[0].projectId, records.projectA.id);
+  assert.equal(deliveryPayloads[0].formId, form.id);
+  assert.deepEqual(deliveryPayloads[0].answers, { email: 'lead@alva.test' });
+  assert.match(deliveryPayloads[0].eventId, /^[0-9a-f-]{36}$/);
   assert.equal((await fetch(`${app.base}${form.publicPath.replace('/f/', '/api/public/forms/')}/submissions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: {} }),
   })).status, 400);
@@ -478,7 +488,21 @@ test('formulário SaaS mantém rascunho, publica explicitamente em rota pública
   assert.equal(persisted.rows[0].company_id, records.companyA.id);
   assert.equal(persisted.rows[0].project_id, records.projectA.id);
   assert.equal(persisted.rows[0].form_version_id, form.publishedVersionId);
-  assert.equal(persisted.rows[0].tracking_status, 'pending');
+  assert.equal(persisted.rows[0].tracking_status, 'delivered');
+  failDelivery = true;
+  const failed = await fetch(`${app.base}${form.publicPath.replace('/f/', '/api/public/forms/')}/submissions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: { email: 'falhou@alva.test' } }),
+  });
+  const failedHtml = await failed.text();
+  assert.equal(failed.status, 200, failedHtml);
+  assert.match(failedHtml, /Recebemos/);
+  assert.equal(failed.headers.get('x-webhook-delivery'), 'failed');
+  assert.deepEqual(persistedBeforeDelivery, [1, 2]);
+  const deliveries = await database.query('SELECT answers, tracking_status FROM form_submissions WHERE form_id = $1 ORDER BY submitted_at', [form.id]);
+  assert.deepEqual(deliveries.rows.map((row) => ({ email: row.answers.email, status: row.tracking_status })), [
+    { email: 'lead@alva.test', status: 'delivered' },
+    { email: 'falhou@alva.test', status: 'failed' },
+  ]);
   const duplicate = await alice.request(`/api/forms/${form.id}/duplicate`, 'POST', {});
   assert.equal(duplicate.status, 201);
   assert.equal((await duplicate.json()).webhook, '');

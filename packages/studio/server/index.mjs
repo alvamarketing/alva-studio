@@ -13,7 +13,7 @@ import { CompanyRepository } from './repositories/company-repository.mjs';
 import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
 import { VideoRepository } from './repositories/video-repository.mjs';
-import { validateWebhookUrl } from './outbound-webhook.mjs';
+import { deliverWebhook, validateWebhookUrl } from './outbound-webhook.mjs';
 import { normalizeRoute } from './domain/access.mjs';
 import { createDatabase, migrate } from './db/postgres.mjs';
 import { PublicationSnapshotBuilder, extractVslReferences } from './publication-snapshot.mjs';
@@ -113,6 +113,9 @@ export function createApp({
   database,
   sessionOptions,
   publicOrigin = process.env.PUBLIC_ORIGIN,
+  webhookFetch = globalThis.fetch,
+  dnsLookup,
+  webhookTimeoutMs,
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -299,7 +302,37 @@ export function createApp({
             input,
           });
         const form = { ...saved.schema, id: saved.form.id, name: saved.form.name, slug: saved.form.slug };
-        if (form.webhook) res.setHeader('X-Webhook-Delivery', saved.webhookDelivery.status);
+        if (form.webhook) {
+          let status = 'failed';
+          const tracking = {
+            companyId: saved.form.companyId ?? saved.companyId,
+            projectId: saved.form.projectId ?? saved.projectId,
+            formId: saved.form.id,
+            submissionId: saved.id,
+          };
+          try {
+            status = (await deliverWebhook({
+              url: form.webhook,
+              event: {
+                eventId: saved.eventId,
+                event: 'form.submitted',
+                companyId: tracking.companyId,
+                projectId: tracking.projectId,
+                formId: tracking.formId,
+                submittedAt: saved.submittedAt,
+                answers: saved.answers,
+              },
+              fetchImpl: webhookFetch,
+              dnsLookup,
+              ...(webhookTimeoutMs === undefined ? {} : { timeoutMs: webhookTimeoutMs }),
+            })).status;
+            await content.markSubmissionTracking({ ...tracking, status });
+          } catch {
+            status = 'failed';
+            await content.markSubmissionTracking({ ...tracking, status }).catch(() => {});
+          }
+          res.setHeader('X-Webhook-Delivery', status);
+        }
         const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');

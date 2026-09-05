@@ -838,19 +838,33 @@ export class ContentRepository {
     });
   }
 
+  async markSubmissionTracking({ companyId, projectId, formId, submissionId, status }) {
+    if (!['delivered', 'failed'].includes(status)) throw fail('Status de entrega inválido.', 400);
+    const result = await this.database.query(
+      `UPDATE form_submissions
+       SET tracking_status = $5
+       WHERE company_id = $1 AND project_id = $2 AND form_id = $3 AND id = $4`,
+      [companyId, projectId, formId, submissionId, status],
+    );
+    if (result.rowCount !== 1) throw fail('Resposta enviada não encontrada.', 404);
+  }
+
   async submitPublishedForm({ resolve, route: routeValue, input }) {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
       const answers = validateFormAnswers(form.schema, input);
       const { rows } = await client.query(
         `INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers)
-         VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id, submitted_at`,
+         VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id, tracking_event_id, submitted_at`,
         [form.company_id, form.project_id, form.id, form.version_id, JSON.stringify(answers)],
       );
       return {
         id: rows[0].id,
+        eventId: rows[0].tracking_event_id,
         form: {
           id: form.id,
+          companyId: form.company_id,
+          projectId: form.project_id,
           name: form.name,
           slug: routeValue === '/' ? '' : routeValue.replace(/^\//, ''),
           companySlug: form.company_slug,
