@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import grapesjs from 'grapesjs';
 import {
   safeDestination,
   componentLabel,
@@ -25,6 +26,8 @@ import {
   vslOptionKeyboardAction,
   editorInteractionPolicy,
   applyEditorInteractionPolicy,
+  createReadOnlyMutationGuard,
+  restoreVslOptionFocus,
 } from '../public/editor-shell.js';
 
 test('referência de VSL no editor persiste somente o identificador público', () => {
@@ -70,7 +73,26 @@ test('cards de VSL oferecem remoção acessível e navegação por setas', () =>
   assert.doesNotMatch(markup, /aria-pressed/);
   assert.equal(vslOptionKeyboardAction({ key: 'ArrowDown' }, ['', 'published'], ''), 'published');
   assert.equal(vslOptionKeyboardAction({ key: 'ArrowUp' }, ['', 'published'], ''), 'published');
+  assert.equal(vslOptionKeyboardAction({ key: 'ArrowDown' }, ['', 'disabled', 'published'], '', ['disabled']), 'published');
+  assert.equal(vslOptionKeyboardAction({ key: 'ArrowDown' }, ['', 'disabled', 'published'], 'published', ['disabled']), '');
   assert.equal(vslOptionKeyboardAction({ key: 'Home' }, ['', 'published'], 'published'), '');
+  let focused = '';
+  assert.equal(restoreVslOptionFocus([{ dataset: { vslOption: 'published' }, focus: () => { focused = 'published'; } }], 'published'), true);
+  assert.equal(focused, 'published');
+  const radios = [
+    { dataset: { vslOption: '' }, focus: () => { focused = ''; } },
+    { dataset: { vslOption: 'disabled' }, disabled: true, focus: () => { focused = 'disabled'; } },
+    { dataset: { vslOption: 'published' }, focus: () => { focused = 'published'; } },
+  ];
+  let selected = '';
+  selected = vslOptionKeyboardAction({ key: 'ArrowRight' }, radios.map((radio) => radio.dataset.vslOption), selected, ['disabled']);
+  assert.equal(selected, 'published');
+  restoreVslOptionFocus(radios, selected);
+  assert.equal(focused, 'published');
+  selected = vslOptionKeyboardAction({ key: 'ArrowRight' }, radios.map((radio) => radio.dataset.vslOption), selected, ['disabled']);
+  assert.equal(selected, '');
+  restoreVslOptionFocus(radios, selected);
+  assert.equal(focused, '');
 });
 
 test('landing page sem page.write mantém catálogo, edição, ordem e exclusão inativos', () => {
@@ -122,6 +144,29 @@ test('preview da VSL mantém iframe fora do botão de seleção', async () => {
   });
   assert.match(headerMarkup, /data-preview-header="1"/);
   assert.doesNotMatch(headerMarkup, /<button[^>]*>[^]*<iframe[^]*<\/button>/);
+});
+
+test('guard read-only restaura mutações programáticas reais do GrapesJS', async () => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  const main = editor.getWrapper().append({ tagName: 'main' })[0];
+  main.append({ tagName: 'section', attributes: { id: 'one' } });
+  main.append({ tagName: 'section', attributes: { id: 'two' } });
+  const snapshot = editor.getProjectData();
+  let restores = 0;
+  const guard = createReadOnlyMutationGuard(editor, { snapshot, lock: () => { restores += 1; } });
+  const original = JSON.stringify(snapshot);
+  const mutateAndAssert = async (mutation) => {
+    mutation();
+    await Promise.resolve();
+    assert.equal(JSON.stringify(editor.getProjectData()), original);
+  };
+  await mutateAndAssert(() => editor.getWrapper().components().at(0).components().at(0).set('attributes', { id: 'changed' }));
+  await mutateAndAssert(() => editor.getWrapper().append({ tagName: 'div', attributes: { id: 'new' } }));
+  await mutateAndAssert(() => editor.getWrapper().components().at(0).remove());
+  await mutateAndAssert(() => editor.getWrapper().components().at(0).components().at(1).move(editor.getWrapper().components().at(0), { at: 0 }));
+  assert.equal(restores, 4);
+  guard.dispose();
+  editor.destroy();
 });
 
 test('modelo VSL montado no caminho headless do GrapesJS elimina configuração legada', () => {

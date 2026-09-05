@@ -1,6 +1,6 @@
 import { createContextList } from './context-list.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
-import { vslOptionKeyboardAction } from './editor-shell.js';
+import { restoreVslOptionFocus, vslOptionKeyboardAction } from './editor-shell.js';
 
 const TYPES = {
   short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
@@ -295,6 +295,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   let vslVideos = [];
   let vslLoadError = '';
   const vslEmbedUrls = new Map();
+  let pendingVslOptionFocusId = null;
   const workspaceId = `forms-workspace-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
   function syncFormPublicationControl() {
     const button = $('#form-public-link');
@@ -533,6 +534,10 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     if (!editable) $('#dynamic-editor').querySelectorAll('.dynamic-properties-panel input, .dynamic-properties-panel select, .dynamic-properties-panel textarea, .dynamic-properties-panel .dynamic-step-actions button, .dynamic-properties-panel .dynamic-vsl-option').forEach((control) => { control.disabled = true; });
     if (!isCompactWorkspace() && focusTreeNodeId && activeTreeItem) restoreFormTreeFocus(document.querySelectorAll('[data-tree-node]'), focusTreeNodeId, activeTreeItem);
     renderPreview();
+    if (pendingVslOptionFocusId !== null) {
+      restoreVslOptionFocus(document.querySelectorAll('[data-vsl-option]'), pendingVslOptionFocusId);
+      pendingVslOptionFocusId = null;
+    }
   }
 
   function renderPreview() {
@@ -574,11 +579,11 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     const vslOptionIds = vslOptions.map((button) => String(button.dataset.vslOption || ''));
     vslOptions.forEach((button) => {
       button.onkeydown = (event) => {
-        const nextId = vslOptionKeyboardAction(event, vslOptionIds, element()?.publicId || '');
+        const nextId = vslOptionKeyboardAction(event, vslOptionIds, element()?.publicId || '', vslOptions.filter((candidate) => candidate.disabled).map((candidate) => candidate.dataset.vslOption));
         if (nextId === null) return;
         event.preventDefault();
         const next = vslOptions.find((candidate) => candidate.dataset.vslOption === nextId && !candidate.disabled);
-        if (next) { next.focus(); next.click(); }
+        if (next) { pendingVslOptionFocusId = nextId; next.click(); }
       };
     });
     document.querySelectorAll('[data-add-screen]').forEach((button) => { button.onclick = () => { if (!can('form.write')) return; current.steps.push(createScreen(button.dataset.addScreen)); selected = current.steps.length - 1; selectedElement = 0; markDirty(); renderEditor(); }; });

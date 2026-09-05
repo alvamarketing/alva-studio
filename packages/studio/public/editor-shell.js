@@ -53,15 +53,74 @@ export function vslCanvasMessage({ publicId = '', canRead = true, loadError = ''
   return publicId ? 'VSL não encontrada. Publique a VSL antes de usar.' : 'Escolha uma VSL publicada.';
 }
 
-export function vslOptionKeyboardAction(event, visibleIds = [], selectedId = '') {
+export function vslOptionKeyboardAction(event, visibleIds = [], selectedId = '', disabledIds = []) {
   const ids = Array.from(visibleIds || []);
   if (!ids.length) return null;
   const index = Math.max(0, ids.indexOf(String(selectedId || '')));
-  if (event?.key === 'ArrowLeft' || event?.key === 'ArrowUp') return ids[(index - 1 + ids.length) % ids.length];
-  if (event?.key === 'ArrowRight' || event?.key === 'ArrowDown') return ids[(index + 1) % ids.length];
+  const disabled = new Set(Array.from(disabledIds || [], (id) => String(id || '')));
+  const direction = event?.key === 'ArrowLeft' || event?.key === 'ArrowUp' ? -1 : event?.key === 'ArrowRight' || event?.key === 'ArrowDown' ? 1 : 0;
+  if (direction) {
+    for (let offset = 1; offset <= ids.length; offset += 1) {
+      const candidate = ids[(index + direction * offset + ids.length * 2) % ids.length];
+      if (!disabled.has(String(candidate || ''))) return candidate;
+    }
+    return null;
+  }
   if (event?.key === 'Home') return ids[0];
   if (event?.key === 'End') return ids.at(-1);
   return null;
+}
+
+export function restoreVslOptionFocus(options = [], selectedId = '') {
+  const selected = String(selectedId || '');
+  const option = Array.from(options || []).find((candidate) => String(candidate?.dataset?.vslOption || '') === selected && !candidate.disabled);
+  if (!option?.focus) return false;
+  option.focus();
+  return true;
+}
+
+export function createReadOnlyMutationGuard(editor, { snapshot = editor?.getProjectData?.(), lock = () => {} } = {}) {
+  const initialSnapshot = structuredClone(snapshot || {});
+  let restoring = false;
+  let queued = false;
+  let disposed = false;
+  const componentPath = (component) => {
+    const path = [];
+    let current = component;
+    while (current?.parent?.()) {
+      path.unshift(current.index?.() ?? 0);
+      current = current.parent();
+    }
+    return path;
+  };
+  const componentAtPath = (component, path) => {
+    let current = component;
+    for (const index of path) current = current?.components?.().at(index);
+    return current;
+  };
+  const restore = () => {
+    if (restoring || !editor?.loadProjectData) return false;
+    restoring = true;
+    const selectedPath = componentPath(editor.getSelected?.());
+    editor.loadProjectData(structuredClone(initialSnapshot));
+    lock(editor.getWrapper?.());
+    const selected = componentAtPath(editor.getWrapper?.(), selectedPath);
+    if (selected) editor.select?.(selected, { scroll: false });
+    restoring = false;
+    return true;
+  };
+  const scheduleRestore = () => {
+    if (queued || restoring || disposed) return;
+    queued = true;
+    queueMicrotask(() => {
+      queued = false;
+      if (!disposed && !restoring) restore();
+    });
+  };
+  const mutationEvents = ['update', 'component:add', 'component:remove', 'component:update:attributes', 'component:update:components', 'component:update:content', 'component:styleUpdate'];
+  const handlers = new Map(mutationEvents.map((event) => [event, scheduleRestore]));
+  handlers.forEach((handler, event) => editor.on?.(event, handler));
+  return { restore, isRestoring: () => restoring, dispose: () => { disposed = true; handlers.forEach((handler, event) => editor.off?.(event, handler)); } };
 }
 
 export function renderVslOptionCards(videos = [], selectedId = '') {
@@ -346,6 +405,8 @@ export function createFriendlyEditor({
   let activeModel;
   let treeComponents = new Map();
   const cleanup = [];
+  let readOnlyMutationGuard = null;
+  let pendingVslOptionFocusId = null;
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
   const interactionPolicy = applyEditorInteractionPolicy(host, can);
   const canInsertVsl = () => interactionPolicy.canAdd;
@@ -491,12 +552,14 @@ export function createFriendlyEditor({
   }
   const beforeMigration = project ? JSON.stringify(editor.getProjectData()) : null;
   normalizeForms(editor);
+  const lockComponent = (component) => {
+    component?.set?.({ draggable: false, editable: false, droppable: false }, { silent: true });
+    componentChildren(component).forEach(lockComponent);
+  };
   if (!interactionPolicy.canEdit) {
-    const lockComponent = (component) => {
-      component.set?.({ draggable: false, editable: false, droppable: false }, { silent: true });
-      componentChildren(component).forEach(lockComponent);
-    };
     lockComponent(editor.getWrapper());
+    readOnlyMutationGuard = createReadOnlyMutationGuard(editor, { snapshot: editor.getProjectData(), lock: lockComponent });
+    cleanup.push(() => readOnlyMutationGuard?.dispose());
   }
   editor.__alvaMigrated = interactionPolicy.canEdit && !!project && beforeMigration !== JSON.stringify(editor.getProjectData());
   loading = false;
@@ -831,11 +894,11 @@ export function createFriendlyEditor({
             render();
           };
           option.onkeydown = (event) => {
-            const nextId = vslOptionKeyboardAction(event, vslOptionIds, currentId);
+            const nextId = vslOptionKeyboardAction(event, vslOptionIds, currentId, vslOptions.filter((candidate) => candidate.disabled).map((candidate) => candidate.dataset.vslOption));
             if (nextId === null) return;
             event.preventDefault();
             const next = vslOptions.find((candidate) => candidate.dataset.vslOption === nextId && !candidate.disabled);
-            if (next) { next.focus(); next.click(); }
+            if (next) { pendingVslOptionFocusId = nextId; next.click(); }
           };
         });
         help(content, publishedVslById.size ? 'A prévia usa a versão publicada da VSL.' : 'Ainda não há VSLs publicadas neste projeto.');
@@ -1104,12 +1167,17 @@ export function createFriendlyEditor({
     if (['section', 'div', 'main', 'article'].includes(tag))
       styleNumber(advanced, model, 'Distância entre elementos (px)', 'gap', 0);
     if (!interactionPolicy.canEdit) props.querySelectorAll('input, select, textarea, .fe-element-actions button, .fe-vsl-option').forEach((control) => { control.disabled = true; });
+    if (pendingVslOptionFocusId !== null) {
+      restoreVslOptionFocus(props.querySelectorAll('[data-vsl-option]'), pendingVslOptionFocusId);
+      pendingVslOptionFocusId = null;
+    }
   }
   props.addEventListener('focusout', () => {
     repaint = setTimeout(render, 100);
   });
   editor.on('component:selected component:deselected', render);
   editor.on('update', () => {
+    if (!interactionPolicy.canEdit) return;
     if (!loading) onChange();
     clearTimeout(repaint);
     repaint = setTimeout(render, 100);

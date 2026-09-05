@@ -192,6 +192,8 @@ test('editor de formulários oferece opções visuais e estados acessíveis da V
   assert.match(source, /aria-checked/);
   assert.doesNotMatch(source, /dynamic-vsl-option[^\n]*aria-pressed/);
   assert.match(source, /previewVslElementMarkup/);
+  assert.match(source, /restoreVslOptionFocus/);
+  assert.match(source, /vslOptionKeyboardAction\([^\n]*disabled/);
 });
 
 test('opções eliminam linhas vazias e preservam rótulos únicos', () => {
