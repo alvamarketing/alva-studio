@@ -306,7 +306,10 @@ export function createProjectApi({
       const [, projectId] = videoCollection;
       await sessionService.authorize(context, null, projectId);
       if (!videos) throw fail('O player de VSL ainda não está disponível.', 409);
-      if (method === 'GET') return json(await videos.listVideos({ companyId: context.companyId, projectId, actorId: context.user.id }));
+      if (method === 'GET') {
+        await sessionService.authorize(context, 'video.read', projectId);
+        return json(await videos.listVideos({ companyId: context.companyId, projectId, actorId: context.user.id }));
+      }
       if (method === 'POST') {
         await sessionService.authorize(context, 'video.write', projectId);
         const input = await body(req);
@@ -319,7 +322,10 @@ export function createProjectApi({
       const [, projectId, videoId, action] = video;
       await sessionService.authorize(context, null, projectId);
       if (!videos) throw fail('O player de VSL ainda não está disponível.', 409);
-      if (!action && method === 'GET') return json(await videos.getVideo({ companyId: context.companyId, projectId, actorId: context.user.id, videoId }));
+      if (!action && method === 'GET') {
+        await sessionService.authorize(context, 'video.read', projectId);
+        return json(await videos.getVideo({ companyId: context.companyId, projectId, actorId: context.user.id, videoId }));
+      }
       if (!action && method === 'PUT') {
         await sessionService.authorize(context, 'video.write', projectId);
         return json(await videos.updateVideo({ ...(await body(req)), companyId: context.companyId, projectId, actorId: context.user.id, videoId }));

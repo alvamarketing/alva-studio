@@ -16,6 +16,13 @@ async function seed(database, suffix) {
   return { user, company, project };
 }
 
+async function addProjectAnalyst(database, seeded, suffix) {
+  const user = await row(database, "INSERT INTO users (email, password_hash, display_name) VALUES ($1, 'hash', 'Analista') RETURNING id", [`vsl-analyst-${suffix}@alva.test`]);
+  const membership = await row(database, "INSERT INTO company_memberships (company_id, user_id, role, joined_at) VALUES ($1, $2, 'analyst', now()) RETURNING id", [seeded.company.id, user.id]);
+  await database.query('INSERT INTO project_grants (company_id, membership_id, project_id) VALUES ($1, $2, $3)', [seeded.company.id, membership.id, seeded.project.id]);
+  return user;
+}
+
 const input = (seeded, extra = {}) => ({
   companyId: seeded.company.id,
   projectId: seeded.project.id,
@@ -89,6 +96,23 @@ test('publicação de VSL congela snapshot e leitura pública respeita empresa e
     assert.equal(publicBefore.versionNumber, 1);
     await assert.rejects(() => repository.getVideo({ companyId: second.company.id, projectId: second.project.id, actorId: second.user.id, videoId: created.id }), /não encontrad[oa]/i);
     await assert.rejects(() => repository.getPublicVideo('missing-public-id'), /não encontrad[oa]/i);
+  } finally {
+    await database.close();
+  }
+});
+
+test('repositório exige video.read para listar e detalhar VSL', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const seeded = await seed(database, 'read');
+  const analyst = await addProjectAnalyst(database, seeded, 'read');
+  const repository = new VideoRepository(database);
+  try {
+    const created = await repository.createVideo(input(seeded));
+    const listed = await repository.listVideos({ companyId: seeded.company.id, projectId: seeded.project.id, actorId: analyst.id });
+    assert.equal(listed.some((video) => video.id === created.id), true);
+    assert.equal((await repository.getVideo({ companyId: seeded.company.id, projectId: seeded.project.id, actorId: analyst.id, videoId: created.id })).id, created.id);
   } finally {
     await database.close();
   }

@@ -195,7 +195,7 @@ export class VideoRepository {
   }
 
   async listVideos({ companyId, projectId, actorId }) {
-    await authorizedProject(this.database, { companyId, projectId, actorId });
+    await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'video.read' });
     const { rows } = await this.database.query(
       `SELECT video.*, version.id AS version_id, version.version_number
          FROM videos video
@@ -207,7 +207,7 @@ export class VideoRepository {
   }
 
   async getVideo({ companyId, projectId, actorId, videoId }) {
-    await authorizedProject(this.database, { companyId, projectId, actorId });
+    await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'video.read' });
     return record(await scoped(this.database, { companyId, projectId, videoId }));
   }
 
