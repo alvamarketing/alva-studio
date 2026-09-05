@@ -1,6 +1,6 @@
 # Studio
 
-- `server/`: HTTP, fundação PostgreSQL multiempresa, compatibilidade local e integração Vercel legada.
+- `server/`: HTTP, fundação PostgreSQL multiempresa, compatibilidade local, publicação por projeto e integração Vercel.
 - `public/`: interface e editor.
 - `test/`: testes automatizados.
 - `README.md`: uso, configuração e limites.
