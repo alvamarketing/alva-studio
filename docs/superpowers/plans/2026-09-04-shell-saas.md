@@ -231,4 +231,3 @@ Marcar `shell_saas` como `feito` em `produto/grafo.yaml` somente após a suíte 
 git add packages/studio/public/index.html packages/studio/public/styles.css packages/studio/public/app.js packages/studio/public/forms.js packages/studio/test/studio-dashboard.test.mjs packages/studio/test/forms-ui.test.mjs produto/grafo.yaml .estado/shell-saas.md
 git commit -m "feat: conclui o painel SaaS por projeto"
 ```
-
