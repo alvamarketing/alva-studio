@@ -38,3 +38,10 @@ A inspeção visual interativa final nos viewports 1440×900 e 390×844 ainda é
 - Foram adicionados testes do grafo HTTP, sequência/erro de boot SaaS, capacidades por tipo de conteúdo e controlador do drawer.
 
 Verificação do fix: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — 153 aprovados, 0 falhas.
+
+## Fix round 2
+
+- O controlador do drawer passou a ser a única fonte do estado visual: abre e remove `is-open` junto com `inert`, `aria-hidden` e `aria-expanded`.
+- O teste de comportamento confirma que Escape deixa o drawer inerte, remove a classe visual e retorna o foco ao acionador.
+
+Verificação do fix: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — 153 aprovados, 0 falhas.

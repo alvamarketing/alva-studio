@@ -238,7 +238,12 @@ test('ações de conteúdo respeitam as capacidades de escrita por tipo', () => 
 
 test('drawer móvel remove controles fechados da navegação e prende Tab com retorno de foco', () => {
   const attributes = new Map();
-  const drawer = { inert: false, setAttribute: (name, value) => attributes.set(name, value) };
+  const classes = new Set();
+  const drawer = {
+    inert: false,
+    classList: { toggle: (name, enabled) => enabled ? classes.add(name) : classes.delete(name) },
+    setAttribute: (name, value) => attributes.set(name, value),
+  };
   const trigger = { focusCalls: 0, setAttribute: (name, value) => attributes.set(name, value), focus() { this.focusCalls++; } };
   const first = { focusCalls: 0, focus() { this.focusCalls++; } };
   const last = { focusCalls: 0, focus() { this.focusCalls++; } };
@@ -251,6 +256,7 @@ test('drawer móvel remove controles fechados da navegação e prende Tab com re
   controller.open();
   assert.equal(drawer.inert, false);
   assert.equal(attributes.get('aria-hidden'), 'false');
+  assert.equal(classes.has('is-open'), true);
   assert.equal(first.focusCalls, 1);
   const tab = { key: 'Tab', shiftKey: false, preventDefaultCalls: 0, preventDefault() { this.preventDefaultCalls++; } };
   active = last;
@@ -264,5 +270,6 @@ test('drawer móvel remove controles fechados da navegação e prende Tab com re
   assert.equal(last.focusCalls, 1);
   controller.handleKeydown({ key: 'Escape', preventDefault() {} });
   assert.equal(drawer.inert, true);
+  assert.equal(classes.has('is-open'), false);
   assert.equal(trigger.focusCalls, 1);
 });

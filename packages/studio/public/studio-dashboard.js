@@ -35,6 +35,7 @@ export function projectContentAction(shell, item) {
 export function createMobileDrawerController({ drawer, trigger, focusable, activeElement = () => document.activeElement } = {}) {
   if (!drawer || !trigger || typeof focusable !== 'function') throw new Error('Os controles do menu móvel são obrigatórios.');
   const setOpen = (open, { returnFocus = false } = {}) => {
+    drawer.classList?.toggle('is-open', open);
     drawer.inert = !open;
     drawer.setAttribute('aria-hidden', String(!open));
     trigger.setAttribute('aria-expanded', String(open));
