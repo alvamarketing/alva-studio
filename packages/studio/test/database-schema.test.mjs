@@ -27,6 +27,8 @@ const expectedTables = [
   'deployment_runs',
   'audit_events',
   'project_routes',
+  'videos',
+  'video_versions',
 ];
 
 const violates = (error) => error?.code === '23503' || error?.code === '23505' || error?.code === '23514';
@@ -102,6 +104,37 @@ test('migrador cria as tabelas SaaS e pode ser executado duas vezes', async (t) 
     );
     const tableNames = new Set(rows.map(({ table_name: tableName }) => tableName));
     for (const tableName of expectedTables) assert.ok(tableNames.has(tableName), `faltou a tabela ${tableName}`);
+  } finally {
+    await database.close();
+  }
+});
+
+test('migração de VSL mantém versões vinculadas, imutáveis e isoladas', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const first = await seedProject(database, { email: 'vsl-a@alva.test', companyName: 'VSL A', slug: 'vsl-a' });
+    const second = await seedProject(database, { email: 'vsl-b@alva.test', companyName: 'VSL B', slug: 'vsl-b' });
+    const video = await row(database, `INSERT INTO videos
+      (company_id, project_id, public_id, name, source_url, source_type, created_by)
+      VALUES ($1, $2, 'public-vsl-a', 'VSL', 'https://cdn.example.test/a.mp4', 'mp4', $3) RETURNING id`,
+    [first.company.id, first.project.id, first.user.id]);
+    const version = await row(database, `INSERT INTO video_versions
+      (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type, accent_color, aspect_ratio, autoplay_muted, resume_enabled, created_by)
+      VALUES ($1, $2, $3, 1, 'public-vsl-a', 'VSL', 'https://cdn.example.test/a.mp4', 'mp4', '#286eea', '16:9', true, true, $4) RETURNING id`,
+    [first.company.id, first.project.id, video.id, first.user.id]);
+    await database.query('UPDATE videos SET published_version_id = $1 WHERE id = $2', [version.id, video.id]);
+    await assert.rejects(
+      () => database.query("UPDATE video_versions SET source_url = 'https://cdn.example.test/changed.mp4' WHERE id = $1", [version.id]),
+      /imutáveis/i,
+    );
+    const otherVideo = await row(database, `INSERT INTO videos
+      (company_id, project_id, public_id, name, source_url, source_type, created_by)
+      VALUES ($1, $2, 'public-vsl-b', 'VSL', 'https://cdn.example.test/b.mp4', 'mp4', $3) RETURNING id`,
+    [second.company.id, second.project.id, second.user.id]);
+    await assert.rejects(
+      () => database.query('UPDATE videos SET published_version_id = $1 WHERE id = $2', [version.id, otherVideo.id]),
+      /violates foreign key/i,
+    );
   } finally {
     await database.close();
   }
