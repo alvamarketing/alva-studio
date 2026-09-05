@@ -240,10 +240,10 @@ export function createApp({
         const embed = Boolean(publicVsl[1]);
         const video = await videos.getPublicVideo(publicVsl[2]);
         res.removeHeader('X-Frame-Options');
-        res.setHeader('Content-Security-Policy', vslContentSecurityPolicy(video.sourceUrl, { embed }));
+        res.setHeader('Content-Security-Policy', vslContentSecurityPolicy(video.sourceUrl, { embed, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl }));
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
-        return res.end(renderVslPage(video, { embed }));
+        return res.end(renderVslPage(video, { embed, publicOrigin: publicOrigin || expectedOrigin }));
       }
       if (req.method === 'GET' && path === '/api/session') return json(await auth.state(req));
       if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {

@@ -1,8 +1,8 @@
 const DEFAULT_MILESTONES = [25, 50, 75, 100];
 let hlsScriptPromise;
 
-export function resumeStorageKey(publicId, versionId) {
-  return `alva-vsl-resume:${String(publicId)}:${String(versionId)}`;
+export function resumeStorageKey(publicId, versionNumber) {
+  return `alva-vsl-resume:${String(publicId)}:${String(versionNumber)}`;
 }
 
 export function toggleCaptionTrack(track, enabled) {
@@ -12,16 +12,17 @@ export function toggleCaptionTrack(track, enabled) {
 }
 
 export function createVslPlayerController({
-  publicId = '', versionId = '', duration = 0, ctaSeconds = null, resumeEnabled = true,
+  publicId = '', versionNumber, versionId, duration = 0, ctaSeconds = null, resumeEnabled = true,
   milestones = DEFAULT_MILESTONES, storage = globalThis.localStorage, onEvent = () => {},
 } = {}) {
-  const key = resumeStorageKey(publicId, versionId);
+  const publicVersion = versionNumber ?? versionId ?? '';
+  const key = resumeStorageKey(publicId, publicVersion);
   const fired = new Set();
   const state = {
     duration: Number(duration) > 0 ? Number(duration) : 0, currentTime: 0, progress: 0,
     playing: false, muted: true, ctaVisible: false, completed: false, error: '',
   };
-  const mark = (type, extra = {}) => onEvent({ type, publicId, versionId, ...extra });
+  const mark = (type, extra = {}) => onEvent({ type, publicId, versionNumber: publicVersion, ...extra });
   const save = () => {
     if (!resumeEnabled || !storage || state.completed || !state.duration || state.currentTime <= 0) return;
     try { storage.setItem(key, JSON.stringify({ time: state.currentTime })); } catch { /* storage can be unavailable */ }

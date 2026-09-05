@@ -61,6 +61,9 @@ test('repositório de VSL valida URL HTTPS, cria e atualiza com lock otimista', 
     assert.equal(updated.name, 'VSL editada');
     assert.equal(updated.lockVersion, 1);
     await assert.rejects(() => repository.updateVideo({ ...input(seeded), videoId: created.id, lockVersion: 0 }), /mudou/i);
+    await assert.rejects(() => repository.removeVideo({ ...input(seeded), videoId: created.id }), /Revisão/i);
+    await assert.rejects(() => repository.removeVideo({ ...input(seeded), videoId: created.id, lockVersion: 0 }), /mudou/i);
+    assert.deepEqual(await repository.removeVideo({ ...input(seeded), videoId: created.id, lockVersion: 1 }), { ok: true });
   } finally {
     await database.close();
   }

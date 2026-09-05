@@ -4,7 +4,7 @@ import { autoplayWhenReady, createVslPlayerController, resumeStorageKey, toggleC
 
 test('controlador de VSL calcula progresso real, CTA e marcos uma vez', () => {
   const events = [];
-  const controller = createVslPlayerController({ publicId: 'public-vsl-123456', versionId: 'version-1', ctaSeconds: 42, onEvent: (event) => events.push(event) });
+  const controller = createVslPlayerController({ publicId: 'public-vsl-123456', versionNumber: 1, ctaSeconds: 42, onEvent: (event) => events.push(event) });
   controller.loadedMetadata(120);
   controller.play();
   controller.timeUpdate(30);
@@ -23,11 +23,11 @@ test('controlador de VSL calcula progresso real, CTA e marcos uma vez', () => {
 test('retomada usa chave por VSL e versão e apaga ao concluir', () => {
   const saved = new Map();
   const storage = { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value), removeItem: (key) => saved.delete(key) };
-  const key = resumeStorageKey('vsl-abc', 'version-1');
-  const first = createVslPlayerController({ publicId: 'vsl-abc', versionId: 'version-1', duration: 100, resumeEnabled: true, storage });
+  const key = resumeStorageKey('vsl-abc', 1);
+  const first = createVslPlayerController({ publicId: 'vsl-abc', versionNumber: 1, duration: 100, resumeEnabled: true, storage });
   first.timeUpdate(35);
   assert.equal(JSON.parse(saved.get(key)).time, 35);
-  const second = createVslPlayerController({ publicId: 'vsl-abc', versionId: 'version-1', duration: 100, resumeEnabled: true, storage });
+  const second = createVslPlayerController({ publicId: 'vsl-abc', versionNumber: 1, duration: 100, resumeEnabled: true, storage });
   assert.equal(second.resumeTime(), 35);
   second.ended();
   assert.equal(saved.has(key), false);

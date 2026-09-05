@@ -270,11 +270,12 @@ export class VideoRepository {
   }
 
   async removeVideo({ companyId, projectId, actorId, videoId, lockVersion }) {
+    if (!Number.isInteger(lockVersion) || lockVersion < 0) throw fail('Revisão inválida.');
     await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'video.write' });
     return withTransaction(this.database, async (client) => {
       const current = await scoped(client, { companyId, projectId, videoId, lock: true });
-      if (lockVersion !== undefined && current.lock_version !== lockVersion) throw fail('A VSL mudou em outra aba. Reabra antes de excluir.', 409);
-      const { rowCount } = await client.query('UPDATE videos SET deleted_at=now(), updated_at=now() WHERE company_id=$1 AND project_id=$2 AND id=$3', [companyId, projectId, videoId]);
+      if (current.lock_version !== lockVersion) throw fail('A VSL mudou em outra aba. Reabra antes de excluir.', 409);
+      const { rowCount } = await client.query('UPDATE videos SET deleted_at=now(), lock_version=lock_version+1, updated_at=now() WHERE company_id=$1 AND project_id=$2 AND id=$3 AND lock_version=$4', [companyId, projectId, videoId, lockVersion]);
       if (rowCount !== 1) throw fail('VSL não encontrada.', 404);
       return { ok: true };
     });
@@ -292,7 +293,8 @@ export class VideoRepository {
     if (rows.length !== 1) throw fail('VSL publicada não encontrada.', 404);
     const published = record({ ...rows[0], id: rows[0].video_id, public_id: rows[0].public_id, published_version_id: rows[0].id, version_id: rows[0].version_number });
     const { id, companyId, projectId, lockVersion, publishedVersionId, publishedLockVersion, createdBy, createdAt, updatedAt, ...publicRecord } = published;
-    return publicRecord;
+    const { versionId, ...withoutLegacyVersionId } = publicRecord;
+    return { ...withoutLegacyVersionId, versionNumber: versionId };
   }
 }
 
