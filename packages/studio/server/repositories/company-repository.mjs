@@ -75,6 +75,19 @@ function membershipRecord(row) {
   };
 }
 
+function projectRecord(row) {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    name: row.name,
+    slug: row.slug,
+    status: row.status,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 async function activeMembership(client, { companyId, userId }) {
   const { rows } = await client.query(
     `SELECT id, role
@@ -137,6 +150,81 @@ export class CompanyRepository {
       throw fail('Sem permissão para ver membros.', 403);
     }
     return rows.map(membershipRecord);
+  }
+
+  async overview({ companyId, userId }) {
+    const membership = await activeMembership(this.database, { companyId, userId });
+    if (!membership) throw fail('Empresa não encontrada.', 404);
+
+    const [company, projects, counts] = await Promise.all([
+      this.database.query(
+        `SELECT * FROM companies
+         WHERE id = $1 AND status = 'active'`,
+        [companyId],
+      ),
+      this.database.query(
+        `SELECT p.*
+         FROM projects p
+         JOIN company_memberships m
+           ON m.company_id = p.company_id
+          AND m.user_id = $2
+          AND m.status = 'active'
+         LEFT JOIN project_grants g
+           ON g.company_id = p.company_id
+          AND g.project_id = p.id
+          AND g.membership_id = m.id
+         WHERE p.company_id = $1
+           AND p.status = 'active'
+           AND (m.role IN ('owner', 'admin') OR g.id IS NOT NULL)
+         ORDER BY p.created_at, p.id`,
+        [companyId, userId],
+      ),
+      this.database.query(
+        `WITH authorized_projects AS (
+           SELECT p.id
+           FROM projects p
+           JOIN company_memberships m
+             ON m.company_id = p.company_id
+            AND m.user_id = $2
+            AND m.status = 'active'
+           LEFT JOIN project_grants g
+             ON g.company_id = p.company_id
+            AND g.project_id = p.id
+            AND g.membership_id = m.id
+           WHERE p.company_id = $1
+             AND p.status = 'active'
+             AND (m.role IN ('owner', 'admin') OR g.id IS NOT NULL)
+         )
+         SELECT
+           (SELECT count(*)::int FROM authorized_projects) AS projects,
+           (SELECT count(*)::int FROM pages page
+            WHERE page.company_id = $1 AND page.project_id IN (SELECT id FROM authorized_projects)
+              AND page.deleted_at IS NULL) AS pages,
+           (SELECT count(*)::int FROM forms form
+            WHERE form.company_id = $1 AND form.project_id IN (SELECT id FROM authorized_projects)
+              AND form.deleted_at IS NULL) AS forms,
+           (SELECT count(*)::int FROM form_submissions submission
+            JOIN forms form ON form.id = submission.form_id
+            WHERE submission.company_id = $1 AND submission.project_id IN (SELECT id FROM authorized_projects)
+              AND form.deleted_at IS NULL) AS submissions,
+           CASE WHEN $3 THEN (
+             SELECT count(*)::int FROM company_memberships member
+             WHERE member.company_id = $1 AND member.status = 'active'
+           ) ELSE 0 END AS members`,
+        [companyId, userId, hasCapability(membership.role, 'member.manage')],
+      ),
+    ]);
+    if (!company.rowCount) throw fail('Empresa não encontrada.', 404);
+
+    return {
+      company: companyRecord(company.rows[0]),
+      role: membership.role,
+      counts: counts.rows[0],
+      projects: projects.rows.map(projectRecord),
+      members: hasCapability(membership.role, 'member.manage')
+        ? await this.members({ companyId, actorUserId: userId })
+        : null,
+    };
   }
 
   async invite({ companyId, actorUserId, email, role }) {

@@ -176,11 +176,24 @@ export function createProjectApi({
       }), 201);
     }
 
+    const companyOverview = path.match(/^\/api\/companies\/([^/]+)\/overview$/);
+    if (companyOverview && method === 'GET') {
+      if (companyOverview[1] !== context.companyId) throw fail('Empresa não encontrada.', 404);
+      return json(await companies.overview({ companyId: context.companyId, userId: context.user.id }));
+    }
+
     const members = path.match(/^\/api\/companies\/([^/]+)\/members$/);
     if (members && method === 'GET') {
       if (members[1] !== context.companyId) throw fail('Empresa não encontrada.', 404);
       await sessionService.authorize(context, 'member.manage');
       return json(await companies.members({ companyId: context.companyId, actorUserId: context.user.id }));
+    }
+
+    const projectOverview = path.match(/^\/api\/projects\/([^/]+)\/overview$/);
+    if (projectOverview && method === 'GET') {
+      const projectId = projectOverview[1];
+      await sessionService.authorize(context, null, projectId);
+      return json(await projects.overview({ companyId: context.companyId, projectId, userId: context.user.id }));
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);

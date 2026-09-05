@@ -98,6 +98,93 @@ export class ProjectRepository {
     return projectRecord(rows[0]);
   }
 
+  async overview({ companyId, projectId, userId }) {
+    const project = await this.getAuthorized({ companyId, projectId, userId });
+    const [counts, content, domain, integrationRows] = await Promise.all([
+      this.database.query(
+        `SELECT
+           (SELECT count(*)::int FROM pages page
+            WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL) AS pages,
+           (SELECT count(*)::int FROM forms form
+            WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL) AS forms,
+           (SELECT count(*)::int FROM pages page
+            WHERE page.company_id = $1 AND page.project_id = $2
+              AND page.deleted_at IS NULL AND page.published_version_id IS NOT NULL) AS "publishedPages",
+           (SELECT count(*)::int FROM forms form
+            WHERE form.company_id = $1 AND form.project_id = $2
+              AND form.deleted_at IS NULL AND form.published_version_id IS NOT NULL) AS "publishedForms",
+           (SELECT count(*)::int FROM form_submissions submission
+            JOIN forms form ON form.id = submission.form_id
+            WHERE submission.company_id = $1 AND submission.project_id = $2 AND form.deleted_at IS NULL) AS submissions`,
+        [companyId, projectId],
+      ),
+      this.database.query(
+        `SELECT * FROM (
+           SELECT page.id, 'page' AS kind, page.name, route.path AS route,
+                  (page.published_version_id IS NOT NULL) AS published, page.updated_at,
+                  0::int AS submission_count
+           FROM pages page
+           JOIN project_routes route
+             ON route.id = page.route_id
+            AND route.company_id = page.company_id
+            AND route.project_id = page.project_id
+            AND route.deleted_at IS NULL
+           WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL
+           UNION ALL
+           SELECT form.id, 'form' AS kind, form.name, route.path AS route,
+                  (form.published_version_id IS NOT NULL) AS published, form.updated_at,
+                  (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = form.id) AS submission_count
+           FROM forms form
+           JOIN project_routes route
+             ON route.id = form.route_id
+            AND route.company_id = form.company_id
+            AND route.project_id = form.project_id
+            AND route.deleted_at IS NULL
+           WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL
+         ) content
+         ORDER BY updated_at DESC, kind, id`,
+        [companyId, projectId],
+      ),
+      this.database.query(
+        `SELECT domain, verification_status
+         FROM project_domains
+         WHERE company_id = $1 AND project_id = $2
+           AND environment = 'production' AND is_canonical AND verification_status = 'verified'
+         ORDER BY updated_at DESC, id DESC LIMIT 1`,
+        [companyId, projectId],
+      ),
+      this.database.query(
+        `SELECT provider
+         FROM project_integrations
+         WHERE company_id = $1 AND project_id = $2
+           AND environment = 'production' AND provider IN ('vercel', 'analytics', 'agents')`,
+        [companyId, projectId],
+      ),
+    ]);
+    const configured = new Set(integrationRows.rows.map((row) => row.provider));
+    return {
+      project,
+      counts: counts.rows[0],
+      content: content.rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        name: row.name,
+        route: row.route,
+        published: row.published,
+        updatedAt: row.updated_at,
+        submissionCount: row.submission_count,
+      })),
+      domain: domain.rows[0]
+        ? { domain: domain.rows[0].domain, verificationStatus: domain.rows[0].verification_status }
+        : null,
+      integrations: {
+        vercel: configured.has('vercel') ? 'configured' : 'pending',
+        analytics: configured.has('analytics') ? 'configured' : 'pending',
+        agents: configured.has('agents') ? 'configured' : 'pending',
+      },
+    };
+  }
+
   async update({ companyId, projectId, actorUserId, name, slug }) {
     const projectName = name === undefined ? null : requiredName(name);
     const normalizedSlug = slug === undefined ? null : projectSlug(slug);

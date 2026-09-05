@@ -6,6 +6,7 @@ import { request as httpRequest } from 'node:http';
 import { createApp } from '../server/index.mjs';
 import { validateFormAnswers } from '../server/form-answer-validation.mjs';
 import { createDatabase, migrate } from '../server/db/postgres.mjs';
+import { ContentRepository } from '../server/repositories/content-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
 const scrypt = promisify(scryptCallback);
@@ -769,6 +770,156 @@ test('integrações exigem capacidade própria e só exigem permissão quando se
     domain: editorPage.domain, webhook: editorPage.webhook,
   })).status, 200);
   assert.equal((await alice.request(`/api/forms/${form.id}`, 'PUT', { revision: 2, webhook: 'http://inseguro.test/hook' })).status, 400);
+  await database.close();
+});
+
+test('overview de empresa reúne somente os projetos e contagens autorizados', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const content = new ContentRepository(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  const page = await (await alice.request(`/api/projects/${records.projectA.id}/pages`, 'POST', {
+    name: 'Página publicada', route: '/publicada', editorState: {}, renderedHtml: '<main>Publicada</main>',
+  })).json();
+  const form = await (await alice.request(`/api/projects/${records.projectA.id}/forms`, 'POST', {
+    name: 'Formulário publicado', route: '/contato', draftSchema: {
+      headerElements: [],
+      steps: [{ id: 'email', type: 'email', title: 'E-mail', required: true }],
+      completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' },
+      webhook: '',
+    },
+  })).json();
+  await content.publishPage({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id, pageId: page.id });
+  await content.publishForm({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id, formId: form.id });
+  await content.submitPublicFormForProject({
+    companySlug: 'alva-a', projectSlug: 'projeto-a', route: '/contato', input: { answers: { email: 'lead@alva.test' } },
+  });
+  const hiddenProject = await (await alice.request('/api/projects', 'POST', { name: 'Projeto restrito', slug: 'projeto-restrito' })).json();
+
+  const ownerOverview = await alice.request(`/api/companies/${records.companyA.id}/overview`);
+  assert.equal(ownerOverview.status, 200);
+  const owner = await ownerOverview.json();
+  assert.deepEqual(
+    (({ id, name, slug, status }) => ({ id, name, slug, status }))(owner.company),
+    { id: records.companyA.id, name: 'Alva A', slug: 'alva-a', status: 'active' },
+  );
+  assert.equal(typeof owner.company.createdAt, 'string');
+  assert.equal(typeof owner.company.updatedAt, 'string');
+  assert.equal(owner.role, 'owner');
+  assert.deepEqual(owner.counts, { projects: 2, pages: 1, forms: 1, submissions: 1, members: 2 });
+  assert.deepEqual(owner.projects.map(({ id, slug }) => ({ id, slug })), [
+    { id: records.projectA.id, slug: 'projeto-a' },
+    { id: hiddenProject.id, slug: 'projeto-restrito' },
+  ]);
+  assert.deepEqual(owner.members.map(({ email, role }) => ({ email, role })), [
+    { email: 'alice@alva.test', role: 'owner' },
+    { email: 'analista@alva.test', role: 'analyst' },
+  ]);
+
+  const editor = (await database.query(
+    `INSERT INTO users (email, password_hash, display_name) VALUES ('editor-overview@alva.test', $1, 'Editora') RETURNING id`,
+    [await legacyPassword(records.password)],
+  )).rows[0];
+  const editorMembership = (await database.query(
+    `INSERT INTO company_memberships (company_id, user_id, role, joined_at)
+     VALUES ($1, $2, 'editor', now()) RETURNING id`, [records.companyA.id, editor.id],
+  )).rows[0];
+  await database.query(
+    'INSERT INTO project_grants (company_id, membership_id, project_id) VALUES ($1, $2, $3)',
+    [records.companyA.id, editorMembership.id, records.projectA.id],
+  );
+  const editorClient = client(app.base);
+  await editorClient.request('/api/login', 'POST', { email: 'editor-overview@alva.test', password: records.password });
+  const editorOverview = await editorClient.request(`/api/companies/${records.companyA.id}/overview`);
+  assert.equal(editorOverview.status, 200);
+  const editorPayload = await editorOverview.json();
+  assert.equal(editorPayload.role, 'editor');
+  assert.deepEqual(editorPayload.counts, { projects: 1, pages: 1, forms: 1, submissions: 1, members: 0 });
+  assert.deepEqual(editorPayload.projects.map((project) => project.id), [records.projectA.id]);
+  assert.equal(editorPayload.members, null);
+
+  assert.equal((await editorClient.request(`/api/companies/${records.companyB.id}/overview`)).status, 404);
+  assert.equal((await editorClient.request(`/api/projects/${hiddenProject.id}/overview`)).status, 404);
+  await database.close();
+});
+
+test('overview de projeto expõe conteúdo real, domínio verificado e estados públicos de integração', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const content = new ContentRepository(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  const publishedPage = await (await alice.request(`/api/projects/${records.projectA.id}/pages`, 'POST', {
+    name: 'Página publicada', route: '/publicada', editorState: {}, renderedHtml: '<main>Publicada</main>',
+  })).json();
+  const draftPage = await (await alice.request(`/api/projects/${records.projectA.id}/pages`, 'POST', {
+    name: 'Página em rascunho', route: '/rascunho', editorState: {}, renderedHtml: '<main>Rascunho</main>',
+  })).json();
+  const form = await (await alice.request(`/api/projects/${records.projectA.id}/forms`, 'POST', {
+    name: 'Contato publicado', route: '/contato', draftSchema: {
+      headerElements: [],
+      steps: [{ id: 'email', type: 'email', title: 'E-mail', required: true }],
+      completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' },
+      webhook: '',
+    },
+  })).json();
+  await content.publishPage({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id, pageId: publishedPage.id });
+  await content.publishForm({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id, formId: form.id });
+  await content.submitPublicFormForProject({
+    companySlug: 'alva-a', projectSlug: 'projeto-a', route: '/contato', input: { answers: { email: 'lead@alva.test' } },
+  });
+  await database.query("UPDATE pages SET updated_at = now() - interval '3 minutes' WHERE id = $1", [publishedPage.id]);
+  await database.query("UPDATE pages SET updated_at = now() - interval '2 minutes' WHERE id = $1", [draftPage.id]);
+  await database.query("UPDATE forms SET updated_at = now() - interval '1 minute' WHERE id = $1", [form.id]);
+  await database.query(
+    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status)
+     VALUES ($1, $2, 'production', 'studio.alva.test', true, 'verified')`,
+    [records.companyA.id, records.projectA.id],
+  );
+  for (const provider of ['vercel', 'analytics', 'agents']) {
+    await database.query(
+      `INSERT INTO project_integrations (company_id, project_id, provider, environment, configuration)
+       VALUES ($1, $2, $3, 'production', '{"token":"não-expor"}'::jsonb)`,
+      [records.companyA.id, records.projectA.id, provider],
+    );
+  }
+  await database.query(
+    `INSERT INTO company_secrets (company_id, provider, secret_name, encrypted_value)
+     VALUES ($1, 'vercel', 'token', 'segredo-nunca-exposto')`,
+    [records.companyA.id],
+  );
+
+  const response = await alice.request(`/api/projects/${records.projectA.id}/overview`);
+  assert.equal(response.status, 200);
+  const overview = await response.json();
+  assert.equal(overview.project.id, records.projectA.id);
+  assert.deepEqual(overview.counts, { pages: 2, forms: 1, publishedPages: 1, publishedForms: 1, submissions: 1 });
+  assert.deepEqual(overview.content.map(({ id, kind, name, route, published, submissionCount }) => ({ id, kind, name, route, published, submissionCount })), [
+    { id: form.id, kind: 'form', name: 'Contato publicado', route: '/contato', published: true, submissionCount: 1 },
+    { id: draftPage.id, kind: 'page', name: 'Página em rascunho', route: '/rascunho', published: false, submissionCount: 0 },
+    { id: publishedPage.id, kind: 'page', name: 'Página publicada', route: '/publicada', published: true, submissionCount: 0 },
+  ]);
+  assert.ok(overview.content.every((item) => typeof item.updatedAt === 'string'));
+  assert.deepEqual(overview.domain, { domain: 'studio.alva.test', verificationStatus: 'verified' });
+  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'configured', agents: 'configured' });
+  assert.equal(JSON.stringify(overview).includes('configuration'), false);
+  assert.equal(JSON.stringify(overview).includes('não-expor'), false);
+  assert.equal(JSON.stringify(overview).includes('segredo-nunca-exposto'), false);
+  assert.equal(JSON.stringify(overview).includes('lead@alva.test'), false);
+
+  const empty = await (await alice.request('/api/projects', 'POST', { name: 'Projeto vazio', slug: 'projeto-vazio' })).json();
+  const emptyOverview = await alice.request(`/api/projects/${empty.id}/overview`);
+  assert.equal(emptyOverview.status, 200);
+  assert.deepEqual((await emptyOverview.json()).counts, { pages: 0, forms: 0, publishedPages: 0, publishedForms: 0, submissions: 0 });
   await database.close();
 });
 
