@@ -1,6 +1,19 @@
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { templates, getTemplate, services, templateCss, formCss, blocks, normalizeForms } from '../public/templates.js';
+
+test('galeria de modelos mantém prévias proporcionais e seleção acessível', async () => {
+  const [css, app] = await Promise.all([
+    readFile(new URL('../public/owner.css', import.meta.url), 'utf8'),
+    readFile(new URL('../public/app.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(css, /grid-template-columns:\s*repeat\(auto-fit, minmax\(210px, 1fr\)\)/);
+  assert.match(css, /\.template-choice \.template-thumb[\s\S]*aspect-ratio:\s*16 \/ 10/);
+  assert.match(css, /#create-dialog[\s\S]*max-height:\s*90vh[\s\S]*overflow:\s*auto/);
+  assert.match(app, /button\.setAttribute\('aria-pressed', String\(template\.id === selected\)\)/);
+  assert.match(app, /frame\.title = 'Modelo ' \+ template\.name/);
+});
 
 test('catálogo oferece cinco estruturas distintas e uma página em branco', () => {
   assert.equal(templates.length, 6);
