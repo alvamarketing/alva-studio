@@ -26,4 +26,6 @@ Task 2: complete — commits `fe53a2c`, `1a8d61e`; review final Approved; 26/26 
 
 Task 3: complete — commits `6ae0a58`, `8ecd173`, `f331838`; review final Approved; 48/48 testes focalizados.
 
-Status: implementação e fixes da Task 4 concluídos; `shell_saas` permanece pendente da homologação visual coordenada.
+Task 4: complete — commits `0ae8592`, `e255fe5`, `08723c4`; review final Approved; inspeção real em 1440×900 e 390×844 aprovada, inclusive abertura e fechamento do drawer por Escape.
+
+Status: plano concluído; `shell_saas` marcado como feito no grafo.

@@ -1,5 +1,5 @@
 versao: 2
-produto: Alva Studio — criar, organizar e publicar landing pages e formulários por projeto
+produto: Alva Studio — criar, organizar e publicar landing pages, formulários e VSLs por projeto
 stack:
   linguagem: JavaScript ESM
   framework: GrapesJS 0.23.6
@@ -28,7 +28,7 @@ nos:
       tipo: homologação
       espera: Worker revalida o destino no momento da entrega, não acessa rede privada e registra cada tentativa sem expor respostas em logs.
   - id: shell_saas
-    estado: pendente
+    estado: feito
     faz: Aplicar Home, Empresa e Projeto do wireframe aos dados reais da fundação
     depende:
       - fundacao_saas
@@ -55,12 +55,41 @@ nos:
     passa_quando:
       tipo: homologação
       espera: Vercel confirma READY para snapshot idempotente sem expor token ou misturar rotas.
+  - id: midia_cdn
+    estado: pendente
+    faz: Armazenar vídeos e imagens por empresa e projeto com upload assinado, validação e entrega por CDN
+    depende:
+      - fundacao_saas
+    produz: Biblioteca de mídia com assets isolados, processamento assíncrono e URLs públicas imutáveis por versão
+    passa_quando:
+      tipo: homologação
+      espera: Upload inválido é rejeitado, mídia não cruza projetos e a publicação nunca depende de URL temporária ou blob local.
+  - id: vsl_player
+    estado: pendente
+    faz: Criar player público de VSL com autoplay compatível, progresso, retomada, CTA temporizado e embed responsivo
+    depende:
+      - midia_cdn
+    produz: Vídeos configuráveis com versões publicadas em /v/<publicId> e /embed/v/<publicId>, sem configurações sensíveis na URL
+    passa_quando:
+      tipo: homologação
+      espera: O player publicado permanece estável durante edições, respeita acessibilidade e registra eventos deduplicados no projeto correto.
+  - id: vsl_nos_editores
+    estado: pendente
+    faz: Reutilizar cada VSL como bloco nas landing pages e nas microlanding pages dos formulários dinâmicos
+    depende:
+      - editores_saas
+      - vsl_player
+    produz: Bloco de vídeo referenciado por ID, com prévia, CTA e validação de publicação
+    passa_quando:
+      tipo: homologação
+      espera: A mesma VSL funciona nos dois editores e referências ausentes ou sem versão publicada impedem uma publicação quebrada.
   - id: tracking_analytics
     estado: pendente
     faz: Integrar Aurora, Umami e NVS por projeto e ambiente
     depende:
       - publicacao_por_projeto
       - worker_webhook
+      - vsl_player
     produz: Pageviews, UTMs, mapa e conversão lead deduplicada após persistir a resposta
     passa_quando:
       tipo: homologação

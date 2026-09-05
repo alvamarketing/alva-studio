@@ -25,9 +25,13 @@ node --test --test-concurrency=1 packages/studio/test/*.test.mjs
 
 Também foram executados `node --check` em `app.js`, `forms.js` e `studio-dashboard.js`, além de `git diff --check`, sem erros.
 
-## Limite
+## Homologação visual
 
-A inspeção visual interativa final nos viewports 1440×900 e 390×844 ainda é necessária. `shell_saas` foi devolvido a `pendente` até a homologação do coordenador.
+- Servidor SaaS real iniciado contra PostgreSQL efêmero, com conta e empresa genéricas exclusivas do teste.
+- Home, Empresa, Projeto e Landing pages inspecionados em 1440×900; nenhuma tela apresentou overflow horizontal.
+- Home inspecionada em 390×844, com conteúdo em uma coluna e sem overflow horizontal.
+- Drawer móvel validado aberto e após Escape, incluindo classe visual, `aria-hidden`, `inert`, `aria-expanded` e retorno de foco.
+- Resultado: aprovado; `shell_saas` pode ser marcado como feito.
 
 ## Fix round 1
 
