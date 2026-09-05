@@ -10,6 +10,7 @@ import {
   moveStep,
   parseOptions,
 } from '../public/forms.js';
+import * as FormsModule from '../public/forms.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const cssPath = new URL('../public/forms.css', import.meta.url);
@@ -61,6 +62,93 @@ test('árvore do formulário preserva topo, telas, elementos e a seleção compa
   assert.equal(formTreeSelection({}), null);
 });
 
+test('árvore de formulários navega por setas, Home e End e restaura o foco após renderizar', () => {
+  assert.equal(typeof FormsModule.formTreeKeyAction, 'function');
+  assert.equal(typeof FormsModule.bindFormTreeItem, 'function');
+  assert.equal(typeof FormsModule.restoreFormTreeFocus, 'function');
+
+  const ids = ['header', 'header:0', 'screen:0'];
+  let items = [];
+  let selectedId = ids[0];
+  let focusedId = null;
+  const makeItem = (id) => ({
+    dataset: { treeId: id },
+    focus() {
+      focusedId = id;
+    },
+  });
+  const render = (nextId, activeItem) => {
+    selectedId = nextId;
+    items = ids.map(makeItem);
+    items.forEach((item) => FormsModule.bindFormTreeItem(item, ids, (id, sourceItem) => render(id, sourceItem)));
+    FormsModule.restoreFormTreeFocus(items, nextId, activeItem);
+  };
+
+  render(ids[0], null);
+  let prevented = false;
+  items[0].onkeydown({ key: 'ArrowDown', preventDefault: () => { prevented = true; } });
+  assert.equal(selectedId, 'header:0');
+  assert.equal(focusedId, 'header:0');
+  assert.equal(prevented, true);
+
+  items[1].onkeydown({ key: 'End', preventDefault: () => {} });
+  assert.equal(selectedId, 'screen:0');
+  assert.equal(focusedId, 'screen:0');
+  items[2].onkeydown({ key: 'Home', preventDefault: () => {} });
+  assert.equal(selectedId, 'header');
+  assert.equal(focusedId, 'header');
+});
+
+test('editor mantém headerElements vazio editável sem substituir o schema', async () => {
+  const previousDocument = globalThis.document;
+  const elements = new Map();
+  const element = () => ({
+    classList: { toggle() {} },
+    hidden: false,
+    value: '',
+    textContent: '',
+    innerHTML: '',
+    children: [],
+    replaceChildren() {
+      this.children = [];
+    },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    focus() {},
+  });
+  for (const selector of [
+    '#nav-pages', '#nav-forms', '#pages-view', '#forms-view', '#form-search', '#form-count', '#new-form',
+    '#dynamic-create-form', '#dynamic-form-name', '#form-save', '#form-back', '#form-public-link',
+    '#form-responses', '#form-list', '#form-editing', '#form-save-state', '#dynamic-editor', '#dynamic-preview',
+  ]) elements.set(selector, element());
+  const headerButton = { dataset: { treeNode: 'header' }, focus() {} };
+  globalThis.document = {
+    querySelector: (selector) => ['[data-element-duplicate]', '[data-element-delete]'].includes(selector) ? null : elements.get(selector) || element(),
+    querySelectorAll: (selector) => selector === '[data-tree-node]' ? [headerButton] : [],
+  };
+  try {
+    const headerElements = [];
+    const formsUI = createFormsUI({
+      api: async (path) => path === '/forms/form-empty' ? {
+        id: 'form-empty', name: 'Vazio', revision: 1, headerElements,
+        steps: [{ id: 'screen-1', title: 'Pergunta', elements: [createStep('short_text', 'field-1')] }],
+        completion: { title: 'Obrigado!', message: 'Recebemos.' }, webhook: '',
+      } : [],
+      toast: () => {},
+    });
+
+    await formsUI.openForm('form-empty');
+
+    headerButton.onclick();
+
+    assert.deepEqual(headerElements, []);
+    assert.match(elements.get('#dynamic-editor').innerHTML, /Topo fixo/);
+    assert.match(elements.get('#dynamic-editor').innerHTML, /Adicionar ao topo/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 test('catálogo dinâmico oferece perguntas, mídia, conversão e gráficos com ícone e movimento', () => {
   for (const type of ['long_text', 'multiple_choice', 'image', 'video', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart']) {
     const step = createStep(type, `etapa-${type}`);
@@ -105,6 +193,7 @@ test('editor dinâmico tem árvore única, prévia central, inspetor, abas móve
   assert.doesNotMatch(source, /dynamic-elements-list/);
   assert.match(css, /\.editor-workspace-tabs/);
   assert.match(css, /\[data-editor-panel\]\[hidden\]/);
+  assert.match(css, /height:\s*calc\(100dvh\s*-\s*112px\)/);
 });
 
 test('editor cria telas compostas com mais de um elemento', () => {

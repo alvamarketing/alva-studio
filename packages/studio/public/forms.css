@@ -605,7 +605,7 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
-    height: calc(100dvh - 64px);
+    height: calc(100dvh - 112px);
   }
   .editor-workspace-tabs {
     display: flex;

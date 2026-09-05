@@ -162,6 +162,36 @@ export function formTreeSelection(node) {
   return treeSelection(selection.editingHeader, selection.selected, selection.selectedElement);
 }
 
+export function formTreeKeyAction(event, visibleIds, selectedId) {
+  const ids = Array.from(visibleIds || []);
+  if (!ids.length) return null;
+  const index = ids.indexOf(selectedId);
+  const selectedIndex = index < 0 ? 0 : index;
+  if (event?.key === 'ArrowUp') return ids[Math.max(0, selectedIndex - 1)];
+  if (event?.key === 'ArrowDown') return ids[Math.min(ids.length - 1, selectedIndex + 1)];
+  if (event?.key === 'Home') return ids[0];
+  if (event?.key === 'End') return ids.at(-1);
+  return null;
+}
+
+export function restoreFormTreeFocus(items, id, activeItem) {
+  if (!activeItem) return false;
+  const item = Array.from(items || []).find((candidate) => candidate.dataset?.treeId === id || candidate.dataset?.treeNode === id);
+  if (!item) return false;
+  item.focus();
+  return true;
+}
+
+export function bindFormTreeItem(item, visibleIds, onSelect) {
+  item.onclick = () => onSelect(item.dataset?.treeId || item.dataset?.treeNode, item);
+  item.onkeydown = (event) => {
+    const next = formTreeKeyAction(event, visibleIds, item.dataset?.treeId || item.dataset?.treeNode);
+    if (!next) return;
+    event.preventDefault();
+    onSelect(next, item);
+  };
+}
+
 function optionsEditor(step) {
   if (step.type === 'logo') return `<label>Endereço da imagem<input data-field="mediaUrl" type="url" placeholder="https://..." value="${escape(step.mediaUrl)}"></label><label>Descrição da logo<input data-field="altText" maxlength="160" value="${escape(step.altText)}"></label><label>Largura da logo (px)<input data-field-number="width" type="number" min="24" max="600" value="${step.width || 120}"></label>`;
   if (step.type === 'progress') return `<label class="dynamic-check"><input data-field="showValue" type="checkbox"${step.showValue ? ' checked' : ''}> Mostrar porcentagem</label>`;
@@ -372,7 +402,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     return current;
   }
 
-  function renderEditor({ focusWorkspaceTab = false } = {}) {
+  function renderEditor({ focusWorkspaceTab = false, focusTreeNodeId = null, activeTreeItem = null } = {}) {
     selected = Math.max(0, Math.min(selected, current.steps.length - 1));
     const screen = current.steps[selected];
     current.headerElements ||= [createStep('logo', 'logo'), createStep('progress', 'progresso')];
@@ -387,7 +417,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       selectedElement,
       editingHeader,
     });
-    const treeItems = treeNodes.map((node) => `<button type="button" class="dynamic-tree-item dynamic-tree-item-${node.kind}" data-tree-node="${node.id}" role="treeitem" aria-level="${node.level}" aria-selected="${node.selected}" style="--dynamic-tree-level:${node.level}"><b class="material-symbols-outlined">${escape(node.icon)}</b><span><strong>${escape(node.label)}</strong><small>${escape(node.detail)}</small></span></button>`).join('');
+    const treeItems = treeNodes.map((node) => `<button type="button" class="dynamic-tree-item dynamic-tree-item-${node.kind}" data-tree-id="${node.id}" data-tree-node="${node.id}" role="treeitem" aria-level="${node.level}" aria-selected="${node.selected}" style="--dynamic-tree-level:${node.level}"><b class="material-symbols-outlined">${escape(node.icon)}</b><span><strong>${escape(node.label)}</strong><small>${escape(node.detail)}</small></span></button>`).join('');
     const workspace = workspaceState(activeWorkspacePanel);
     $('#dynamic-editor').innerHTML = `
       <div class="editor-workspace-tabs" role="tablist" aria-label="Regiões do editor">${workspace.panels.map((panel) => `<button type="button" role="tab" data-workspace-tab="${panel.id}" id="${workspaceId}-tab-${panel.id}" aria-controls="${workspaceId}-panel-${panel.id}" aria-selected="${panel.selected}" tabindex="${panel.selected ? '0' : '-1'}">${panel.label}</button>`).join('')}</div>
@@ -406,7 +436,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
           <label class="dynamic-check"><input data-screen-field="autoAdvance" type="checkbox"${screen.autoAdvance ? ' checked' : ''}> Avançar ao marcar uma escolha</label>
           <div class="dynamic-step-actions"><button data-screen-move="-1" aria-label="Mover tela para cima" title="Mover tela para cima"${selected === 0 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span></button><button data-screen-move="1" aria-label="Mover tela para baixo" title="Mover tela para baixo"${selected === current.steps.length - 1 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span></button><button data-screen-duplicate aria-label="Duplicar tela" title="Duplicar tela"><span class="material-symbols-outlined">content_copy</span></button><button data-screen-delete aria-label="Excluir tela" title="Excluir tela" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
         </div></details>`}
-        <div class="dynamic-element-editor">
+        ${element ? `<div class="dynamic-element-editor">
         <div class="dynamic-panel-title"><span>ELEMENTO ${selectedElement + 1}</span><h2>${TYPES[element.type].label}</h2></div>
         <div class="dynamic-step-actions"><button data-element-move="-1" aria-label="Mover elemento para cima" title="Mover elemento para cima"${selectedElement === 0 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span></button><button data-element-move="1" aria-label="Mover elemento para baixo" title="Mover elemento para baixo"${selectedElement === activeElements.length - 1 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span></button><button data-element-duplicate aria-label="Duplicar elemento" title="Duplicar elemento"><span class="material-symbols-outlined">content_copy</span></button><button data-element-delete aria-label="Excluir elemento" title="Excluir elemento" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
         <label>Tipo<select data-field="type">${Object.entries(TYPES).filter(([type]) => !editingHeader || HEADER_TYPES.has(type)).map(([type, meta]) => `<option value="${type}"${element.type === type ? ' selected' : ''}>${meta.label}</option>`).join('')}</select></label>
@@ -416,11 +446,12 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
         ${INFORMATIONAL.has(element.type) ? '' : `<label class="dynamic-check"><input data-field="required" type="checkbox"${element.required ? ' checked' : ''}> Resposta obrigatória</label>`}
         <div class="dynamic-customize"><h3>Ícone</h3><label>Ícone Google<select data-field="icon">${ICONS.map(([name, label]) => `<option value="${name}"${(element.icon || TYPES[element.type].icon) === name ? ' selected' : ''}>${label}</option>`).join('')}</select></label></div>
         <details class="dynamic-finish-settings"><summary>Finalização e integração</summary><label>Título final<input data-setting="title" maxlength="120" value="${escape(current.completion.title)}"></label><label>Mensagem final<textarea data-setting="message" maxlength="500">${escape(current.completion.message)}</textarea></label><label>Webhook HTTPS<input data-setting="webhook" type="url" placeholder="https://..." value="${escape(current.webhook)}"></label></details>
-        </div>
+        </div>` : `<div class="dynamic-element-editor dynamic-element-editor-empty"><div class="dynamic-panel-title"><span>TOPO FIXO</span><h2>Nenhum elemento</h2><p>Adicione um elemento ao topo para editar sua aparência e comportamento.</p></div></div>`}
       </aside>`;
     bindWorkspaceTabs();
     syncWorkspacePanels({ focusTab: focusWorkspaceTab });
     bindEditor(treeNodes);
+    if (!isCompactWorkspace() && focusTreeNodeId && activeTreeItem) restoreFormTreeFocus(document.querySelectorAll('[data-tree-node]'), focusTreeNodeId, activeTreeItem);
     renderPreview();
   }
 
@@ -436,16 +467,17 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     const elements = () => editingHeader ? current.headerElements : screen().elements;
     const element = () => elements()[selectedElement];
     const nodesById = new Map(treeNodes.map((node) => [node.id, node]));
+    const visibleIds = treeNodes.map((node) => node.id);
     document.querySelectorAll('[data-tree-node]').forEach((button) => {
-      button.onclick = () => {
-        const next = formTreeSelection(nodesById.get(button.dataset.treeNode));
+      bindFormTreeItem(button, visibleIds, (nodeId, activeItem) => {
+        const next = formTreeSelection(nodesById.get(nodeId));
         if (!next) return;
         editingHeader = next.editingHeader;
         selected = next.selected;
         selectedElement = next.selectedElement;
         activeWorkspacePanel = 'inspector';
-        renderEditor({ focusWorkspaceTab: isCompactWorkspace() });
-      };
+        renderEditor({ focusWorkspaceTab: isCompactWorkspace(), focusTreeNodeId: nodeId, activeTreeItem: activeItem });
+      });
     });
     document.querySelectorAll('[data-add-screen]').forEach((button) => { button.onclick = () => { current.steps.push(createScreen(button.dataset.addScreen)); selected = current.steps.length - 1; selectedElement = 0; markDirty(); renderEditor(); }; });
     document.querySelectorAll('[data-add-type]').forEach((button) => { button.onclick = () => { elements().push(createStep(button.dataset.addType)); selectedElement = elements().length - 1; markDirty(); renderEditor(); }; });
@@ -453,8 +485,10 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     $('[data-screen-duplicate]').onclick = () => { const copy = structuredClone(screen()); copy.id = `tela-${Date.now()}`; copy.elements.forEach((item,index) => { item.id = `elemento-${Date.now()}-${index}`; }); current.steps.splice(selected + 1, 0, copy); selected++; selectedElement = 0; markDirty(); renderEditor(); };
     $('[data-screen-delete]').onclick = () => { if (current.steps.length === 1) return toast('O formulário precisa ter pelo menos uma tela.'); current.steps.splice(selected, 1); selected = Math.min(selected, current.steps.length - 1); selectedElement = 0; markDirty(); renderEditor(); };
     document.querySelectorAll('[data-element-move]').forEach((button) => { button.onclick = () => { const direction = Number(button.dataset.elementMove), target = selectedElement + direction; if (target < 0 || target >= elements().length) return; const reordered = moveStep(elements(), selectedElement, direction); if (editingHeader) current.headerElements = reordered; else screen().elements = reordered; selectedElement = target; markDirty(); renderEditor(); }; });
-    $('[data-element-duplicate]').onclick = () => { const copy = structuredClone(element()); copy.id = `elemento-${Date.now()}`; elements().splice(selectedElement + 1, 0, copy); selectedElement++; markDirty(); renderEditor(); };
-    $('[data-element-delete]').onclick = () => { if (elements().length === 1) return toast(editingHeader ? 'Mantenha ao menos um elemento no topo.' : 'A tela precisa ter pelo menos um elemento.'); elements().splice(selectedElement, 1); selectedElement = Math.min(selectedElement, elements().length - 1); markDirty(); renderEditor(); };
+    const duplicateElement = $('[data-element-duplicate]');
+    if (duplicateElement) duplicateElement.onclick = () => { const copy = structuredClone(element()); copy.id = `elemento-${Date.now()}`; elements().splice(selectedElement + 1, 0, copy); selectedElement++; markDirty(); renderEditor(); };
+    const deleteElement = $('[data-element-delete]');
+    if (deleteElement) deleteElement.onclick = () => { if (elements().length === 1) return toast(editingHeader ? 'Mantenha ao menos um elemento no topo.' : 'A tela precisa ter pelo menos um elemento.'); elements().splice(selectedElement, 1); selectedElement = Math.min(selectedElement, elements().length - 1); markDirty(); renderEditor(); };
     document.querySelectorAll('[data-screen-field]').forEach((input) => { input.oninput = () => { const key = input.dataset.screenField; screen()[key] = key === 'autoAdvance' ? input.checked : key === 'timer' ? Number(input.value) : input.value; markDirty(); if (key === 'title' || key === 'motion') renderPreview(); }; });
     document.querySelectorAll('[data-field]').forEach((input) => {
       input.oninput = () => { const key = input.dataset.field; if (['required', 'showValue', 'autoStart'].includes(key)) element()[key] = input.checked; else if (key === 'options') element().options = parseOptions(input.value); else if (key === 'visualOptions') element().options = input.value.split('\n').map((row) => { const [label,imageUrl,icon] = row.split('|').map((part) => part.trim()); return { label, imageUrl: imageUrl || '', icon: icon || 'image' }; }).filter((option) => option.label); else element()[key] = input.value; markDirty(); renderPreview(); };
