@@ -30,14 +30,94 @@ export function vslBlockState(publicId = '') {
 }
 
 export function vslEmbedUrl(publicOrigin, publicId) {
-  const origin = new URL(String(publicOrigin || globalThis.location?.origin || '')).origin;
+  const originUrl = new URL(String(publicOrigin || globalThis.location?.origin || ''));
+  if (!['http:', 'https:'].includes(originUrl.protocol) || originUrl.username || originUrl.password || originUrl.pathname !== '/' || originUrl.search || originUrl.hash)
+    throw new Error('A origem pública da VSL é inválida.');
+  const origin = originUrl.origin;
   return `${origin}/embed/v/${encodeURIComponent(String(publicId ?? '').trim())}`;
 }
 
 export function publishedVslOptions(videos = []) {
   return videos
-    .filter((video) => video?.publicId && (video.publishedVersionId || video.versionId || video.versionNumber !== null && video.versionNumber !== undefined))
+    .filter((video) => video?.publicId && typeof video.publishedVersionId === 'string' && video.publishedVersionId.trim())
     .map((video) => ({ publicId: String(video.publicId), name: String(video.name || 'VSL'), status: 'Publicada' }));
+}
+
+const VSL_MODEL_KEYS = new Set(['type', 'publicId', 'tagName', 'attributes', 'components', 'style', 'classes', 'droppable']);
+
+function cleanVslModel(model, publicId) {
+  for (const key of Object.keys(model.attributes || {})) {
+    if (!VSL_MODEL_KEYS.has(key)) model.unset?.(key, { silent: true });
+  }
+  model.set('type', 'vsl', { silent: true });
+  model.set('publicId', publicId, { silent: true });
+  model.set('attributes', { [VSL_ATTRIBUTE]: publicId }, { silent: true });
+}
+
+export function createVslComponentType({ publishedVslById = new Map(), publicOrigin = '', canReadVsl = () => true, loadError = '' } = {}) {
+  return {
+    isComponent: (element) => element?.getAttribute?.(VSL_ATTRIBUTE) !== null,
+    model: {
+      defaults: {
+        tagName: 'div',
+        type: 'vsl',
+        publicId: '',
+        droppable: false,
+        attributes: { [VSL_ATTRIBUTE]: '' },
+      },
+      init() {
+        const attrs = this.get('attributes') || {};
+        const attrId = String(attrs[VSL_ATTRIBUTE] || '').trim();
+        const id = String(this.get('publicId') || attrId).trim();
+        cleanVslModel(this, id);
+        this.listenTo(this, 'change:publicId', () => cleanVslModel(this, String(this.get('publicId') || '').trim()));
+      },
+    },
+    view: {
+      onRender() {
+        const publicId = String(this.model.get('publicId') || '').trim();
+        this.el.classList.add('alva-vsl');
+        this.el.replaceChildren();
+        const video = publicId ? publishedVslById.get(publicId) : null;
+        if (video && canReadVsl()) {
+          const iframe = this.el.ownerDocument.createElement('iframe');
+          iframe.className = 'alva-vsl-frame';
+          iframe.src = vslEmbedUrl(publicOrigin, publicId);
+          iframe.title = `Prévia da VSL: ${video.name}`;
+          iframe.loading = 'lazy';
+          iframe.allow = 'autoplay';
+          iframe.setAttribute('aria-label', `Prévia da VSL ${video.name}`);
+          this.el.append(iframe);
+          return;
+        }
+        const message = this.el.ownerDocument.createElement('p');
+        message.className = 'alva-vsl-empty';
+        message.textContent = loadError
+          ? 'Não foi possível carregar as VSLs. Tente novamente.'
+          : publicId
+          ? (canReadVsl() ? 'VSL não encontrada. Escolha uma VSL publicada.' : 'Você não tem permissão para visualizar VSLs.')
+          : 'Escolha uma VSL publicada.';
+        this.el.append(message);
+      },
+      removed() {
+        this.el?.replaceChildren();
+      },
+    },
+  };
+}
+
+function vslIframeMarkup(publicId, publicOrigin) {
+  if (!publicId) return '<div class="alva-vsl-empty">Escolha uma VSL publicada.</div>';
+  const src = escapeText(vslEmbedUrl(publicOrigin, publicId));
+  return `<iframe class="alva-vsl-frame" src="${src}" title="Prévia da VSL" allow="autoplay" loading="lazy" aria-label="Prévia da VSL"></iframe>`;
+}
+
+export function renderVslReferences(html, { publicOrigin } = {}) {
+  const source = String(html ?? '');
+  return source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl(?:\s*=\s*(?:"([^"]*)"|'([^']*)'))?[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, tag, attrs, doubleId, singleId) => {
+    const publicId = String(doubleId ?? singleId ?? '').trim();
+    return vslIframeMarkup(publicId, publicOrigin);
+  });
 }
 
 export const editorActionMeta = Object.freeze({
@@ -174,6 +254,7 @@ export function createFriendlyEditor({
   onChange = () => {},
   onOpenFormSettings = () => {},
   vslVideos = [],
+  vslLoadError = '',
   publicOrigin = globalThis.location?.origin || '',
   can = () => true,
 }) {
@@ -333,58 +414,7 @@ export function createFriendlyEditor({
       doc.removeEventListener('click', clearSelection);
     });
   });
-  editor.DomComponents.addType('vsl', {
-    isComponent: (element) => element?.getAttribute?.(VSL_ATTRIBUTE) !== null,
-    model: {
-      defaults: {
-        tagName: 'div',
-        type: 'vsl',
-        publicId: '',
-        droppable: false,
-        attributes: { [VSL_ATTRIBUTE]: '' },
-      },
-      init() {
-        const attrs = this.get('attributes') || {};
-        const attrId = String(attrs[VSL_ATTRIBUTE] || '').trim();
-        const id = String(this.get('publicId') || attrId).trim();
-        this.set('publicId', id, { silent: true });
-        this.set('attributes', { [VSL_ATTRIBUTE]: id }, { silent: true });
-        this.listenTo(this, 'change:publicId', () => {
-          const next = String(this.get('publicId') || '').trim();
-          this.set('publicId', next, { silent: true });
-          this.set('attributes', { [VSL_ATTRIBUTE]: next }, { silent: true });
-        });
-      },
-    },
-    view: {
-      onRender() {
-        const publicId = String(this.model.get('publicId') || '').trim();
-        this.el.classList.add('alva-vsl');
-        this.el.replaceChildren();
-        const video = publicId ? publishedVslById.get(publicId) : null;
-        if (video && canReadVsl()) {
-          const iframe = this.el.ownerDocument.createElement('iframe');
-          iframe.className = 'alva-vsl-frame';
-          iframe.src = vslEmbedUrl(publicOrigin, publicId);
-          iframe.title = `Prévia da VSL: ${video.name}`;
-          iframe.loading = 'lazy';
-          iframe.allow = 'autoplay';
-          iframe.setAttribute('aria-label', `Prévia da VSL ${video.name}`);
-          this.el.append(iframe);
-          return;
-        }
-        const message = this.el.ownerDocument.createElement('p');
-        message.className = 'alva-vsl-empty';
-        message.textContent = publicId
-          ? (canReadVsl() ? 'VSL não encontrada. Escolha uma VSL publicada.' : 'Você não tem permissão para visualizar VSLs.')
-          : 'Escolha uma VSL publicada.';
-        this.el.append(message);
-      },
-      removed() {
-        this.el?.replaceChildren();
-      },
-    },
-  });
+  editor.DomComponents.addType('vsl', createVslComponentType({ publishedVslById, publicOrigin, canReadVsl, loadError: vslLoadError }));
   editor.DomComponents.addType('alva-field', {
     isComponent: (element) => element.tagName === 'INPUT',
     model: { defaults: { tagName: 'input', void: true, droppable: false, traits: [] } },
@@ -710,14 +740,14 @@ export function createFriendlyEditor({
     const content = section('Conteúdo');
     if (isVsl) {
       const currentId = String(model.get('publicId') || attrs[VSL_ATTRIBUTE] || '').trim();
-      if (canReadVsl()) {
+      if (canReadVsl() && !vslLoadError) {
         const choices = [['', 'Escolha uma VSL publicada'], ...publishedVslOptions(vslVideos).map((video) => [video.publicId, video.name])];
         if (currentId && !publishedVslById.has(currentId)) choices.push([currentId, 'VSL não encontrada']);
         const selector = field(content, 'VSL publicada', currentId, (value) => model.set('publicId', String(value || '').trim()), { choices });
         selector.className = 'fe-vsl-selector';
         selector.disabled = !canInsertVsl();
-        help(content, 'A prévia usa a versão publicada da VSL.');
-      } else help(content, 'Você não tem permissão para visualizar VSLs.');
+        help(content, publishedVslById.size ? 'A prévia usa a versão publicada da VSL.' : 'Ainda não há VSLs publicadas neste projeto.');
+      } else help(content, !canReadVsl() ? 'Você não tem permissão para visualizar VSLs.' : vslLoadError || 'Não foi possível carregar as VSLs. Tente novamente.');
     }
     const textTags = /^(h[1-6]|p|span|small|strong|em|a|button)$/;
     const hasStructure = model.find('img,form,input,textarea,select,div,section').length > 0;

@@ -16,6 +16,8 @@ import {
   vslBlockState,
   publishedVslOptions,
   vslEmbedUrl,
+  createVslComponentType,
+  renderVslReferences,
 } from '../public/editor-shell.js';
 
 test('referência de VSL no editor persiste somente o identificador público', () => {
@@ -30,11 +32,79 @@ test('catálogo do editor mostra somente VSLs publicadas e a prévia usa o embed
   assert.deepEqual(
     publishedVslOptions([
       { publicId: 'draft', name: 'Rascunho' },
+      { publicId: 'draft-version-id', name: 'Sem publicação', versionId: 'version-1' },
+      { publicId: 'draft-version-number', name: 'Sem publicação', versionNumber: 1 },
       { publicId: 'published', name: 'Publicada', publishedVersionId: 'version-1', sourceUrl: 'https://draft.invalid' },
     ]),
     [{ publicId: 'published', name: 'Publicada', status: 'Publicada' }],
   );
   assert.equal(vslEmbedUrl('https://studio.example.test', 'public/vsl'), 'https://studio.example.test/embed/v/public%2Fvsl');
+  assert.throws(() => vslEmbedUrl('javascript:alert(1)', 'public-vsl-123456'), /origem pública/i);
+});
+
+test('modelo VSL montado no caminho headless do GrapesJS elimina configuração legada', () => {
+  const definition = createVslComponentType({
+    publicOrigin: 'https://studio.example.test',
+    publishedVslById: new Map([['public-vsl-123456', { publicId: 'public-vsl-123456', name: 'VSL publicada' }]]),
+  });
+  const model = {
+    attributes: {
+      type: 'vsl',
+      publicId: 'public-vsl-123456',
+      tagName: 'div',
+      droppable: false,
+      attributes: { 'data-alva-vsl': 'public-vsl-123456', sourceUrl: 'https://draft.invalid' },
+      sourceUrl: 'https://draft.invalid',
+      cta: { text: 'Comprar', url: 'https://draft.invalid' },
+      version: 4,
+      config: { autoplayMuted: true },
+    },
+    get(key) { return this.attributes[key]; },
+    set(key, value) { this.attributes[key] = value; },
+    unset(key) { delete this.attributes[key]; },
+    listenTo() {},
+  };
+  definition.model.init.call(model);
+  assert.deepEqual(model.attributes, {
+    type: 'vsl',
+    publicId: 'public-vsl-123456',
+    tagName: 'div',
+    droppable: false,
+    attributes: { 'data-alva-vsl': 'public-vsl-123456' },
+  });
+});
+
+test('prévia do componente troca e remove o iframe público e a saída transforma placeholders', () => {
+  const definition = createVslComponentType({
+    publicOrigin: 'https://studio.example.test',
+    publishedVslById: new Map([['public-vsl-123456', { publicId: 'public-vsl-123456', name: 'VSL publicada' }]]),
+  });
+  const doc = { createElement(tagName) {
+    return {
+      tagName: tagName.toUpperCase(),
+      classList: { add() {} },
+      setAttribute(name, value) { this.attributes = { ...(this.attributes || {}), [name]: value }; },
+      replaceChildren(...children) { this.children = children; },
+      append(...children) { this.children = [...(this.children || []), ...children]; },
+      ownerDocument: doc,
+    };
+  } };
+  const element = doc.createElement('div');
+  const view = { el: element, model: { get: (key) => key === 'publicId' ? 'public-vsl-123456' : undefined } };
+  definition.view.onRender.call(view);
+  assert.equal(element.children[0].src, 'https://studio.example.test/embed/v/public-vsl-123456');
+  view.model.get = (key) => key === 'publicId' ? 'other-vsl' : undefined;
+  definition.view.onRender.call(view);
+  assert.match(element.children[0].textContent, /VSL não encontrada/);
+  definition.view.removed.call(view);
+  assert.deepEqual(element.children, []);
+  assert.match(renderVslReferences('<div data-alva-vsl="public-vsl-123456"></div>', { publicOrigin: 'https://studio.example.test' }), /<iframe[^>]+src="https:\/\/studio\.example\.test\/embed\/v\/public-vsl-123456"/);
+});
+
+test('prévia e download da página usam a mesma saída com referências VSL materializadas', async () => {
+  const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(source, /const pageHtml = renderVslReferences\(editor\.getHtml\(\)/);
+  assert.match(source, /new Blob\(\[exportHtml\(\)\]/);
 });
 
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {

@@ -22,3 +22,19 @@
 ### Verificação de regressão
 
 - `node --test packages/studio/test/*.test.mjs`: 224 testes, 224 passaram, 0 falharam.
+
+## Correções após revisão
+
+- O inicializador do componente agora remove propriedades legadas e configurações extras do modelo GrapesJS, mantendo apenas `type`, `publicId` e campos estruturais necessários.
+- O catálogo aceita exclusivamente `publishedVersionId` preenchido; `versionId` e `versionNumber` isolados não são tratados como publicação.
+- A saída de prévia, download e salvamento passa por `renderVslReferences`, que converte referências em iframes públicos absolutos com URL e atributos escapados.
+- Falhas ao carregar o catálogo são exibidas separadamente de um projeto sem VSLs publicadas.
+- Os testes headless cobrem limpeza do modelo, troca/remoção do iframe e transformação da saída.
+
+### Validação da rodada de correção
+
+- `node --test packages/studio/test/editor-controls.test.mjs`: 19 testes, 19 passaram.
+- `node --test packages/studio/test/editor-controls.test.mjs packages/studio/test/project-content.test.mjs packages/studio/test/templates.test.mjs packages/studio/test/vsl-public.test.mjs`: 35 testes, 35 passaram.
+- `node --test packages/studio/test/*.test.mjs`: 227 testes, 227 passaram, 0 falharam.
+- `node --check packages/studio/public/editor-shell.js` e `node --check packages/studio/public/app.js`: sem erros.
+- `git diff --check`: sem erros.
