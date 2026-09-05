@@ -128,6 +128,7 @@ function record(row) {
     milestones: row.milestones ?? [],
     lockVersion: row.lock_version,
     publishedVersionId: row.published_version_id,
+    publishedLockVersion: row.published_lock_version,
     versionId: row.version_id ?? null,
     versionNumber: row.version_number ?? null,
     createdBy: row.created_by,
@@ -247,8 +248,8 @@ export class VideoRepository {
           current.resume_enabled, current.cta_text, current.cta_url, current.cta_seconds, JSON.stringify(current.milestones), actorId],
       );
       await client.query(
-        'UPDATE videos SET published_version_id=$4, updated_at=now() WHERE company_id=$1 AND project_id=$2 AND id=$3',
-        [companyId, projectId, videoId, rows[0].id],
+        'UPDATE videos SET published_version_id=$4, published_lock_version=$5, updated_at=now() WHERE company_id=$1 AND project_id=$2 AND id=$3',
+        [companyId, projectId, videoId, rows[0].id, current.lock_version],
       );
       return record({ ...rows[0], published_version_id: rows[0].id, version_id: rows[0].id, version_number: versionNumber, lock_version: current.lock_version });
     });
@@ -288,7 +289,9 @@ export class VideoRepository {
         WHERE video.public_id = $1 AND video.deleted_at IS NULL`, [publicIdText],
     );
     if (rows.length !== 1) throw fail('VSL publicada não encontrada.', 404);
-    return record({ ...rows[0], id: rows[0].video_id, public_id: rows[0].public_id, published_version_id: rows[0].id, version_id: rows[0].id });
+    const published = record({ ...rows[0], id: rows[0].video_id, public_id: rows[0].public_id, published_version_id: rows[0].id, version_id: rows[0].version_number });
+    const { id, companyId, projectId, lockVersion, publishedVersionId, publishedLockVersion, createdBy, createdAt, updatedAt, ...publicRecord } = published;
+    return publicRecord;
   }
 }
 
