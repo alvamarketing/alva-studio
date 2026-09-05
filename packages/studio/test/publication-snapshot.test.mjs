@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPublishableSnapshot } from '../server/publication-snapshot.mjs';
+import { buildPublishableSnapshot, extractVslReferences } from '../server/publication-snapshot.mjs';
 
 function database(rows, videoRows = []) {
   return { query: async (text) => ({ rows: /FROM videos/i.test(text) ? videoRows : rows }) };
@@ -77,6 +77,45 @@ test('snapshot rejeita conflito entre publicId do componente e data-alva-vsl', a
   }];
   await assert.rejects(
     () => buildPublishableSnapshot({ database: database(rows, [{ public_id: 'public-vsl-a', version_number: 1 }]), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
+    /referência de VSL inválida/i,
+  );
+});
+
+test('snapshot publica VSL GrapesJS com movimento estrutural e não aceita atributos arbitrários ou configuração', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-motion', version_id: 'page-version-vsl-motion', version_number: 1, path: '/vsl-motion',
+    rendered_html: '<div data-alva-vsl="public-vsl-motion" data-alva-motion="float"></div>',
+    editor_state: {
+      components: [{ type: 'vsl', publicId: 'public-vsl-motion', tagName: 'div', droppable: false, attributes: {
+        'data-alva-vsl': 'public-vsl-motion', 'data-alva-motion': 'float',
+      } }],
+    },
+  }];
+  const snapshot = await buildPublishableSnapshot({
+    database: database(rows, [{ public_id: 'public-vsl-motion', version_number: 1 }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+  });
+  assert.equal(snapshot.manifest[0].path, '/vsl-motion');
+  assert.deepEqual(extractVslReferences(rows[0].editor_state), [{ type: 'vsl', publicId: 'public-vsl-motion' }]);
+
+  for (const attributes of [
+    { 'data-alva-vsl': 'public-vsl-motion', 'data-alva-unknown': 'x' },
+    { 'data-alva-vsl': 'public-vsl-motion', 'data-alva-motion': 'bounce' },
+  ]) {
+    await assert.rejects(
+      () => buildPublishableSnapshot({
+        database: database([{ ...rows[0], editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-motion', attributes, config: { autoplay: true } }] } }], [{ public_id: 'public-vsl-motion', version_number: 1 }]),
+        companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+      }),
+      /referência de VSL inválida/i,
+    );
+  }
+  await assert.rejects(
+    () => buildPublishableSnapshot({
+      database: database([{ ...rows[0], editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-motion', attributes: { 'data-alva-vsl': 'public-vsl-motion', 'data-alva-motion': 'float' }, config: { autoplay: true } }] } }], [{ public_id: 'public-vsl-motion', version_number: 1 }]),
+      companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+    }),
     /referência de VSL inválida/i,
   );
 });

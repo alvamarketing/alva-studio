@@ -51,3 +51,16 @@
 - `node --test packages/studio/test/*.test.mjs`: 229 testes, 229 passaram, 0 falharam.
 - `node --check packages/studio/public/editor-shell.js packages/studio/public/app.js packages/studio/server/publication-snapshot.mjs`: sem erros.
 - `git diff --check`: sem erros.
+
+## Correção após a rodada 3 de revisão
+
+- O snapshot aceita `data-alva-motion` somente como atributo estrutural de apresentação e somente nos valores oferecidos pelo inspetor (`fade-up`, `slide-left`, `zoom-in` e `float`).
+- A extração continua retornando exclusivamente `{ type: 'vsl', publicId }`; atributos desconhecidos, movimento inválido e configuração embutida seguem rejeitados.
+- O teste reproduz um `editor_state` GrapesJS com movimento e verifica a publicação, a forma canônica extraída e as rejeições de entradas indevidas.
+
+### Validação final da rodada 3
+
+- `node --test packages/studio/test/publication-snapshot.test.mjs packages/studio/test/editor-controls.test.mjs`: 25 testes, 25 passaram.
+- `node --test packages/studio/test/*.test.mjs`: 230 testes, 230 passaram, 0 falharam.
+- `node --check packages/studio/public/editor-shell.js packages/studio/public/app.js packages/studio/server/publication-snapshot.mjs`: sem erros.
+- `git diff --check`: sem erros.

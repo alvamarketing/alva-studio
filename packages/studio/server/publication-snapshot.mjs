@@ -32,8 +32,9 @@ function publicFormAction(publicOrigin, companySlug, projectSlug, path) {
 
 const VSL_COMPONENT_KEYS = new Set([
   'type', 'publicId', 'tagName', 'attributes', 'components', 'style', 'classes', 'droppable',
-  'title', 'description', 'motion', 'advanceAfterCta',
 ]);
+const VSL_PRESENTATION_ATTRIBUTES = new Set(['data-alva-vsl', 'data-alva-motion']);
+const VSL_MOTION_VALUES = new Set(['fade-up', 'slide-left', 'zoom-in', 'float']);
 
 function canonicalVslReference(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('Referência de VSL inválida.', 400);
@@ -41,7 +42,9 @@ function canonicalVslReference(value) {
   const attributes = value.attributes;
   if (attributes !== undefined && (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)))
     throw fail('Referência de VSL inválida.', 400);
-  if (attributes && Object.keys(attributes).some((key) => key !== 'data-alva-vsl')) throw fail('Referência de VSL inválida.', 400);
+  if (attributes && Object.keys(attributes).some((key) => !VSL_PRESENTATION_ATTRIBUTES.has(key))) throw fail('Referência de VSL inválida.', 400);
+  const motion = attributes?.['data-alva-motion'];
+  if (motion !== undefined && (typeof motion !== 'string' || !VSL_MOTION_VALUES.has(motion.trim()))) throw fail('Referência de VSL inválida.', 400);
   const publicId = typeof value.publicId === 'string' ? value.publicId.trim() : '';
   const attributeId = typeof attributes?.['data-alva-vsl'] === 'string' ? attributes['data-alva-vsl'].trim() : '';
   if (value.publicId !== undefined && typeof value.publicId !== 'string') throw fail('Referência de VSL inválida.', 400);
@@ -59,6 +62,10 @@ function vslReferences(value, output = []) {
     else for (const item of Object.values(value)) vslReferences(item, output);
   }
   return output;
+}
+
+export function extractVslReferences(value) {
+  return vslReferences(value);
 }
 
 function validateOrigin(value) {
