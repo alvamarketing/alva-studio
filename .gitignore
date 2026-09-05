@@ -22,3 +22,4 @@ grapesjs-*.tgz
 _index.html
 docs/.vuepress/dist
 dist/
+.worktrees/
