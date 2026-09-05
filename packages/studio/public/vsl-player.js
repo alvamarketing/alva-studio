@@ -1,4 +1,5 @@
 const DEFAULT_MILESTONES = [25, 50, 75, 100];
+let hlsScriptPromise;
 
 export function resumeStorageKey(publicId, versionId) {
   return `alva-vsl-resume:${String(publicId)}:${String(versionId)}`;
@@ -73,19 +74,40 @@ function button(label, className, type = 'button') {
   return element;
 }
 
-function loadHls(video, sourceUrl, onError) {
-  if (globalThis.Hls?.isSupported?.()) {
-    const hls = new globalThis.Hls(); hls.loadSource(sourceUrl); hls.attachMedia(video); return hls;
+async function loadHls(video, sourceUrl) {
+  if (!globalThis.Hls?.isSupported?.()) {
+    if (typeof document === 'undefined') throw new Error('Este navegador não suporta streaming HLS.');
+    if (!hlsScriptPromise) {
+      const existing = document.querySelector('script[data-alva-hls]');
+      hlsScriptPromise = existing
+        ? new Promise((resolve, reject) => { existing.addEventListener('load', resolve, { once: true }); existing.addEventListener('error', reject, { once: true }); })
+        : new Promise((resolve, reject) => {
+          const script = document.createElement('script'); script.src = '/vendor/hls.min.js'; script.dataset.alvaHls = 'true';
+          script.onload = resolve; script.onerror = reject; document.head.append(script);
+        });
+    }
+    await hlsScriptPromise;
   }
-  if (typeof document === 'undefined') return null;
-  const script = document.createElement('script');
-  script.src = '/vendor/hls.min.js'; script.onload = () => {
-    if (globalThis.Hls?.isSupported?.()) {
-      const hls = new globalThis.Hls(); hls.loadSource(sourceUrl); hls.attachMedia(video);
-    } else onError('Este navegador não suporta streaming HLS.');
-  }; script.onerror = () => onError('Não foi possível carregar o suporte a streaming HLS.');
-  document.head.append(script);
-  return null;
+  if (!globalThis.Hls?.isSupported?.()) throw new Error('Este navegador não suporta streaming HLS.');
+  const hls = new globalThis.Hls();
+  hls.loadSource(sourceUrl); hls.attachMedia(video);
+  if (video.dataset) video.dataset.alvaMediaAttached = 'true';
+  return hls;
+}
+
+export function autoplayWhenReady(video, { onBlocked = () => {} } = {}) {
+  return new Promise((resolve) => {
+    let attempted = false;
+    const run = async () => {
+      if (attempted || !(video.src || video.currentSrc || video.dataset?.alvaMediaAttached) || video.readyState < 1) return;
+      attempted = true;
+      try { await video.play(); } catch { onBlocked(); }
+      resolve();
+    };
+    video.addEventListener('loadedmetadata', run);
+    video.addEventListener('canplay', run);
+    run();
+  });
 }
 
 export function mountVslPlayer(container, config = {}) {
@@ -126,9 +148,13 @@ export function mountVslPlayer(container, config = {}) {
   muteButton.addEventListener('click', () => { video.muted = !video.muted; controller.setMuted(video.muted); render(); });
   seek.addEventListener('input', () => { if (Number.isFinite(video.duration)) video.currentTime = (Number(seek.value) / 100) * video.duration; });
   cta?.addEventListener('click', () => controller.ctaClick());
-  if (config.sourceType === 'hls' && !video.canPlayType('application/vnd.apple.mpegurl')) loadHls(video, config.sourceUrl, (message) => { controller.setError(message); render(); });
-  else { video.src = config.sourceUrl; video.load(); }
-  if (config.autoplayMuted !== false) video.play().catch(() => { status.textContent = 'Clique em reproduzir para iniciar o vídeo.'; });
+  const autoplay = config.autoplayMuted !== false
+    ? autoplayWhenReady(video, { onBlocked: () => { status.textContent = 'Clique em reproduzir para iniciar o vídeo.'; } })
+    : Promise.resolve();
+  if (config.sourceType === 'hls' && !video.canPlayType('application/vnd.apple.mpegurl')) {
+    loadHls(video, config.sourceUrl).catch((error) => { controller.setError(error.message); render(); });
+  } else { video.src = config.sourceUrl; video.load(); }
+  autoplay.catch(() => {});
   render();
   return { controller, video, destroy: () => { video.pause(); video.removeAttribute('src'); video.load(); container.replaceChildren(); } };
 }

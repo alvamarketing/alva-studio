@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createVslPlayerController, resumeStorageKey } from '../public/vsl-player.js';
+import { autoplayWhenReady, createVslPlayerController, resumeStorageKey } from '../public/vsl-player.js';
 
 test('controlador de VSL calcula progresso real, CTA e marcos uma vez', () => {
   const events = [];
@@ -31,4 +31,15 @@ test('retomada usa chave por VSL e versão e apaga ao concluir', () => {
   assert.equal(second.resumeTime(), 35);
   second.ended();
   assert.equal(saved.has(key), false);
+});
+
+test('autoplay espera mídia anexada e pronta e executa somente uma vez', async () => {
+  const listeners = {};
+  const video = { src: '', readyState: 0, addEventListener: (event, fn) => { listeners[event] = fn; }, play: async () => { video.plays = (video.plays || 0) + 1; } };
+  const pending = autoplayWhenReady(video);
+  assert.equal(video.plays, undefined);
+  video.src = 'https://media.test/vsl.m3u8'; video.readyState = 1;
+  listeners.loadedmetadata(); await pending;
+  listeners.loadedmetadata();
+  assert.equal(video.plays, 1);
 });
