@@ -1,6 +1,6 @@
 import { flushChanges } from './save-cycle.js';
 import { templates, getTemplate, normalizeForms } from './templates.js';
-import { buildPageExportHtml, createFriendlyEditor } from './editor-shell.js';
+import { buildPageExportHtml, createFriendlyEditor, materializePageHtml } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createFormsUI } from './forms.js';
@@ -300,6 +300,16 @@ function markDirty() {
   clearTimeout(timer);
   timer = setTimeout(() => save().catch((e) => toast(e.message)), 1500);
 }
+function canonicalExportHtml() {
+  return buildPageExportHtml({
+    title: $('#page-name').value.trim(),
+    css: editor.getCss(),
+    html: editor.getHtml(),
+    js: editor.getJs(),
+    publicOrigin: window.location.origin,
+    materializeVsl: false,
+  });
+}
 function exportHtml() {
   return buildPageExportHtml({
     title: $('#page-name').value.trim(),
@@ -307,6 +317,7 @@ function exportHtml() {
     html: editor.getHtml(),
     js: editor.getJs(),
     publicOrigin: window.location.origin,
+    materializeVsl: true,
   });
 }
 function projectEmpty(title, text) {
@@ -493,7 +504,7 @@ async function saveOnce() {
     revision: page.revision,
     name: $('#page-name').value.trim(),
     project: editor.getProjectData(),
-    html: exportHtml(),
+    html: canonicalExportHtml(),
     domain: page.domain,
     webhook: page.webhook,
   };
@@ -588,7 +599,9 @@ function renderList() {
     card.querySelector('.thumbnail').replaceChildren(frame);
     api('/pages/' + p.id)
       .then((full) => {
-        frame.srcdoc = full.html || templateDocument(getTemplate(full.template) || getTemplate('services'));
+        frame.srcdoc = full.html
+          ? materializePageHtml(full.html, { publicOrigin: window.location.origin })
+          : templateDocument(getTemplate(full.template) || getTemplate('services'));
       })
       .catch(() => {
         frame.srcdoc = '<p>Prévia indisponível</p>';

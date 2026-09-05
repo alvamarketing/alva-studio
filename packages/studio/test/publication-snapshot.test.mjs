@@ -148,6 +148,41 @@ test('snapshot injeta no HTML da página somente o embed absoluto da versão pub
   assert.doesNotMatch(html, /draft\.example|sourceUrl|version_id|page-version-vsl-html/i);
 });
 
+test('snapshot preserva documento completo e troca marcador pela origem pública do servidor', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-document', version_id: 'page-version-vsl-document', version_number: 1, path: '/vsl-document',
+    rendered_html: '<!doctype html><html><head><style>.hero{color:red}</style></head><body><main><div data-alva-vsl="public-vsl-document"></div></main><script>window.ready=true</script></body></html>',
+    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-document' }] },
+  }];
+  const snapshot = await buildPublishableSnapshot({
+    database: database(rows, [{ public_id: 'public-vsl-document', version_number: 2 }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
+  });
+  const html = snapshot.files[0].data;
+  assert.match(html, /<!doctype html>/i);
+  assert.match(html, /\.hero\{color:red\}/);
+  assert.match(html, /window\.ready=true/);
+  assert.match(html, /src="https:\/\/public\.example\.test\/embed\/v\/public-vsl-document"/i);
+  assert.doesNotMatch(html, /data-alva-vsl/);
+});
+
+test('snapshot reescreve apenas iframe legado que aponta para VSL conhecida', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-legacy', version_id: 'page-version-vsl-legacy', version_number: 1, path: '/vsl-legacy',
+    rendered_html: '<main><iframe class="alva-vsl-frame" src="https://client.example.test/embed/v/public-vsl-legacy" title="VSL"></iframe><iframe class="alva-vsl-frame" src="https://evil.example.test/embed/v/outro" title="VSL"></iframe></main>',
+    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-legacy' }] },
+  }];
+  const snapshot = await buildPublishableSnapshot({
+    database: database(rows, [{ public_id: 'public-vsl-legacy', version_number: 3 }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
+  });
+  const html = snapshot.files[0].data;
+  assert.match(html, /src="https:\/\/public\.example\.test\/embed\/v\/public-vsl-legacy"/i);
+  assert.match(html, /https:\/\/evil\.example\.test\/embed\/v\/outro/);
+});
+
 test('snapshot deduplica VSL repetida entre página e formulário', async () => {
   const rows = [
     {

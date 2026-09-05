@@ -239,13 +239,17 @@ export function renderVslReferences(html, { publicOrigin } = {}) {
   });
 }
 
-export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin } = {}) {
+export function materializePageHtml(html, { publicOrigin } = {}) {
+  return renderVslReferences(html, { publicOrigin });
+}
+
+export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin, materializeVsl = true } = {}) {
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escapeText(title) +
     '</title><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block" rel="stylesheet"><style>' +
     css +
     '</style></head><body>' +
-    renderVslReferences(html, { publicOrigin }) +
+    (materializeVsl ? renderVslReferences(html, { publicOrigin }) : String(html ?? '')) +
     '<script>' +
     js +
     '</script></body></html>';
