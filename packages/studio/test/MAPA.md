@@ -4,6 +4,8 @@
 - `server.test.mjs`: HTTP, proteção de acesso, locale, grafo de módulos públicos e boot SaaS.
 - `save-cycle.test.mjs`: salvamento durante edição.
 - `publisher.test.mjs`: contrato Vercel com transporte simulado.
+- `publication-snapshot.test.mjs` e `publication-integration.test.mjs`: snapshot, isolamento e cofre de conexão por projeto.
+- `publication-deployment.test.mjs`: idempotência de execução e publicação multi rota com retry.
 
 - `access.test.mjs`: papéis, capacidades, slugs e rotas públicas permitidas.
 - `database-schema.test.mjs`: migrações PostgreSQL, isolamento estrutural, versões e integridade do schema.

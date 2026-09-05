@@ -16,5 +16,7 @@
 - `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
 - `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.
 - `dynamic-form.mjs`: documento público sequencial com mídia, gráficos, movimento e confirmação de envio.
-- `publisher.mjs`: chamadas Vercel do modo local; publicação Vercel por projeto SaaS permanece pendente.
+- `publication-snapshot.mjs`: snapshot determinístico de todas as rotas publicadas de um projeto.
+- `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto e execuções idempotentes.
+- `publisher.mjs`: chamadas Vercel para previews, produção, status e domínio, com retry temporário.
 - `auth.mjs`: conta única, sessões e credencial Vercel cifrada em disco do modo local legado.

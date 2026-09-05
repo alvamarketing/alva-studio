@@ -140,3 +140,109 @@ export class ProjectIntegrationRepository {
     return publicConfiguration({});
   }
 }
+
+const TERMINAL_STATES = new Set(['READY', 'ERROR', 'CANCELED', 'BLOCKED']);
+
+function runRecord(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    projectId: row.project_id,
+    environment: row.environment,
+    snapshotHash: row.snapshot_hash,
+    idempotencyKey: row.idempotency_key,
+    expectedRevision: row.expected_revision,
+    status: row.status,
+    externalDeploymentId: row.external_deployment_id || null,
+    externalProjectId: row.external_project_id || null,
+    url: row.url || null,
+    error: row.error || null,
+    createdAt: row.created_at || null,
+    startedAt: row.started_at || null,
+    completedAt: row.completed_at || null,
+  };
+}
+
+function deploymentInput({ environment, snapshotHash, expectedRevision }) {
+  if (!['preview', 'production'].includes(environment)) throw fail('Ambiente de publicação inválido.', 400);
+  if (!/^[a-f0-9]{64}$/i.test(snapshotHash)) throw fail('Snapshot inválido.', 400);
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw fail('Revisão inválida.', 400);
+}
+
+export class DeploymentRepository {
+  constructor(database) {
+    if (!database || typeof database.query !== 'function') throw new Error('Banco inválido para publicações.');
+    this.database = database;
+  }
+
+  async find({ companyId, projectId, runId, environment, idempotencyKey }) {
+    const conditions = runId ? 'id = $3' : 'environment = $3 AND idempotency_key = $4';
+    const params = runId ? [companyId, projectId, runId] : [projectId, environment, idempotencyKey];
+    const { rows } = await this.database.query(
+      `SELECT * FROM deployment_runs WHERE ${runId ? 'company_id = $1 AND project_id = $2 AND id = $3' : 'project_id = $1 AND environment = $2 AND idempotency_key = $3'} LIMIT 1`,
+      params,
+    );
+    return runRecord(rows[0]);
+  }
+
+  async createOrGet({ companyId, projectId, environment, snapshotHash, expectedRevision, requestedBy, idempotencyKey }) {
+    deploymentInput({ environment, snapshotHash, expectedRevision });
+    const key = String(idempotencyKey || `${environment}:${snapshotHash}`);
+    if (key.length > 120) throw fail('Chave de idempotência inválida.', 400);
+    const existing = await this.find({ projectId, environment, idempotencyKey: key });
+    if (existing) {
+      if (existing.snapshotHash.toLowerCase() !== snapshotHash.toLowerCase()) throw fail('A chave de idempotência já pertence a outro conteúdo.', 409);
+      return existing;
+    }
+    const { rows } = await this.database.query(
+      `INSERT INTO deployment_runs
+         (company_id, project_id, environment, snapshot_hash, idempotency_key, expected_revision, requested_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (project_id, environment, idempotency_key) DO NOTHING
+       RETURNING *`,
+      [companyId, projectId, environment, snapshotHash, key, expectedRevision, requestedBy || null],
+    );
+    if (rows[0]) return runRecord(rows[0]);
+    const concurrent = await this.find({ projectId, environment, idempotencyKey: key });
+    if (!concurrent) throw fail('Não foi possível criar a execução de publicação.', 503);
+    if (concurrent.snapshotHash.toLowerCase() !== snapshotHash.toLowerCase()) throw fail('A chave de idempotência já pertence a outro conteúdo.', 409);
+    return concurrent;
+  }
+
+  async updateExternal({ companyId, projectId, runId, externalDeploymentId, externalProjectId, url, status }) {
+    const nextStatus = String(status || 'QUEUED').toUpperCase();
+    if (!['QUEUED', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado externo inválido.', 400);
+    const { rows } = await this.database.query(
+      `UPDATE deployment_runs
+          SET external_deployment_id = COALESCE($4, external_deployment_id),
+              external_project_id = COALESCE($5, external_project_id),
+              status = $6,
+              started_at = COALESCE(started_at, now()),
+              completed_at = CASE WHEN $6 = ANY($7::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
+        WHERE company_id = $1 AND project_id = $2 AND id = $3
+        RETURNING *`,
+      [companyId, projectId, runId, externalDeploymentId || null, externalProjectId || null, nextStatus, [...TERMINAL_STATES]],
+    );
+    if (!rows.length) throw fail('Execução não encontrada.', 404);
+    const result = runRecord(rows[0]);
+    if (url) result.url = url;
+    return result;
+  }
+
+  async updateStatus({ companyId, projectId, runId, status, url, error }) {
+    const nextStatus = String(status || '').toUpperCase();
+    if (!['QUEUED', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado inválido.', 400);
+    const { rows } = await this.database.query(
+      `UPDATE deployment_runs
+          SET status = $4, completed_at = CASE WHEN $4 = ANY($5::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
+        WHERE company_id = $1 AND project_id = $2 AND id = $3 RETURNING *`,
+      [companyId, projectId, runId, nextStatus, [...TERMINAL_STATES]],
+    );
+    if (!rows.length) throw fail('Execução não encontrada.', 404);
+    const result = runRecord(rows[0]);
+    if (url !== undefined) result.url = url;
+    if (error !== undefined) result.error = error;
+    return result;
+  }
+}
