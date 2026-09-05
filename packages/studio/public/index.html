@@ -37,9 +37,9 @@
           <strong>ALVA</strong>
           <span>Studio</span>
         </a>
-        <label class="company-switcher" for="company-switcher">
-          <span class="workspace-label">EMPRESA ATUAL</span>
-          <select id="company-switcher" aria-label="Selecionar empresa"></select>
+        <label class="project-switcher" for="project-switcher">
+          <span class="workspace-label">PROJETO ATUAL</span>
+          <select id="project-switcher" aria-label="Selecionar projeto"></select>
         </label>
         <div class="workspace-label">SEU STUDIO</div>
         <button class="nav-item nav-active" id="nav-home" aria-current="page" title="Início">
@@ -50,28 +50,28 @@
           <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
           <span class="sidebar-label">Projeto</span>
         </button>
-        <button class="nav-item" id="nav-pages" title="Projetos">
+        <button class="nav-item" id="nav-pages" title="Páginas">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <rect x="3" y="3" width="7" height="7" rx="1" />
             <rect x="14" y="3" width="7" height="7" rx="1" />
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          <span class="sidebar-label">Projetos</span>
+          <span class="sidebar-label">Páginas</span>
         </button>
-        <button class="nav-item" id="nav-forms" title="Formulários Dinâmicos">
+        <button class="nav-item" id="nav-forms" title="Quizzes">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M5 4h14v16H5zM8 8h8M8 12h5M8 16h7" />
           </svg>
-          <span class="sidebar-label">Formulários Dinâmicos</span>
+          <span class="sidebar-label">Quizzes</span>
         </button>
         <button class="nav-item" id="nav-vsl" title="VSLs">
           <span class="material-symbols-outlined" aria-hidden="true">play_circle</span>
           <span class="sidebar-label">VSLs</span>
         </button>
-        <button class="nav-item" id="nav-company" title="Empresa e equipe">
-          <span class="material-symbols-outlined" aria-hidden="true">corporate_fare</span>
-          <span class="sidebar-label">Empresa e equipe</span>
+        <button class="nav-item" id="nav-history" title="Histórico">
+          <span class="material-symbols-outlined" aria-hidden="true">history</span>
+          <span class="sidebar-label">Histórico</span>
         </button>
         <div class="sidebar-footer">
           <button class="sidebar-settings" id="app-settings" title="Configurações do app">
@@ -107,19 +107,23 @@
             <button class="primary" id="new-project" hidden>＋ Novo projeto</button>
           </header>
           <p id="studio-dashboard-status" class="dashboard-status" role="status" aria-live="polite"></p>
-          <section class="dashboard-section" aria-labelledby="home-companies-title">
-            <div class="section-heading"><h2 id="home-companies-title">Empresas</h2></div>
-            <div id="home-companies" class="company-grid"></div>
-          </section>
           <section class="dashboard-section" aria-labelledby="home-projects-title">
-            <div class="section-heading"><h2 id="home-projects-title">Projetos autorizados</h2></div>
+            <div class="section-heading"><h2 id="home-projects-title">Projetos</h2></div>
             <div id="home-projects" class="project-grid"></div>
           </section>
           <section class="dashboard-section" aria-labelledby="home-activity-title">
-            <div class="section-heading"><h2 id="home-activity-title">Atividade recente</h2></div>
+            <div class="section-heading"><h2 id="home-activity-title">Histórico</h2></div>
             <div id="home-activity" class="activity-list"></div>
           </section>
           <footer>Feito para tirar suas campanhas do papel. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="history-view" aria-labelledby="history-view-title" hidden>
+          <header class="dashboard-header">
+            <div><div class="eyebrow">SEU STUDIO</div><h1 id="history-view-title">Histórico<span class="accent">.</span></h1><p>Resumo das atualizações verificáveis dos seus projetos.</p></div>
+          </header>
+          <p id="history-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <div id="history-list" class="activity-list" aria-live="polite"></div>
+          <footer>Resumo baseado nos dados dos projetos. <span>ALVA STUDIO</span></footer>
         </section>
         <section id="company-view" aria-labelledby="company-view-title" hidden>
           <header class="dashboard-header">
@@ -150,8 +154,8 @@
                 <h2 id="project-content-title">Conteúdos</h2>
                 <nav id="project-content-filter" class="project-filter" aria-label="Filtrar conteúdos">
                   <button type="button" data-project-filter="all" aria-current="page">Visão geral</button>
-                  <button type="button" data-project-filter="pages">Landing pages</button>
-                  <button type="button" data-project-filter="forms">Formulários</button>
+                  <button type="button" data-project-filter="pages">Páginas</button>
+                  <button type="button" data-project-filter="forms">Quizzes</button>
                   <button type="button" data-project-filter="videos">VSLs</button>
                 </nav>
               </div>
@@ -216,7 +220,7 @@
           <header class="dashboard-header">
             <div>
               <div class="eyebrow">CONVERSE E QUALIFIQUE</div>
-              <h1>Formulários Dinâmicos<span class="accent">.</span></h1>
+              <h1>Quizzes<span class="accent">.</span></h1>
               <p>Crie uma jornada de microlanding pages, do primeiro clique até o contato.</p>
             </div>
             <button class="primary" id="new-form">＋ Novo formulário</button>
@@ -232,7 +236,7 @@
     </section>
     <section id="form-editing" hidden>
       <header class="editor-header dynamic-form-header">
-        <button class="icon-button" id="form-back" aria-label="Voltar para formulários" title="Formulários Dinâmicos">
+        <button class="icon-button" id="form-back" aria-label="Voltar para quizzes" title="Quizzes">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
         </button>
         <input id="dynamic-form-name" aria-label="Nome do formulário" maxlength="100" />

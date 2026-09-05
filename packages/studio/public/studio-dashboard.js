@@ -38,8 +38,32 @@ export function canCreateProject(shell) {
 export function dashboardModel({ phase = 'empty', error = '', companies = [], projects = [] } = {}) {
   if (phase === 'loading') return { status: 'loading', message: 'Carregando seu Studio…', companies: [], projects: [], activity: [] };
   if (phase === 'error') return { status: 'error', message: error || 'Não foi possível carregar seu Studio.', companies: [], projects: [], activity: [] };
-  if (!companies.length && !projects.length) return { status: 'empty', message: 'Você ainda não tem empresas ou projetos disponíveis.', companies: [], projects: [], activity: [] };
+  if (!projects.length) return { status: 'empty', message: 'Você ainda não tem projetos disponíveis.', companies, projects: [], activity: [] };
   return { status: 'ready', message: '', companies, projects, activity: [...projects].sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt))) };
+}
+
+export function createLatestRequestGuard() {
+  let generation = 0;
+  return {
+    next() {
+      generation += 1;
+      return generation;
+    },
+    isCurrent(request, context, currentContext) {
+      return request === generation && context === currentContext;
+    },
+  };
+}
+
+export function projectCardCounts(overview = {}) {
+  const counts = overview.counts || {};
+  return {
+    pages: Number(counts.pages || 0),
+    forms: Number(counts.forms || 0),
+    videos: Number(counts.videos || 0),
+    submissions: Number(counts.submissions || 0),
+    published: Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0) + Number(counts.publishedVideos || 0),
+  };
 }
 
 export function filterProjectContent(content = [], filter = 'all') {
@@ -96,7 +120,7 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
     status: item.published ? 'Publicado' : 'Rascunho',
     responses: Number(item.submissionCount || 0),
   }));
-  const published = Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0);
+  const published = Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0) + Number(counts.publishedVideos || 0);
   const configured = (value) => value === 'configured' ? 'Configurado' : 'Ainda não configurado';
   return {
     status: content.length ? 'ready' : 'empty',
@@ -105,10 +129,11 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
     slug: overview.project.slug,
     project: overview.project,
     metrics: [
-      ['Landing pages', Number(counts.pages || 0)],
-      ['Formulários', Number(counts.forms || 0)],
+      ['Páginas', Number(counts.pages || 0)],
+      ['Quizzes', Number(counts.forms || 0)],
+      ['VSLs', Number(counts.videos || 0)],
       ['Publicados', published],
-      ['Respostas', Number(counts.submissions || 0)],
+      ['Leads / respostas', Number(counts.submissions || 0)],
     ],
     content,
     domain: overview.domain?.verificationStatus === 'verified'
@@ -181,6 +206,36 @@ export function createDashboardContextFlow({ shell, renderState, renderSwitcher 
       } catch (error) {
         renderState(failedState(previous, error));
         renderSwitcher(previous, { selectedCompanyId: previous.currentCompany?.id || '', disabled: false });
+        throw error;
+      }
+    },
+    confirm,
+    bootstrap: confirm,
+  };
+}
+
+export function createDashboardProjectFlow({ shell, renderState, renderSwitcher }) {
+  if (!shell || typeof shell.state !== 'function' || typeof shell.selectProject !== 'function')
+    throw new Error('O contexto de projeto do Studio é obrigatório.');
+  if (typeof renderState !== 'function' || typeof renderSwitcher !== 'function')
+    throw new Error('Os renderizadores do dashboard são obrigatórios.');
+
+  let confirmed = shell.state();
+  const confirm = () => {
+    confirmed = shell.state();
+    renderSwitcher(confirmed, { selectedProjectId: confirmed.currentProject?.id || '', disabled: false });
+    return confirmed;
+  };
+  return {
+    async selectProject(projectId) {
+      const previous = confirmed;
+      renderState(loadingState(previous));
+      renderSwitcher(previous, { selectedProjectId: projectId, disabled: true });
+      try {
+        return await shell.selectProject(projectId);
+      } catch (error) {
+        renderState(failedState(previous, error));
+        renderSwitcher(previous, { selectedProjectId: previous.currentProject?.id || '', disabled: false });
         throw error;
       }
     },

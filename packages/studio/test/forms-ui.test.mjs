@@ -16,11 +16,13 @@ const htmlPath = new URL('../public/index.html', import.meta.url);
 const cssPath = new URL('../public/forms.css', import.meta.url);
 const formsPath = new URL('../public/forms.js', import.meta.url);
 
-test('dashboard oferece páginas e formulários dinâmicos como destinos principais', async () => {
+test('dashboard oferece páginas e quizzes como destinos principais', async () => {
   const html = await readFile(htmlPath, 'utf8');
   assert.match(html, /id="nav-pages"/);
   assert.match(html, /id="nav-forms"/);
-  assert.match(html, /Formulários Dinâmicos/);
+  assert.match(html, /Quizzes/);
+  assert.match(html, /Páginas/);
+  assert.match(html, /Histórico/);
   assert.match(html, /id="forms-view"/);
   assert.match(html, /id="new-form"/);
   assert.match(html, /id="form-editing"/);

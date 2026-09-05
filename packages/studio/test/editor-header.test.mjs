@@ -102,10 +102,12 @@ test('rodapé do menu concentra configurações, aparência e recolhimento', asy
   assert.match(footer, />left_panel_close<\/span>/);
 });
 
-test('formulários dinâmicos permanecem como destino principal do menu', async () => {
+test('quizzes permanecem como destino principal do menu', async () => {
   const html = await readFile(htmlPath, 'utf8');
   const sidebar = html.match(/<section id="dashboard"[\s\S]*?<\/aside>/)?.[0] || '';
   assert.match(sidebar, /id="nav-pages"/);
   assert.match(sidebar, /id="nav-forms"/);
-  assert.match(sidebar, /Formulários Dinâmicos/);
+  assert.match(sidebar, /Quizzes/);
+  assert.match(sidebar, /Páginas/);
+  assert.match(sidebar, /Histórico/);
 });

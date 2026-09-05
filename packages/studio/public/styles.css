@@ -196,15 +196,15 @@ a:focus-visible {
   color: var(--alva-muted);
   margin: 65px 10px 18px;
 }
-.company-switcher {
+.project-switcher {
   display: grid;
   gap: 7px;
   margin: 34px 0 0;
 }
-.company-switcher .workspace-label {
+.project-switcher .workspace-label {
   margin: 0 10px;
 }
-.company-switcher select {
+.project-switcher select {
   width: 100%;
   padding: 9px 10px;
   font-size: 12px;
@@ -385,6 +385,14 @@ main {
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 13px;
 }
+.project-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.studio-project-card { aspect-ratio: 1 / 1; align-content: space-between; }
+.project-card-counts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 14px; }
+.project-card-counts span { padding: 7px 3px; border-radius: 8px; background: var(--alva-cloud); color: var(--alva-muted); font-size: 9px; text-align: center; }
+.project-card-counts strong { display: block; color: var(--alva-ink); font-size: 12px; margin-bottom: 2px; }
+.project-card-counts-status { grid-column: 1 / -1; color: var(--alva-muted); font-size: 10px; }
+.activity-item { grid-template-columns: 1fr auto; align-items: center; min-height: 58px; }
+.activity-list { display: grid; gap: 8px; }
 .company-card,
 .studio-project-card,
 .activity-item {
@@ -743,7 +751,7 @@ main {
 }
 :root[data-sidebar-collapsed='true'] .brand strong,
 :root[data-sidebar-collapsed='true'] .brand span,
-:root[data-sidebar-collapsed='true'] .company-switcher,
+:root[data-sidebar-collapsed='true'] .project-switcher,
 :root[data-sidebar-collapsed='true'] .workspace-label,
 :root[data-sidebar-collapsed='true'] .sidebar-label {
   display: none;

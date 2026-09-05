@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
@@ -38,6 +38,7 @@ let editor,
   mobileMenuTrigger,
   mobileDrawer,
   config = { vercelConnected: false };
+const homeOverviewGuard = createLatestRequestGuard();
 const authenticatedApi = createAuthenticatedApi({ request: fetch, onSessionExpired: () => ownerUI?.sessionExpired() });
 function toast(message) {
   $('#toast').textContent = message;
@@ -58,7 +59,7 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
-  applyDashboardNavigation({ home: $('#nav-home'), company: $('#nav-company'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl') }, view);
+  applyDashboardNavigation({ home: $('#nav-home'), history: $('#nav-history'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl') }, view);
 }
 function updateVslNavigation() {
   $('#nav-vsl').hidden = !studioShell?.can?.('video.read');
@@ -67,6 +68,7 @@ function setDashboardView(view) {
   const sections = {
     home: '#studio-home',
     company: '#company-view',
+    history: '#history-view',
     project: '#project-view',
     pages: '#pages-view',
     forms: '#forms-view',
@@ -77,6 +79,7 @@ function setDashboardView(view) {
   setActiveNavigation(view);
   updateVslNavigation();
   if (view === 'home') renderHome();
+  if (view === 'history') renderHistory();
   if (view === 'company') renderCompany();
   if (view === 'project') renderProject();
   if (view === 'vsl') vslUI.show();
@@ -98,6 +101,7 @@ function renderDashboardState(state) {
   dashboardStateOverride = state;
   updateVslNavigation();
   if (!$('#studio-home').hidden) renderHome();
+  if (!$('#history-view').hidden) renderHistory();
   if (!$('#company-view').hidden) renderCompany();
   if (!$('#project-view').hidden) renderProject();
 }
@@ -129,37 +133,40 @@ function renderHome() {
   if (!studioShell) return;
   updateVslNavigation();
   const state = dashboardState();
+  const request = homeOverviewGuard.next();
+  const context = state.currentCompany?.id || '';
   const model = dashboardModel(state);
   $('#home-display-name').textContent = state.session?.user?.displayName || 'seja bem-vindo';
   const status = $('#studio-dashboard-status');
   status.textContent = model.message;
   status.dataset.state = model.status;
   $('#new-project').hidden = !canCreateProject(studioShell);
-  const companies = clear($('#home-companies'));
   const projects = clear($('#home-projects'));
   const activity = clear($('#home-activity'));
   if (model.status === 'loading') return;
   if (model.status === 'error') return;
-  if (!model.companies.length) companies.append(emptyCard('Nenhuma empresa disponível.', 'Peça acesso a uma empresa para continuar.'));
-  for (const company of model.companies) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'company-card';
-    button.dataset.companyId = company.id;
-    const name = document.createElement('strong');
-    name.textContent = company.name;
-    const label = document.createElement('span');
-    label.textContent = company.id === state.currentCompany?.id ? 'Empresa atual' : roleLabel(company.role);
-    button.append(name, label);
-    button.onclick = action(async () => {
-      if (company.id === studioShell.state().currentCompany?.id) return;
-      await dashboardContextFlow.selectCompany(company.id);
-      setDashboardView('home');
-    });
-    companies.append(button);
-  }
   if (!model.projects.length) projects.append(emptyCard('Nenhum projeto disponível.', 'Crie um projeto ou peça acesso a um projeto da empresa atual.'));
   for (const project of model.projects) projects.append(projectCard(project));
+  void Promise.all(model.projects.map(async (project) => {
+    try {
+      const overview = await api(`/projects/${project.id}/overview`);
+      if (!homeOverviewGuard.isCurrent(request, context, studioShell.state().currentCompany?.id || '') || $('#studio-home').hidden) return;
+      project.counts = projectCardCounts(overview);
+      const card = projects.querySelector(`[data-project-id="${project.id}"]`);
+      if (card) for (const [key] of [['pages'], ['forms'], ['videos'], ['submissions'], ['published']]) {
+        const amount = card.querySelector(`[data-count-key="${key}"]`);
+        if (amount) amount.textContent = project.counts[key] === undefined ? '—' : String(project.counts[key]);
+      }
+    } catch {
+      if (!homeOverviewGuard.isCurrent(request, context, studioShell.state().currentCompany?.id || '') || $('#studio-home').hidden) return;
+      const card = projects.querySelector(`[data-project-id="${project.id}"]`);
+      const unavailable = card?.querySelector('.project-card-counts-status');
+      if (unavailable) {
+        unavailable.hidden = false;
+        unavailable.textContent = 'Contagens indisponíveis';
+      }
+    }
+  }));
   if (!model.activity.length) activity.append(emptyCard('Ainda não há atividade.', 'As atualizações dos seus projetos aparecerão aqui.'));
   for (const project of model.activity) {
     const item = document.createElement('button');
@@ -174,6 +181,32 @@ function renderHome() {
     activity.append(item);
   }
 }
+async function renderHistory() {
+  if (!studioShell) return;
+  const model = dashboardModel(dashboardState());
+  const status = $('#history-status');
+  const list = clear($('#history-list'));
+  status.textContent = model.message;
+  status.dataset.state = model.status;
+  if (model.status === 'loading' || model.status === 'error') return;
+  const projects = model.activity;
+  if (!projects.length) {
+    list.append(emptyCard('Ainda não há histórico.', 'As atualizações dos seus projetos aparecerão aqui.'));
+    return;
+  }
+  for (const project of projects) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'activity-item';
+    const name = document.createElement('strong');
+    name.textContent = project.name;
+    const date = document.createElement('span');
+    date.textContent = relativeDate(project.updatedAt);
+    item.append(name, date);
+    item.onclick = action(() => selectProject(project.id));
+    list.append(item);
+  }
+}
 function projectCard(project) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -183,7 +216,22 @@ function projectCard(project) {
   name.textContent = project.name;
   const meta = document.createElement('span');
   meta.textContent = relativeDate(project.updatedAt);
-  button.append(name, meta);
+  const counts = document.createElement('div');
+  counts.className = 'project-card-counts';
+  for (const [key, label] of [['pages', 'Páginas'], ['forms', 'Quizzes'], ['videos', 'VSLs'], ['submissions', 'Leads'], ['published', 'Publicados']]) {
+    const value = document.createElement('span');
+    const amount = document.createElement('strong');
+    amount.dataset.countKey = key;
+    amount.textContent = project.counts?.[key] === undefined ? '—' : String(project.counts[key]);
+    value.append(amount, label);
+    counts.append(value);
+  }
+  const unavailable = document.createElement('span');
+  unavailable.className = 'project-card-counts-status';
+  unavailable.hidden = true;
+  unavailable.setAttribute('role', 'status');
+  counts.append(unavailable);
+  button.append(name, meta, counts);
   button.onclick = action(() => selectProject(project.id));
   return button;
 }
@@ -323,8 +371,8 @@ function renderProjectContent(model) {
   const list = clear($('#project-content-list'));
   const content = filterProjectContent(model.content, projectContentFilter);
   if (!content.length) {
-    const label = projectContentFilter === 'pages' ? 'landing pages' : projectContentFilter === 'forms' ? 'formulários' : projectContentFilter === 'videos' ? 'VSLs' : 'conteúdos';
-    list.append(projectEmpty(`Nenhum ${label} disponível.`, projectContentFilter === 'all' ? 'Crie uma landing page ou formulário para começar.' : 'Mude o filtro ou crie um novo conteúdo.'));
+    const label = projectContentFilter === 'pages' ? 'página' : projectContentFilter === 'forms' ? 'quiz' : projectContentFilter === 'videos' ? 'VSL' : 'conteúdo';
+    list.append(projectEmpty(`Nenhum ${label} disponível.`, projectContentFilter === 'all' ? 'Crie uma página ou quiz para começar.' : 'Mude o filtro ou crie um novo conteúdo.'));
     return;
   }
   for (const item of content) {
@@ -927,25 +975,25 @@ studioShell = createStudioShell({
     if (!$('#vsl-view').hidden && state.currentProject) await vslUI.reload();
   },
 });
-function renderCompanySwitcher(state = studioShell.state(), { selectedCompanyId = state.currentCompany?.id || '', disabled = state.phase === 'loading' || !state.companies.length } = {}) {
-  const switcher = $('#company-switcher');
+function renderProjectSwitcher(state = studioShell.state(), { selectedProjectId = state.currentProject?.id || '', disabled = state.phase === 'loading' || !state.projects.length } = {}) {
+  const switcher = $('#project-switcher');
   switcher.replaceChildren();
-  for (const company of state.companies) {
+  for (const project of state.projects) {
     const option = document.createElement('option');
-    option.value = company.id;
-    option.textContent = company.name;
-    option.selected = company.id === selectedCompanyId;
+    option.value = project.id;
+    option.textContent = project.name;
+    option.selected = project.id === selectedProjectId;
     switcher.append(option);
   }
   switcher.disabled = disabled;
 }
-dashboardContextFlow = createDashboardContextFlow({
+dashboardContextFlow = createDashboardProjectFlow({
   shell: studioShell,
   renderState: renderDashboardState,
-  renderSwitcher: renderCompanySwitcher,
+  renderSwitcher: renderProjectSwitcher,
 });
 $('#nav-home').onclick = () => setDashboardView('home');
-$('#nav-company').onclick = () => setDashboardView('company');
+$('#nav-history').onclick = () => setDashboardView('history');
 $('#nav-project').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar sua visão geral.');
   projectContentFilter = 'all';
@@ -1054,9 +1102,9 @@ document.addEventListener('keydown', (event) => {
   mobileDrawer.handleKeydown(event);
   if (event.key === 'Escape') $('#mobile-drawer-backdrop').hidden = true;
 });
-$('#company-switcher').onchange = action(async (event) => {
-  if (event.target.value === studioShell.state().currentCompany?.id) return;
-  await dashboardContextFlow.selectCompany(event.target.value);
+$('#project-switcher').onchange = action(async (event) => {
+  if (event.target.value === studioShell.state().currentProject?.id) return;
+  await dashboardContextFlow.selectProject(event.target.value);
   setDashboardView('home');
 });
 $('#new-project').onclick = () => {
@@ -1137,7 +1185,7 @@ ownerUI = createOwnerUI({
     $('#dashboard').hidden = true;
     formsUI.reset();
     companyOverviewRequest++;
-    $('#company-switcher').replaceChildren();
+    $('#project-switcher').replaceChildren();
   },
   onSettingsChanged: refreshConfig,
 });

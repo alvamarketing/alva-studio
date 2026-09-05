@@ -1,19 +1,26 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, publicationModel } from '../public/studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel } from '../public/studio-dashboard.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
 
-test('Home e Empresa expõem landmarks e navegação principal acessível', async () => {
+test('Home expõe navegação de projetos, quizzes e histórico sem menu de empresa', async () => {
   const html = await readFile(htmlPath, 'utf8');
 
   assert.match(html, /<section id="studio-home"[^>]*aria-labelledby="studio-home-title"/);
   assert.match(html, /<section id="company-view"[^>]*aria-labelledby="company-view-title"/);
   assert.match(html, /id="nav-home"[^>]*aria-current="page"/);
-  assert.match(html, /id="nav-company"/);
-  assert.match(html, /id="company-switcher"/);
+  assert.match(html, /id="nav-pages"[^>]*title="Páginas"/);
+  assert.match(html, /id="nav-forms"[^>]*title="Quizzes"/);
+  assert.match(html, /id="nav-history"/);
+  assert.doesNotMatch(html, /id="nav-company"/);
+  assert.match(html, /id="project-switcher"[^>]*aria-label="Selecionar projeto"/);
+  assert.match(html, /id="history-view"/);
+  assert.doesNotMatch(html, /id="home-companies"/);
+  assert.match(html, /id="home-projects" class="project-grid"/);
+  assert.match(html, /id="home-activity" class="activity-list"/);
   assert.match(html, /id="new-project-dialog"/);
 });
 
@@ -33,12 +40,48 @@ test('modelo da Home cria cartões somente com as empresas e projetos recebidos'
   assert.equal(isProjectSlug('Campanha inválida'), false);
 });
 
+test('modelo da Home não cria bloco de empresas e deixa contagens desconhecidas sem inventar números', () => {
+  const model = dashboardModel({ phase: 'ready', companies: [{ id: 'company-a' }], projects: [{ id: 'project-a', name: 'Projeto real' }] });
+  assert.equal(model.status, 'ready');
+  assert.equal(model.projects[0].counts, undefined);
+  assert.deepEqual(model.activity, [{ id: 'project-a', name: 'Projeto real' }]);
+});
+
+test('troca de projeto mantém a empresa única e confirma o projeto retornado pela sessão', async () => {
+  let active = { phase: 'ready', companies: [{ id: 'company-a' }], projects: [{ id: 'project-a' }, { id: 'project-b' }], currentCompany: { id: 'company-a' }, currentProject: { id: 'project-a' }, session: { currentCompanyId: 'company-a', currentProjectId: 'project-a' } };
+  const rendered = [];
+  const shell = { state: () => active, selectProject: async (projectId) => { active = { ...active, currentProject: { id: projectId }, session: { ...active.session, currentProjectId: projectId } }; } };
+  const flow = createDashboardProjectFlow({ shell, renderState: (state) => rendered.push(state), renderSwitcher: () => {} });
+  await flow.selectProject('project-b');
+  assert.equal(rendered[0].phase, 'loading');
+  assert.equal(flow.confirm().currentProject.id, 'project-b');
+  assert.equal(flow.confirm().currentCompany.id, 'company-a');
+});
+
+test('resposta antiga de overview não pode atualizar o card depois de uma nova renderização ou contexto', () => {
+  const guard = createLatestRequestGuard();
+  const first = guard.next();
+  const second = guard.next();
+  assert.equal(guard.isCurrent(first, 'company-a', 'company-a'), false);
+  assert.equal(guard.isCurrent(second, 'company-a', 'company-a'), true);
+  assert.equal(guard.isCurrent(second, 'company-a', 'company-b'), false);
+});
+
+test('overview bem-sucedido sem vídeos normaliza todas as contagens conhecidas para zero', () => {
+  assert.deepEqual(projectCardCounts({ counts: { pages: 2, forms: 1, submissions: 4, publishedPages: 1 } }), {
+    pages: 2, forms: 1, videos: 0, submissions: 4, published: 1,
+  });
+});
+
 test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wireframe', async () => {
   const [html, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(appPath, 'utf8')]);
   const dashboardShell = html.slice(html.indexOf('<section id="studio-home"'), html.indexOf('<section id="pages-view"'));
 
   assert.match(app, /api\(`\/companies\/\$\{state\.currentCompany\.id\}\/overview`\)/);
   assert.match(app, /relativeDate\(project\.updatedAt\)/);
+  assert.match(app, /Contagens indisponíveis/);
+  assert.match(app, /homeOverviewGuard\.isCurrent\(request/);
+  assert.match(app, /history-status/);
   assert.match(app, /canCreateProject\(studioShell\)/);
   assert.match(app, /await studioShell\.initialize\(\);\s*dashboardContextFlow\.bootstrap\(\);/);
   assert.match(app, /createVslUI\(\{ api, getShell: \(\) => studioShell, toast \}\)/);
@@ -188,7 +231,7 @@ test('visão do projeto mostra somente o overview autorizado, estados e contagen
   assert.equal(model.title, 'Campanha real');
   assert.equal(model.domain.label, 'exemplo.com.br');
   assert.deepEqual(model.metrics, [
-    ['Landing pages', 2], ['Formulários', 1], ['Publicados', 1], ['Respostas', 7],
+    ['Páginas', 2], ['Quizzes', 1], ['VSLs', 0], ['Publicados', 1], ['Leads / respostas', 7],
   ]);
   assert.equal(model.content[0].status, 'Publicado');
   assert.equal(model.content[1].status, 'Rascunho');
