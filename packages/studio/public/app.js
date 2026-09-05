@@ -868,7 +868,7 @@ async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
 formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability) });
-const vslUI = createVslUI({ api, shell: studioShell, toast });
+const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
 contextBoundary = createStudioContextBoundary({
   savePage: save,
   closePageEditor: () => {

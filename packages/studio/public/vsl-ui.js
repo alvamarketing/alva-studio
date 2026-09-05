@@ -24,7 +24,9 @@ export function parseVslFormValues(values = {}) {
 
 function field(form, name) { return form.elements.namedItem(name); }
 
-export function createVslUI({ api, shell, toast = () => {} }) {
+export function createVslUI({ api, shell, getShell, toast = () => {} }) {
+  const resolveShell = typeof getShell === 'function' ? getShell : () => shell;
+  const currentShell = () => resolveShell();
   let current = null;
   const root = () => document.querySelector('#vsl-view');
   const list = () => document.querySelector('#vsl-list');
@@ -38,10 +40,10 @@ export function createVslUI({ api, shell, toast = () => {} }) {
     for (const name of ['name', 'sourceUrl', 'sourceType', 'posterUrl', 'captionsUrl', 'accentColor', 'aspectRatio', 'ctaText', 'ctaUrl', 'ctaSeconds']) field(target, name).value = video?.[name] ?? ({ accentColor: '#286eea', aspectRatio: '16:9', sourceType: 'mp4' }[name] ?? '');
     field(target, 'autoplayMuted').checked = video?.autoplayMuted ?? true;
     field(target, 'resumeEnabled').checked = video?.resumeEnabled ?? true;
-    field(target, 'publish').hidden = !video || !shell?.can?.('deployment.publish');
+    field(target, 'publish').hidden = !video || !currentShell()?.can?.('deployment.publish');
   };
   const editById = async (videoId) => {
-    const video = await fetchVslForEdit({ api, projectId: shell.state().currentProject.id, videoId });
+    const video = await fetchVslForEdit({ api, projectId: currentShell().state().currentProject.id, videoId });
     showForm(video);
     return video;
   };
@@ -59,7 +61,7 @@ export function createVslUI({ api, shell, toast = () => {} }) {
     }
   };
   const load = async () => {
-    const projectId = shell?.state?.().currentProject?.id;
+    const projectId = currentShell()?.state?.().currentProject?.id;
     if (!projectId) return;
     status().textContent = 'Carregando VSLs…';
     try { render(await api(`/projects/${projectId}/videos`)); status().textContent = ''; }
@@ -73,14 +75,14 @@ export function createVslUI({ api, shell, toast = () => {} }) {
   if (typeof document !== 'undefined' && form()) {
     form().onsubmit = async (event) => {
       event.preventDefault();
-      const projectId = shell.state().currentProject.id;
+      const projectId = currentShell().state().currentProject.id;
       const saved = current
         ? await api(`/projects/${projectId}/videos/${current.id}`, 'PUT', { ...collect(), lockVersion: current.lockVersion })
         : await api(`/projects/${projectId}/videos`, 'POST', collect());
       current = saved; toast('VSL salva.'); await load();
     };
     field(form(), 'publish').onclick = async () => {
-      const projectId = shell.state().currentProject.id;
+      const projectId = currentShell().state().currentProject.id;
       await api(`/projects/${projectId}/videos/${current.id}/publish`, 'POST', { lockVersion: current.lockVersion });
       toast('VSL publicada.'); await load();
     };
