@@ -63,3 +63,28 @@ ou a qualidade necessária para concluir a tarefa.
 - Só aumente o nível do modelo após registrar o impedimento específico que o
   modelo atual não conseguiu resolver. Preferência ou conveniência não contam
   como insuficiência demonstrada.
+
+## Regra de fidelidade visual
+
+A referência única de interface do Alva Studio é
+`docs/wireframes/alva-studio-ui-reference.html`. Toda tela do produto deve
+segui-la exatamente. Não é inspiração: é o contrato visual.
+
+- **Toda tarefa que cria ou altera tela cita a seção do wireframe** que ela
+  implementa, pelo título exato da seção (por exemplo "Visitas nos últimos 7
+  dias", "Conteúdos do projeto", "Estrutura do projeto", "Configure sua VSL").
+  Tarefa de tela sem seção citada não entra no plano.
+- **Reutilize os tokens da seção "Biblioteca visual"** — tipografia, botões,
+  cores, campos, item da árvore e opção visual. Eles já existem como custom
+  properties em `packages/studio/public/styles.css` (bloco `:root`, a partir da
+  linha 1) e nos demais `packages/studio/public/*.css`. Não crie cor, raio,
+  sombra, família ou tamanho novo: se faltar um token, isso é uma pergunta para
+  o dono, não uma decisão de quem implementa.
+- **Pronto exige verificação visual em navegador**, não só teste verde. Abra a
+  tela implementada e a seção correspondente do wireframe lado a lado, no mesmo
+  viewport, em desktop e em celular, e compare blocos, textos, espaçamento e
+  estados. Anexe o screenshot da comparação.
+- **Registre a verificação na certificação do nó** em `.estado/<id>.md`,
+  nomeando a seção do wireframe conferida e o caminho do screenshot. Sem esse
+  registro o nó não é `feito`. Como em todo o resto, quem constrói a tela não
+  é quem confere.

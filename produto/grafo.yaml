@@ -25,8 +25,9 @@ nos:
       - fundacao_saas
     produz: Navegação por empresa e projeto, contexto ativo e indicadores sem dados fictícios
     passa_quando:
-      tipo: revisão
-      espera: O painel mostra apenas dados autorizados da empresa e projeto ativos em desktop e celular.
+      tipo: arquivo
+      caminho: .estado/shell_saas.md
+      casa: "Resultado: [0-9]+ testes aprovados, 0 falhas"
   - id: editores_saas
     estado: feito
     faz: Aplicar o shell compartilhado ao editor de landing pages e ao editor de formulários dinâmicos
@@ -44,8 +45,9 @@ nos:
       - editores_saas
     produz: Preview e produção separados, domínio por projeto, cofre de segredos e auditoria
     passa_quando:
-      tipo: homologação
-      espera: Vercel confirma READY para snapshot idempotente sem expor token ou misturar rotas.
+      tipo: arquivo
+      caminho: .estado/publicacao_por_projeto.md
+      casa: "Suíte final: [0-9]+ testes aprovados, 0 falhas"
   - id: vsl_player
     estado: feito
     faz: Criar VSL por URL ou streaming pronto, com autoplay mutado, progresso, retomada, CTA temporizado e embed responsivo
@@ -53,8 +55,9 @@ nos:
       - publicacao_por_projeto
     produz: Player configurável e publicável sem upload, transcodificação ou CDN próprios
     passa_quando:
-      tipo: homologação
-      espera: Uma URL de vídeo válida gera player acessível, CTA no tempo correto, retomada e embed funcional.
+      tipo: arquivo
+      caminho: .estado/vsl_player.md
+      casa: "Suíte final: [0-9]+ testes aprovados, 0 falhas"
   - id: vsl_nos_editores
     estado: feito
     faz: Reutilizar cada VSL como bloco nas landing pages e nas microlanding pages dos formulários dinâmicos
@@ -63,8 +66,9 @@ nos:
       - vsl_player
     produz: Bloco de vídeo referenciado por ID, com prévia, CTA e validação de publicação
     passa_quando:
-      tipo: homologação
-      espera: A mesma VSL funciona nos dois editores e referências ausentes ou sem versão publicada impedem uma publicação quebrada.
+      tipo: arquivo
+      caminho: .estado/vsl_nos_editores.md
+      casa: "[0-9]+ testes aprovados e 0 falhas"
   - id: leads_integracoes
     estado: feito
     faz: Consolidar respostas no Studio, exportar CSV e entregar um webhook básico por formulário
@@ -73,8 +77,9 @@ nos:
       - publicacao_por_projeto
     produz: Lista e exportação de leads por projeto, com envio simples para n8n, CRM ou URL configurada
     passa_quando:
-      tipo: homologação
-      espera: Resposta persistida aparece no Studio e no CSV; webhook HTTPS recebe o evento sem misturar projetos.
+      tipo: arquivo
+      caminho: .estado/leads_integracoes.md
+      casa: "[0-9]+ pass, 0 fail"
   - id: tracking_coletor
     estado: pendente
     faz: Coletar visitas, origem, UTMs e eventos de VSL e formulário em um coletor interno compatível com o modelo do Umami, sem cookie e sem dado pessoal
@@ -113,8 +118,9 @@ nos:
       - tracking_coletor
     produz: Checkout hospedado, webhook idempotente e um plano comercial por empresa
     passa_quando:
-      tipo: homologação
-      espera: Sandbox confirma cobrança, reconsulta do pagamento e atualização transacional antes de liberar recursos.
+      tipo: arquivo
+      caminho: .estado/cobranca_empresa.md
+      casa: "Prova: cobrança sandbox confirmada, webhook idempotente, [0-9]+ testes verdes"
   - id: agentes_mcp
     estado: pendente
     faz: Expor leitura e criação de rascunhos por agentes, mantendo publicação como ação humana
@@ -122,8 +128,9 @@ nos:
       - cobranca_empresa
     produz: MCP por projeto com chaves em hash, leitura e rascunhos auditáveis
     passa_quando:
-      tipo: homologação
-      espera: Chave não cruza empresa/projeto e nenhum agente publica sem ação humana.
+      tipo: arquivo
+      caminho: .estado/agentes_mcp.md
+      casa: "Prova: chave em hash por projeto, nenhum agente publica sem ação humana, [0-9]+ testes verdes"
   - id: worker_webhook
     estado: feito
     faz: Evoluir o webhook básico para fila com tentativas, idempotência, auditoria e defesa contra DNS rebinding
@@ -131,8 +138,9 @@ nos:
       - leads_integracoes
     produz: Entrega assíncrona robusta para volume e falhas temporárias
     passa_quando:
-      tipo: homologação
-      espera: Worker revalida o destino em cada tentativa, não acessa rede privada e não duplica entregas confirmadas.
+      tipo: arquivo
+      caminho: .estado/worker_webhook.md
+      casa: "Suíte completa rodada localmente: [0-9]+/[0-9]+"
   - id: midia_cdn
     estado: pendente
     faz: Adicionar upload próprio, processamento e CDN quando o uso de VSL justificar essa infraestrutura
@@ -140,5 +148,6 @@ nos:
       - vsl_nos_editores
     produz: Biblioteca de mídia com upload assinado, transcodificação e entrega por CDN
     passa_quando:
-      tipo: homologação
-      espera: Mídia não cruza projetos e publicação nunca depende de URL temporária ou blob local.
+      tipo: arquivo
+      caminho: .estado/midia_cdn.md
+      casa: "Prova: mídia isolada por empresa e projeto, publicação sem URL temporária, [0-9]+ testes verdes"
