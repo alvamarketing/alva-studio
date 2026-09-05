@@ -11,6 +11,9 @@ importers:
       grapesjs:
         specifier: 0.23.6
         version: 0.23.6
+      hls.js:
+        specifier: ^1.5.17
+        version: 1.7.2
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -41,6 +44,9 @@ packages:
 
   grapesjs@0.23.6:
     resolution: {integrity: sha512-I8M/sPWjHm6MLIdUtRFNOKsQ3PtDgIDsc2S8ANkJsfHj3ZoH98oNMMWr64Kx22XgjHCQ4xpUx7nvXyQSKV1mrQ==}
+
+  hls.js@1.7.2:
+    resolution: {integrity: sha512-CW/pPvSOFIRsosbwxrYaE9ERmpTo5fbTqL7wCvuCFlqW1Bmb1K5fXsY7yiH95rmlr4rVuA7UXHbM/cIXQ6AXwg==}
 
   html-entities@1.4.0:
     resolution: {integrity: sha512-8nxjcBcd8wovbeKx7h3wTji4e6+rhaVuPNpMqwWgnHh+N9ToqsCs6XztWRBPQ+UtzsoMAdKZtUENoVzU/EMtZA==}
@@ -143,6 +149,8 @@ snapshots:
       html-entities: 1.4.0
       promise-polyfill: 8.3.0
       underscore: 1.13.8
+
+  hls.js@1.7.2: {}
 
   html-entities@1.4.0: {}
 
