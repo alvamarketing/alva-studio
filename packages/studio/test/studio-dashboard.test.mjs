@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel } from '../public/studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, publicationModel } from '../public/studio-dashboard.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
@@ -208,6 +208,17 @@ test('visão do projeto separa carregamento, erro e projeto vazio', () => {
   });
   assert.equal(empty.status, 'empty');
   assert.equal(empty.domain.label, 'Domínio ainda não verificado');
+});
+
+test('publicação traduz estados técnicos em linguagem simples e preserva o resumo de rotas', () => {
+  assert.deepEqual(publicationModel({ connectionStatus: 'pending', routes: [{ path: '/' }, { path: '/captura' }] }), {
+    state: 'pending', label: 'Conecte a Vercel', routes: 2, canPreview: false, canProduction: false,
+  });
+  assert.deepEqual(publicationModel({ connectionStatus: 'configured', run: { status: 'READY' }, routes: [{ path: '/' }] }), {
+    state: 'ready', label: 'No ar', routes: 1, canPreview: true, canProduction: true,
+  });
+  assert.equal(publicationModel({ connectionStatus: 'configured', run: { status: 'ERROR' } }).label, 'Falhou');
+  assert.equal(publicationModel({ connectionStatus: 'configured', run: { status: 'BUILDING' } }).label, 'Preparando');
 });
 
 test('Projeto possui destinos, filtros, estado assíncrono e controles responsivos acessíveis', async () => {

@@ -58,6 +58,13 @@ export class PublicationService {
     return this.send({ ...input, environment: 'preview', snapshot });
   }
 
+  async overview({ companyId, projectId }) {
+    return {
+      integration: await this.integrations.publicSettings({ companyId, projectId }),
+      run: await this.deployments.latest({ companyId, projectId }),
+    };
+  }
+
   async production(input) {
     if (input.confirmed !== true) throw fail('A confirmação da publicação em produção é obrigatória.', 409);
     if (!input.previewRunId) throw fail('Valide uma prévia antes de publicar em produção.', 409);
