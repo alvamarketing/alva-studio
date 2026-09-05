@@ -212,7 +212,9 @@ export function createApp({
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
       if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicVsl && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicVsl && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
+      const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicVsl && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);

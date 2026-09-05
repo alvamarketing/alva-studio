@@ -1,5 +1,5 @@
 import { test } from 'node:test';
-import { get } from 'node:http';
+import { get, request as httpRequest } from 'node:http';
 import { runInNewContext } from 'node:vm';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -23,7 +23,21 @@ async function setup(t, options = {}) {
   const cookie = response.headers.get('set-cookie').split(';')[0];
   const request = (path, options = {}) =>
     fetch(base + path, { ...options, headers: { Cookie: cookie, Origin: base, ...options.headers } });
-  return { base, request };
+  return { base, request, cookie };
+}
+// fetch() rejeita cabeçalhos Sec-Fetch-*; usamos http.request cru para simular navegação/CORS reais.
+function rawRequest(base, path, { method = 'GET', headers = {}, body } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(base + path, { method, headers }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    if (body !== undefined) req.write(body);
+    req.end();
+  });
 }
 test('API cria, edita, duplica e exclui páginas isoladas', async (t) => {
   const { base, request } = await setup(t);
@@ -59,6 +73,66 @@ test('bloqueia origem externa, corpo indevido e hostname arbitrário', async (t)
     }).on('error', reject);
   });
   assert.equal(status, 403);
+});
+test('permite navegação de nível superior cross-site, mas bloqueia mutação e fetch cross-site', async (t) => {
+  const { base, cookie } = await setup(t);
+  const navigation = await rawRequest(base, '/', {
+    headers: { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' },
+  });
+  assert.equal(navigation.status, 200);
+  const fetchCors = await rawRequest(base, '/api/pages', {
+    headers: {
+      Cookie: cookie,
+      'Sec-Fetch-Site': 'cross-site',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Dest': 'empty',
+    },
+  });
+  assert.equal(fetchCors.status, 403);
+  const mutation = await rawRequest(base, '/api/pages', {
+    method: 'POST',
+    headers: {
+      Cookie: cookie,
+      'Content-Type': 'application/json',
+      'Sec-Fetch-Site': 'cross-site',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Dest': 'document',
+    },
+    body: JSON.stringify({ name: 'LP Alva' }),
+  });
+  assert.equal(mutation.status, 403);
+  const session = await rawRequest(base, '/api/session', {
+    headers: {
+      Cookie: cookie,
+      'Sec-Fetch-Site': 'cross-site',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Dest': 'document',
+    },
+  });
+  assert.equal(session.status, 403);
+});
+test('em produção, navegação cross-site para o host público é permitida e CORS cross-site é bloqueado', async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'alva-http-'));
+  const server = createApp({ dataDir, publicOrigin: 'https://studio.example' });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  t.after(async () => {
+    await new Promise((r) => server.close(r));
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const navigation = await rawRequest(base, '/', {
+    headers: {
+      Host: 'studio.example',
+      'Sec-Fetch-Site': 'cross-site',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Dest': 'document',
+    },
+  });
+  assert.equal(navigation.status, 200);
+  const cors = await rawRequest(base, '/', {
+    headers: { Host: 'studio.example', 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'cors' },
+  });
+  assert.equal(cors.status, 403);
 });
 test('configuração indica desconexão e não inclui credenciais', async (t) => {
   const { base, request } = await setup(t);
