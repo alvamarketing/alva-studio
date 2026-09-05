@@ -2,7 +2,7 @@
 
 - `index.mjs`: servidor HTTP, mapa dos módulos públicos e entrypoints SaaS (PostgreSQL obrigatório) e legado explícito para migração/rollback.
 - `db/`: adaptador PostgreSQL e migrações ordenadas do schema SaaS.
-  - `postgres.mjs`: pool, transações e executor idempotente de migrações com checksum.
+  - `postgres.mjs`: pool com tratamento de erro de cliente ocioso, transações e executor idempotente de migrações com checksum.
   - `migrations/001_saas_foundation.sql`: empresas, memberships, projetos, conteúdo, versões, integrações e auditoria.
   - `migrations/002_invitations.sql`: convites de membros.
   - `migrations/003_published_content_routes.sql`: rota preservada nos snapshots publicados.

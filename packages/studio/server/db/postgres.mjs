@@ -10,9 +10,19 @@ function checksum(content) {
   return createHash('sha256').update(content).digest('hex');
 }
 
-export function createDatabase({ connectionString }) {
+export function createDatabase({ connectionString, log = console.error }) {
   if (typeof connectionString !== 'string' || !connectionString) throw new Error('Informe a conexão PostgreSQL.');
   const pool = new Pool({ connectionString });
+
+  pool.on('error', (err) => {
+    log(JSON.stringify({
+      level: 'error',
+      event: 'postgres.pool.error',
+      message: err.message,
+      code: err.code ?? null,
+    }));
+  });
+
   return {
     query: (...args) => pool.query(...args),
     close: () => pool.end(),
