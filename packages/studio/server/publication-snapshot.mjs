@@ -3,6 +3,7 @@ import { normalizeRoute } from './domain/access.mjs';
 import { normalizeFormInput } from './form-store.mjs';
 import { renderDynamicForm } from './dynamic-form.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from './vsl-reference.mjs';
+import { formContentSecurityPolicy } from './content-security-policy.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -18,6 +19,34 @@ function canonical(value) {
 
 function pathFile(path) {
   return path === '/' ? 'index.html' : `${path.slice(1)}/index.html`;
+}
+
+function escapeAttribute(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
+
+function withoutFrameAncestors(policy) {
+  return policy.split('; ').filter((directive) => !directive.startsWith('frame-ancestors')).join('; ');
+}
+
+// A página estática ainda não emite CSP (fica para a fase 2, via cabeçalho em vercel.json);
+// aqui só entra o script do tracker, no mesmo padrão do formulário.
+function injectPageTracker(html, { nonce, trackerPublicId }) {
+  if (!trackerPublicId) return html;
+  const script = `<script src="/tracker.js" data-alva-tracker="${escapeAttribute(trackerPublicId)}" nonce="${escapeAttribute(nonce)}"></script>`;
+  return html.includes('</body>') ? html.replace('</body>', `${script}</body>`) : `${html}${script}`;
+}
+
+function injectPublicationCsp(html, policy) {
+  return html.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}">`);
+}
+
+async function resolveAnalyticsTrackerPublicId(database, companyId, projectId) {
+  const { rows } = await database.query(
+    `SELECT tracker_public_id FROM analytics_websites WHERE company_id = $1 AND project_id = $2 AND environment = 'production' LIMIT 1`,
+    [companyId, projectId],
+  );
+  return rows[0]?.tracker_public_id || null;
 }
 
 function publicFormAction(publicOrigin, companySlug, projectSlug, path) {
@@ -81,13 +110,14 @@ function validateOrigin(value) {
   }
 }
 
-function recordForRow(row, publicOrigin, vslEmbedUrls = new Map()) {
+function recordForRow(row, publicOrigin, vslEmbedUrls = new Map(), { nonce, trackerPublicId } = {}) {
   if (!row || !['page', 'form'].includes(row.kind)) throw fail('Conteúdo publicado inválido.', 409);
   let path;
   try { path = normalizeRoute(row.path); } catch { throw fail('A publicação contém uma rota inválida.', 409); }
   if (!row.company_id || !row.project_id || !row.content_id || !row.version_id) throw fail('A publicação contém uma versão inválida.', 409);
   if (row.kind === 'page') {
     if (typeof row.rendered_html !== 'string' || !row.rendered_html.trim()) throw fail('A publicação contém uma página vazia.', 409);
+    const pageHtml = renderPublishedVslReferences(row.rendered_html, { vslEmbedUrls });
     return {
       path,
       type: 'page',
@@ -95,13 +125,21 @@ function recordForRow(row, publicOrigin, vslEmbedUrls = new Map()) {
       versionId: row.version_id,
       versionNumber: row.version_number,
       file: pathFile(path),
-      data: renderPublishedVslReferences(row.rendered_html, { vslEmbedUrls }),
+      data: injectPageTracker(pageHtml, { nonce, trackerPublicId }),
     };
   }
   if (!row.company_slug || !row.project_slug) throw fail('A publicação não encontrou o projeto público.', 409);
   let schema;
   try { schema = normalizeFormInput(row.schema); } catch { throw fail('A publicação contém um formulário inválido.', 409); }
   const form = { ...schema, id: row.content_id, name: row.name || 'Formulário' };
+  const actionUrl = publicFormAction(publicOrigin, row.company_slug, row.project_slug, path);
+  const html = renderDynamicForm(form, actionUrl, { vslEmbedUrls, nonce, trackerPublicId });
+  const policy = withoutFrameAncestors(formContentSecurityPolicy({
+    nonce,
+    studioOrigin: publicOrigin,
+    actionOrigin: new URL(actionUrl).origin,
+    frameOrigins: vslEmbedUrls.size ? [publicOrigin] : [],
+  }));
   return {
     path,
     type: 'form',
@@ -109,7 +147,7 @@ function recordForRow(row, publicOrigin, vslEmbedUrls = new Map()) {
     versionId: row.version_id,
     versionNumber: row.version_number,
     file: pathFile(path),
-    data: renderDynamicForm(form, publicFormAction(publicOrigin, row.company_slug, row.project_slug, path), { vslEmbedUrls }),
+    data: injectPublicationCsp(html, policy),
   };
 }
 
@@ -153,9 +191,18 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     throw error;
   }
   const vslEmbedUrls = new Map([...resolvedVsl].map(([publicId, value]) => [publicId, value.embedUrl]));
+  const trackerPublicId = await resolveAnalyticsTrackerPublicId(database, companyId, projectId);
+  const fingerprint = createHash('sha256').update(JSON.stringify(canonical({
+    rows: rows
+      .map((row) => ({ path: row.path, rendered_html: row.rendered_html, schema: row.schema, editor_state: row.editor_state, version_id: row.version_id }))
+      .sort((left, right) => left.version_id.localeCompare(right.version_id)),
+    vslEmbedUrls: [...vslEmbedUrls],
+    trackerPublicId,
+  }))).digest('hex');
+  const nonce = fingerprint.slice(0, 24);
   const records = rows.map((row) => {
     if (row.company_id !== companyId || row.project_id !== projectId) throw fail('A publicação contém conteúdo de outra empresa.', 403);
-    return recordForRow(row, origin, vslEmbedUrls);
+    return recordForRow(row, origin, vslEmbedUrls, { nonce, trackerPublicId });
   }).sort((left, right) => left.path.localeCompare(right.path));
   const seen = new Set();
   for (const record of records) {
