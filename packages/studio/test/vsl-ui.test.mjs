@@ -1,6 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createVslUI, fetchVslForEdit, parseVslFormValues, vslListModel, vslStatusLabel, vslUiAccessPolicy } from '../public/vsl-ui.js';
+
+test('configuração de VSL apresenta quatro etapas, avançado e prévia responsiva', async () => {
+  const [html, css, ui] = await Promise.all([
+    readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../public/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../public/vsl-ui.js', import.meta.url), 'utf8'),
+  ]);
+  for (const field of ['name', 'sourceUrl', 'sourceType', 'posterUrl', 'accentColor', 'aspectRatio', 'captionsUrl', 'ctaText', 'ctaUrl', 'ctaSeconds', 'autoplayMuted', 'resumeEnabled'])
+    assert.match(html, new RegExp(`name="${field}"`));
+  assert.match(html, /1<\/span> Vídeo[\s\S]*2<\/span> Visual[\s\S]*3<\/span> Reprodução[\s\S]*4<\/span> CTA/);
+  assert.match(html, /<details><summary>Opções avançadas<\/summary>/);
+  assert.match(html, /id="vsl-preview"/);
+  assert.match(css, /\.vsl-editor-layout\s*\{[\s\S]*grid-template-columns/);
+  assert.match(css, /\.vsl-preview-screen[\s\S]*min-height/);
+  assert.match(css, /@media\s*\(min-width:\s*621px\) and \(max-width:\s*900px\)[\s\S]*\.vsl-editor-layout\s*\{\s*grid-template-columns:\s*1fr/);
+  assert.match(ui, /updatePreview/);
+  assert.match(ui, /screen\.style\.aspectRatio/);
+  assert.match(ui, /vsl-preview-accent/);
+  assert.match(ui, /vsl-preview-playback/);
+  assert.match(ui, /após \$\{ctaSeconds\}s/);
+});
 
 test('modelo da tela de VSL traduz rascunho, publicada e alterações pendentes', () => {
   assert.equal(vslStatusLabel({ publishedVersionId: null, lockVersion: 0 }), 'Rascunho');

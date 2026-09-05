@@ -204,22 +204,17 @@
           </header>
           <p id="vsl-status" class="dashboard-status" role="status" aria-live="polite"></p>
           <div id="vsl-list" class="vsl-list"></div>
-          <form id="vsl-form" class="vsl-form" hidden>
-            <h2>Configurar VSL</h2>
-            <label>Nome<input name="name" required maxlength="100"></label>
-            <label>URL da mídia<input name="sourceUrl" type="url" placeholder="https://…" required></label>
-            <label>Tipo<select name="sourceType"><option value="mp4">MP4</option><option value="hls">HLS</option></select></label>
-            <label>Poster<input name="posterUrl" type="url" placeholder="https://…"></label>
-            <label>Legenda VTT<input name="captionsUrl" type="url" placeholder="https://…"></label>
-            <label>Cor do player<input name="accentColor" type="text" value="#286eea" pattern="#[0-9a-fA-F]{6}"></label>
-            <label>Proporção<select name="aspectRatio"><option>16:9</option><option>9:16</option><option>1:1</option></select></label>
-            <label>Texto do CTA<input name="ctaText" maxlength="200"></label>
-            <label>Destino do CTA<input name="ctaUrl" placeholder="https://… ou /checkout"></label>
-            <label>Exibir CTA após (segundos)<input name="ctaSeconds" type="number" min="0"></label>
-            <label><input name="autoplayMuted" type="checkbox" checked> Começar sem som</label>
-            <label><input name="resumeEnabled" type="checkbox" checked> Retomar de onde parou</label>
-            <div class="vsl-form-actions"><button type="submit" class="primary">Salvar alterações</button><button type="button" name="publish">Publicar versão</button></div>
-          </form>
+          <div class="vsl-editor-layout">
+            <form id="vsl-form" class="vsl-form" hidden>
+              <div class="vsl-form-heading"><h2>Configurar VSL</h2><p>Preencha o essencial em quatro passos. Você pode ajustar o restante depois.</p></div>
+              <fieldset><legend><span>1</span> Vídeo</legend><label>Nome<input name="name" required maxlength="100"></label><div class="vsl-inline-fields"><label>URL da mídia<input name="sourceUrl" type="url" placeholder="https://…" required></label><label>Tipo<select name="sourceType"><option value="mp4">MP4</option><option value="hls">HLS</option></select></label></div></fieldset>
+              <fieldset><legend><span>2</span> Visual</legend><div class="vsl-inline-fields"><label>Imagem de capa (poster)<input name="posterUrl" type="url" placeholder="https://…"></label><label>Cor do player<input name="accentColor" type="text" value="#286eea" pattern="#[0-9a-fA-F]{6}"></label></div><label>Proporção<select name="aspectRatio"><option>16:9</option><option>9:16</option><option>1:1</option></select></label></fieldset>
+              <fieldset><legend><span>3</span> Reprodução</legend><div class="vsl-checks"><label><input name="autoplayMuted" type="checkbox" checked> Começar sem som</label><label><input name="resumeEnabled" type="checkbox" checked> Retomar de onde parou</label></div><details><summary>Opções avançadas</summary><label>Legenda VTT<input name="captionsUrl" type="url" placeholder="https://…/legenda.vtt"></label><p class="editor-action-help">Use VTT para oferecer legendas. HLS é escolhido no tipo do vídeo.</p></details></fieldset>
+              <fieldset><legend><span>4</span> CTA</legend><div class="vsl-inline-fields"><label>Texto do botão<input name="ctaText" maxlength="200" placeholder="Quero saber mais"></label><label>Destino<input name="ctaUrl" placeholder="https://… ou /checkout"></label></div><label>Exibir CTA após (segundos)<input name="ctaSeconds" type="number" min="0" placeholder="Ex.: 42"></label></fieldset>
+              <div class="vsl-form-actions"><button type="submit" class="primary">Salvar alterações</button><button type="button" name="publish">Publicar versão</button></div>
+            </form>
+            <aside id="vsl-preview" class="vsl-preview" aria-label="Prévia da VSL" hidden><div class="vsl-preview-label">PRÉVIA</div><div class="vsl-preview-screen"><img id="vsl-preview-poster" alt="" hidden><span class="material-symbols-outlined" aria-hidden="true">play_circle</span><strong id="vsl-preview-title">Sua VSL</strong><small id="vsl-preview-meta">MP4 · 16:9</small><small id="vsl-preview-playback">Sem som · Retomada ativada</small><small id="vsl-preview-cta">CTA após configurar</small></div><p>Resumo visual da capa, reprodução e CTA antes de salvar.</p></aside>
+          </div>
         </section>
         <section id="forms-view" hidden>
           <header class="dashboard-header">

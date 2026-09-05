@@ -36,16 +36,42 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const list = () => document.querySelector('#vsl-list');
   const form = () => document.querySelector('#vsl-form');
   const status = () => document.querySelector('#vsl-status');
+  const updatePreview = () => {
+    const target = form();
+    const title = document.querySelector('#vsl-preview-title');
+    const meta = document.querySelector('#vsl-preview-meta');
+    const playback = document.querySelector('#vsl-preview-playback');
+    const cta = document.querySelector('#vsl-preview-cta');
+    const poster = document.querySelector('#vsl-preview-poster');
+    const screen = document.querySelector('.vsl-preview-screen');
+    if (!target || !title || !meta || !playback || !cta || !poster || !screen) return;
+    title.textContent = field(target, 'name').value.trim() || 'Sua VSL';
+    const aspectRatio = field(target, 'aspectRatio').value || '16:9';
+    meta.textContent = `${field(target, 'sourceType').value.toUpperCase()} · ${aspectRatio}`;
+    screen.style.aspectRatio = aspectRatio.replace(':', ' / ');
+    const color = field(target, 'accentColor').value.trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) screen.style.setProperty('--vsl-preview-accent', color);
+    playback.textContent = `${field(target, 'autoplayMuted').checked ? 'Sem som' : 'Som ativado'} · ${field(target, 'resumeEnabled').checked ? 'Retomada ativada' : 'Retomada desativada'}`;
+    const ctaText = field(target, 'ctaText').value.trim() || 'a configurar';
+    const ctaSeconds = field(target, 'ctaSeconds').value;
+    cta.textContent = `CTA: ${ctaText} · ${ctaSeconds === '' ? 'tempo a configurar' : `após ${ctaSeconds}s`}`;
+    const url = field(target, 'posterUrl').value.trim();
+    poster.hidden = !url;
+    if (url) poster.src = url;
+  };
   const showForm = (video = null) => {
     if (!video && !currentShell()?.can?.('video.write')) return;
     current = video;
     const target = form();
     if (!target) return;
     target.hidden = false;
+    const preview = document.querySelector('#vsl-preview');
+    if (preview) preview.hidden = false;
     const policy = vslUiAccessPolicy({ hasVideo: Boolean(video), can: (capability) => currentShell()?.can?.(capability) ?? false });
     for (const name of ['name', 'sourceUrl', 'sourceType', 'posterUrl', 'captionsUrl', 'accentColor', 'aspectRatio', 'ctaText', 'ctaUrl', 'ctaSeconds']) field(target, name).value = video?.[name] ?? ({ accentColor: '#286eea', aspectRatio: '16:9', sourceType: 'mp4' }[name] ?? '');
     field(target, 'autoplayMuted').checked = video?.autoplayMuted ?? true;
     field(target, 'resumeEnabled').checked = video?.resumeEnabled ?? true;
+    updatePreview();
     for (const control of target.querySelectorAll('input, select, textarea')) control.disabled = !policy.canEdit;
     const submit = target.querySelector('[type="submit"]');
     if (submit) submit.hidden = !policy.canEdit;
@@ -85,6 +111,7 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     return parseVslFormValues({ ...values, autoplayMuted: field(target, 'autoplayMuted').checked, resumeEnabled: field(target, 'resumeEnabled').checked });
   };
   if (typeof document !== 'undefined' && form()) {
+    form().addEventListener('input', updatePreview);
     form().onsubmit = async (event) => {
       event.preventDefault();
       if (!vslUiAccessPolicy({ hasVideo: Boolean(current), can: (capability) => currentShell()?.can?.(capability) ?? false }).canEdit) return;
