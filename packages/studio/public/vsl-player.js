@@ -5,6 +5,12 @@ export function resumeStorageKey(publicId, versionId) {
   return `alva-vsl-resume:${String(publicId)}:${String(versionId)}`;
 }
 
+export function toggleCaptionTrack(track, enabled) {
+  if (!track) return false;
+  track.mode = enabled ? 'showing' : 'disabled';
+  return Boolean(enabled);
+}
+
 export function createVslPlayerController({
   publicId = '', versionId = '', duration = 0, ctaSeconds = null, resumeEnabled = true,
   milestones = DEFAULT_MILESTONES, storage = globalThis.localStorage, onEvent = () => {},
@@ -117,14 +123,17 @@ export function mountVslPlayer(container, config = {}) {
   video.className = 'vsl-video'; video.playsInline = true; video.preload = 'metadata'; video.muted = config.autoplayMuted !== false;
   if (config.posterUrl) video.poster = config.posterUrl;
   video.controls = false;
-  if (config.captionsUrl) { const track = document.createElement('track'); track.kind = 'subtitles'; track.src = config.captionsUrl; track.srclang = 'pt-BR'; track.label = 'Português'; video.append(track); }
+  let captionTrack = null;
+  if (config.captionsUrl) { captionTrack = document.createElement('track'); captionTrack.kind = 'subtitles'; captionTrack.src = config.captionsUrl; captionTrack.srclang = 'pt-BR'; captionTrack.label = 'Português'; captionTrack.mode = 'disabled'; video.append(captionTrack); }
   const frame = document.createElement('div'); frame.className = 'vsl-frame'; frame.append(video);
   const controls = document.createElement('div'); controls.className = 'vsl-controls';
   const playButton = button('Reproduzir', 'vsl-play');
   const muteButton = button('Ativar som', 'vsl-mute');
+  const captionsButton = config.captionsUrl ? button('Legendas', 'vsl-captions') : null;
+  captionsButton?.setAttribute('aria-pressed', 'false');
   const seek = document.createElement('input'); seek.type = 'range'; seek.min = '0'; seek.max = '100'; seek.step = '0.1'; seek.value = '0'; seek.className = 'vsl-seek'; seek.setAttribute('aria-label', 'Progresso do vídeo');
   const time = document.createElement('span'); time.className = 'vsl-time'; time.textContent = '0:00 / 0:00';
-  controls.append(playButton, muteButton, seek, time);
+  controls.append(playButton, muteButton); captionsButton && controls.append(captionsButton); controls.append(seek, time);
   const status = document.createElement('p'); status.className = 'vsl-status'; status.setAttribute('role', 'status');
   let cta = null;
   if (config.ctaText && config.ctaUrl) { cta = document.createElement('a'); cta.className = 'vsl-cta'; cta.textContent = config.ctaText; cta.href = config.ctaUrl; cta.hidden = true; frame.append(cta); }
@@ -146,6 +155,7 @@ export function mountVslPlayer(container, config = {}) {
   video.addEventListener('error', () => { controller.setError('Não foi possível reproduzir este vídeo. Verifique o endereço da mídia.'); render(); });
   playButton.addEventListener('click', () => { if (video.paused) video.play().catch(() => { status.textContent = 'Clique em reproduzir para iniciar o vídeo.'; }); else video.pause(); });
   muteButton.addEventListener('click', () => { video.muted = !video.muted; controller.setMuted(video.muted); render(); });
+  captionsButton?.addEventListener('click', () => { const enabled = captionsButton.getAttribute('aria-pressed') !== 'true'; captionsButton.setAttribute('aria-pressed', String(toggleCaptionTrack(captionTrack, enabled))); });
   seek.addEventListener('input', () => { if (Number.isFinite(video.duration)) video.currentTime = (Number(seek.value) / 100) * video.duration; });
   cta?.addEventListener('click', () => controller.ctaClick());
   const autoplay = config.autoplayMuted !== false

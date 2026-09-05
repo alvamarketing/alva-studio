@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayWhenReady, createVslPlayerController, resumeStorageKey } from '../public/vsl-player.js';
+import { autoplayWhenReady, createVslPlayerController, resumeStorageKey, toggleCaptionTrack } from '../public/vsl-player.js';
 
 test('controlador de VSL calcula progresso real, CTA e marcos uma vez', () => {
   const events = [];
@@ -42,4 +42,12 @@ test('autoplay espera mídia anexada e pronta e executa somente uma vez', async 
   listeners.loadedmetadata(); await pending;
   listeners.loadedmetadata();
   assert.equal(video.plays, 1);
+});
+
+test('legenda VTT pode ser ativada por controle acessível', () => {
+  const track = { mode: 'disabled' };
+  assert.equal(toggleCaptionTrack(track, true), true);
+  assert.equal(track.mode, 'showing');
+  assert.equal(toggleCaptionTrack(track, false), false);
+  assert.equal(track.mode, 'disabled');
 });
