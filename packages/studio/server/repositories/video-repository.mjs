@@ -19,14 +19,14 @@ function safeUrl(value, { required = false, label = 'URL da mídia', relative = 
   const text = String(value ?? '').trim();
   if (!text && !required) return null;
   if (!text) throw fail(`${label} é obrigatória.`);
-  let url;
-  try { url = new URL(text, 'https://studio.invalid'); } catch { throw fail(`${label} inválida.`); }
   if (relative) {
     if (!text.startsWith('/') || text.startsWith('//') || text.includes('\\') || /(^|\/)\.\.?([/]|$)/.test(text))
       throw fail(`${label} deve ser um caminho relativo seguro.`);
     return text;
   }
-  if (url.protocol !== 'https:' || url.username || url.password) throw fail(`${label} precisa ser HTTPS sem credenciais.`);
+  let url;
+  try { url = new URL(text); } catch { throw fail(`${label} precisa ser HTTPS e absoluta.`); }
+  if (!/^https:\/\//i.test(text) || url.protocol !== 'https:' || !url.hostname || url.username || url.password) throw fail(`${label} precisa ser HTTPS sem credenciais.`);
   return text;
 }
 
@@ -84,7 +84,8 @@ function normalizedInput(input = {}, current = {}) {
     ? safeUrl(urlValue, { label: 'URL do CTA', relative: true })
     : safeUrl(urlValue, { label: 'URL do CTA' });
   const seconds = ctaSeconds(input.ctaSeconds === undefined ? current.cta_seconds : input.ctaSeconds);
-  if ((text && !ctaUrl) || (!text && ctaUrl) || (seconds !== null && (!text || !ctaUrl)))
+  const hasCta = Boolean(text || ctaUrl || seconds !== null);
+  if (hasCta && (!text || !ctaUrl || seconds === null))
     throw fail('CTA precisa de texto, destino e tempo.');
   return {
     name: input.name === undefined ? current.name : requiredName(input.name),

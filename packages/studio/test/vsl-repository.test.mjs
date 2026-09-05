@@ -43,7 +43,16 @@ test('repositório de VSL valida URL HTTPS, cria e atualiza com lock otimista', 
   const repository = new VideoRepository(database);
   try {
     await assert.rejects(() => repository.createVideo(input(seeded, { sourceUrl: 'http://media.example.test/a.mp4' })), /HTTPS/i);
+    for (const field of ['sourceUrl', 'posterUrl', 'captionsUrl']) {
+      for (const value of ['//media.example.test/a.mp4', 'video.mp4', 'https:video.mp4']) {
+        await assert.rejects(() => repository.createVideo(input(seeded, { [field]: value })), /HTTPS|URL/i);
+      }
+    }
     await assert.rejects(() => repository.createVideo(input(seeded, { ctaUrl: 'https://:senha@evil.test/checkout' })), /credenciais/i);
+    await assert.rejects(() => repository.createVideo(input(seeded, { ctaText: 'Comprar', ctaUrl: '/checkout', ctaSeconds: null })), /CTA/i);
+    await assert.rejects(() => repository.createVideo(input(seeded, { ctaText: null, ctaUrl: null, ctaSeconds: 0 })), /CTA/i);
+    const zeroCta = await repository.createVideo(input(seeded, { ctaText: 'Comprar agora', ctaUrl: '/checkout', ctaSeconds: 0 }));
+    assert.equal(zeroCta.ctaSeconds, 0);
     const created = await repository.createVideo(input(seeded));
     assert.equal(created.projectId, seeded.project.id);
     assert.equal(created.lockVersion, 0);
