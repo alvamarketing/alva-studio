@@ -256,6 +256,15 @@
 .dynamic-preview-element[aria-current='true'] .dynamic-edit-hint { opacity: 1; }
 .dynamic-preview-element h1 { font-size: clamp(19px, 2.7vw, 34px); margin: 7px 0; }
 .dynamic-preview-element .dynamic-preview-icon { margin: 0 0 6px; }
+.dynamic-preview-vsl-element { display: grid; gap: 10px; padding: 15px; border: 1px solid transparent; border-radius: 16px; }
+.dynamic-preview-vsl-element[aria-current='true'] { border-color: var(--alva-blue); background: color-mix(in srgb, var(--alva-blue) 6%, transparent); }
+.dynamic-preview-select { display: flex; align-items: center; gap: 9px; width: 100%; padding: 0; color: inherit; text-align: left; background: transparent; border: 0; }
+.dynamic-preview-select:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 3px; border-radius: 8px; }
+.dynamic-preview-select-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.dynamic-preview-select-copy small { color: var(--alva-muted); }
+.dynamic-preview-select .dynamic-edit-hint { margin: 0 0 0 auto; opacity: 0; }
+.dynamic-preview-vsl-element[aria-current='true'] .dynamic-edit-hint { opacity: 1; }
+.dynamic-preview-vsl-element .dynamic-vsl { margin-top: 2px; }
 .dynamic-preview-next { width: 100%; margin-top: 22px; }
 .dynamic-preview-visual-choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin-top: 12px; }
 .dynamic-preview-visual-choices > div { overflow: hidden; min-height: 104px; display: grid; place-items: center; border: 1px solid var(--alva-line); border-radius: 13px; background: var(--alva-white); }
@@ -480,7 +489,7 @@
 .dynamic-vsl-fieldset legend { padding: 0; color: var(--alva-muted); font-size: 12px; }
 .dynamic-vsl-options { display: grid; gap: 8px; }
 .dynamic-vsl-option { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 9px 11px; border: 1px solid var(--alva-line); border-radius: 10px; background: var(--alva-white); color: var(--alva-ink); text-align: left; cursor: pointer; }
-.dynamic-vsl-option[aria-pressed='true'] { border-color: var(--alva-blue); box-shadow: 0 0 0 2px rgb(40 110 234 / 15%); }
+.dynamic-vsl-option[aria-checked='true'] { border-color: var(--alva-blue); box-shadow: 0 0 0 2px rgb(40 110 234 / 15%); }
 .dynamic-vsl-option.is-invalid { color: var(--alva-muted); cursor: default; }
 .dynamic-vsl-option > .material-symbols-outlined { color: var(--alva-blue); }
 .dynamic-vsl-option span:last-child { display: grid; gap: 2px; min-width: 0; }

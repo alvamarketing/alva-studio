@@ -21,6 +21,10 @@ import {
   buildPageExportHtml,
   vslEditorOptions,
   vslCanvasMessage,
+  renderVslOptionCards,
+  vslOptionKeyboardAction,
+  editorInteractionPolicy,
+  applyEditorInteractionPolicy,
 } from '../public/editor-shell.js';
 
 test('referência de VSL no editor persiste somente o identificador público', () => {
@@ -53,6 +57,71 @@ test('catálogo visual da VSL expõe somente nome, status e estado de prévia', 
   assert.equal(vslCanvasMessage({ publicId: 'missing', canRead: true }), 'VSL não encontrada. Publique a VSL antes de usar.');
   assert.equal(vslCanvasMessage({ publicId: '', canRead: true }), 'Escolha uma VSL publicada.');
   assert.equal(vslCanvasMessage({ publicId: 'missing', canRead: false }), 'Você não tem permissão para visualizar VSLs.');
+});
+
+test('cards de VSL oferecem remoção acessível e navegação por setas', () => {
+  const markup = renderVslOptionCards([
+    { publicId: 'published', name: 'Oferta', publishedVersionId: 'version-1' },
+  ], 'published');
+  assert.match(markup, /role="radiogroup"/);
+  assert.match(markup, /data-vsl-option=""/);
+  assert.match(markup, /Remover seleção/);
+  assert.match(markup, /aria-checked="true"/);
+  assert.doesNotMatch(markup, /aria-pressed/);
+  assert.equal(vslOptionKeyboardAction({ key: 'ArrowDown' }, ['', 'published'], ''), 'published');
+  assert.equal(vslOptionKeyboardAction({ key: 'ArrowUp' }, ['', 'published'], ''), 'published');
+  assert.equal(vslOptionKeyboardAction({ key: 'Home' }, ['', 'published'], 'published'), '');
+});
+
+test('landing page sem page.write mantém catálogo, edição, ordem e exclusão inativos', () => {
+  const policy = editorInteractionPolicy((capability) => capability === 'video.read');
+  assert.deepEqual(policy, {
+    canEdit: false,
+    canAdd: false,
+    canReorder: false,
+    canDelete: false,
+    canInlineEdit: false,
+    canReadVsl: true,
+  });
+  assert.equal(editorInteractionPolicy((capability) => capability === 'page.write').canAdd, true);
+  assert.equal(editorInteractionPolicy(() => false).canReadVsl, false);
+  const library = {};
+  const controls = [{ disabled: false }, { disabled: false }, { disabled: false }];
+  const root = {
+    querySelector(selector) { return selector === '.fe-library' ? library : null; },
+    querySelectorAll() { return controls; },
+  };
+  applyEditorInteractionPolicy(root, (capability) => capability === 'video.read');
+  assert.equal(library.hidden, true);
+  assert.deepEqual(controls.map((control) => control.disabled), [true, true, true]);
+  const editableLibrary = {};
+  const editableControls = [{ disabled: false }, { disabled: false }];
+  applyEditorInteractionPolicy({
+    querySelector() { return editableLibrary; },
+    querySelectorAll() { return editableControls; },
+  }, (capability) => capability === 'page.write');
+  assert.equal(editableLibrary.hidden, false);
+  assert.deepEqual(editableControls.map((control) => control.disabled), [false, false]);
+});
+
+test('preview da VSL mantém iframe fora do botão de seleção', async () => {
+  const { previewVslElementMarkup } = await import('../public/forms.js');
+  const markup = previewVslElementMarkup({
+    element: { type: 'vsl', title: 'Oferta', publicId: 'public-vsl' },
+    index: 0,
+    options: { vslEmbedUrls: new Map([['public-vsl', 'https://studio.test/embed/v/public-vsl']]) },
+  });
+  assert.match(markup, /<button[^>]*data-preview-element="0"/);
+  assert.match(markup, /<iframe[^>]+src="https:\/\/studio\.test\/embed\/v\/public-vsl"/);
+  assert.doesNotMatch(markup, /<button[^>]*>[^]*<iframe[^]*<\/button>/);
+  const headerMarkup = previewVslElementMarkup({
+    element: { type: 'vsl', title: 'Topo', publicId: 'public-vsl' },
+    index: 1,
+    header: true,
+    options: { vslEmbedUrls: new Map([['public-vsl', 'https://studio.test/embed/v/public-vsl']]) },
+  });
+  assert.match(headerMarkup, /data-preview-header="1"/);
+  assert.doesNotMatch(headerMarkup, /<button[^>]*>[^]*<iframe[^]*<\/button>/);
 });
 
 test('modelo VSL montado no caminho headless do GrapesJS elimina configuração legada', () => {

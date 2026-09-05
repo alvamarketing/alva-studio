@@ -1,5 +1,6 @@
 import { createContextList } from './context-list.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
+import { vslOptionKeyboardAction } from './editor-shell.js';
 
 const TYPES = {
   short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
@@ -214,9 +215,9 @@ function optionsEditor(step, { vslVideos = [], canReadVsl = true, loadError = ''
     const selected = String(step.publicId || '').trim();
     const options = vslVideos.map((video) => ({ publicId: String(video.publicId), name: String(video.name || 'VSL'), status: 'Publicada' }));
     if (selected && !options.some((option) => option.publicId === selected)) options.push({ publicId: selected, name: 'VSL não encontrada', status: 'Indisponível', invalid: true });
-    const cards = options.length
-      ? `<div class="dynamic-vsl-options" role="radiogroup" aria-label="VSL publicada">${options.map((option) => `<button type="button" class="dynamic-vsl-option${option.invalid ? ' is-invalid' : ''}" data-vsl-option="${escape(option.publicId)}" aria-pressed="${option.publicId === selected}"${option.invalid ? ' disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">play_circle</span><span><strong>${escape(option.name)}</strong><small>${escape(option.status)}</small></span></button>`).join('')}</div>`
-      : '<p class="dynamic-vsl-help">Ainda não há VSLs publicadas neste projeto.</p>';
+    options.unshift({ publicId: '', name: 'Remover seleção', status: 'Nenhuma VSL' });
+    const focusId = options.some((option) => !option.invalid && option.publicId === selected) ? selected : '';
+    const cards = `<div class="dynamic-vsl-options" role="radiogroup" aria-label="VSL publicada">${options.map((option) => `<button type="button" role="radio" class="dynamic-vsl-option${option.invalid ? ' is-invalid' : ''}" data-vsl-option="${escape(option.publicId)}" aria-checked="${option.publicId === selected}" tabindex="${option.publicId === focusId ? '0' : '-1'}"${option.invalid ? ' disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">${option.publicId ? 'play_circle' : 'remove_circle_outline'}</span><span><strong>${escape(option.name)}</strong><small>${escape(option.status)}</small></span></button>`).join('')}</div>`;
     return `<fieldset class="dynamic-vsl-fieldset"><legend>VSL publicada</legend>${cards}</fieldset><label>Movimento<select data-field="motion">${MOTIONS.map(([value, label]) => `<option value="${value}"${value === (step.motion || 'none') ? ' selected' : ''}>${label}</option>`).join('')}</select></label><small class="dynamic-vsl-help">${escape(loadError || (vslVideos.length ? 'A prévia usa a versão publicada desta VSL.' : ''))}</small>`;
   }
   if (['single_choice', 'multiple_choice'].includes(step.type)) return `<label>Opções<textarea data-field="options" rows="6">${escape((step.options || []).join('\n'))}</textarea><small>Uma opção por linha.</small></label>`;
@@ -251,15 +252,23 @@ function previewAnswer(step, { vslEmbedUrls = new Map(), canReadVsl = true, vslL
 }
 
 function previewHeaderElement(element, index, selected, options = {}) {
+  if (element.type === 'vsl') return previewVslElementMarkup({ element, index, selected: index === selected, header: true, options });
   let content;
   if (element.type === 'logo') content = element.mediaUrl
     ? `<img src="${escape(element.mediaUrl)}" alt="${escape(element.altText || 'Logo')}" style="width:${element.width || 120}px">`
     : '<span class="dynamic-preview-brand"><i class="material-symbols-outlined">gesture</i><strong>SUA MARCA</strong></span>';
   else if (element.type === 'progress') content = `<span class="dynamic-preview-progress"><i style="width:42%"></i></span>${element.showValue ? '<small>42%</small>' : ''}`;
   else if (['countdown', 'timer'].includes(element.type)) content = `<span class="dynamic-fixed-clock"><i class="material-symbols-outlined">timer</i>${element.type === 'countdown' ? '03:18:42' : '00:60'}</span>`;
-  else if (element.type === 'vsl') content = previewAnswer(element, options);
   else content = `<span class="dynamic-header-summary"><i class="material-symbols-outlined">${escape(element.icon || TYPES[element.type]?.icon || 'widgets')}</i>${escape(element.title)}</span>`;
   return `<button type="button" data-preview-header="${index}" aria-current="${index === selected}" title="Editar ${escape(TYPES[element.type]?.label || 'elemento')}">${content}</button>`;
+}
+
+export function previewVslElementMarkup({ element, index = 0, selected = false, header = false, options = {} } = {}) {
+  const dataAttribute = header ? `data-preview-header="${index}"` : `data-preview-element="${index}"`;
+  const label = header ? 'VSL no topo fixo' : `VSL da tela: ${element?.title || 'VSL publicada'}`;
+  const title = header ? 'VSL publicada no topo' : element?.title || 'VSL publicada';
+  const description = header ? '' : element?.description || '';
+  return `<div class="dynamic-preview-vsl-element${header ? ' dynamic-preview-vsl-header' : ''}" aria-current="${selected}"><button type="button" class="dynamic-preview-select" ${dataAttribute} aria-current="${selected}" aria-label="Editar ${escape(label)}"><span class="dynamic-preview-icon material-symbols-outlined" aria-hidden="true">play_circle</span><span class="dynamic-preview-select-copy"><strong>${escape(title)}</strong>${description ? `<small>${escape(description)}</small>` : ''}</span><span class="dynamic-edit-hint"><i class="material-symbols-outlined" aria-hidden="true">edit</i> Editar</span></button>${previewAnswer(element, options)}</div>`;
 }
 
 export function moveStep(steps, index, direction) {
@@ -529,7 +538,9 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   function renderPreview() {
     const screen = current.steps[selected];
     const previewOptions = { vslEmbedUrls, canReadVsl: can('video.read'), vslLoadError };
-    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-browser"><div class="dynamic-preview-fixed">${current.headerElements.map((element, index) => previewHeaderElement(element, index, editingHeader && index === selectedElement, previewOptions)).join('')}</div><div class="dynamic-preview-stage"><div class="dynamic-preview-card dynamic-composed" data-motion="${escape(screen.motion || 'fade-up')}"><p>${escape(screen.title).toUpperCase()}</p><div class="dynamic-preview-elements">${screen.elements.map((element,index) => `<button type="button" class="dynamic-preview-element" data-preview-element="${index}" aria-current="${!editingHeader && index === selectedElement}"><span class="dynamic-preview-icon material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><h1>${escape(element.title)}</h1>${element.description ? `<div class="dynamic-preview-description">${escape(element.description)}</div>` : ''}${previewAnswer(element, previewOptions)}<span class="dynamic-edit-hint"><i class="material-symbols-outlined" aria-hidden="true">edit</i> Editar</span></button>`).join('')}</div><button class="dynamic-preview-next" type="button">${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button></div></div></div>`;
+    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-browser"><div class="dynamic-preview-fixed">${current.headerElements.map((element, index) => previewHeaderElement(element, index, editingHeader && index === selectedElement, previewOptions)).join('')}</div><div class="dynamic-preview-stage"><div class="dynamic-preview-card dynamic-composed" data-motion="${escape(screen.motion || 'fade-up')}"><p>${escape(screen.title).toUpperCase()}</p><div class="dynamic-preview-elements">${screen.elements.map((element, index) => element.type === 'vsl'
+      ? previewVslElementMarkup({ element, index, selected: !editingHeader && index === selectedElement, options: previewOptions })
+      : `<button type="button" class="dynamic-preview-element" data-preview-element="${index}" aria-current="${!editingHeader && index === selectedElement}"><span class="dynamic-preview-icon material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><h1>${escape(element.title)}</h1>${element.description ? `<div class="dynamic-preview-description">${escape(element.description)}</div>` : ''}${previewAnswer(element, previewOptions)}<span class="dynamic-edit-hint"><i class="material-symbols-outlined" aria-hidden="true">edit</i> Editar</span></button>`).join('')}</div><button class="dynamic-preview-next" type="button">${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button></div></div></div>`;
     document.querySelectorAll('[data-preview-header]').forEach((button) => { button.onclick = () => { editingHeader = true; selectedElement = Number(button.dataset.previewHeader); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
     document.querySelectorAll('[data-preview-element]').forEach((button) => { button.onclick = () => { editingHeader = false; selectedElement = Number(button.dataset.previewElement); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
   }
@@ -557,6 +568,17 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
         element().publicId = String(button.dataset.vslOption || '').trim();
         markDirty();
         renderEditor();
+      };
+    });
+    const vslOptions = [...document.querySelectorAll('[data-vsl-option]')];
+    const vslOptionIds = vslOptions.map((button) => String(button.dataset.vslOption || ''));
+    vslOptions.forEach((button) => {
+      button.onkeydown = (event) => {
+        const nextId = vslOptionKeyboardAction(event, vslOptionIds, element()?.publicId || '');
+        if (nextId === null) return;
+        event.preventDefault();
+        const next = vslOptions.find((candidate) => candidate.dataset.vslOption === nextId && !candidate.disabled);
+        if (next) { next.focus(); next.click(); }
       };
     });
     document.querySelectorAll('[data-add-screen]').forEach((button) => { button.onclick = () => { if (!can('form.write')) return; current.steps.push(createScreen(button.dataset.addScreen)); selected = current.steps.length - 1; selectedElement = 0; markDirty(); renderEditor(); }; });

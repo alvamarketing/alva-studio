@@ -22,6 +22,10 @@ export function parseVslFormValues(values = {}) {
   };
 }
 
+export function vslUiAccessPolicy({ can = () => false, hasVideo = false } = {}) {
+  return { canEdit: Boolean(can('video.write')), canPublish: Boolean(hasVideo && can('deployment.publish')) };
+}
+
 function field(form, name) { return form.elements.namedItem(name); }
 
 export function createVslUI({ api, shell, getShell, toast = () => {} }) {
@@ -38,15 +42,15 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     const target = form();
     if (!target) return;
     target.hidden = false;
-    const editable = currentShell()?.can?.('video.write') ?? false;
+    const policy = vslUiAccessPolicy({ hasVideo: Boolean(video), can: (capability) => currentShell()?.can?.(capability) ?? false });
     for (const name of ['name', 'sourceUrl', 'sourceType', 'posterUrl', 'captionsUrl', 'accentColor', 'aspectRatio', 'ctaText', 'ctaUrl', 'ctaSeconds']) field(target, name).value = video?.[name] ?? ({ accentColor: '#286eea', aspectRatio: '16:9', sourceType: 'mp4' }[name] ?? '');
     field(target, 'autoplayMuted').checked = video?.autoplayMuted ?? true;
     field(target, 'resumeEnabled').checked = video?.resumeEnabled ?? true;
-    for (const control of target.querySelectorAll('input, select, textarea')) control.disabled = !editable;
+    for (const control of target.querySelectorAll('input, select, textarea')) control.disabled = !policy.canEdit;
     const submit = target.querySelector('[type="submit"]');
-    if (submit) submit.hidden = !editable;
-    field(target, 'publish').hidden = !video || !currentShell()?.can?.('deployment.publish');
-    field(target, 'publish').disabled = !editable;
+    if (submit) submit.hidden = !policy.canEdit;
+    field(target, 'publish').hidden = !policy.canPublish;
+    field(target, 'publish').disabled = !policy.canPublish;
   };
   const editById = async (videoId) => {
     const video = await fetchVslForEdit({ api, projectId: currentShell().state().currentProject.id, videoId });
@@ -83,6 +87,7 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   if (typeof document !== 'undefined' && form()) {
     form().onsubmit = async (event) => {
       event.preventDefault();
+      if (!vslUiAccessPolicy({ hasVideo: Boolean(current), can: (capability) => currentShell()?.can?.(capability) ?? false }).canEdit) return;
       const projectId = currentShell().state().currentProject.id;
       const saved = current
         ? await api(`/projects/${projectId}/videos/${current.id}`, 'PUT', { ...collect(), lockVersion: current.lockVersion })
@@ -90,6 +95,7 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
       current = saved; toast('VSL salva.'); await load();
     };
     field(form(), 'publish').onclick = async () => {
+      if (!current || !vslUiAccessPolicy({ hasVideo: true, can: (capability) => currentShell()?.can?.(capability) ?? false }).canPublish) return;
       const projectId = currentShell().state().currentProject.id;
       await api(`/projects/${projectId}/videos/${current.id}/publish`, 'POST', { lockVersion: current.lockVersion });
       toast('VSL publicada.'); await load();

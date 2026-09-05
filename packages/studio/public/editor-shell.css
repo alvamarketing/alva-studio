@@ -210,7 +210,7 @@
   text-align: left;
   cursor: pointer;
 }
-.fe-vsl-option[aria-pressed='true'] {
+.fe-vsl-option[aria-checked='true'] {
   border-color: var(--alva-blue);
   box-shadow: 0 0 0 2px rgb(40 110 234 / 15%);
 }

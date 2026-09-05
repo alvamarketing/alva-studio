@@ -187,6 +187,11 @@ test('editor de formulários oferece opções visuais e estados acessíveis da V
   assert.match(source, /VSL não encontrada\. Publique a VSL antes de usar/);
   assert.match(source, /aria-label="Prévia da VSL/);
   assert.match(source, /disabled = !editable/);
+  assert.match(source, /Remover seleção/);
+  assert.match(source, /role="radio"/);
+  assert.match(source, /aria-checked/);
+  assert.doesNotMatch(source, /dynamic-vsl-option[^\n]*aria-pressed/);
+  assert.match(source, /previewVslElementMarkup/);
 });
 
 test('opções eliminam linhas vazias e preservam rótulos únicos', () => {

@@ -53,13 +53,38 @@ export function vslCanvasMessage({ publicId = '', canRead = true, loadError = ''
   return publicId ? 'VSL não encontrada. Publique a VSL antes de usar.' : 'Escolha uma VSL publicada.';
 }
 
+export function vslOptionKeyboardAction(event, visibleIds = [], selectedId = '') {
+  const ids = Array.from(visibleIds || []);
+  if (!ids.length) return null;
+  const index = Math.max(0, ids.indexOf(String(selectedId || '')));
+  if (event?.key === 'ArrowLeft' || event?.key === 'ArrowUp') return ids[(index - 1 + ids.length) % ids.length];
+  if (event?.key === 'ArrowRight' || event?.key === 'ArrowDown') return ids[(index + 1) % ids.length];
+  if (event?.key === 'Home') return ids[0];
+  if (event?.key === 'End') return ids.at(-1);
+  return null;
+}
+
 export function renderVslOptionCards(videos = [], selectedId = '') {
   const options = vslEditorOptions(videos);
   const selected = String(selectedId || '').trim();
   if (selected && !options.some((option) => option.publicId === selected))
     options.push({ publicId: selected, name: 'VSL não encontrada', status: 'Indisponível', invalid: true });
-  if (!options.length) return '<p class="fe-help">Ainda não há VSLs publicadas neste projeto.</p>';
-  return `<div class="fe-vsl-options" role="radiogroup" aria-label="VSL publicada">${options.map((option) => `<button type="button" class="fe-vsl-option${option.invalid ? ' is-invalid' : ''}" data-vsl-option="${escapeText(option.publicId)}" aria-pressed="${option.publicId === selected}"${option.invalid ? ' disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">play_circle</span><span><strong>${escapeText(option.name)}</strong><small>${escapeText(option.status)}</small></span></button>`).join('')}</div>`;
+  options.unshift({ publicId: '', name: 'Remover seleção', status: 'Nenhuma VSL' });
+  const focusId = options.some((option) => !option.invalid && option.publicId === selected) ? selected : '';
+  return `<div class="fe-vsl-options" role="radiogroup" aria-label="VSL publicada">${options.map((option) => `<button type="button" role="radio" class="fe-vsl-option${option.invalid ? ' is-invalid' : ''}" data-vsl-option="${escapeText(option.publicId)}" aria-checked="${option.publicId === selected}" tabindex="${option.publicId === focusId ? '0' : '-1'}"${option.invalid ? ' disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">${option.publicId ? 'play_circle' : 'remove_circle_outline'}</span><span><strong>${escapeText(option.name)}</strong><small>${escapeText(option.status)}</small></span></button>`).join('')}</div>`;
+}
+
+export function editorInteractionPolicy(can = () => false) {
+  const canEdit = Boolean(can('page.write'));
+  return { canEdit, canAdd: canEdit, canReorder: canEdit, canDelete: canEdit, canInlineEdit: canEdit, canReadVsl: Boolean(can('video.read')) };
+}
+
+export function applyEditorInteractionPolicy(root, can = () => false) {
+  const policy = editorInteractionPolicy(can);
+  const library = root?.querySelector?.('.fe-library');
+  if (library) library.hidden = !policy.canAdd;
+  if (!policy.canEdit) root?.querySelectorAll?.('input, select, textarea, .fe-element-actions button, .fe-canvas-bar button').forEach((control) => { control.disabled = true; });
+  return policy;
 }
 
 const VSL_MODEL_KEYS = new Set(['type', 'publicId', 'tagName', 'attributes', 'components', 'style', 'classes', 'droppable']);
@@ -322,7 +347,8 @@ export function createFriendlyEditor({
   let treeComponents = new Map();
   const cleanup = [];
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
-  const canInsertVsl = () => Boolean(can('page.write'));
+  const interactionPolicy = applyEditorInteractionPolicy(host, can);
+  const canInsertVsl = () => interactionPolicy.canAdd;
   const canReadVsl = () => Boolean(can('video.read'));
   const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 740px)').matches;
   function syncWorkspacePanels({ focusTab = false } = {}) {
@@ -360,6 +386,7 @@ export function createFriendlyEditor({
   }
   bindWorkspaceTabs();
   syncWorkspacePanels();
+  if (!interactionPolicy.canEdit) status.textContent = 'Modo de visualização: edição, ordem e exclusão estão desativadas.';
   if (typeof window !== 'undefined') {
     const syncOnResize = () => syncWorkspacePanels();
     window.addEventListener('resize', syncOnResize);
@@ -396,8 +423,8 @@ export function createFriendlyEditor({
     },
     blockManager: {
       appendTo: $('.fe-blocks'),
-      appendOnClick: (block) => insertBlock(block),
-      blocks: blocks.filter(([id]) => id !== 'vsl' || canInsertVsl()).map(([id, label, category, content]) => ({
+      appendOnClick: (block) => { if (interactionPolicy.canAdd) insertBlock(block); },
+      blocks: blocks.filter(([id]) => interactionPolicy.canAdd && (id !== 'vsl' || canInsertVsl())).map(([id, label, category, content]) => ({
         id,
         label,
         category,
@@ -426,7 +453,13 @@ export function createFriendlyEditor({
     icons.rel = 'stylesheet';
     icons.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block';
     doc.head.append(icons);
-    const handleCanvasKey = (event) => handleEditorKey(event, true);
+    const handleCanvasKey = (event) => { if (interactionPolicy.canEdit) handleEditorKey(event, true); };
+    const preventInlineEditing = (event) => {
+      if (!interactionPolicy.canInlineEdit) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
     const clearSelection = (event) => {
       if (isCanvasBackgroundElement(event.target)) {
         activateWorkspacePanel('canvas', { focusTab: isCompactWorkspace() });
@@ -435,9 +468,11 @@ export function createFriendlyEditor({
       }
     };
     doc.addEventListener('keydown', handleCanvasKey, true);
+    doc.addEventListener('dblclick', preventInlineEditing, true);
     doc.addEventListener('click', clearSelection);
     cleanup.push(() => {
       doc.removeEventListener('keydown', handleCanvasKey, true);
+      doc.removeEventListener('dblclick', preventInlineEditing, true);
       doc.removeEventListener('click', clearSelection);
     });
   });
@@ -446,6 +481,9 @@ export function createFriendlyEditor({
     isComponent: (element) => element.tagName === 'INPUT',
     model: { defaults: { tagName: 'input', void: true, droppable: false, traits: [] } },
   });
+  editor.on('rte:enable', (_view, rte) => {
+    if (!interactionPolicy.canInlineEdit) rte?.disable?.();
+  });
   if (project) editor.loadProjectData(project);
   else {
     editor.setComponents(html);
@@ -453,7 +491,14 @@ export function createFriendlyEditor({
   }
   const beforeMigration = project ? JSON.stringify(editor.getProjectData()) : null;
   normalizeForms(editor);
-  editor.__alvaMigrated = !!project && beforeMigration !== JSON.stringify(editor.getProjectData());
+  if (!interactionPolicy.canEdit) {
+    const lockComponent = (component) => {
+      component.set?.({ draggable: false, editable: false, droppable: false }, { silent: true });
+      componentChildren(component).forEach(lockComponent);
+    };
+    lockComponent(editor.getWrapper());
+  }
+  editor.__alvaMigrated = interactionPolicy.canEdit && !!project && beforeMigration !== JSON.stringify(editor.getProjectData());
   loading = false;
   if (editor.__alvaMigrated) onChange();
 
@@ -524,6 +569,7 @@ export function createFriendlyEditor({
     custom.forEach(({ rule, style }) => rule.addStyle(style));
   }
   function insertBlock(block) {
+    if (!interactionPolicy.canAdd || !block) return;
     const selected = editor.getSelected();
     const wrapper = editor.getWrapper();
     const id = block.getId();
@@ -566,6 +612,7 @@ export function createFriendlyEditor({
     announce(`${block.get('label')} adicionado. Ajuste o conteúdo no painel lateral.`);
   }
   $('.fe-blocks').addEventListener('keydown', (event) => {
+    if (!interactionPolicy.canAdd) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const element = event.target.closest('[data-block-id]');
     if (!element) return;
@@ -573,6 +620,7 @@ export function createFriendlyEditor({
     insertBlock(editor.BlockManager.get(element.dataset.blockId));
   });
   editor.on('block:drag:stop', (component) => {
+    if (!interactionPolicy.canAdd) return;
     if (component) {
       blockStyles();
       if (tagOf(component) === 'form' || component.find('form').length) formStyles();
@@ -581,6 +629,7 @@ export function createFriendlyEditor({
   });
   function run(action) {
     try {
+      if (!interactionPolicy.canEdit) return;
       action();
       render();
     } catch (error) {
@@ -628,6 +677,7 @@ export function createFriendlyEditor({
     if (options.min !== undefined) input.min = options.min;
     if (options.max !== undefined) input.max = options.max;
     input.onchange = () => {
+      if (!interactionPolicy.canEdit) return;
       input.setCustomValidity('');
       try {
         change(options.type === 'checkbox' ? input.checked : input.value);
@@ -651,7 +701,7 @@ export function createFriendlyEditor({
       applyIconButton(b, options.icon);
     } else b.textContent = text;
     if (options.className) b.classList.add(...options.className.split(/\s+/).filter(Boolean));
-    b.disabled = !!options.disabled;
+    b.disabled = !!options.disabled || !interactionPolicy.canEdit;
     b.onclick = () => run(action);
     parent.append(b);
     return b;
@@ -709,8 +759,8 @@ export function createFriendlyEditor({
     activeModel = model;
     const mode = panelMode(model);
     renderTree();
-    $('.fe-canvas-bar [data-undo]').disabled = !editor.UndoManager.hasUndo();
-    $('.fe-canvas-bar [data-redo]').disabled = !editor.UndoManager.hasRedo();
+    $('.fe-canvas-bar [data-undo]').disabled = !interactionPolicy.canEdit || !editor.UndoManager.hasUndo();
+    $('.fe-canvas-bar [data-redo]').disabled = !interactionPolicy.canEdit || !editor.UndoManager.hasRedo();
     props.replaceChildren();
     if (mode === 'library') {
       const empty = document.createElement('div');
@@ -772,11 +822,20 @@ export function createFriendlyEditor({
         label.textContent = 'VSL publicada';
         content.append(label);
         content.insertAdjacentHTML('beforeend', renderVslOptionCards(vslVideos, currentId));
-        content.querySelectorAll('[data-vsl-option]').forEach((option) => {
+        const vslOptions = [...content.querySelectorAll('[data-vsl-option]')];
+        const vslOptionIds = vslOptions.map((option) => String(option.dataset.vslOption || ''));
+        vslOptions.forEach((option) => {
           option.onclick = () => {
             if (!canInsertVsl() || option.disabled) return;
             model.set('publicId', String(option.dataset.vslOption || '').trim());
             render();
+          };
+          option.onkeydown = (event) => {
+            const nextId = vslOptionKeyboardAction(event, vslOptionIds, currentId);
+            if (nextId === null) return;
+            event.preventDefault();
+            const next = vslOptions.find((candidate) => candidate.dataset.vslOption === nextId && !candidate.disabled);
+            if (next) { next.focus(); next.click(); }
           };
         });
         help(content, publishedVslById.size ? 'A prévia usa a versão publicada da VSL.' : 'Ainda não há VSLs publicadas neste projeto.');
@@ -838,6 +897,7 @@ export function createFriendlyEditor({
       const upload = field(content, 'Escolher imagem do computador', '', () => {}, { type: 'file' });
       upload.accept = 'image/png,image/jpeg,image/webp,image/gif';
       upload.onchange = () => {
+        if (!interactionPolicy.canEdit) return;
         const file = upload.files[0];
         if (!file) return;
         if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
@@ -997,6 +1057,7 @@ export function createFriendlyEditor({
     styleNumber(space, model, 'Respiro acima (px)', 'padding-top', 0);
     styleNumber(space, model, 'Respiro abaixo (px)', 'padding-bottom', 0);
     styleNumber(space, model, 'Respiro nas laterais (px)', 'padding-left', 0).onchange = (event) => {
+      if (!interactionPolicy.canEdit) return;
       const value = Number(event.target.value);
       if (Number.isFinite(value) && value >= 0 && value <= 500)
         model.addStyle({ 'padding-left': value + 'px', 'padding-right': value + 'px' });
@@ -1042,7 +1103,7 @@ export function createFriendlyEditor({
     styleNumber(advanced, model, 'Altura mínima (px)', 'min-height', '', 3000);
     if (['section', 'div', 'main', 'article'].includes(tag))
       styleNumber(advanced, model, 'Distância entre elementos (px)', 'gap', 0);
-    if (!can('page.write')) props.querySelectorAll('input, select, textarea, .fe-element-actions button, .fe-vsl-option').forEach((control) => { control.disabled = true; });
+    if (!interactionPolicy.canEdit) props.querySelectorAll('input, select, textarea, .fe-element-actions button, .fe-vsl-option').forEach((control) => { control.disabled = true; });
   }
   props.addEventListener('focusout', () => {
     repaint = setTimeout(render, 100);
@@ -1059,6 +1120,7 @@ export function createFriendlyEditor({
   });
   editor.on('load', render);
   function handleEditorKey(event, stopImmediate = false) {
+    if (!interactionPolicy.canEdit) return;
     const action = editorKeyboardAction(event, editor.getSelected());
     if (!action) return;
     event.preventDefault();

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createVslUI, fetchVslForEdit, parseVslFormValues, vslListModel, vslStatusLabel } from '../public/vsl-ui.js';
+import { createVslUI, fetchVslForEdit, parseVslFormValues, vslListModel, vslStatusLabel, vslUiAccessPolicy } from '../public/vsl-ui.js';
 
 test('modelo da tela de VSL traduz rascunho, publicada e alterações pendentes', () => {
   assert.equal(vslStatusLabel({ publishedVersionId: null, lockVersion: 0 }), 'Rascunho');
@@ -45,4 +45,11 @@ test('tela de VSL não expõe URL da mídia nem JSON na lista visual', async () 
   assert.match(source, /vsl-list-row/);
   assert.match(source, /Publicado|Publicada/);
   assert.doesNotMatch(source, /JSON\.stringify\(video\)/);
+});
+
+test('publicação da VSL depende de deployment.publish separadamente do CRUD', () => {
+  assert.deepEqual(vslUiAccessPolicy({ hasVideo: true, can: (capability) => capability === 'deployment.publish' }), { canEdit: false, canPublish: true });
+  assert.deepEqual(vslUiAccessPolicy({ hasVideo: true, can: (capability) => capability === 'video.write' }), { canEdit: true, canPublish: false });
+  assert.deepEqual(vslUiAccessPolicy({ hasVideo: true, can: () => true }), { canEdit: true, canPublish: true });
+  assert.deepEqual(vslUiAccessPolicy({ hasVideo: false, can: () => true }), { canEdit: true, canPublish: false });
 });
