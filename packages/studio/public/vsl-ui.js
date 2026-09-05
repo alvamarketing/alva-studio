@@ -9,6 +9,10 @@ export function vslListModel(videos = []) {
   return videos.map((video) => ({ ...video, status: vslStatusLabel(video) }));
 }
 
+export async function fetchVslForEdit({ api, projectId, videoId }) {
+  return api(`/projects/${projectId}/videos/${videoId}`);
+}
+
 function field(form, name) { return form.elements.namedItem(name); }
 
 export function createVslUI({ api, shell, toast = () => {} }) {
@@ -26,6 +30,11 @@ export function createVslUI({ api, shell, toast = () => {} }) {
     field(target, 'autoplayMuted').checked = video?.autoplayMuted ?? true;
     field(target, 'resumeEnabled').checked = video?.resumeEnabled ?? true;
     field(target, 'publish').hidden = !video || !shell?.can?.('deployment.publish');
+  };
+  const editById = async (videoId) => {
+    const video = await fetchVslForEdit({ api, projectId: shell.state().currentProject.id, videoId });
+    showForm(video);
+    return video;
   };
   const render = (videos = []) => {
     const target = list();
@@ -67,5 +76,5 @@ export function createVslUI({ api, shell, toast = () => {} }) {
       toast('VSL publicada.'); await load();
     };
   }
-  return { show: async () => { root().hidden = false; await load(); }, hide: () => { if (root()) root().hidden = true; }, edit: showForm, reload: load };
+  return { show: async () => { root().hidden = false; await load(); }, hide: () => { if (root()) root().hidden = true; }, edit: showForm, editById, reload: load };
 }

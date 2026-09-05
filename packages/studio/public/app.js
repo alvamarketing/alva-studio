@@ -346,7 +346,7 @@ function renderProjectContent(model) {
       edit.textContent = item.kind === 'page' ? 'Editar página' : item.kind === 'video' ? 'Editar VSL' : 'Editar formulário';
       edit.onclick = action(() => {
         if (item.kind === 'page') return openPage(item.id);
-        if (item.kind === 'video') { setDashboardView('vsl'); return vslUI.edit(item); }
+        if (item.kind === 'video') { setDashboardView('vsl'); return vslUI.editById(item.id); }
         return formsUI.openForm(item.id);
       });
       row.append(icon, details, edit);
