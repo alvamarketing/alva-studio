@@ -174,6 +174,7 @@ test('servidor entrega todo o grafo de módulos importado pelo app', async (t) =
   await visit('/app.js');
   assert.ok(seen.has('/studio-shell.js'));
   assert.ok(seen.has('/studio-dashboard.js'));
+  assert.ok(seen.has('/leads-ui.js'));
 });
 
 test('inicialização SaaS exige DATABASE_URL e só inicia o app depois de migrar o banco', async () => {

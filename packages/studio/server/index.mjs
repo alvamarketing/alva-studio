@@ -184,6 +184,7 @@ export function createApp({
     '/vendor/pt.js': ['node_modules/grapesjs/locale/pt.js', 'text/javascript'],
     '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
+    '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
   };
   return createServer(async (req, res) => {

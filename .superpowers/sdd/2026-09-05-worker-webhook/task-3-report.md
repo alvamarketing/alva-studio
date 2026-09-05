@@ -17,3 +17,7 @@
 `node --test packages/studio/test/leads-ui.test.mjs packages/studio/test/studio-dashboard.test.mjs` — 27 testes aprovados.
 
 `npm test` em `packages/studio` — suíte completa aprovada.
+
+## Nota de correção (pós-entrega)
+
+`packages/studio/server/index.mjs` não expunha `/leads-ui.js` no mapa de assets estáticos, apesar de `public/app.js` importá-lo; `server.test.mjs` reportava 404. RED confirmado adicionando `assert.ok(seen.has('/leads-ui.js'))` ao teste de grafo de módulos; GREEN confirmado após acrescentar a entrada `/leads-ui.js` ao mapa `files`. Teste focado: `node --test --test-name-pattern="servidor entrega todo o grafo" test/server.test.mjs`. Suíte completa não reexecutada neste commit.
