@@ -7,6 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
+import { dashboardModel, isProjectSlug, roleLabel } from './studio-dashboard.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -27,6 +28,7 @@ let editor,
   formsUI,
   studioShell,
   contextBoundary,
+  companyOverviewRequest = 0,
   config = { vercelConnected: false };
 function toast(message) {
   $('#toast').textContent = message;
@@ -55,6 +57,220 @@ function action(fn) {
       toast(error.message);
     }
   };
+}
+function setActiveNavigation(view) {
+  const entries = [
+    ['home', '#nav-home'],
+    ['company', '#nav-company'],
+    ['pages', '#nav-pages'],
+    ['forms', '#nav-forms'],
+  ];
+  for (const [name, selector] of entries) {
+    const button = $(selector);
+    const active = name === view;
+    button.classList.toggle('nav-active', active);
+    if (active) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  }
+}
+function setDashboardView(view) {
+  const sections = {
+    home: '#studio-home',
+    company: '#company-view',
+    pages: '#pages-view',
+    forms: '#forms-view',
+  };
+  for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
+  setActiveNavigation(view);
+  if (view === 'home') renderHome();
+  if (view === 'company') renderCompany();
+}
+function clear(node) {
+  node.replaceChildren();
+  return node;
+}
+function emptyCard(title, text) {
+  const element = document.createElement('div');
+  element.className = 'dashboard-empty';
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+  const description = document.createElement('p');
+  description.textContent = text;
+  element.append(heading, description);
+  return element;
+}
+function relativeDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return 'Atualização sem data';
+  const minutes = Math.max(0, Math.round((Date.now() - date.valueOf()) / 60_000));
+  if (minutes < 1) return 'Atualizado agora';
+  if (minutes < 60) return `Atualizado há ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `Atualizado há ${hours} h`;
+  return `Atualizado em ${date.toLocaleDateString('pt-BR')}`;
+}
+function renderHome() {
+  if (!studioShell) return;
+  const state = studioShell.state();
+  const model = dashboardModel(state);
+  $('#home-display-name').textContent = state.session?.user?.displayName || 'seja bem-vindo';
+  const status = $('#studio-dashboard-status');
+  status.textContent = model.message;
+  status.dataset.state = model.status;
+  $('#new-project').hidden = !studioShell.can('project.manage');
+  const companies = clear($('#home-companies'));
+  const projects = clear($('#home-projects'));
+  const activity = clear($('#home-activity'));
+  if (model.status === 'loading') return;
+  if (model.status === 'error') return;
+  if (!model.companies.length) companies.append(emptyCard('Nenhuma empresa disponível.', 'Peça acesso a uma empresa para continuar.'));
+  for (const company of model.companies) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'company-card';
+    button.dataset.companyId = company.id;
+    const name = document.createElement('strong');
+    name.textContent = company.name;
+    const label = document.createElement('span');
+    label.textContent = company.id === state.currentCompany?.id ? 'Empresa atual' : roleLabel(company.role);
+    button.append(name, label);
+    button.onclick = action(async () => {
+      if (company.id === studioShell.state().currentCompany?.id) return;
+      await studioShell.selectCompany(company.id);
+      setDashboardView('home');
+    });
+    companies.append(button);
+  }
+  if (!model.projects.length) projects.append(emptyCard('Nenhum projeto disponível.', 'Crie um projeto ou peça acesso a um projeto da empresa atual.'));
+  for (const project of model.projects) projects.append(projectCard(project));
+  if (!model.activity.length) activity.append(emptyCard('Ainda não há atividade.', 'As atualizações dos seus projetos aparecerão aqui.'));
+  for (const project of model.activity) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'activity-item';
+    const name = document.createElement('strong');
+    name.textContent = project.name;
+    const date = document.createElement('span');
+    date.textContent = relativeDate(project.updatedAt);
+    item.append(name, date);
+    item.onclick = action(() => selectProject(project.id));
+    activity.append(item);
+  }
+}
+function projectCard(project) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'studio-project-card';
+  button.dataset.projectId = project.id;
+  const name = document.createElement('strong');
+  name.textContent = project.name;
+  const meta = document.createElement('span');
+  meta.textContent = relativeDate(project.updatedAt);
+  button.append(name, meta);
+  button.onclick = action(() => selectProject(project.id));
+  return button;
+}
+async function selectProject(projectId) {
+  await studioShell.selectProject(projectId);
+  setDashboardView('pages');
+  formsUI.showPages();
+  await loadList();
+}
+function renderCompanyOverview(overview) {
+  const content = clear($('#company-content'));
+  $('#company-view-title').textContent = overview.company.name;
+  $('#company-role').textContent = `Seu papel: ${roleLabel(overview.role)}`;
+  const details = document.createElement('section');
+  details.className = 'company-overview-section';
+  const detailsTitle = document.createElement('h2');
+  detailsTitle.textContent = 'Visão geral';
+  const counts = document.createElement('div');
+  counts.className = 'company-counts';
+  for (const [label, value] of [['Projetos', overview.counts.projects], ['Páginas', overview.counts.pages], ['Formulários', overview.counts.forms], ['Respostas', overview.counts.submissions]]) {
+    const count = document.createElement('div');
+    const amount = document.createElement('strong');
+    amount.textContent = String(value ?? 0);
+    const caption = document.createElement('span');
+    caption.textContent = label;
+    count.append(amount, caption);
+    counts.append(count);
+  }
+  details.append(detailsTitle, counts);
+  const projects = document.createElement('section');
+  projects.className = 'company-overview-section';
+  const projectsTitle = document.createElement('h2');
+  projectsTitle.textContent = 'Projetos';
+  const projectsList = document.createElement('div');
+  projectsList.className = 'project-grid';
+  if (!overview.projects.length) projectsList.append(emptyCard('Nenhum projeto disponível.', 'Os projetos autorizados aparecerão aqui.'));
+  for (const project of overview.projects) projectsList.append(projectCard(project));
+  projects.append(projectsTitle, projectsList);
+  content.append(details, projects);
+  if (overview.members) {
+    const team = document.createElement('section');
+    team.className = 'company-overview-section';
+    const teamTitle = document.createElement('h2');
+    teamTitle.textContent = 'Equipe';
+    const list = document.createElement('div');
+    list.className = 'member-list';
+    if (!overview.members.length) list.append(emptyCard('Nenhuma pessoa na equipe.', 'Os membros ativos aparecerão aqui.'));
+    for (const member of overview.members) {
+      const item = document.createElement('div');
+      item.className = 'member-item';
+      const identity = document.createElement('div');
+      const name = document.createElement('strong');
+      name.textContent = member.displayName || member.email;
+      const email = document.createElement('span');
+      email.textContent = member.email;
+      identity.append(name, email);
+      const role = document.createElement('span');
+      role.className = 'role-chip';
+      role.textContent = roleLabel(member.role);
+      item.append(identity, role);
+      list.append(item);
+    }
+    team.append(teamTitle, list);
+    content.append(team);
+  }
+  const future = document.createElement('section');
+  future.className = 'company-overview-section company-future';
+  const futureTitle = document.createElement('h2');
+  futureTitle.textContent = 'Plano e cobrança';
+  const futureText = document.createElement('p');
+  futureText.textContent = 'Em breve';
+  future.append(futureTitle, futureText);
+  content.append(future);
+}
+async function renderCompany() {
+  if (!studioShell) return;
+  const state = studioShell.state();
+  const status = $('#company-status');
+  const content = clear($('#company-content'));
+  if (state.phase === 'loading') {
+    status.textContent = 'Carregando empresa…';
+    status.dataset.state = 'loading';
+    return;
+  }
+  if (state.phase === 'error' || !state.currentCompany) {
+    status.textContent = state.error || 'Não foi possível carregar a empresa atual.';
+    status.dataset.state = 'error';
+    return;
+  }
+  const request = ++companyOverviewRequest;
+  status.textContent = 'Carregando empresa…';
+  status.dataset.state = 'loading';
+  try {
+    const overview = await api(`/companies/${state.currentCompany.id}/overview`);
+    if (request !== companyOverviewRequest || state.currentCompany.id !== studioShell.state().currentCompany?.id) return;
+    status.textContent = '';
+    status.dataset.state = overview.projects.length ? 'ready' : 'empty';
+    renderCompanyOverview(overview);
+  } catch (error) {
+    if (request !== companyOverviewRequest) return;
+    status.textContent = error.message || 'Não foi possível carregar a empresa.';
+    status.dataset.state = 'error';
+    content.append(emptyCard('Não foi possível carregar a empresa.', 'Tente novamente em instantes.'));
+  }
 }
 function markDirty() {
   if (loading) return;
@@ -461,6 +677,10 @@ function renderTemplates() {
   }
 }
 async function refreshConfig() {
+  if (!studioShell?.state().currentProject || !studioShell.can('integration.manage')) {
+    config = { vercelConnected: false };
+    return config;
+  }
   config = await api('/config');
   if (page) {
     $('#publish').disabled = !config.vercelConnected;
@@ -497,23 +717,110 @@ studioShell = createStudioShell({
   api,
   beforeContextChange: closeOpenEditors,
   onContextChanged: async () => {
-    formsUI.showPages();
-    await loadList();
+    companyOverviewRequest++;
+    const state = studioShell.state();
+    renderCompanySwitcher();
+    await refreshConfig();
+    if (!$('#studio-home').hidden) renderHome();
+    if (!$('#company-view').hidden) await renderCompany();
+    if (!$('#pages-view').hidden && state.currentProject) await loadList();
+    if (!$('#forms-view').hidden && state.currentProject) await formsUI.showForms();
   },
+});
+function renderCompanySwitcher() {
+  const state = studioShell.state();
+  const switcher = $('#company-switcher');
+  switcher.replaceChildren();
+  for (const company of state.companies) {
+    const option = document.createElement('option');
+    option.value = company.id;
+    option.textContent = company.name;
+    option.selected = company.id === state.currentCompany?.id;
+    switcher.append(option);
+  }
+  switcher.disabled = state.phase === 'loading' || !state.companies.length;
+}
+$('#nav-home').onclick = () => setDashboardView('home');
+$('#nav-company').onclick = () => setDashboardView('company');
+$('#nav-pages').onclick = action(async () => {
+  if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
+  setDashboardView('pages');
+  formsUI.showPages();
+  await loadList();
+});
+$('#nav-forms').onclick = action(async () => {
+  if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
+  setDashboardView('forms');
+  await formsUI.showForms();
+});
+$('#company-switcher').onchange = action(async (event) => {
+  if (event.target.value === studioShell.state().currentCompany?.id) return;
+  await studioShell.selectCompany(event.target.value);
+  renderCompanySwitcher();
+  setDashboardView('home');
+});
+$('#new-project').onclick = () => {
+  const form = $('#new-project-form');
+  $('#new-project-error').textContent = '';
+  form.reset();
+  form.elements.slug.dataset.auto = 'true';
+  $('#new-project-dialog').showModal();
+};
+$('#new-project-form').elements.name.oninput = (event) => {
+  const slug = $('#new-project-form').elements.slug;
+  if (slug.dataset.auto !== 'true') return;
+  slug.value = event.target.value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+$('#new-project-form').elements.slug.oninput = () => {
+  $('#new-project-form').elements.slug.dataset.auto = 'false';
+};
+$('#new-project-form').onsubmit = action(async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form));
+  const name = values.name.trim();
+  const slug = values.slug.trim();
+  const error = $('#new-project-error');
+  error.textContent = '';
+  if (!name || name.length > 100) {
+    error.textContent = 'Informe um nome de até 100 caracteres.';
+    return;
+  }
+  if (!isProjectSlug(slug) || slug.length > 80) {
+    error.textContent = 'Use um identificador de até 80 caracteres com letras minúsculas, números e hífens.';
+    return;
+  }
+  const button = event.submitter;
+  button.disabled = true;
+  try {
+    const project = await api('/projects', 'POST', { name, slug });
+    $('#new-project-dialog').close();
+    await selectProject(project.id);
+    toast('Projeto criado e selecionado.');
+  } catch (requestError) {
+    error.textContent = requestError.message;
+  } finally {
+    button.disabled = false;
+  }
 });
 ownerUI = createOwnerUI({
   api,
   toast,
   onAuthenticated: async () => {
     await studioShell.initialize();
+    renderCompanySwitcher();
     await refreshConfig();
     if (page) {
       $('#editing').hidden = false;
       $('#dashboard').hidden = true;
     } else {
       $('#dashboard').hidden = false;
-      formsUI.showPages();
-      await loadList();
+      setDashboardView('home');
     }
   },
   beforeLogout: save,
@@ -526,6 +833,8 @@ ownerUI = createOwnerUI({
     $('#editing').hidden = true;
     $('#dashboard').hidden = true;
     formsUI.reset();
+    companyOverviewRequest++;
+    $('#company-switcher').replaceChildren();
   },
   onSettingsChanged: refreshConfig,
 });

@@ -37,21 +37,33 @@
           <strong>ALVA</strong>
           <span>Studio</span>
         </a>
-        <div class="workspace-label">ESPAÇO DE CRIAÇÃO</div>
-        <button class="nav-item nav-active" id="nav-pages" title="Minhas páginas">
+        <label class="company-switcher" for="company-switcher">
+          <span class="workspace-label">EMPRESA ATUAL</span>
+          <select id="company-switcher" aria-label="Selecionar empresa"></select>
+        </label>
+        <div class="workspace-label">SEU STUDIO</div>
+        <button class="nav-item nav-active" id="nav-home" aria-current="page" title="Início">
+          <span class="material-symbols-outlined" aria-hidden="true">home</span>
+          <span class="sidebar-label">Início</span>
+        </button>
+        <button class="nav-item" id="nav-pages" title="Projetos">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <rect x="3" y="3" width="7" height="7" rx="1" />
             <rect x="14" y="3" width="7" height="7" rx="1" />
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          <span class="sidebar-label">Minhas páginas</span>
+          <span class="sidebar-label">Projetos</span>
         </button>
         <button class="nav-item" id="nav-forms" title="Formulários Dinâmicos">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M5 4h14v16H5zM8 8h8M8 12h5M8 16h7" />
           </svg>
           <span class="sidebar-label">Formulários Dinâmicos</span>
+        </button>
+        <button class="nav-item" id="nav-company" title="Empresa e equipe">
+          <span class="material-symbols-outlined" aria-hidden="true">corporate_fare</span>
+          <span class="sidebar-label">Empresa e equipe</span>
         </button>
         <div class="sidebar-footer">
           <button class="sidebar-settings" id="app-settings" title="Configurações do app">
@@ -73,7 +85,43 @@
         </div>
       </aside>
       <main>
-        <section id="pages-view">
+        <section id="studio-home" aria-labelledby="studio-home-title">
+          <header class="dashboard-header studio-home-header">
+            <div>
+              <div class="eyebrow">SEU STUDIO</div>
+              <h1 id="studio-home-title">Olá, <span id="home-display-name">…</span><span class="accent">.</span></h1>
+              <p>Organize os projetos da sua empresa e avance no que importa agora.</p>
+            </div>
+            <button class="primary" id="new-project" hidden>＋ Novo projeto</button>
+          </header>
+          <p id="studio-dashboard-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <section class="dashboard-section" aria-labelledby="home-companies-title">
+            <div class="section-heading"><h2 id="home-companies-title">Empresas</h2></div>
+            <div id="home-companies" class="company-grid"></div>
+          </section>
+          <section class="dashboard-section" aria-labelledby="home-projects-title">
+            <div class="section-heading"><h2 id="home-projects-title">Projetos autorizados</h2></div>
+            <div id="home-projects" class="project-grid"></div>
+          </section>
+          <section class="dashboard-section" aria-labelledby="home-activity-title">
+            <div class="section-heading"><h2 id="home-activity-title">Atividade recente</h2></div>
+            <div id="home-activity" class="activity-list"></div>
+          </section>
+          <footer>Feito para tirar suas campanhas do papel. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="company-view" aria-labelledby="company-view-title" hidden>
+          <header class="dashboard-header">
+            <div>
+              <div class="eyebrow">EMPRESA</div>
+              <h1 id="company-view-title">Empresa<span class="accent">.</span></h1>
+              <p id="company-role">Carregando permissões…</p>
+            </div>
+          </header>
+          <p id="company-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <div id="company-content" class="company-overview"></div>
+          <footer>Dados da empresa atual. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="pages-view" hidden>
           <header class="dashboard-header">
             <div>
               <div class="eyebrow">DA IDEIA AO AR</div>
@@ -224,6 +272,19 @@
         <div class="template-gallery" id="template-gallery" aria-label="Escolher um modelo"></div>
         <div class="dialog-actions">
           <button type="button" data-close>Cancelar</button><button class="primary">Criar página</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="new-project-dialog">
+      <form id="new-project-form">
+        <div class="eyebrow">NOVO PROJETO</div>
+        <h2>Como ele vai se chamar?</h2>
+        <label>Nome do projeto<input name="name" required maxlength="100" placeholder="Ex.: Campanha de primavera" autofocus /></label>
+        <label>Identificador do projeto<input name="slug" required maxlength="80" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="campanha-de-primavera" /></label>
+        <p class="help">Use letras minúsculas, números e hífens.</p>
+        <p class="form-error" id="new-project-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" data-close>Cancelar</button><button class="primary">Criar projeto</button>
         </div>
       </form>
     </dialog>
