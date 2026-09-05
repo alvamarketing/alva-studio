@@ -1,4 +1,5 @@
 import { normalizeProjectSlug, normalizeRoute } from './domain/access.mjs';
+import { renderLeadsCsv } from './leads-csv.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -17,6 +18,30 @@ function rejectsInvalidDraftSchema(input) {
 
 function routeFor(name) {
   return normalizeRoute(normalizeProjectSlug(name || `conteudo-${crypto.randomUUID().slice(0, 8)}`));
+}
+
+function queryLimit(value) {
+  if (value === null || value === '') return 50;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) throw fail('Limite inválido.', 400);
+  return Math.min(100, Math.max(1, parsed));
+}
+
+function formFields(schema) {
+  const steps = Array.isArray(schema?.steps) ? schema.steps : [];
+  return steps.flatMap((step) => Array.isArray(step?.elements) ? step.elements : [step])
+    .filter((field) => field && typeof field.id === 'string')
+    .map((field) => ({ id: field.id, title: String(field.title ?? field.id) }));
+}
+
+function sendCsv(res, csv) {
+  res.writeHead(200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="leads.csv"',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(csv);
 }
 
 function pageInput(input = {}) {
@@ -206,6 +231,32 @@ export function createProjectApi({
       const projectId = projectOverview[1];
       await sessionService.authorize(context, null, projectId);
       return json(await projects.overview({ companyId: context.companyId, projectId, userId: context.user.id }));
+    }
+
+    const leads = path.match(/^\/api\/projects\/([^/]+)\/(leads|leads\.csv)$/);
+    if (leads && method === 'GET') {
+      const [, projectId, format] = leads;
+      const search = new URL(req.url, 'http://localhost').searchParams;
+      const formId = search.get('formId') || undefined;
+      const limitValue = queryLimit(search.get('limit'));
+      if (format === 'leads') {
+        return json(await content.projectSubmissions({
+          companyId: context.companyId, projectId, actorId: context.user.id, formId,
+          limit: limitValue, cursor: search.get('cursor') || undefined,
+        }));
+      }
+      if (!formId) throw fail('Informe o formulário para exportar leads.', 400);
+      const form = await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId });
+      const submissions = [];
+      let cursor;
+      do {
+        const page = await content.projectSubmissions({
+          companyId: context.companyId, projectId, actorId: context.user.id, formId, limit: 100, cursor,
+        });
+        submissions.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor);
+      return sendCsv(res, renderLeadsCsv({ formName: form.name, fields: formFields(form.draftSchema), submissions }));
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);

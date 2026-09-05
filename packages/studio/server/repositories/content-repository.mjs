@@ -166,6 +166,27 @@ function formVersionRecord(row) {
   };
 }
 
+function leadCursor(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) throw fail('Cursor inválido.', 400);
+  let decoded;
+  try {
+    decoded = Buffer.from(value, 'base64url').toString('utf8');
+  } catch {
+    throw fail('Cursor inválido.', 400);
+  }
+  if (Buffer.from(decoded).toString('base64url') !== value) throw fail('Cursor inválido.', 400);
+  const [submittedAt, id, ...extra] = decoded.split('|');
+  if (extra.length || !submittedAt || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id ?? '') || Number.isNaN(Date.parse(submittedAt)))
+    throw fail('Cursor inválido.', 400);
+  return { submittedAt, id };
+}
+
+function encodedLeadCursor(submittedAt, id) {
+  const timestamp = submittedAt instanceof Date ? submittedAt.toISOString() : new Date(submittedAt).toISOString();
+  return Buffer.from(`${timestamp}|${id}`).toString('base64url');
+}
+
 async function authorizedProject(client, { companyId, projectId, actorId, capability }) {
   const { rows } = await client.query(
     `SELECT p.id, membership.role
@@ -568,6 +589,41 @@ export class ContentRepository {
       [companyId, projectId, formId],
     );
     return rows.map((row) => ({ id: row.id, formId, answers: row.answers, submittedAt: row.submitted_at }));
+  }
+
+  async projectSubmissions({ companyId, projectId, actorId, formId, limit = 50, cursor }) {
+    await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'submission.read' });
+    if (formId) await scopedForm(this.database, { companyId, projectId, formId });
+    const pageSize = Math.min(100, Math.max(1, Number.isInteger(limit) ? limit : 50));
+    const after = leadCursor(cursor);
+    const { rows } = await this.database.query(
+      `SELECT submission.id, submission.form_id, form.name AS form_name, submission.answers,
+              submission.submitted_at, submission.tracking_status
+       FROM form_submissions submission
+       JOIN forms form
+         ON form.id = submission.form_id
+        AND form.company_id = submission.company_id
+        AND form.project_id = submission.project_id
+        AND form.deleted_at IS NULL
+       WHERE submission.company_id = $1
+         AND submission.project_id = $2
+         AND ($3::uuid IS NULL OR submission.form_id = $3)
+         AND ($4::timestamptz IS NULL OR (submission.submitted_at, submission.id) < ($4::timestamptz, $5::uuid))
+       ORDER BY submission.submitted_at DESC, submission.id DESC
+       LIMIT $6`,
+      [companyId, projectId, formId ?? null, after?.submittedAt ?? null, after?.id ?? null, pageSize + 1],
+    );
+    const hasNext = rows.length > pageSize;
+    const items = rows.slice(0, pageSize).map((row) => ({
+      id: row.id,
+      formId: row.form_id,
+      formName: row.form_name,
+      answers: row.answers,
+      submittedAt: row.submitted_at,
+      webhookStatus: row.tracking_status,
+    }));
+    const last = items.at(-1);
+    return { items, nextCursor: hasNext ? encodedLeadCursor(last.submittedAt, last.id) : null };
   }
 
   async pageSettings({ companyId, projectId, actorId, pageId }) {

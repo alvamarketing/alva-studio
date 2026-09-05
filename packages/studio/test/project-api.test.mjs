@@ -187,6 +187,77 @@ test('APIs do projeto exigem sessão, ocultam recursos cruzados e aplicam capaci
   await database.close();
 });
 
+test('leads do projeto paginam, isolam formulários e exportam CSV', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const content = new ContentRepository(database);
+  const schema = {
+    headerElements: [],
+    steps: [{ id: 'dados', elements: [
+      { id: 'nome', type: 'short_text', title: 'Nome', required: true },
+      { id: 'email', type: 'email', title: 'E-mail', required: true },
+    ] }],
+    completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' }, webhook: '',
+  };
+  const form = await content.createForm({
+    companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id,
+    name: 'Contato', route: '/contato', draftSchema: schema,
+  });
+  const published = await content.publishForm({
+    companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id, formId: form.id, lockVersion: 0,
+  });
+  const otherForm = await content.createForm({
+    companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.alice.id,
+    name: 'Outro projeto', route: '/outro', draftSchema: schema,
+  });
+  await content.publishForm({
+    companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.alice.id, formId: otherForm.id, lockVersion: 0,
+  });
+  await database.query(
+    `INSERT INTO form_submissions (id, company_id, project_id, form_id, form_version_id, answers, submitted_at)
+     VALUES
+       ('00000000-0000-4000-8000-000000000001', $1, $2, $3, $4, $5::jsonb, '2026-09-05T10:00:00.000Z'),
+       ('00000000-0000-4000-8000-000000000002', $1, $2, $3, $4, $6::jsonb, '2026-09-05T11:00:00.000Z')`,
+    [records.companyA.id, records.projectA.id, form.id, published.id,
+      JSON.stringify({ nome: 'Primeira', email: 'primeira@alva.test', legado: '=1+1' }),
+      JSON.stringify({ nome: 'Segunda', email: 'segunda@alva.test' })],
+  );
+  const app = await start(t, database);
+  const analyst = client(app.base);
+  const alice = client(app.base);
+  await analyst.request('/api/login', 'POST', { email: 'analista@alva.test', password: records.password });
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  const first = await analyst.request(`/api/projects/${records.projectA.id}/leads?limit=1`);
+  const firstText = await first.text();
+  assert.equal(first.status, 200, firstText);
+  const page = JSON.parse(firstText);
+  assert.deepEqual(page.items.map((item) => ({ formId: item.formId, formName: item.formName, answers: item.answers, webhookStatus: item.webhookStatus })), [{
+    formId: form.id, formName: 'Contato', answers: { nome: 'Segunda', email: 'segunda@alva.test' }, webhookStatus: 'pending',
+  }]);
+  assert.equal(page.items[0].submittedAt, '2026-09-05T11:00:00.000Z');
+  assert.match(page.nextCursor, /^[A-Za-z0-9_-]+$/);
+  const second = await analyst.request(`/api/projects/${records.projectA.id}/leads?cursor=${encodeURIComponent(page.nextCursor)}&limit=100`);
+  const secondText = await second.text();
+  assert.equal(second.status, 200, secondText);
+  assert.deepEqual(JSON.parse(secondText).items.map((item) => item.answers.nome), ['Primeira']);
+  assert.equal((await analyst.request(`/api/projects/${records.projectA.id}/leads?cursor=invalido`)).status, 400);
+  assert.equal((await alice.request(`/api/projects/${records.projectA.id}/leads?formId=${otherForm.id}`)).status, 404);
+
+  assert.equal((await analyst.request(`/api/projects/${records.projectA.id}/leads.csv`)).status, 400);
+  const csv = await analyst.request(`/api/projects/${records.projectA.id}/leads.csv?formId=${form.id}`);
+  const csvText = Buffer.from(await csv.arrayBuffer()).toString('utf8');
+  assert.equal(csv.status, 200, csvText);
+  assert.equal(csv.headers.get('content-type'), 'text/csv; charset=utf-8');
+  assert.match(csv.headers.get('content-disposition'), /^attachment;/);
+  assert.match(csvText, /^\uFEFFRecebida em,Formulário,Nome,E-mail,legado\r\n/m);
+  assert.match(csvText, /\r\n2026-09-05T11:00:00.000Z,Contato,Segunda/);
+  assert.match(await (await analyst.request(`/api/projects/${records.projectA.id}/leads.csv?formId=${form.id}`)).text(), /'=1\+1/);
+  await database.close();
+});
+
 test('a borda SaaS ignora identificadores de escopo enviados no corpo', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
