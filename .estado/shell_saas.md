@@ -1,3 +1,8 @@
+---
+no: shell_saas
+status: feito
+---
+
 # Gate do shell SaaS — aprovado
 
 Data: 2026-09-05

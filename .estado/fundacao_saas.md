@@ -1,6 +1,6 @@
 ---
+no: fundacao_saas
 status: feito
-atualizado_em: 2026-09-04
 ---
 
 # Fundação SaaS
