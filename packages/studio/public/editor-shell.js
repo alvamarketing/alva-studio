@@ -81,9 +81,11 @@ export function restoreVslOptionFocus(options = [], selectedId = '') {
 
 export function createReadOnlyMutationGuard(editor, { snapshot = editor?.getProjectData?.(), lock = () => {} } = {}) {
   const initialSnapshot = structuredClone(snapshot || {});
+  const initialSignature = JSON.stringify(initialSnapshot);
   let restoring = false;
   let queued = false;
   let disposed = false;
+  const watched = new Map();
   const componentPath = (component) => {
     const path = [];
     let current = component;
@@ -102,12 +104,29 @@ export function createReadOnlyMutationGuard(editor, { snapshot = editor?.getProj
     if (restoring || !editor?.loadProjectData) return false;
     restoring = true;
     const selectedPath = componentPath(editor.getSelected?.());
+    unwatchComponents();
     editor.loadProjectData(structuredClone(initialSnapshot));
     lock(editor.getWrapper?.());
+    watchComponent(editor.getWrapper?.());
     const selected = componentAtPath(editor.getWrapper?.(), selectedPath);
     if (selected) editor.select?.(selected, { scroll: false });
     restoring = false;
     return true;
+  };
+  const scheduleIfPersisted = () => {
+    if (restoring || disposed || JSON.stringify(editor.getProjectData?.()) === initialSignature) return;
+    scheduleRestore();
+  };
+  const watchComponent = (component) => {
+    if (!component || watched.has(component)) return;
+    const onChange = () => scheduleIfPersisted();
+    component.on?.('change', onChange);
+    watched.set(component, onChange);
+    componentChildren(component).forEach(watchComponent);
+  };
+  const unwatchComponents = () => {
+    watched.forEach((onChange, component) => component.off?.('change', onChange));
+    watched.clear();
   };
   const scheduleRestore = () => {
     if (queued || restoring || disposed) return;
@@ -118,9 +137,10 @@ export function createReadOnlyMutationGuard(editor, { snapshot = editor?.getProj
     });
   };
   const mutationEvents = ['update', 'component:add', 'component:remove', 'component:update:attributes', 'component:update:components', 'component:update:content', 'component:styleUpdate'];
-  const handlers = new Map(mutationEvents.map((event) => [event, scheduleRestore]));
+  const handlers = new Map(mutationEvents.map((event) => [event, event === 'component:add' ? (component) => { watchComponent(component); scheduleRestore(); } : scheduleRestore]));
+  watchComponent(editor.getWrapper?.());
   handlers.forEach((handler, event) => editor.on?.(event, handler));
-  return { restore, isRestoring: () => restoring, dispose: () => { disposed = true; handlers.forEach((handler, event) => editor.off?.(event, handler)); } };
+  return { restore, isRestoring: () => restoring, dispose: () => { disposed = true; unwatchComponents(); handlers.forEach((handler, event) => editor.off?.(event, handler)); } };
 }
 
 export function renderVslOptionCards(videos = [], selectedId = '') {

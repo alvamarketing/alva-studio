@@ -161,10 +161,13 @@ test('guard read-only restaura mutações programáticas reais do GrapesJS', asy
     assert.equal(JSON.stringify(editor.getProjectData()), original);
   };
   await mutateAndAssert(() => editor.getWrapper().components().at(0).components().at(0).set('attributes', { id: 'changed' }));
+  await mutateAndAssert(() => editor.getWrapper().components().at(0).set('style', { color: 'red' }));
+  await mutateAndAssert(() => editor.getWrapper().components().at(0).set('foo', 'bar'));
+  await mutateAndAssert(() => editor.getWrapper().components().at(0).addStyle({ background: 'red' }));
   await mutateAndAssert(() => editor.getWrapper().append({ tagName: 'div', attributes: { id: 'new' } }));
   await mutateAndAssert(() => editor.getWrapper().components().at(0).remove());
   await mutateAndAssert(() => editor.getWrapper().components().at(0).components().at(1).move(editor.getWrapper().components().at(0), { at: 0 }));
-  assert.equal(restores, 4);
+  assert.equal(restores, 7);
   guard.dispose();
   editor.destroy();
 });

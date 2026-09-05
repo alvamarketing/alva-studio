@@ -9,6 +9,7 @@
 - A revisão de acessibilidade adiciona a opção `Remover seleção`/`Nenhuma VSL` nos dois editores, radios com `aria-checked`, foco roving e setas de navegação. Sem `page.write`, a landing oculta o catálogo e bloqueia inserção, arraste, atalhos de exclusão, reordenação, duplicação e edição inline; a publicação da VSL continua independente de `video.write`.
 - A prévia de VSL no formulário usa um container não interativo e um botão separado de `Editar`, deixando o iframe e seus controles acessíveis ao teclado sem aninhamento inválido.
 - O modo somente leitura agora guarda o snapshot autorizado do GrapesJS e reverte mutações programáticas de atributos, componentes, estilos, inserção, remoção e ordem sem disparar `onChange`; a seleção é recuperada por caminho após a restauração. Setas de rádio pulam opções indisponíveis e restauram o foco depois da renderização.
+- A guarda também observa o `change` dos modelos Backbone existentes e inseridos, compara o `getProjectData()` persistível e reverte `set('style')`, `set('foo')`, `addStyle` e alterações equivalentes sem reagir a estado transitório de seleção ou foco.
 - O campo de avanço após CTA não foi exposto, pois esta entrega não altera a navegação existente do formulário.
 
 ## TDD e validação
