@@ -4,7 +4,7 @@ stack:
   linguagem: JavaScript ESM
   framework: GrapesJS 0.23.6
   banco: PostgreSQL para a fundação SaaS; JSON local somente para compatibilidade e importação
-  hospedagem: Painel Studio; publicação Vercel por projeto ainda pendente
+  hospedagem: Painel Studio com publicação Vercel por projeto
   testes: node:test
   comando_teste: node --test packages/studio/test/*.test.mjs
   porque: O Studio preserva o editor sem CMS e passa a separar empresas, projetos e conteúdo de forma transacional.
@@ -38,7 +38,7 @@ nos:
       comando: node --test packages/studio/test/*.test.mjs
       espera: exit 0, com rotas e edições isoladas por projeto.
   - id: publicacao_por_projeto
-    estado: pendente
+    estado: feito
     faz: Publicar snapshots atômicos de várias rotas em um projeto Vercel por projeto Studio
     depende:
       - editores_saas
