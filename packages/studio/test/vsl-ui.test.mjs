@@ -42,6 +42,10 @@ test('formulário preserva CTA no segundo zero', () => {
   assert.equal(parseVslFormValues({ ctaSeconds: '0', autoplayMuted: 'on', resumeEnabled: 'on' }).ctaSeconds, 0);
 });
 
+test('destino de CTA digitado como domínio simples fica pronto para salvar', () => {
+  assert.equal(parseVslFormValues({ ctaUrl: 'google.com' }).ctaUrl, 'https://google.com');
+});
+
 test('abrir VSL resolve o shell depois do bootstrap', async () => {
   const originalDocument = globalThis.document;
   const view = { hidden: true };

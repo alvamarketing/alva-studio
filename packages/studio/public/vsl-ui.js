@@ -13,9 +13,15 @@ export async function fetchVslForEdit({ api, projectId, videoId }) {
   return api(`/projects/${projectId}/videos/${videoId}`);
 }
 
+export function normalizeCtaUrl(value) {
+  const text = String(value ?? '').trim();
+  return /^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(text) ? `https://${text}` : text;
+}
+
 export function parseVslFormValues(values = {}) {
   return {
     ...values,
+    ctaUrl: normalizeCtaUrl(values.ctaUrl),
     ctaSeconds: values.ctaSeconds === '' || values.ctaSeconds === null || values.ctaSeconds === undefined ? null : Number(values.ctaSeconds),
     autoplayMuted: values.autoplayMuted === true || values.autoplayMuted === 'on',
     resumeEnabled: values.resumeEnabled === true || values.resumeEnabled === 'on',
