@@ -106,14 +106,15 @@ test('falha de rede nunca lança para a página, nem no beacon nem no fallback f
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
-test('track(name, data) envia event_name plano compatível com o coletor, sem aninhar o "data" do chamador', () => {
+test('track(name, data) transporta event_data permitido, sem aninhar dados fora do contrato', () => {
   const calls = [];
   const navigator = { sendBeacon: (url, body) => { calls.push(body); return true; } };
   const tracker = createTracker({ trackerPublicId: 'trk_1', location: fakeLocation('/f/orcamento', ''), navigator });
-  tracker.track('form_step', { index: 2 });
+  tracker.track('form_step', { formId: 'form_123', screenId: 'qualificacao', stepIndex: 2 });
   const payload = JSON.parse(calls[0]);
   assert.equal(payload.event_name, 'form_step');
-  assert.deepEqual(Object.keys(payload).sort(), ['event_name', 'trackerPublicId', 'url_path']);
+  assert.deepEqual(payload.event_data, { formId: 'form_123', screenId: 'qualificacao', stepIndex: 2 });
+  assert.deepEqual(parseCollectPayload(calls[0], 'text/plain').event.event_data, payload.event_data);
 });
 
 test('boot sem data-alva-tracker não dispara nenhuma requisição', () => {
@@ -177,5 +178,6 @@ test('integração: eventos reais da VSL (mapVslEventToTrackerEvent + alva:track
   assert.equal(start.event.event_name, 'vsl_start');
   assert.equal(progress.event.event_name, 'vsl_progress');
   assert.equal(cta.event.event_name, 'vsl_cta_click');
+  assert.deepEqual(progress.event.event_data, { publicId: 'pub123', versionNumber: 2, value: 50 });
   assert.equal(JSON.stringify([start, progress, cta]).includes('http'), false, 'nenhuma URL de mídia deve vazar até o coletor');
 });

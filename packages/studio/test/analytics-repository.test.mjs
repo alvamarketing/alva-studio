@@ -41,7 +41,8 @@ async function seedProjectFor(database, company, user, { name, slug }) {
 async function createWebsite(database, { companyId, projectId }, trackerPublicId, environment = 'production') {
   return row(
     database,
-    'INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, $3, $4) RETURNING id',
+    `INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (company_id, project_id, environment) DO UPDATE SET tracker_public_id = EXCLUDED.tracker_public_id RETURNING id`,
     [companyId, projectId, trackerPublicId, environment],
   );
 }
@@ -159,12 +160,56 @@ test('summary inclui dailyVisits: série diária dos últimos 7 dias terminando 
     const summary = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from: new Date(0), to });
     assert.equal(summary.dailyVisits.length, 7, 'sempre 7 dias, mesmo sem evento em todos eles');
     assert.equal(summary.dailyVisits[0].date, sixDaysAgo.toISOString().slice(0, 10));
-    assert.equal(summary.dailyVisits[0].total, 1);
+    assert.equal(summary.dailyVisits[0].visits, 1);
     assert.equal(summary.dailyVisits[3].date, threeDaysAgo.toISOString().slice(0, 10));
-    assert.equal(summary.dailyVisits[3].total, 2);
+    assert.equal(summary.dailyVisits[3].visits, 2);
     assert.equal(summary.dailyVisits[6].date, to.toISOString().slice(0, 10));
-    assert.equal(summary.dailyVisits[6].total, 0, 'dia sem evento vem zerado, não ausente');
-    assert.equal(summary.dailyVisits.filter((day) => day.total === 0).length, 5, 'os outros 5 dias sem evento também vêm zerados');
+    assert.equal(summary.dailyVisits[6].visits, 0, 'dia sem evento vem zerado, não ausente');
+    assert.equal(summary.dailyVisits.filter((day) => day.visits === 0).length, 5, 'os outros 5 dias sem evento também vêm zerados');
+  } finally {
+    await database.close();
+  }
+});
+
+test('ingest preserva atribuição inicial, metadados seguros e somente submissão confirmada como conversão', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedCompany(database, { email: 'attribution@alva.test', companyName: 'Attribution', slug: 'attribution' });
+    const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'projeto-attribution' });
+    const website = await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'tracker-attribution');
+    const repo = new AnalyticsRepository(database, { visitorSalt: 'segredo-de-teste' });
+    const now = new Date('2026-03-10T12:00:00Z');
+
+    await repo.ingest({
+      websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'visitor-attribution',
+      event: { type: 'pageview', urlPath: '/oferta', urlQuery: 'utm_source=meta&utm_campaign=lancamento&fbclid=click-123', referrer: 'https://www.google.com', at: now },
+    });
+    await repo.ingest({
+      websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'visitor-attribution',
+      event: { type: 'custom', eventName: 'vsl_progress', urlPath: '/oferta', eventData: { publicId: 'video_123', versionNumber: 2, value: 75 }, at: now },
+    });
+    await repo.ingest({
+      websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'visitor-attribution',
+      event: { type: 'custom', eventName: 'form_submit_attempt', urlPath: '/oferta', eventData: { formId: 'form_123', screenId: 'etapa_3', stepIndex: 2 }, at: now },
+    });
+    await repo.recordLead({
+      companyId: seed.company.id, projectId: project.id, formId: 'form_123',
+      trackingEventId: randomUUID(), urlPath: '/oferta', at: now,
+    });
+
+    const session = await row(database, 'SELECT utm_source, utm_campaign, referrer_domain, click_ids FROM analytics_sessions WHERE company_id = $1', [seed.company.id]);
+    assert.deepEqual(session, { utm_source: 'meta', utm_campaign: 'lancamento', referrer_domain: 'www.google.com', click_ids: { fbclid: 'click-123' } });
+    const storedData = await database.query('SELECT data_key, data_value FROM analytics_event_data WHERE company_id = $1 ORDER BY data_key', [seed.company.id]);
+    assert.deepEqual(storedData.rows, [
+      { data_key: 'form_id', data_value: 'form_123' }, { data_key: 'form_id', data_value: 'form_123' },
+      { data_key: 'milestone', data_value: '75' }, { data_key: 'screen_id', data_value: 'etapa_3' },
+      { data_key: 'step_index', data_value: '2' },
+      { data_key: 'vsl_public_id', data_value: 'video_123' }, { data_key: 'vsl_version', data_value: '2' },
+    ]);
+    const summary = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from: new Date(now.getTime() - 60_000), to: new Date(now.getTime() + 60_000) });
+    assert.equal(summary.sources[0].source, 'meta');
+    assert.deepEqual(summary.vslFunnel, [{ eventName: 'vsl_progress', milestone: 75, total: 1 }]);
+    assert.deepEqual(summary.conversions, [{ contentId: 'form_123', urlPath: '/oferta', total: 1 }]);
   } finally {
     await database.close();
   }
@@ -184,8 +229,8 @@ test('summary inclui funnel: origem mais comum, top 2 rotas e total de conversõ
     const first = await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'fv1', event: { type: 'pageview', urlPath: '/imobiliarias', at: now } });
     await database.query("UPDATE analytics_sessions SET utm_source = 'meta' WHERE id = $1", [first.sessionId]);
     await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'fv1', event: { type: 'pageview', urlPath: '/diagnostico', at: now } });
-    await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'fv1', event: { type: 'custom', eventName: 'form_submit_attempt', urlPath: '/diagnostico', at: now } });
-    await repo.ingest({ websiteId: websiteOutro.id, companyId: seed.company.id, projectId: outro.id, visitorHash: 'fv2', event: { type: 'custom', eventName: 'form_submit_attempt', urlPath: '/outra-rota', at: now } });
+    await repo.recordLead({ companyId: seed.company.id, projectId: project.id, formId: 'form_123', trackingEventId: randomUUID(), urlPath: '/diagnostico', at: now });
+    await repo.recordLead({ companyId: seed.company.id, projectId: outro.id, formId: 'form_456', trackingEventId: randomUUID(), urlPath: '/outra-rota', at: now });
 
     const summary = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from: new Date(now.getTime() - 60_000), to: new Date(now.getTime() + 60_000) });
     assert.equal(summary.funnel.length, 4);
@@ -336,6 +381,25 @@ test('purgeExpired remove evento com mais de 90 dias e preserva agregado de 24 m
 
     const remainingRollup = await database.query('SELECT id FROM analytics_daily_rollup WHERE id = $1', [rollup.id]);
     assert.equal(remainingRollup.rowCount, 1);
+  } finally {
+    await database.close();
+  }
+});
+
+test('purgeExpired remove dados do evento e sessões sem atividade além da retenção', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedCompany(database, { email: 'purge-data@alva.test', companyName: 'Purge Data', slug: 'purge-data' });
+    const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'projeto-purge-data' });
+    const website = await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'tracker-purge-data');
+    const repo = new AnalyticsRepository(database);
+    const oldAt = new Date(Date.now() - 91 * 24 * 60 * 60 * 1000);
+    await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'visitor-expired', event: { type: 'custom', eventName: 'vsl_progress', urlPath: '/', eventData: { publicId: 'video_1', versionNumber: 1, value: 75 }, at: oldAt } });
+    const result = await repo.purgeExpired({ eventDays: 90, rollupMonths: 25, limit: 100 });
+    assert.equal(result.removidos, 5, 'a contagem inclui três metadados, o evento e a sessão removidos');
+    assert.equal((await database.query('SELECT id FROM analytics_sessions WHERE company_id = $1', [seed.company.id])).rowCount, 0);
+    assert.equal((await database.query('SELECT id FROM analytics_events WHERE company_id = $1', [seed.company.id])).rowCount, 0);
+    assert.equal((await database.query('SELECT id FROM analytics_event_data WHERE company_id = $1', [seed.company.id])).rowCount, 0);
   } finally {
     await database.close();
   }

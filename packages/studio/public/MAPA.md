@@ -6,6 +6,7 @@
 - `templates.js`: modelo inicial e blocos.
 - `styles.css`: aparência do painel.
 - `vsl-player.js` e `vsl-ui.js`: runtime acessível do player público e tela de configuração de VSLs.
+- `tracker.js`: tracker interno de primeira parte, sem cookie, sem PII e com allowlist de UTMs, click IDs e eventos estruturados.
 
 - `editor-shell.js` e `editor-shell.css`: editor guiado com blocos e controles contextuais.
 - `owner.js` e `owner.css`: acesso do dono e configurações do aplicativo.

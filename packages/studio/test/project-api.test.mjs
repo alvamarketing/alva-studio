@@ -468,6 +468,15 @@ test('formulário SaaS mantém rascunho, publica explicitamente em rota pública
   assert.match(completionHtml, /Recebemos/);
   assert.equal(submitted.headers.get('x-webhook-delivery'), 'queued', 'a resposta ao visitante não pode esperar a entrega do webhook');
   assert.equal(deliveryPayloads.length, 0, 'a entrega é processada pelo worker, não durante a submissão');
+  const lead = await database.query(
+    `SELECT event.event_name, event.tracking_event_id, data.data_value AS form_id
+       FROM analytics_events event
+       JOIN analytics_event_data data ON data.event_id = event.id AND data.company_id = event.company_id AND data.project_id = event.project_id
+      WHERE event.company_id = $1 AND event.project_id = $2 AND event.event_name = 'lead'`,
+    [records.companyA.id, records.projectA.id],
+  );
+  const submissionTracking = await database.query('SELECT tracking_event_id FROM form_submissions WHERE form_id = $1', [form.id]);
+  assert.deepEqual(lead.rows, [{ event_name: 'lead', tracking_event_id: submissionTracking.rows[0].tracking_event_id, form_id: form.id }]);
   const queuedCount = await database.query("SELECT count(*)::int AS count FROM webhook_deliveries WHERE status = 'pending'");
   assert.equal(queuedCount.rows[0].count, 1);
 
@@ -1099,7 +1108,7 @@ test('coletor público ingere evento de origem publicada, recusa origem não pub
   const records = await seed(database);
   const app = await start(t, database);
   await database.query(
-    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-collect-a')",
+    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-collect-a') ON CONFLICT (company_id, project_id, environment) DO UPDATE SET tracker_public_id = EXCLUDED.tracker_public_id",
     [records.companyA.id, records.projectA.id],
   );
   await database.query(
@@ -1126,6 +1135,21 @@ test('coletor público ingere evento de origem publicada, recusa origem não pub
   assert.equal(eventRow.rows[0].event_type, 'pageview');
   assert.equal(eventRow.rows[0].url_path, '/oferta');
 
+  const formStep = await send('https://painel.alva-a.test', {
+    trackerPublicId: 'trk-collect-a', event_name: 'form_step', url_path: '/oferta',
+    event_data: { formId: 'form_123', screenId: 'qualificacao', stepIndex: 2 },
+  });
+  assert.equal(formStep.status, 204, await formStep.text());
+  const eventData = await database.query(
+    "SELECT data_key, data_value FROM analytics_event_data WHERE company_id = $1 ORDER BY data_key",
+    [records.companyA.id],
+  );
+  assert.deepEqual(eventData.rows, [
+    { data_key: 'form_id', data_value: 'form_123' },
+    { data_key: 'screen_id', data_value: 'qualificacao' },
+    { data_key: 'step_index', data_value: '2' },
+  ]);
+
   const forbidden = await send('https://attacker.example.test', { trackerPublicId: 'trk-collect-a', event_name: 'pageview' });
   assert.equal(forbidden.status, 403, await forbidden.text());
 
@@ -1134,7 +1158,7 @@ test('coletor público ingere evento de origem publicada, recusa origem não pub
   await database.close();
 });
 
-test('OPTIONS do coletor responde 204 com Access-Control-Allow-Origin', async (t) => {
+test('OPTIONS do coletor responde 204 sem refletir origem arbitrária', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
   await migrate(database);
@@ -1145,7 +1169,7 @@ test('OPTIONS do coletor responde 204 com Access-Control-Allow-Origin', async (t
     headers: { Origin: 'https://qualquer-origem.example.test', 'Access-Control-Request-Method': 'POST' },
   });
   assert.equal(response.status, 204);
-  assert.equal(response.headers.get('access-control-allow-origin'), 'https://qualquer-origem.example.test');
+  assert.equal(response.headers.get('access-control-allow-origin'), null, 'preflight sem tracker não pode refletir origem arbitrária');
   await database.close();
 });
 
@@ -1156,7 +1180,7 @@ test('coletor recusa corpo de mais de 64 KB com 413', async (t) => {
   const records = await seed(database);
   const app = await start(t, database);
   await database.query(
-    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-collect-grande')",
+    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-collect-grande') ON CONFLICT (company_id, project_id, environment) DO UPDATE SET tracker_public_id = EXCLUDED.tracker_public_id",
     [records.companyA.id, records.projectA.id],
   );
   const bigBody = JSON.stringify({ trackerPublicId: 'trk-collect-grande', event_name: 'pageview', url_path: 'a'.repeat(70 * 1024) });
@@ -1189,6 +1213,7 @@ test('resposta pública do formulário emite CSP-Report-Only com nonce e sem uns
 
   const publicPage = await fetch(`${app.base}${form.publicPath}`);
   assert.equal(publicPage.status, 200);
+  assert.match(await publicPage.clone().text(), /<script src="\/tracker\.js" data-alva-tracker="[a-f0-9]{32}" nonce="[^"]+"><\/script>/);
   const csp = publicPage.headers.get('content-security-policy-report-only');
   assert.ok(csp, 'deveria emitir Content-Security-Policy-Report-Only');
   const scriptSrc = csp.split('; ').find((directive) => directive.startsWith('script-src'));
@@ -1204,7 +1229,7 @@ test('laço de retenção do analytics remove eventos expirados via runOnce e po
   const records = await seed(database);
   const app = await start(t, database);
   const website = (await database.query(
-    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-retencao') RETURNING id",
+    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-retencao') ON CONFLICT (company_id, project_id, environment) DO UPDATE SET tracker_public_id = EXCLUDED.tracker_public_id RETURNING id",
     [records.companyA.id, records.projectA.id],
   )).rows[0];
   await database.query(

@@ -138,6 +138,15 @@ async function trackerPublicIdForVideo(database, videoPublicId) {
   return rows[0]?.tracker_public_id || null;
 }
 
+async function trackerPublicIdForProject(database, companyId, projectId) {
+  const { rows } = await database.query(
+    `SELECT tracker_public_id FROM analytics_websites
+      WHERE company_id = $1 AND project_id = $2 AND environment = 'production' LIMIT 1`,
+    [companyId, projectId],
+  );
+  return rows[0]?.tracker_public_id || null;
+}
+
 // Mesmo padrão de startWebhookWorker: laço independente do ciclo de requisição,
 // unref() para não segurar o processo vivo, e parado explicitamente no close do servidor.
 function startAnalyticsRetentionWorker({ analytics, intervalMs = 24 * 60 * 60 * 1000 }) {
@@ -322,10 +331,10 @@ export function createApp({
         throw error('Origem não autorizada para este domínio.', 403);
       if (analytics && content && publicCollect) {
         if (req.method === 'OPTIONS') {
-          if (origin) {
-            res.setHeader('Access-Control-Allow-Origin', origin);
-            res.setHeader('Vary', 'Origin');
-          }
+          // O preflight não traz tracker_public_id, portanto não pode abrir uma origem arbitrária.
+          // O tracker usa text/plain (simple request); requests com preflight só continuam na origem
+          // do próprio Studio e o POST ainda valida tracker + domínio publicado abaixo.
+          if (origin === expectedOrigin) res.setHeader('Vary', 'Origin');
           res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
           res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
           res.writeHead(204);
@@ -364,6 +373,7 @@ export function createApp({
             urlPath: event.url_path,
             urlQuery: event.url_query,
             referrer: event.referrer,
+            eventData: event.event_data,
           },
         });
         // Nenhuma resposta do coletor devolve conteúdo — só status, para não vazar nada ao visitante.
@@ -414,7 +424,8 @@ export function createApp({
         });
         const vslEmbedUrls = new Map([...resolved].map(([publicId, value]) => [publicId, value.embedUrl]));
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
-        return res.end(renderDynamicForm(form, publicFormRequest.action, { vslEmbedUrls, nonce }));
+        const trackerPublicId = analytics ? await trackerPublicIdForProject(database, form.companyId, form.projectId) : null;
+        return res.end(renderDynamicForm(form, publicFormRequest.action, { vslEmbedUrls, nonce, trackerPublicId }));
       }
       const localForm = !content && path.match(/^\/f\/([a-z0-9-]+)$/);
       if (req.method === 'GET' && localForm) {
@@ -437,6 +448,13 @@ export function createApp({
             route: publicFormRequest.route,
             input,
           });
+        await analytics?.recordLead({
+          companyId: saved.form.companyId,
+          projectId: saved.form.projectId,
+          formId: saved.form.id,
+          trackingEventId: saved.eventId,
+          urlPath: publicFormRequest.route,
+        });
         const form = { ...saved.schema, id: saved.form.id, name: saved.form.name, slug: saved.form.slug };
         // A entrega do webhook é enfileirada por submitPublishedForm (mesma transação da
         // submissão) e processada de forma assíncrona pelo webhookWorker — a resposta ao

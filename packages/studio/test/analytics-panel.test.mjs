@@ -22,6 +22,15 @@ test('a maior barra vira 100% e as demais ficam proporcionais a ela', () => {
   assert.ok(model.bars[0].altura < model.bars[5].altura);
 });
 
+test('consome o contrato do resumo do servidor, cujo total diário é chamado visits', () => {
+  const model = analyticsPanelModel(summaryWith([
+    { date: '2026-09-01', visits: 1 }, { date: '2026-09-02', visits: 3 },
+  ]));
+  assert.equal(model.bars[0].visitas, 1);
+  assert.equal(model.bars[1].visitas, 3);
+  assert.equal(model.phase, 'ready');
+});
+
 test('dia sem visita mostra a barra no piso mínimo, sem inventar visitas', () => {
   const model = analyticsPanelModel(summaryWith(Array.from({ length: 7 }, (_, index) => ({ date: `2026-09-0${index + 1}`, visits: index === 3 ? 40 : 0 }))));
   assert.equal(model.bars[0].visitas, 0);

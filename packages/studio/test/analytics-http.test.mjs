@@ -64,7 +64,8 @@ async function seedProjectFor(database, company, user, { name, slug }) {
 async function createWebsite(database, { companyId, projectId }, trackerPublicId, environment = 'production') {
   return row(
     database,
-    'INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, $3, $4) RETURNING id',
+    `INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (company_id, project_id, environment) DO UPDATE SET tracker_public_id = EXCLUDED.tracker_public_id RETURNING id`,
     [companyId, projectId, trackerPublicId, environment],
   );
 }

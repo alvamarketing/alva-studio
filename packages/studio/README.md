@@ -43,6 +43,10 @@ No modo SaaS, salvar o formulário mantém um rascunho; publicar é uma ação e
 
 A submissão é persistida antes do webhook. Nesta fundação, configurar o destino valida somente uma URL HTTPS sem credenciais; não há consulta DNS, bloqueio de endereço privado ou proteção contra DNS rebinding ainda. A entrega assíncrona permanece com estado `pending` e não faz saída de rede. Validação de destino completa e o worker de entrega são próximas etapas. O webhook não recebe credenciais do Studio.
 
+### Coletor interno de analytics
+
+O Studio coleta visitas, origem, UTMs, click IDs, conversões por formulário e marcos de VSL no próprio PostgreSQL, isolados por empresa e projeto. O `tracker.js` é servido de primeira parte e não usa cookie nem serviço externo; o navegador envia somente caminho, query filtrada, domínio de referência e identificadores/eventos estruturados. Nome, e-mail, telefone, arquivos e respostas abertas são rejeitados e nunca entram em `analytics_*`. Sessões e eventos brutos são retidos por 90 dias, enquanto agregados diários permanecem por até 24 meses. Páginas públicas usam CSP com nonce por resposta, e o coletor aceita somente origens publicadas e trackers provisionados para o projeto.
+
 Nome, e-mail, telefone, arquivos e respostas abertas nunca entram no Analytics interno, em URLs, em UTMs ou em logs. O canal de conversões de mídia é separado e envia às plataformas apenas hashes SHA-256 de e-mail e telefone normalizados, mais os identificadores de clique `fbp`, `fbc`, `gclid`, `ttclid` e `li_fat_id` — sempre a partir do servidor e somente para submissões com consentimento publicitário opt-in registrado. Nunca PII em claro, nunca endereço IP e nunca user agent. Cada projeto declara a empresa cliente como controladora e a Alva como operadora, com URL de política de privacidade obrigatória antes de qualquer envio de conversão.
 
 ## Preparar o PostgreSQL

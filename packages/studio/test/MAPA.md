@@ -18,6 +18,7 @@
 - `import-local.test.mjs`: inspeção, importação idempotente e rollback transacional do legado local.
 - `project-api.test.mjs`: sessão persistente, API de empresas/projetos e bloqueio de acessos cruzados.
 - `vsl-repository.test.mjs` e `vsl-api.test.mjs`: VSLs, snapshots, validação e rotas autenticadas por projeto.
+- `analytics-api.test.mjs`, `analytics-collect.test.mjs`, `analytics-csp.test.mjs`, `analytics-http.test.mjs`, `analytics-panel.test.mjs`, `analytics-repository.test.mjs` e `analytics-tracker.test.mjs`: contrato do coletor, isolamento, PII, CORS, CSP, persistência, retenção, resumo e painel.
 
 - `templates.test.mjs`: catálogo e consistência dos formulários.
 - `editor*.test.mjs`: controles do editor guiado.

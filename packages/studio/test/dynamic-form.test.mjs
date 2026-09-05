@@ -215,7 +215,7 @@ test('nonce aparece no script do runner e no script do tracker público', () => 
   assert.match(html, /<script src="\/tracker\.js" data-alva-tracker="track-xyz" nonce="abc123"><\/script>/);
 });
 
-test('runner instrumentado referencia form_start, form_step e form_submit_attempt sem ler valor de campo', () => {
+test('runner instrumentado identifica formulário e tela em cada evento, sem ler valor de campo', () => {
   const html = renderDynamicForm(form, '/api/public/forms/123/submit', { trackerPublicId: 'track-xyz' });
   const scriptMatch = html.match(/<script(?: nonce="[^"]*")?>([\s\S]*?)<\/script>\s*(?:<script src="\/tracker\.js"|<\/body>)/);
   assert.ok(scriptMatch, 'script do runner deve estar presente');
@@ -223,12 +223,18 @@ test('runner instrumentado referencia form_start, form_step e form_submit_attemp
   assert.match(runnerSource, /form_start/);
   assert.match(runnerSource, /form_step/);
   assert.match(runnerSource, /form_submit_attempt/);
+  assert.doesNotMatch(runnerSource, /trackFormEvent\('form_submit',/);
+  assert.match(runnerSource, /event_data/);
+  assert.match(runnerSource, /formId/);
+  assert.match(runnerSource, /screenId/);
+  assert.match(runnerSource, /stepIndex/);
+  assert.match(runnerSource, /screenIds/);
   const iifeStart = runnerSource.indexOf('(()=>');
   const trackingHelperCode = iifeStart >= 0 ? runnerSource.slice(0, iifeStart) : runnerSource;
   assert.doesNotMatch(trackingHelperCode, /\.value/);
 });
 
-test('trackFormEvent do runner instrumentado gera payload plano aceito por parseCollectPayload', () => {
+test('trackFormEvent do runner instrumentado gera payload aceito com metadados estruturados', () => {
   const html = renderDynamicForm(form, '/api/public/forms/123/submit', { trackerPublicId: 'track-xyz' });
   const scriptMatch = html.match(/<script(?: nonce="[^"]*")?>([\s\S]*?)<\/script>\s*(?:<script src="\/tracker\.js"|<\/body>)/);
   assert.ok(scriptMatch, 'script do runner deve estar presente');
@@ -245,13 +251,14 @@ test('trackFormEvent do runner instrumentado gera payload plano aceito por parse
   };
   runInNewContext(trackingHelperCode, context);
 
-  context.trackFormEvent('form_start');
-  context.trackFormEvent('form_step');
-  context.trackFormEvent('form_submit_attempt');
+  context.trackFormEvent('form_start', { formId: '123', screenId: 'nome', stepIndex: 0 });
+  context.trackFormEvent('form_step', { formId: '123', screenId: 'perfil', stepIndex: 1 });
+  context.trackFormEvent('form_submit_attempt', { formId: '123', screenId: 'perfil', stepIndex: 1 });
 
   assert.equal(sentBodies.length, 3);
   const names = sentBodies.map((body) => parseCollectPayload(body, 'text/plain').event.event_name);
   assert.deepEqual(names, ['form_start', 'form_step', 'form_submit_attempt']);
+  assert.deepEqual(parseCollectPayload(sentBodies[1], 'text/plain').event.event_data, { formId: '123', screenId: 'perfil', stepIndex: 1 });
 });
 
 test('sem trackerPublicId, o runner não ganha instrumentação de eventos', () => {

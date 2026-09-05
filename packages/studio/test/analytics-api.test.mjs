@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { createProjectApi } from '../server/project-api.mjs';
 import { AnalyticsRepository } from '../server/repositories/analytics-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
@@ -41,7 +42,8 @@ async function seedProjectFor(database, company, user, { name, slug }) {
 async function createWebsite(database, { companyId, projectId }, trackerPublicId) {
   return row(
     database,
-    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, $3, 'production') RETURNING id",
+    `INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, $3, 'production')
+     ON CONFLICT (company_id, project_id, environment) DO UPDATE SET tracker_public_id = EXCLUDED.tracker_public_id RETURNING id`,
     [companyId, projectId, trackerPublicId],
   );
 }
@@ -130,7 +132,7 @@ test('resumo não contém visitor_hash, linha crua de evento nem campo de respos
   const analytics = new AnalyticsRepository(database);
   const now = new Date('2026-02-01T12:00:00Z');
   await analytics.ingest({ websiteId: websiteA.id, companyId: owner.company.id, projectId: projectA.id, visitorHash: 'visitor-a-1', event: { type: 'pageview', urlPath: '/', at: now } });
-  await analytics.ingest({ websiteId: websiteA.id, companyId: owner.company.id, projectId: projectA.id, visitorHash: 'visitor-a-1', event: { type: 'custom', eventName: 'form_submit_attempt', urlPath: '/formulario', at: now } });
+  await analytics.recordLead({ companyId: owner.company.id, projectId: projectA.id, formId: 'form_123', trackingEventId: randomUUID(), urlPath: '/formulario', at: now });
   await analytics.ingest({ websiteId: websiteB.id, companyId: owner.company.id, projectId: projectB.id, visitorHash: 'visitor-b-1', event: { type: 'pageview', urlPath: '/', at: now } });
 
   const sessionService = fakeSessionService({ companyId: owner.company.id, userId: owner.user.id, projectId: projectA.id });

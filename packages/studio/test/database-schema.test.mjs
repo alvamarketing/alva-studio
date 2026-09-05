@@ -406,6 +406,7 @@ test('coletor de analytics isola por empresa e projeto e valida event_type', asy
   try {
     const seed = await seedProject(database, { email: 'analytics-a@alva.test', companyName: 'Analytics A', slug: 'analytics-a' });
     const other = await seedProject(database, { email: 'analytics-b@alva.test', companyName: 'Analytics B', slug: 'analytics-b' });
+    await database.query('DELETE FROM analytics_websites WHERE company_id = $1 AND project_id = $2', [seed.company.id, seed.project.id]);
 
     const website = await row(
       database,
@@ -465,6 +466,37 @@ test('coletor de analytics isola por empresa e projeto e valida event_type', asy
       violates,
       'evento não pode referenciar site de outro projeto',
     );
+  } finally {
+    await database.close();
+  }
+});
+
+test('migração do coletor cria tracker público para projetos já existentes', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const { createDatabase, migrate } = await import('../server/db/postgres.mjs');
+  const database = createDatabase({ connectionString });
+  try {
+    const basePath = await mkdtemp(join(tmpdir(), 'alva-analytics-backfill-'));
+    t.after(() => rm(basePath, { recursive: true, force: true }));
+    const migrations = await (await import('node:fs/promises')).readdir(sourceMigrations);
+    for (const name of migrations.filter((name) => name < '012_analytics_websites.sql')) {
+      await writeFile(join(basePath, name), await readFile(join(sourceMigrations, name)));
+    }
+    await migrate(database, { migrationsPath: basePath });
+    const seed = await seedProject(database, { email: 'backfill@alva.test', companyName: 'Backfill', slug: 'backfill' });
+    await writeFile(join(basePath, '012_analytics_websites.sql'), await readFile(join(sourceMigrations, '012_analytics_websites.sql')));
+    await migrate(database, { migrationsPath: basePath });
+    const website = await database.query('SELECT tracker_public_id FROM analytics_websites WHERE company_id = $1 AND project_id = $2', [seed.company.id, seed.project.id]);
+    assert.equal(website.rowCount, 1);
+    assert.match(website.rows[0].tracker_public_id, /^[a-f0-9]{32}$/);
+
+    const createdAfterMigration = await database.query(
+      "INSERT INTO projects (company_id, name, slug, created_by) VALUES ($1, 'Novo', 'novo', $2) RETURNING id",
+      [seed.company.id, seed.user.id],
+    );
+    const provisioned = await database.query('SELECT tracker_public_id FROM analytics_websites WHERE company_id = $1 AND project_id = $2', [seed.company.id, createdAfterMigration.rows[0].id]);
+    assert.equal(provisioned.rowCount, 1, 'projeto criado após a migração recebe tracker automaticamente');
+    assert.match(provisioned.rows[0].tracker_public_id, /^[a-f0-9]{32}$/);
   } finally {
     await database.close();
   }

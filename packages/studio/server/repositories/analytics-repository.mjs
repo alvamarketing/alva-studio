@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability } from '../domain/access.mjs';
 
@@ -32,11 +32,41 @@ function dayKey(at) {
   return new Date(at).toISOString().slice(0, 10);
 }
 
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+const CLICK_ID_KEYS = ['fbclid', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id'];
+
+function attribution(event = {}) {
+  const params = new URLSearchParams(event.urlQuery || '');
+  const values = Object.fromEntries(UTM_KEYS.map((key) => [key, params.get(key) || null]));
+  const clickIds = Object.fromEntries(CLICK_ID_KEYS.flatMap((key) => {
+    const value = params.get(key);
+    return value ? [[key, value]] : [];
+  }));
+  let referrerDomain = null;
+  try { referrerDomain = event.referrer ? new URL(event.referrer).hostname.toLowerCase() : null; } catch { /* parser público já valida */ }
+  return { ...values, referrerDomain, clickIds };
+}
+
+function eventDataEntries(value = {}) {
+  const entries = [];
+  const map = {
+    publicId: 'vsl_public_id', versionNumber: 'vsl_version', value: 'milestone',
+    formId: 'form_id', screenId: 'screen_id', stepIndex: 'step_index',
+  };
+  for (const [key, dataKey] of Object.entries(map)) {
+    if (value[key] !== undefined) entries.push([dataKey, String(value[key]), typeof value[key] === 'number' ? 'number' : 'string']);
+  }
+  return entries;
+}
+
 export class AnalyticsRepository {
-  constructor(database) { this.database = database; }
+  constructor(database, { visitorSalt = process.env.ANALYTICS_VISITOR_SALT || randomBytes(32).toString('base64url') } = {}) {
+    this.database = database;
+    this.visitorSalt = visitorSalt;
+  }
 
   visitorHash({ websiteId, address, userAgent, at = new Date() }) {
-    return createHash('sha256').update(`${dayKey(at)}:${websiteId}:${address ?? ''}:${userAgent ?? ''}`).digest('hex');
+    return createHash('sha256').update(`${this.visitorSalt}:${dayKey(at)}:${websiteId}:${address ?? ''}:${userAgent ?? ''}`).digest('hex');
   }
 
   // companySlug/projectSlug vêm no mesmo JOIN para que o chamador (fronteira pública do coletor)
@@ -65,6 +95,7 @@ export class AnalyticsRepository {
   async ingest({ websiteId, companyId, projectId, visitorHash, event }) {
     const at = event?.at ?? new Date();
     const eventType = event?.type === 'custom' ? 'custom' : 'pageview';
+    const sessionAttribution = attribution(event);
     return withTransaction(this.database, async (client) => {
       const existing = await client.query(
         `SELECT id FROM analytics_sessions
@@ -83,9 +114,13 @@ export class AnalyticsRepository {
         );
       } else {
         const created = await client.query(
-          `INSERT INTO analytics_sessions (company_id, project_id, website_id, visitor_hash, first_seen_at, last_seen_at)
-           VALUES ($1, $2, $3, $4, $5, $5) RETURNING id`,
-          [companyId, projectId, websiteId, visitorHash, at],
+          `INSERT INTO analytics_sessions
+             (company_id, project_id, website_id, visitor_hash, first_seen_at, last_seen_at,
+              referrer_domain, utm_source, utm_medium, utm_campaign, utm_term, utm_content, click_ids)
+           VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) RETURNING id`,
+          [companyId, projectId, websiteId, visitorHash, at, sessionAttribution.referrerDomain,
+            sessionAttribution.utm_source, sessionAttribution.utm_medium, sessionAttribution.utm_campaign,
+            sessionAttribution.utm_term, sessionAttribution.utm_content, JSON.stringify(sessionAttribution.clickIds)],
         );
         sessionId = created.rows[0].id;
       }
@@ -97,7 +132,37 @@ export class AnalyticsRepository {
         [companyId, projectId, websiteId, sessionId, at, eventType, event?.urlPath ?? '/', event?.urlQuery ?? null,
           event?.referrer ?? null, event?.eventName ?? null, event?.trackingEventId ?? null],
       );
+      for (const [dataKey, dataValue, dataType] of eventDataEntries(event?.eventData)) {
+        await client.query(
+          `INSERT INTO analytics_event_data (company_id, project_id, event_id, data_key, data_value, data_type)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [companyId, projectId, inserted.rows[0].id, dataKey, dataValue, dataType],
+        );
+      }
       return { sessionId, eventId: inserted.rows[0].id, trackingEventId: inserted.rows[0].tracking_event_id };
+    });
+  }
+
+  async recordLead({ companyId, projectId, formId, trackingEventId, urlPath = '/', at = new Date() }) {
+    const { rows } = await this.database.query(
+      `SELECT id FROM analytics_websites
+        WHERE company_id = $1 AND project_id = $2 AND environment = 'production' LIMIT 1`,
+      [companyId, projectId],
+    );
+    if (!rows.length) return null;
+    return withTransaction(this.database, async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO analytics_events
+           (company_id, project_id, website_id, event_at, event_type, url_path, event_name, tracking_event_id)
+         VALUES ($1, $2, $3, $4, 'custom', $5, 'lead', $6) RETURNING id, tracking_event_id`,
+        [companyId, projectId, rows[0].id, at, urlPath, trackingEventId],
+      );
+      await client.query(
+        `INSERT INTO analytics_event_data (company_id, project_id, event_id, data_key, data_value, data_type)
+         VALUES ($1, $2, $3, 'form_id', $4, 'string')`,
+        [companyId, projectId, inserted.rows[0].id, formId],
+      );
+      return { eventId: inserted.rows[0].id, trackingEventId: inserted.rows[0].tracking_event_id };
     });
   }
 
@@ -150,19 +215,27 @@ export class AnalyticsRepository {
     );
 
     const { rows: conversionRows } = await this.database.query(
-      `SELECT url_path, COUNT(*)::int AS total
-         FROM analytics_events
-        WHERE company_id = $1 AND project_id = $2 AND event_at >= $3 AND event_at < $4 AND event_name = 'form_submit_attempt'
-        GROUP BY url_path ORDER BY total DESC LIMIT 10`,
+      `SELECT COALESCE(data.data_value, event.url_path) AS content_id, event.url_path, COUNT(*)::int AS total
+         FROM analytics_events event
+         LEFT JOIN analytics_event_data data
+           ON data.company_id = event.company_id AND data.project_id = event.project_id
+          AND data.event_id = event.id AND data.data_key = 'form_id'
+        WHERE event.company_id = $1 AND event.project_id = $2 AND event.event_at >= $3 AND event.event_at < $4
+          AND event.event_name = 'lead'
+        GROUP BY content_id, event.url_path ORDER BY total DESC LIMIT 10`,
       range,
     );
 
     const { rows: vslRows } = await this.database.query(
-      `SELECT event_name, COUNT(*)::int AS total
-         FROM analytics_events
-        WHERE company_id = $1 AND project_id = $2 AND event_at >= $3 AND event_at < $4
-          AND event_name IN ('vsl_start', 'vsl_progress', 'vsl_complete')
-        GROUP BY event_name`,
+      `SELECT event.event_name, data.data_value AS milestone, COUNT(*)::int AS total
+         FROM analytics_events event
+         LEFT JOIN analytics_event_data data
+           ON data.company_id = event.company_id AND data.project_id = event.project_id
+          AND data.event_id = event.id AND data.data_key = 'milestone'
+        WHERE event.company_id = $1 AND event.project_id = $2 AND event.event_at >= $3 AND event.event_at < $4
+          AND event.event_name IN ('vsl_start', 'vsl_progress', 'vsl_complete')
+        GROUP BY event.event_name, data.data_value
+        ORDER BY event.event_name, data.data_value`,
       range,
     );
 
@@ -181,7 +254,7 @@ export class AnalyticsRepository {
     const dailyVisits = [];
     for (let offset = 6; offset >= 0; offset -= 1) {
       const key = new Date(to.getTime() - offset * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      dailyVisits.push({ date: key, total: dailyMap.get(key) ?? 0 });
+      dailyVisits.push({ date: key, visits: dailyMap.get(key) ?? 0 });
     }
 
     // Jornada única no estilo do wireframe ("Meta Ads → rota → rota → Lead"): origem mais comum,
@@ -203,8 +276,8 @@ export class AnalyticsRepository {
         term: current.utm_term, content: current.utm_content, total: current.total,
       })),
       topRoutes: routeRows.map((current) => ({ urlPath: current.url_path, total: current.total })),
-      conversions: conversionRows.map((current) => ({ urlPath: current.url_path, total: current.total })),
-      vslFunnel: vslRows.map((current) => ({ eventName: current.event_name, total: current.total })),
+      conversions: conversionRows.map((current) => ({ contentId: current.content_id, urlPath: current.url_path, total: current.total })),
+      vslFunnel: vslRows.map((current) => ({ eventName: current.event_name, milestone: current.milestone === null ? null : Number(current.milestone), total: current.total })),
       dailyVisits,
       funnel,
     };
@@ -214,8 +287,31 @@ export class AnalyticsRepository {
     let removidos = 0;
     for (;;) {
       const { rowCount } = await this.database.query(
+        `DELETE FROM analytics_event_data WHERE ctid IN (
+           SELECT data.ctid FROM analytics_event_data data
+           JOIN analytics_events event
+             ON event.company_id = data.company_id AND event.project_id = data.project_id AND event.id = data.event_id
+          WHERE event.event_at < now() - ($1 || ' days')::interval LIMIT $2
+         )`,
+        [eventDays, limit],
+      );
+      removidos += rowCount;
+      if (rowCount < limit) break;
+    }
+    for (;;) {
+      const { rowCount } = await this.database.query(
         `DELETE FROM analytics_events WHERE ctid IN (
            SELECT ctid FROM analytics_events WHERE event_at < now() - ($1 || ' days')::interval LIMIT $2
+         )`,
+        [eventDays, limit],
+      );
+      removidos += rowCount;
+      if (rowCount < limit) break;
+    }
+    for (;;) {
+      const { rowCount } = await this.database.query(
+        `DELETE FROM analytics_sessions WHERE ctid IN (
+           SELECT ctid FROM analytics_sessions WHERE last_seen_at < now() - ($1 || ' days')::interval LIMIT $2
          )`,
         [eventDays, limit],
       );

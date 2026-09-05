@@ -1,26 +1,21 @@
 # Alva Studio — regra de execução
 
-## Regra master do Codex: Product Owner e maestro
+## Regra master do Codex: execução pelo CLI com subagentes
 
-**Codex é somente Product Owner/maestro. Codex não executa.**
+O Codex opera diretamente neste repositório pelo CLI e coordena subagentes
+internos para acelerar o trabalho. O Maestri não faz parte do fluxo deste
+projeto.
 
-Toda leitura de código, edição, comando de shell, teste, commit e implementação
-deve ser executada por agentes Claude já conectados no Maestri — nunca pelo
-Codex diretamente.
-
-- **Codex lista, delega, acompanha e julga resultados.** Codex não lê arquivos
-  para implementação, não edita código, não roda testes, não executa comandos
-  de build/deploy, não faz commits.
-- **Agentes conectados no Maestri executam.** Reutilize terminais e agentes
-  existentes; nunca crie terminal ou agente novo se houver um adequado. Nunca
-  use subagentes internos do Codex/collaboration neste projeto — use o Maestri.
-- **Seleção de modelos para delegação:** Haiku para tarefas mecânicas (testes
-  simples, alterações localizadas, verificações diretas); Sonnet para integração,
-  depuração e revisão complexa; Opus/Fable somente quando Haiku e Sonnet
+- **Codex coordena e executa.** Pode ler e editar arquivos, rodar comandos,
+  testes e builds, além de revisar e integrar o trabalho dos subagentes.
+- **Subagentes internos executam tarefas delimitadas.** Use as ferramentas de
+  colaboração disponíveis nesta sessão, com escopo, critérios e saída claros.
+- **Seleção de modelos:** Luna para tarefas mecânicas e localizadas; Terra para
+  integração, depuração e revisão complexa; Sol somente quando Luna e Terra
   demonstrarem insuficiência concreta e registrada.
-- **Orquestradores nunca executam.** Workflows, agents e orchestrators apenas
-  decompõem, distribuem, acompanham dependências e validam resultados. Não
-  implementam, não editam arquivos operacionalmente, não rodam testes rotineiros.
+- **Git e produção:** subagentes não fazem push, publicação ou alteração em
+  produção sem autorização explícita. O Codex consolida e verifica antes dessas
+  ações.
 
 ## Regra master de subagentes e modelos
 
@@ -51,12 +46,11 @@ ou a qualidade necessária para concluir a tarefa.
 - Nunca atribua trabalho de estagiário a uma super IA. Modelos de maior
   capacidade não devem fazer leitura ampla, comandos simples, testes rotineiros,
   alterações mecânicas ou verificações que um modelo menor possa concluir.
-- Orquestradores apenas decompõem, distribuem, acompanham dependências e validam
-  resultados. Eles não implementam, editam arquivos, executam testes rotineiros
-  nem assumem tarefas operacionais.
-- Reutilize um agente ou terminal existente, disponível e adequado ao escopo
-  antes de criar outro. Não crie uma janela nova quando uma já aberta puder
-  receber a tarefa sem apagar ou interromper trabalho do usuário.
+- O agente principal decompõe, distribui e valida; também pode executar
+  diretamente quando isso for mais eficiente ou necessário para integrar o
+  resultado.
+- Reutilize um subagente interno disponível e adequado ao escopo antes de criar
+  outro, sem interromper trabalho em andamento.
 - Dê escopos estreitos, critérios objetivos e peça respostas compactas. Evite
   auditorias amplas repetidas, subauditorias redundantes, releituras integrais e
   novas execuções de testes quando não houve mudança relevante.

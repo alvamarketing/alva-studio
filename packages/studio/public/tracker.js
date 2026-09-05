@@ -20,12 +20,13 @@ function referrerOrigin(referrer) {
 
 // Formato plano exigido por parseCollectPayload (server/analytics-collect.mjs): allowlist fechada
 // de chaves no nível raiz, sem aninhamento — trackerPublicId, event_name, url_path, url_query, referrer.
-function buildPayload({ trackerPublicId, location, document: doc, eventName }) {
+function buildPayload({ trackerPublicId, location, document: doc, eventName, eventData }) {
   const payload = { trackerPublicId, event_name: eventName, url_path: location?.pathname || '/' };
   const query = filteredQueryString(location?.search);
   if (query) payload.url_query = query;
   const referrer = referrerOrigin(doc?.referrer);
   if (referrer) payload.referrer = referrer;
+  if (eventData !== undefined) payload.event_data = eventData;
   return payload;
 }
 
@@ -59,11 +60,8 @@ export function createTracker({
     pageview() {
       return deliver(buildPayload({ trackerPublicId, location, document: doc, eventName: 'pageview' }));
     },
-    // "data" não é transmitido: o coletor (Task 3) não reserva campo para dado extra por evento
-    // nesta fase — só identificador de tracker, nome do evento e contexto de URL/referência.
     track(name, data) {
-      void data;
-      return deliver(buildPayload({ trackerPublicId, location, document: doc, eventName: name }));
+      return deliver(buildPayload({ trackerPublicId, location, document: doc, eventName: name, eventData: data }));
     },
   };
 }

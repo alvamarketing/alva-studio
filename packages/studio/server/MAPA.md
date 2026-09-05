@@ -12,6 +12,8 @@
   - `migrations/007_deployment_claim_error.sql`: lease atômico e erro persistido da execução.
   - `migrations/008_vsl_player.sql`: VSLs por projeto e snapshots publicados imutáveis.
   - `migrations/009_vsl_published_lock.sql`: revisão do rascunho usada para o estado de alterações não publicadas.
+  - `migrations/011_analytics_collector.sql`: websites, sessões, eventos, dados estruturados e agregados internos do coletor.
+  - `migrations/012_analytics_websites.sql`: backfill e provisionamento automático do tracker público por projeto.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
@@ -23,6 +25,9 @@
 - `repositories/content-repository.mjs`: submissões paginadas por projeto, CSV por formulário e atualização escopada do status de entrega.
 - `leads-csv.mjs`: serialização CSV UTF-8 com BOM, colunas estáveis e neutralização de fórmulas de planilha.
 - `dynamic-form.mjs`: documento público sequencial com mídia, gráficos, movimento e confirmação de envio.
+- `analytics-collect.mjs`: parser, allowlist, proteção contra PII e limitador do endpoint público de coleta.
+- `content-security-policy.mjs`: nonce e políticas CSP das experiências públicas.
+- `repositories/analytics-repository.mjs`: persistência isolada de sessões, eventos, atribuição, conversões, marcos VSL, resumo e retenção.
 - `publication-snapshot.mjs`: snapshot determinístico de todas as rotas publicadas de um projeto.
 - `publication-service.mjs`: coordenação de preview, produção confirmada, status, domínio e auditoria.
 - `publication-cors.mjs`: validação de origens HTTPS autorizadas para submissões públicas do projeto.

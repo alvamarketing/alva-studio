@@ -24,8 +24,8 @@ test('recusa multipart/form-data com 415', () => {
 });
 
 test('recusa corpo acima de 64 KB com 413 e aceita exatamente o teto', () => {
-  const empty = Buffer.byteLength(JSON.stringify(basePayload({ url_path: '' })), 'utf8');
-  const raw = JSON.stringify(basePayload({ url_path: 'a'.repeat(64 * 1024 - empty) }));
+  const empty = Buffer.byteLength(JSON.stringify(basePayload({ url_path: '/' })), 'utf8');
+  const raw = JSON.stringify(basePayload({ url_path: `/${'a'.repeat(64 * 1024 - empty)}` }));
   assert.equal(Buffer.byteLength(raw, 'utf8'), 64 * 1024, 'ajuste do teste deve cair exatamente no teto');
   assert.doesNotThrow(() => parseCollectPayload(raw, 'application/json'));
 
@@ -59,6 +59,13 @@ test('aceita todo evento da lista fechada de event_name', () => {
     const result = parseCollectPayload(JSON.stringify(basePayload({ event_name })), 'application/json');
     assert.equal(result.event.event_name, event_name);
   }
+});
+
+test('recusa form_submit: a conversão confirmada é lead emitido pelo servidor', () => {
+  assert.throws(
+    () => parseCollectPayload(JSON.stringify(basePayload({ event_name: 'form_submit' })), 'application/json'),
+    (error) => error.status === 400,
+  );
 });
 
 test('url_query é filtrada às 5 UTMs e aos click ids permitidos, descartando qualquer outra chave', () => {
@@ -113,6 +120,31 @@ test('recusa JSON inválido com 400 e corpo sem trackerPublicId com 400', () => 
   assert.throws(() => parseCollectPayload('{invalido', 'application/json'), (error) => error.status === 400);
   assert.throws(
     () => parseCollectPayload(JSON.stringify({ event_name: 'pageview' }), 'application/json'),
+    (error) => error.status === 400,
+  );
+});
+
+test('preserva somente metadados estruturados permitidos de VSL e formulário', () => {
+  const vsl = parseCollectPayload(JSON.stringify({
+    trackerPublicId: 'trk_abc123', event_name: 'vsl_progress',
+    event_data: { publicId: 'video_123', versionNumber: 4, value: 75 },
+  }), 'application/json');
+  assert.deepEqual(vsl.event.event_data, { publicId: 'video_123', versionNumber: 4, value: 75 });
+
+  const form = parseCollectPayload(JSON.stringify({
+    trackerPublicId: 'trk_abc123', event_name: 'form_step',
+    event_data: { formId: 'form_123', screenId: 'qualificacao', stepIndex: 2 },
+  }), 'text/plain');
+  assert.deepEqual(form.event.event_data, { formId: 'form_123', screenId: 'qualificacao', stepIndex: 2 });
+});
+
+test('recusa PII codificada em path, referenciador e metadado estruturado', () => {
+  assert.throws(
+    () => parseCollectPayload(JSON.stringify({ trackerPublicId: 'trk_abc123', event_name: 'pageview', url_path: '/contato/ana%40alva.test' }), 'application/json'),
+    (error) => error.status === 400,
+  );
+  assert.throws(
+    () => parseCollectPayload(JSON.stringify({ trackerPublicId: 'trk_abc123', event_name: 'vsl_progress', event_data: { publicId: 'ana@alva.test', versionNumber: 1, value: 75 } }), 'application/json'),
     (error) => error.status === 400,
   );
 });
