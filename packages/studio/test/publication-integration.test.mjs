@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ProjectDomainRepository, SecretVault, ProjectIntegrationRepository } from '../server/repositories/publication-repository.mjs';
+import { PublicationService } from '../server/publication-service.mjs';
+import { createDatabase, migrate } from '../server/db/postgres.mjs';
+import { CompanyRepository } from '../server/repositories/company-repository.mjs';
+import { ContentRepository } from '../server/repositories/content-repository.mjs';
+import { ProjectRepository } from '../server/repositories/project-repository.mjs';
+import { VideoRepository } from '../server/repositories/video-repository.mjs';
+import { postgresFixture } from './postgres-fixture.mjs';
+import { randomUUID } from 'node:crypto';
 
 class MemoryDatabase {
   constructor() { this.integration = null; this.secret = null; }
@@ -80,4 +88,55 @@ test('domínio de outro projeto entra em conflito e troca canônica do mesmo pro
   assert.equal(owned.transactionCalls, 1);
   assert.equal(owned.rows.find((row) => row.domain === 'old.example.test').is_canonical, false);
   assert.equal(owned.rows.find((row) => row.domain === 'new.example.test').is_canonical, true);
+});
+
+test('publicação inválida falha antes de deployment ou POST externo', async () => {
+  let deployments = 0;
+  let posts = 0;
+  const service = new PublicationService({
+    snapshotBuilder: { build: async () => {
+      const error = Object.assign(new Error('Publique a VSL antes de publicar este projeto.'), { status: 409, statusCode: 409 });
+      throw error;
+    } },
+    integrations: { credentials: async () => { throw new Error('não deveria consultar integração'); } },
+    deployments: { async createOrGet() { deployments += 1; } },
+    publisherFactory: () => ({ publish: async () => { posts += 1; } }),
+  });
+  await assert.rejects(
+    () => service.preview({ companyId: 'company-a', projectId: 'project-a', requestedBy: 'user-a', expectedRevision: 1 }),
+    (error) => error.status === 409 && /publique a VSL/i.test(error.message),
+  );
+  assert.equal(deployments, 0);
+  assert.equal(posts, 0);
+});
+
+test('publicar conteúdo com VSL inválida não cria versão e preserva a publicação anterior', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const owner = (await database.query(
+      `INSERT INTO users (email, password_hash, display_name) VALUES ($1, $2, 'Owner') RETURNING id`,
+      [`publication-vsl-${randomUUID()}@test`, 'hash'],
+    )).rows[0];
+    const companies = new CompanyRepository(database);
+    const projects = new ProjectRepository(database);
+    const company = await companies.create({ ownerUserId: owner.id, name: 'Empresa VSL', slug: `empresa-vsl-${randomUUID().slice(0, 8)}` });
+    const project = await projects.create({ companyId: company.id, actorUserId: owner.id, name: 'Projeto VSL', slug: `projeto-vsl-${randomUUID().slice(0, 8)}` });
+    const videos = new VideoRepository(database);
+    const videoInput = { companyId: company.id, projectId: project.id, actorId: owner.id, name: 'VSL', sourceUrl: 'https://media.example.test/vsl.mp4', sourceType: 'mp4' };
+    const video = await videos.createVideo(videoInput);
+    await videos.publishVideo({ ...videoInput, videoId: video.id, lockVersion: 0 });
+    const content = new ContentRepository(database, { publicOrigin: 'https://studio.alva.test' });
+    const page = await content.createPage({ companyId: company.id, projectId: project.id, actorId: owner.id, name: 'Página', route: '/pagina', editorState: { components: [{ type: 'vsl', publicId: video.publicId }] }, renderedHtml: `<div data-alva-vsl="${video.publicId}"></div>` });
+    const published = await content.publishPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
+    const publishedContent = await content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/pagina' });
+    assert.match(publishedContent.renderedHtml, /https:\/\/studio\.alva\.test\/embed\/v\//);
+    const changed = await content.updatePage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, lockVersion: 0, editorState: { components: [{ type: 'vsl', publicId: 'public-vsl-missing' }] }, renderedHtml: '<div data-alva-vsl="public-vsl-missing"></div>' });
+    await assert.rejects(() => content.publishPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, lockVersion: changed.lockVersion }), (error) => error.statusCode === 409 && /publique a VSL/i.test(error.message));
+    const current = await content.getPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
+    assert.equal(current.publishedVersionId, published.id);
+  } finally {
+    await database.close();
+  }
 });

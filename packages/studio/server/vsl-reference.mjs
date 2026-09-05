@@ -2,6 +2,10 @@ function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
+
 function validatePublicOrigin(value) {
   try {
     const origin = new URL(String(value));
@@ -53,6 +57,19 @@ export async function resolvePublishedVslReferences({ database, companyId, proje
     resolved.set(reference.publicId, await resolvePublishedVsl({ database, companyId, projectId, publicId: reference.publicId, publicOrigin }));
   }
   return resolved;
+}
+
+export function renderPublishedVslReferences(html, { vslEmbedUrls = new Map() } = {}) {
+  const source = String(html ?? '');
+  return source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, _tag, _attributes, doubleId, singleId) => {
+    const publicId = String(doubleId ?? singleId ?? '').trim();
+    const value = vslEmbedUrls instanceof Map ? vslEmbedUrls.get(publicId) : vslEmbedUrls?.[publicId];
+    const embedUrl = typeof value === 'string' ? value : value?.embedUrl;
+    if (!/^https?:\/\/[^\s]+$/i.test(String(embedUrl || ''))) {
+      throw fail(`A VSL referenciada (${publicId || 'sem publicId'}) não está publicada neste projeto. Publique a VSL antes de publicar o conteúdo.`, 409);
+    }
+    return `<iframe class="alva-vsl-frame" src="${escapeHtml(embedUrl)}" title="VSL" aria-label="VSL" allow="autoplay; fullscreen; picture-in-picture" loading="lazy" allowfullscreen></iframe>`;
+  });
 }
 
 // Public form rendering may keep a partial map so the renderer can show its

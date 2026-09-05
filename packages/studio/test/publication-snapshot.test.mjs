@@ -74,7 +74,7 @@ test('snapshot mantém publicação estrita quando uma VSL referenciada não est
   }];
   await assert.rejects(
     () => buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
-    (error) => error.status === 404,
+    (error) => error.status === 409 && /publique a VSL/i.test(error.message),
   );
 });
 
@@ -129,5 +129,57 @@ test('snapshot publica VSL GrapesJS com movimento estrutural e não aceita atrib
       companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
     }),
     /referência de VSL inválida/i,
+  );
+});
+
+test('snapshot injeta no HTML da página somente o embed absoluto da versão publicada', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-html', version_id: 'page-version-vsl-html', version_number: 1, path: '/vsl-html',
+    rendered_html: '<section><div data-alva-vsl="public-vsl-123456"><iframe src="https://draft.example/v.mp4"></iframe></div></section>',
+    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-123456' }] },
+  }];
+  const snapshot = await buildPublishableSnapshot({
+    database: database(rows, [{ public_id: 'public-vsl-123456', version_number: 4 }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+  });
+  const html = snapshot.files[0].data;
+  assert.match(html, /<iframe[^>]+src="https:\/\/studio\.alva\.test\/embed\/v\/public-vsl-123456"/i);
+  assert.doesNotMatch(html, /draft\.example|sourceUrl|version_id|page-version-vsl-html/i);
+});
+
+test('snapshot deduplica VSL repetida entre página e formulário', async () => {
+  const rows = [
+    {
+      kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+      content_id: 'page-vsl-dup', version_id: 'page-version-vsl-dup', version_number: 1, path: '/pagina',
+      rendered_html: '<div data-alva-vsl="public-vsl-duplicate"></div>',
+      editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-duplicate' }] },
+    },
+    {
+      kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+      content_id: 'form-vsl-dup', version_id: 'form-version-vsl-dup', version_number: 1, path: '/formulario',
+      schema: { steps: [{ id: 'step', elements: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl-duplicate' }] }] },
+    },
+  ];
+  let videoQueries = 0;
+  const db = { query: async (text) => {
+    if (/FROM videos/i.test(text)) videoQueries += 1;
+    return { rows: /FROM videos/i.test(text) ? [{ public_id: 'public-vsl-duplicate', version_number: 2 }] : rows };
+  } };
+  const snapshot = await buildPublishableSnapshot({ database: db, companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' });
+  assert.equal(videoQueries, 1);
+  assert.match(snapshot.files[1].data, /https:\/\/studio\.alva\.test\/embed\/v\/public-vsl-duplicate/);
+});
+
+test('snapshot bloqueia VSL sem versão publicada com conflito acionável antes de gerar arquivos', async () => {
+  const rows = [{
+    kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'form-vsl-draft', version_id: 'form-version-vsl-draft', version_number: 1, path: '/captura',
+    schema: { steps: [{ id: 'step', elements: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl-draft' }] }] },
+  }];
+  await assert.rejects(
+    () => buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
+    (error) => error.status === 409 && /publique a VSL|versão publicada|projeto/i.test(error.message),
   );
 });

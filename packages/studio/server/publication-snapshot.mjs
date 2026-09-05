@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { normalizeRoute } from './domain/access.mjs';
 import { normalizeFormInput } from './form-store.mjs';
 import { renderDynamicForm } from './dynamic-form.mjs';
-import { resolvePublishedVslReferences } from './vsl-reference.mjs';
+import { renderPublishedVslReferences, resolvePublishedVslReferences } from './vsl-reference.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -95,7 +95,7 @@ function recordForRow(row, publicOrigin, vslEmbedUrls = new Map()) {
       versionId: row.version_id,
       versionNumber: row.version_number,
       file: pathFile(path),
-      data: row.rendered_html,
+      data: renderPublishedVslReferences(row.rendered_html, { vslEmbedUrls }),
     };
   }
   if (!row.company_slug || !row.project_slug) throw fail('A publicação não encontrou o projeto público.', 409);
@@ -143,7 +143,15 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
   );
   if (!rows.length) throw fail('Não há nenhuma rota publicada para este projeto.', 409);
   const references = rows.flatMap((row) => vslReferences(row.editor_state).concat(vslReferences(row.schema)));
-  const resolvedVsl = await resolvePublishedVslReferences({ database, companyId, projectId, publicOrigin: origin, references });
+  let resolvedVsl;
+  try {
+    resolvedVsl = await resolvePublishedVslReferences({ database, companyId, projectId, publicOrigin: origin, references });
+  } catch (error) {
+    if (error?.status === 404) {
+      throw fail(`${error.message} Publique a VSL antes de publicar este conteúdo.`, 409);
+    }
+    throw error;
+  }
   const vslEmbedUrls = new Map([...resolvedVsl].map(([publicId, value]) => [publicId, value.embedUrl]));
   const records = rows.map((row) => {
     if (row.company_id !== companyId || row.project_id !== projectId) throw fail('A publicação contém conteúdo de outra empresa.', 403);

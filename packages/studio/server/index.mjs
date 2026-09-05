@@ -123,7 +123,7 @@ export function createApp({
   const getPublisher = async () => injectedPublisher || new Publisher(await auth.credentials());
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
-  const content = database ? new ContentRepository(database) : null;
+  const content = database ? new ContentRepository(database, { publicOrigin }) : null;
   const videos = database ? new VideoRepository(database) : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
   const deployments = database ? new DeploymentRepository(database) : null;

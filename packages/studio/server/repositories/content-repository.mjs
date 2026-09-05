@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from '../form-answer-validation.mjs';
 import { normalizeFormInput } from '../form-store.mjs';
 import { allowedPublicationOrigin } from '../publication-cors.mjs';
+import { extractVslReferences } from '../publication-snapshot.mjs';
+import { renderPublishedVslReferences, resolvePublishedVslReferences } from '../vsl-reference.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -284,8 +286,20 @@ async function assertPublishedPathAvailable(client, { companyId, projectId, path
 }
 
 export class ContentRepository {
-  constructor(database) {
+  constructor(database, { publicOrigin = process.env.PUBLIC_ORIGIN } = {}) {
     this.database = database;
+    this.publicOrigin = publicOrigin;
+  }
+
+  async assertPublishedVslReferences(client, { companyId, projectId, editorState, schema }) {
+    const references = extractVslReferences(editorState).concat(extractVslReferences(schema));
+    if (!references.length) return new Map();
+    try {
+      return await resolvePublishedVslReferences({ database: client, companyId, projectId, publicOrigin: this.publicOrigin, references });
+    } catch (error) {
+      if (error?.status === 404) throw fail(`${error.message} Publique a VSL antes de publicar este conteúdo.`, 409);
+      throw error;
+    }
   }
 
   async createPage({ companyId, projectId, actorId, name, route: routeValue, template, editorState = {}, renderedHtml = '' }) {
@@ -800,6 +814,8 @@ export class ContentRepository {
       const page = await scopedPage(client, { companyId, projectId, pageId, lock: true });
       if (expectedLockVersion !== undefined && page.lock_version !== lockVersion(expectedLockVersion))
         throw fail('A página mudou em outra aba. Reabra antes de publicar.', 409);
+      const resolvedVsl = await this.assertPublishedVslReferences(client, { companyId, projectId, editorState: page.editor_state });
+      const renderedHtml = renderPublishedVslReferences(page.rendered_html, { vslEmbedUrls: resolvedVsl });
       await assertPublishedPathAvailable(client, {
         companyId, projectId, path: page.route, contentId: pageId, contentType: 'page',
       });
@@ -811,7 +827,7 @@ export class ContentRepository {
         `INSERT INTO page_versions (company_id, project_id, page_id, version_number, published_path, editor_state, rendered_html, created_by)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
          RETURNING *`,
-        [companyId, projectId, pageId, number.rows[0].version_number, page.route, JSON.stringify(page.editor_state), page.rendered_html, actorId],
+        [companyId, projectId, pageId, number.rows[0].version_number, page.route, JSON.stringify(page.editor_state), renderedHtml, actorId],
       );
       await client.query(
         `UPDATE pages
@@ -830,6 +846,7 @@ export class ContentRepository {
       if (expectedLockVersion !== undefined && form.lock_version !== lockVersion(expectedLockVersion))
         throw fail('O formulário mudou em outra aba. Reabra antes de publicar.', 409);
       const schema = normalizeFormInput(form.draft_schema);
+      await this.assertPublishedVslReferences(client, { companyId, projectId, schema });
       await assertPublishedPathAvailable(client, {
         companyId, projectId, path: form.route, contentId: formId, contentType: 'form',
       });
