@@ -99,6 +99,41 @@ export function componentLabel(component) {
   );
 }
 
+function componentChildren(component) {
+  const children = component?.components?.();
+  if (Array.isArray(children)) return children;
+  return children?.models || [];
+}
+
+function componentTreeId(component) {
+  return String(component?.cid || component?.getId?.() || component?.get?.('id') || '');
+}
+
+export function componentTreeNodes(wrapper, selected) {
+  const nodes = [];
+  const visit = (component, level) => {
+    const id = componentTreeId(component);
+    if (!id) return;
+    nodes.push({ id, label: componentLabel(component), level, selected: component === selected });
+    componentChildren(component).forEach((child) => visit(child, level + 1));
+  };
+  componentChildren(wrapper).forEach((component) => visit(component, 1));
+  return nodes;
+}
+
+export function treeKeyAction(event, visibleIds, selectedId) {
+  const ids = Array.from(visibleIds || []);
+  if (!ids.length) return null;
+  const index = ids.indexOf(selectedId);
+  const selectedIndex = index < 0 ? 0 : index;
+
+  if (event?.key === 'ArrowUp') return ids[Math.max(0, selectedIndex - 1)];
+  if (event?.key === 'ArrowDown') return ids[Math.min(ids.length - 1, selectedIndex + 1)];
+  if (event?.key === 'Home') return ids[0];
+  if (event?.key === 'End') return ids.at(-1);
+  return null;
+}
+
 export function createFriendlyEditor({
   container,
   project,
@@ -110,13 +145,34 @@ export function createFriendlyEditor({
   const host = typeof container === 'string' ? document.querySelector(container) : container;
   if (!host) throw new Error('Não foi possível abrir a área de edição.');
   host.classList.add('friendly-editor');
-  host.innerHTML = `<aside class="fe-sidebar"><div class="fe-library"><div class="fe-panel-heading"><span class="fe-eyebrow">CONSTRUA SUA PÁGINA</span><h2>Adicionar elementos</h2><p>Clique para adicionar ou arraste para o lugar desejado.</p></div><div class="fe-blocks"></div><div class="fe-library-tip"><strong>Comece pelo essencial</strong><p>Um título claro, uma imagem e um convite para conversar.</p></div></div><div class="fe-inspector" aria-label="Editar elemento" hidden><div class="fe-properties"></div></div></aside><div class="fe-workspace"><div class="fe-canvas-bar" aria-label="Histórico de edição"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></div><div class="fe-canvas"></div><div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div></div>`;
+  host.innerHTML = `
+    <aside class="fe-sidebar" data-editor-panel="structure">
+      <div class="fe-panel-heading">
+        <span class="fe-eyebrow">CONSTRUA SUA PÁGINA</span>
+        <h2>Estrutura</h2>
+        <p>Selecione um elemento para editar ou mude sua ordem pelos controles de edição.</p>
+      </div>
+      <div class="fe-tree" role="tree" aria-label="Estrutura da página"></div>
+      <details class="fe-library" open>
+        <summary>Adicionar elementos</summary>
+        <div class="fe-blocks"></div>
+        <div class="fe-library-tip"><strong>Comece pelo essencial</strong><p>Um título claro, uma imagem e um convite para conversar.</p></div>
+      </details>
+    </aside>
+    <div class="fe-workspace" data-editor-panel="canvas">
+      <div class="fe-canvas-bar" aria-label="Histórico de edição"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></div>
+      <div class="fe-canvas"></div>
+      <div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div>
+    </div>
+    <aside class="fe-inspector" data-editor-panel="inspector" aria-label="Editar elemento"><div class="fe-properties"></div></aside>`;
   const $ = (selector) => host.querySelector(selector);
   const props = $('.fe-properties');
   const status = $('.fe-status');
+  const tree = $('.fe-tree');
   let loading = true;
   let repaint;
   let activeModel;
+  let treeComponents = new Map();
   const cleanup = [];
   function applyIconButton(element, action, shortcut = '') {
     const meta = editorActionMeta[action];
@@ -210,6 +266,58 @@ export function createFriendlyEditor({
 
   function announce(message) {
     status.textContent = message;
+  }
+  function focusTreeItem(id) {
+    tree.querySelectorAll('[data-tree-id]').forEach((item) => {
+      if (item.dataset.treeId === id) item.focus();
+    });
+  }
+  function selectTreeItem(id, focus = false) {
+    const component = treeComponents.get(id);
+    if (!component) return;
+    editor.select(component, { scroll: true });
+    activeModel = null;
+    render();
+    if (focus) focusTreeItem(id);
+  }
+  function renderTree() {
+    const wrapper = editor.getWrapper();
+    const nodes = componentTreeNodes(wrapper, editor.getSelected());
+    treeComponents = new Map();
+    const collect = (component) => {
+      const id = componentTreeId(component);
+      if (id) treeComponents.set(id, component);
+      componentChildren(component).forEach(collect);
+    };
+    componentChildren(wrapper).forEach(collect);
+    tree.replaceChildren();
+    if (!nodes.length) {
+      const empty = document.createElement('p');
+      empty.className = 'fe-tree-empty';
+      empty.textContent = 'Adicione um elemento para começar a montar sua página.';
+      tree.append(empty);
+      return;
+    }
+    const visibleIds = nodes.map((node) => node.id);
+    for (const node of nodes) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'fe-tree-item';
+      item.dataset.treeId = node.id;
+      item.setAttribute('role', 'treeitem');
+      item.setAttribute('aria-level', String(node.level));
+      item.setAttribute('aria-selected', String(node.selected));
+      item.style.setProperty('--fe-tree-level', String(node.level));
+      item.textContent = node.label;
+      item.onclick = () => selectTreeItem(node.id);
+      item.onkeydown = (event) => {
+        const next = treeKeyAction(event, visibleIds, node.id);
+        if (!next) return;
+        event.preventDefault();
+        selectTreeItem(next, true);
+      };
+      tree.append(item);
+    }
   }
   function formStyles() {
     normalizeForms(editor);
@@ -403,12 +511,17 @@ export function createFriendlyEditor({
       return;
     activeModel = model;
     const mode = panelMode(model);
-    $('.fe-library').hidden = mode !== 'library';
-    $('.fe-inspector').hidden = mode !== 'inspector';
+    renderTree();
     $('.fe-canvas-bar [data-undo]').disabled = !editor.UndoManager.hasUndo();
     $('.fe-canvas-bar [data-redo]').disabled = !editor.UndoManager.hasRedo();
     props.replaceChildren();
-    if (mode === 'library') return;
+    if (mode === 'library') {
+      const empty = document.createElement('div');
+      empty.className = 'fe-inspector-empty';
+      empty.innerHTML = '<h3>Selecione um elemento</h3><p class="fe-help">Escolha na estrutura ou clique no canvas para editar conteúdo, aparência e posição.</p>';
+      props.append(empty);
+      return;
+    }
     const tag = tagOf(model);
     const attrs = model.getAttributes();
     const head = section('Editar ' + componentLabel(model).toLocaleLowerCase('pt-BR'));
@@ -416,16 +529,6 @@ export function createFriendlyEditor({
       className: 'fe-back-library',
     });
     head.prepend(backToLibrary);
-    const trail = document.createElement('div');
-    trail.className = 'fe-breadcrumb';
-    head.prepend(trail);
-    const ancestors = [];
-    let ancestor = model.parent();
-    while (ancestor && ancestors.length < 3) {
-      ancestors.unshift(ancestor);
-      ancestor = ancestor.parent();
-    }
-    for (const item of ancestors) button(trail, componentLabel(item), () => editor.select(item));
     const actions = document.createElement('div');
     actions.className = 'fe-element-actions';
     head.append(actions);

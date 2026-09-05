@@ -1,7 +1,7 @@
 /* Original: the friendly editing shell. The canvas keeps each page's own styles. */
 .friendly-editor {
   display: grid;
-  grid-template-columns: 282px minmax(300px, 1fr);
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px);
   height: calc(100dvh - 66px);
   min-height: 520px;
   background: var(--alva-surface-alt);
@@ -21,9 +21,13 @@
   scrollbar-color: var(--alva-soft) transparent;
   border-right: 1px solid var(--alva-line);
 }
-.fe-library[hidden],
-.fe-inspector[hidden] {
-  display: none !important;
+.fe-inspector {
+  min-height: 0;
+  overflow: auto;
+  background: var(--alva-white);
+  border-left: 1px solid var(--alva-line);
+  scrollbar-width: thin;
+  scrollbar-color: var(--alva-soft) transparent;
 }
 .fe-panel-heading {
   padding: 24px 17px 16px;
@@ -47,6 +51,57 @@
   color: var(--alva-muted);
   margin: 8px 0;
   white-space: pre-line;
+}
+.fe-tree {
+  display: grid;
+  gap: 3px;
+  padding: 0 10px 16px;
+}
+.fe-tree-item {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px 8px calc(10px + (var(--fe-tree-level) - 1) * 14px);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--alva-ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+}
+.fe-tree-item:hover,
+.fe-tree-item:focus-visible,
+.fe-tree-item[aria-selected='true'] {
+  border-color: var(--alva-blue-light);
+  background: var(--alva-highlight);
+  color: var(--alva-blue-strong);
+  outline: none;
+}
+.fe-tree-item:focus-visible {
+  outline: 2px solid var(--alva-blue);
+  outline-offset: 1px;
+}
+.fe-tree-empty {
+  margin: 0;
+  padding: 10px;
+  color: var(--alva-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.fe-library {
+  border-top: 1px solid var(--alva-line);
+}
+.fe-library summary {
+  padding: 14px 17px;
+  color: var(--alva-ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+.fe-library[open] summary {
+  border-bottom: 1px solid var(--alva-line);
 }
 .fe-workspace {
   display: flex;
@@ -346,23 +401,6 @@
 .fe-element-actions button:disabled {
   cursor: default;
 }
-.fe-breadcrumb {
-  display: flex;
-  gap: 2px;
-  flex-wrap: wrap;
-  margin: -4px 0 13px;
-}
-.fe-breadcrumb button {
-  font-size: 9px;
-  padding: 3px 4px;
-  border: 0;
-  background: transparent;
-  color: var(--alva-muted);
-}
-.fe-breadcrumb button + button:before {
-  content: '›';
-  margin-right: 5px;
-}
 .fe-color-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -384,7 +422,7 @@
 }
 @media (max-width: 1250px) {
   .friendly-editor {
-    grid-template-columns: 254px minmax(280px, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr) 280px;
   }
   .fe-canvas-bar {
     justify-content: flex-end;
@@ -402,7 +440,7 @@
 @media (max-width: 1050px) {
   .friendly-editor {
     height: calc(100dvh - 112px);
-    grid-template-columns: 230px minmax(250px, 1fr);
+    grid-template-columns: 210px minmax(0, 1fr) 250px;
   }
   .friendly-editor .gjs-blocks-c {
     padding: 7px;
@@ -430,10 +468,11 @@
 @media (max-width: 740px) {
   .friendly-editor {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(150px, 38dvh) minmax(0, 1fr);
+    grid-template-rows: auto minmax(320px, 1fr) auto;
+    height: auto;
     width: 100%;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
   }
   .friendly-editor .gjs-blocks-c {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -453,12 +492,18 @@
     position: static;
     width: 100%;
     min-width: 0;
+    max-height: 42dvh;
     border-right: 0;
     border-bottom: 1px solid var(--alva-line);
   }
   .fe-workspace {
     width: 100%;
     min-width: 0;
+  }
+  .fe-inspector {
+    max-height: 50dvh;
+    border-top: 1px solid var(--alva-line);
+    border-left: 0;
   }
   .fe-element-actions {
     grid-template-columns: repeat(5, minmax(0, 1fr));

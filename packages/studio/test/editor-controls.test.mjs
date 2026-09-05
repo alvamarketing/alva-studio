@@ -9,6 +9,8 @@ import {
   isCanvasBackgroundElement,
   blockIcons,
   editorKeyboardAction,
+  componentTreeNodes,
+  treeKeyAction,
 } from '../public/editor-shell.js';
 
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {
@@ -55,10 +57,60 @@ test('nomes visíveis dos componentes usam linguagem de edição', () => {
   assert.equal(componentLabel({ is: () => true, get: () => 'body' }), 'Página');
 });
 
-test('o painel único alterna entre elementos e edição conforme a seleção', () => {
+test('a seleção distingue catálogo contextual de edição de elemento', () => {
   assert.equal(panelMode(null), 'library');
   assert.equal(panelMode({ is: (type) => type === 'wrapper' }), 'library');
   assert.equal(panelMode({ is: () => false }), 'inspector');
+});
+
+test('árvore de componentes preserva a ordem, níveis e uma única seleção', () => {
+  const component = (cid, tagName, children = [], wrapper = false) => ({
+    cid,
+    get: (key) => (key === 'tagName' ? tagName : undefined),
+    components: () => children,
+    is: (type) => wrapper && type === 'wrapper',
+  });
+  const heading = component('heading', 'h1');
+  const button = component('button', 'button');
+  const section = component('section', 'section', [heading, button]);
+  const footer = component('footer', 'footer');
+  const wrapper = component('wrapper', 'body', [section, footer], true);
+
+  assert.deepEqual(componentTreeNodes(wrapper, button), [
+    { id: 'section', label: 'Seção', level: 1, selected: false },
+    { id: 'heading', label: 'Título', level: 2, selected: false },
+    { id: 'button', label: 'Botão', level: 2, selected: true },
+    { id: 'footer', label: 'Rodapé', level: 1, selected: false },
+  ]);
+});
+
+test('teclado da árvore percorre itens visíveis sem acionar exclusão', () => {
+  const ids = ['section', 'heading', 'button'];
+
+  assert.equal(treeKeyAction({ key: 'ArrowDown' }, ids, 'heading'), 'button');
+  assert.equal(treeKeyAction({ key: 'ArrowDown' }, ids, 'button'), 'button');
+  assert.equal(treeKeyAction({ key: 'ArrowUp' }, ids, 'section'), 'section');
+  assert.equal(treeKeyAction({ key: 'Home' }, ids, 'button'), 'section');
+  assert.equal(treeKeyAction({ key: 'End' }, ids, 'section'), 'button');
+  assert.equal(treeKeyAction({ key: 'Delete' }, ids, 'button'), null);
+  assert.equal(treeKeyAction({ key: 'Backspace' }, ids, 'button'), null);
+});
+
+test('landing declara árvore acessível e as três regiões persistentes', async () => {
+  const [source, css] = await Promise.all([
+    readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8'),
+    readFile(new URL('../public/editor-shell.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(source, /role="tree"/);
+  assert.match(source, /setAttribute\('role', 'treeitem'\)/);
+  assert.match(source, /aria-level/);
+  assert.match(source, /aria-selected/);
+  assert.match(source, /data-editor-panel="structure"/);
+  assert.match(source, /data-editor-panel="canvas"/);
+  assert.match(source, /data-editor-panel="inspector"/);
+  assert.doesNotMatch(source, /fe-breadcrumb/);
+  assert.ok(css.includes('grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px)'));
 });
 
 test('ações compactas preservam nomes acessíveis e ícones', () => {
