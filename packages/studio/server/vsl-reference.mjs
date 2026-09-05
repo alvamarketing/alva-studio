@@ -1,3 +1,5 @@
+import { transformHtmlElements } from '../vsl-html.js';
+
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
 }
@@ -60,9 +62,10 @@ export async function resolvePublishedVslReferences({ database, companyId, proje
 }
 
 export function renderPublishedVslReferences(html, { vslEmbedUrls = new Map() } = {}) {
-  const source = String(html ?? '');
-  const rendered = source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, _tag, _attributes, doubleId, singleId) => {
-    const publicId = String(doubleId ?? singleId ?? '').trim();
+  const rendered = transformHtmlElements(html, ({ attributes }) => {
+    const attribute = attributes.find(({ name }) => name === 'data-alva-vsl');
+    if (!attribute || attribute.value === null) return null;
+    const publicId = String(attribute.value ?? '').trim();
     const value = vslEmbedUrls instanceof Map ? vslEmbedUrls.get(publicId) : vslEmbedUrls?.[publicId];
     const embedUrl = typeof value === 'string' ? value : value?.embedUrl;
     if (!/^https?:\/\/[^\s]+$/i.test(String(embedUrl || ''))) {
@@ -78,32 +81,33 @@ function publishedVslIframeMarkup(embedUrl) {
 }
 
 function rewriteKnownVslIframes(html, vslEmbedUrls) {
-  const source = String(html ?? '');
-  return source.replace(/<iframe\b([^>]*)>([\s\S]*?)<\/iframe\s*>/gi, (whole, attributes) => {
-    const classMatch = attributes.match(/\bclass\s*=\s*(["'])([\s\S]*?)\1/i);
-    if (!classMatch || !classMatch[2].split(/\s+/).includes('alva-vsl-frame')) return whole;
-    const srcMatch = attributes.match(/\bsrc\s*=\s*(["'])([\s\S]*?)\1/i);
-    if (!srcMatch) return whole;
+  return transformHtmlElements(html, ({ tagName, attributes }) => {
+    if (tagName !== 'iframe') return null;
+    const classAttribute = attributes.find(({ name }) => name === 'class');
+    const classMatch = classAttribute?.value?.match(/(?:^|\s)alva-vsl-frame(?:\s|$)/i);
+    if (!classMatch) return null;
+    const src = attributes.find(({ name }) => name === 'src')?.value;
+    if (src === null || src === undefined) return null;
     let url;
     try {
-      url = new URL(srcMatch[2]);
+      url = new URL(src);
     } catch {
-      return whole;
+      return null;
     }
-    if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash) return whole;
+    if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash) return null;
     const prefix = '/embed/v/';
-    if (!url.pathname.startsWith(prefix)) return whole;
+    if (!url.pathname.startsWith(prefix)) return null;
     const encodedPublicId = url.pathname.slice(prefix.length);
-    if (!encodedPublicId || encodedPublicId.includes('/')) return whole;
+    if (!encodedPublicId || encodedPublicId.includes('/')) return null;
     let publicId;
     try {
       publicId = decodeURIComponent(encodedPublicId);
     } catch {
-      return whole;
+      return null;
     }
     const value = vslEmbedUrls instanceof Map ? vslEmbedUrls.get(publicId) : vslEmbedUrls?.[publicId];
     const embedUrl = typeof value === 'string' ? value : value?.embedUrl;
-    if (!/^https?:\/\/[^\s]+$/i.test(String(embedUrl || ''))) return whole;
+    if (!/^https?:\/\/[^\s]+$/i.test(String(embedUrl || ''))) return null;
     return publishedVslIframeMarkup(embedUrl);
   });
 }

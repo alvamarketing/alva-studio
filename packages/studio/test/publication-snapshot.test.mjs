@@ -183,6 +183,44 @@ test('snapshot reescreve apenas iframe legado que aponta para VSL conhecida', as
   assert.match(html, /https:\/\/evil\.example\.test\/embed\/v\/outro/);
 });
 
+test('publicação transforma somente nós reais e preserva byte a byte comentários e raw text', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-raw-text', version_id: 'page-version-vsl-raw-text', version_number: 1, path: '/vsl-raw-text',
+    rendered_html: '<!-- <div data-alva-vsl="public-vsl-raw-text"></div> --><script>const x = \'<iframe class="alva-vsl-frame" src="https://client.example/embed/v/public-vsl-raw-text"></iframe>\';</script><style>.x{content:"<div data-alva-vsl=\\\'public-vsl-raw-text\\\'></div>"}</style><template><div data-alva-vsl="public-vsl-raw-text"></div></template><main><div data-alva-vsl="public-vsl-raw-text"></div><iframe class="alva-vsl-frame" src="https://client.example/embed/v/public-vsl-raw-text"></iframe></main>',
+    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-raw-text' }] },
+  }];
+  const snapshot = await buildPublishableSnapshot({
+    database: database(rows, [{ public_id: 'public-vsl-raw-text', version_number: 1 }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
+  });
+  const html = snapshot.files[0].data;
+  assert.match(html, /<!-- <div data-alva-vsl="public-vsl-raw-text"><\/div> -->/);
+  assert.match(html, /const x = \'<iframe class="alva-vsl-frame" src="https:\/\/client\.example\/embed\/v\/public-vsl-raw-text"><\/iframe>\';/);
+  assert.match(html, /<template><div data-alva-vsl="public-vsl-raw-text"><\/div><\/template>/);
+  assert.equal((html.match(/src="https:\/\/public\.example\.test\/embed\/v\/public-vsl-raw-text"/g) || []).length, 2);
+});
+
+test('publicação preserva HTML malformado em vez de aplicar substituição parcial', async () => {
+  for (const renderedHtml of [
+    '<main><div data-alva-vsl="public-vsl-malformed><span></main>',
+    '<main><div data-alva-vsl=<script>alert(1)</script>></div></main>',
+    '<main><div data-alva-vsl></div></main>',
+  ]) {
+    const rows = [{
+      kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+      content_id: 'page-vsl-malformed', version_id: 'page-version-vsl-malformed', version_number: 1, path: '/vsl-malformed',
+      rendered_html: renderedHtml,
+      editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-malformed' }] },
+    }];
+    const snapshot = await buildPublishableSnapshot({
+      database: database(rows, [{ public_id: 'public-vsl-malformed', version_number: 1 }]),
+      companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
+    });
+    assert.equal(snapshot.files[0].data, renderedHtml);
+  }
+});
+
 test('snapshot deduplica VSL repetida entre página e formulário', async () => {
   const rows = [
     {

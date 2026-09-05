@@ -163,6 +163,7 @@ export function createApp({
     '/owner.js': ['public/owner.js', 'text/javascript'],
     '/owner.css': ['public/owner.css', 'text/css'],
     '/editor-shell.js': ['public/editor-shell.js', 'text/javascript'],
+    '/vsl-html.js': ['vsl-html.js', 'text/javascript'],
     '/editor-shell.css': ['public/editor-shell.css', 'text/css'],
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],

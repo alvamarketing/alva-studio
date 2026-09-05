@@ -231,6 +231,25 @@ test('prévia do componente troca e remove o iframe público e a saída transfor
   assert.match(renderVslReferences('<div data-alva-vsl="public-vsl-123456"></div>', { publicOrigin: 'https://studio.example.test' }), /<iframe[^>]+src="https:\/\/studio\.example\.test\/embed\/v\/public-vsl-123456"/);
 });
 
+test('materialização do cliente transforma somente nós reais fora de comentários e raw text', () => {
+  const source = '<!-- <div data-alva-vsl="public-vsl-literal"></div> --><script>const html = \'<div data-alva-vsl="public-vsl-literal"></div>\';</script><style>.x::after{content:"<div data-alva-vsl=\\\'public-vsl-literal\\\'></div>"}</style><template><div data-alva-vsl="public-vsl-literal"></div></template><textarea><div data-alva-vsl="public-vsl-literal"></div></textarea><title><div data-alva-vsl="public-vsl-literal"></div></title><main><div data-alva-vsl="public-vsl-literal"></div></main><section data-alva-vsl="public-vsl-literal"></section>';
+  const output = renderVslReferences(source, { publicOrigin: 'https://studio.example.test' });
+  assert.equal(output.slice(0, output.indexOf('<main>')), source.slice(0, source.indexOf('<main>')));
+  assert.equal((output.match(/embed\/v\/public-vsl-literal/g) || []).length, 2);
+  assert.match(output, /<main><iframe[^>]+embed\/v\/public-vsl-literal/);
+  assert.match(output, /<\/main><iframe[^>]+embed\/v\/public-vsl-literal/);
+});
+
+test('materialização do cliente falha de forma conservadora em HTML malformado', () => {
+  for (const malformed of [
+    '<main><div data-alva-vsl="public-vsl-malformed><span></main>',
+    '<main><div data-alva-vsl=<script>alert(1)</script>></div></main>',
+    '<main><div data-alva-vsl></div></main>',
+  ]) {
+    assert.equal(renderVslReferences(malformed, { publicOrigin: 'https://studio.example.test' }), malformed);
+  }
+});
+
 test('fluxo comportamental de exportação materializa o iframe público com título seguro', () => {
   const output = buildPageExportHtml({
     title: 'Página <VSL>',

@@ -24,5 +24,30 @@ As falhas foram reproduzidas com mensagens assertivas sobre esses comportamentos
 
 - Focais: `editor-controls.test.mjs`, `publication-snapshot.test.mjs` e `project-content.test.mjs` — todos verdes.
 - Suíte serial: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — **257 testes passando, 0 falhas**.
-- Sintaxe: `node --check` nos três arquivos de produção alterados — passou.
+- Sintaxe: `node --check` nos quatro módulos de produção alterados — passou.
 - Integridade do patch: `git diff --check` — passou.
+
+## Round 1 — proteção do tokenizador
+
+### Evidência RED
+
+Os testes de regressão para comentários, `script`, `style`, `template`, `textarea` e `title` falharam antes da correção: o renderer global substituiu marcadores literais e iframes dentro dessas regiões. O caso equivalente de publicação também alterou strings protegidas no snapshot.
+
+### Correção
+
+`packages/studio/vsl-html.js` passou a concentrar um tokenizador conservador compartilhado pelo cliente e pelo servidor. Ele preserva comentários e raw text integralmente, entende aspas em atributos, só substitui elementos reais completos e devolve HTML malformado sem transformação parcial. A publicação usa o mesmo caminho para o fallback de iframe legado, limitado a iframes reais com referência publicada conhecida. O módulo foi incluído no mapa HTTP do servidor para que o grafo de imports do app continue servível.
+
+### Cobertura adicional
+
+- marcador e iframe literal dentro de comentário, `script` e `style` preservados byte a byte;
+- marcadores dentro de `template`, `textarea` e `title` preservados;
+- nós reais antes e depois materializados nos dois lados;
+- atributos sem fechamento e valores não quotados malformados preservados;
+- CSS e JavaScript continuam íntegros.
+- tags sem valor, atributos não quotados inválidos e tentativas de injeção são preservados sem substituição parcial.
+
+### Validação da rodada
+
+- Focais cliente, snapshot/publicação e servidor: **51 passando, 0 falhas**.
+- Suíte serial após a correção: **261 testes passando, 0 falhas**.
+- Grafo HTTP inclui `/vsl-html.js`; `node --check` e `git diff --check` passaram.
