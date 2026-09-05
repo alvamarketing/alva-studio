@@ -17,7 +17,7 @@ nos:
     passa_quando:
       tipo: comando
       comando: node --test --test-concurrency=1 packages/studio/test/*.test.mjs
-      espera: exit 0 com 117 testes, incluindo isolamento entre duas empresas em leitura, escrita, exclusão, respostas, publicação e integrações pendentes
+      espera: exit 0 com 123 testes, incluindo isolamento entre duas empresas em leitura, escrita, exclusão, respostas, publicação e integrações pendentes
   - id: worker_webhook
     estado: pendente
     faz: Entregar webhooks em fila com resolução DNS, bloqueio de destinos privados e defesa contra DNS rebinding
