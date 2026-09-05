@@ -270,6 +270,15 @@ test('materialização do cliente protege CDATA e falha atomicamente quando CDAT
   assert.equal(renderVslReferences(malformed, { publicOrigin: 'https://studio.example.test' }), malformed);
 });
 
+test('materialização do cliente consome CDATA dentro do elemento alvo e preserva plaintext ambíguo atomicamente', () => {
+  const nestedCdata = '<main><div data-alva-vsl="public-vsl-before-cdata"><![CDATA[</div>]]></div><section data-alva-vsl="public-vsl-after-cdata"></section></main>';
+  const cdataOutput = renderVslReferences(nestedCdata, { publicOrigin: 'https://studio.example.test' });
+  assert.equal((cdataOutput.match(/studio\.example\.test\/embed\/v\//g) || []).length, 2);
+  assert.doesNotMatch(cdataOutput, /\]\]>\]<\/div>/);
+  const plaintext = '<main><div data-alva-vsl="public-vsl-before-plaintext"></div><plaintext><div data-alva-vsl="public-vsl-after-plaintext"></div>';
+  assert.equal(renderVslReferences(plaintext, { publicOrigin: 'https://studio.example.test' }), plaintext);
+});
+
 test('fluxo comportamental de exportação materializa o iframe público com título seguro', () => {
   const output = buildPageExportHtml({
     title: 'Página <VSL>',

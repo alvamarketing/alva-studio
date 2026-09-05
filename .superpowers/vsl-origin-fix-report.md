@@ -68,3 +68,20 @@ O tokenizador agora valida o documento inteiro antes de chamar qualquer substitu
 - Suíte serial: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — **265 testes passando, 0 falhas**.
 - Sintaxe: `node --check` — passou.
 - Integridade do patch: `git diff --check` — passou.
+
+## Round 3 — tokenização única para spans balanceados
+
+### Evidência RED
+
+As reproduções do reviewer falharam antes da consolidação: CDATA dentro de um `div` alvo fazia o localizador parar no `</div>` literal da CDATA e deixar lixo, enquanto `<plaintext>` sem fechamento permitia materializar o marcador anterior antes de falhar. O cliente e a publicação apresentaram **1 falha cada** em uma execução focal de 48 testes.
+
+### Correção
+
+`tokenizeHtmlDocument` agora é a única passagem que valida e monta os spans dos elementos, zonas protegidas e limites de fechamento. A transformação consome diretamente esses tokens; não há um segundo `findElementEnd` para reinterpretar o conteúdo. CDATA é pulada em qualquer profundidade, inclusive dentro do elemento substituído. `<plaintext>` é tratado conservadoramente como ambíguo: o documento inteiro permanece byte a byte e nenhuma transformação é feita.
+
+### Validação da rodada
+
+- Focais cliente + publicação + servidor: **57 passando, 0 falhas**.
+- Suíte serial: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — **267 testes passando, 0 falhas**.
+- Sintaxe: `node --check` nos módulos alterados — passou.
+- Integridade do patch: `git diff --check` — passou.

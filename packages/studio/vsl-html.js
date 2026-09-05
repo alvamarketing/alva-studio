@@ -81,145 +81,95 @@ function isDoctype(source, start, end) {
   return /^<!doctype\b[^>]*>$/i.test(source.slice(start, end + 1));
 }
 
-function validateHtmlDocument(source) {
+function tokenizeHtmlDocument(source) {
   const stack = [];
+  const elements = new Map();
+  const protectedRanges = new Map();
   let index = 0;
   while (index < source.length) {
     const nextTag = source.indexOf('<', index);
-    if (nextTag < 0) return stack.length === 0;
+    if (nextTag < 0) return stack.length === 0 ? { elements, protectedRanges } : null;
     if (source.startsWith('<!--', nextTag)) {
       const commentEnd = source.indexOf('-->', nextTag + 4);
-      if (commentEnd < 0) return false;
+      if (commentEnd < 0) return null;
+      protectedRanges.set(nextTag, commentEnd + 3);
       index = commentEnd + 3;
       continue;
     }
     if (source.startsWith('<![CDATA[', nextTag)) {
       const cdataEnd = findCdataEnd(source, nextTag + 9);
-      if (cdataEnd < 0) return false;
+      if (cdataEnd < 0) return null;
+      protectedRanges.set(nextTag, cdataEnd);
       index = cdataEnd;
       continue;
     }
     const tagEnd = findTagEnd(source, nextTag);
-    if (tagEnd < 0) return false;
+    if (tagEnd < 0) return null;
     if (isDoctype(source, nextTag, tagEnd)) {
       index = tagEnd + 1;
       continue;
     }
     if (source[nextTag + 1] === '/') {
       const closing = source.slice(nextTag, tagEnd + 1).match(/^<\/([A-Za-z][\w:-]*)\s*>$/);
-      if (!closing) return false;
+      if (!closing) return null;
       const tagName = closing[1].toLowerCase();
-      if (VOID_ELEMENTS.has(tagName) || stack.pop() !== tagName) return false;
+      const context = stack[stack.length - 1];
+      if (VOID_ELEMENTS.has(tagName) || !context || context.tagName !== tagName) return null;
+      context.element.elementEnd = tagEnd + 1;
+      stack.pop();
       index = tagEnd + 1;
       continue;
     }
     const opening = parseOpeningTag(source, nextTag, tagEnd);
-    if (!opening) return false;
+    if (!opening) return null;
     if (RAW_TEXT_ELEMENTS.has(opening.tagName)) {
-      if (opening.selfClosing) return false;
-      if (opening.tagName === 'plaintext') return true;
+      if (opening.selfClosing || opening.tagName === 'plaintext') return null;
       const rawEnd = findRawTextEnd(source, tagEnd + 1, opening.tagName);
-      if (rawEnd < 0) return false;
+      if (rawEnd < 0) return null;
+      protectedRanges.set(nextTag, rawEnd);
       index = rawEnd;
       continue;
     }
-    if (opening.selfClosing && !VOID_ELEMENTS.has(opening.tagName)) return false;
-    if (!opening.selfClosing && !VOID_ELEMENTS.has(opening.tagName)) stack.push(opening.tagName);
+    if (opening.selfClosing && !VOID_ELEMENTS.has(opening.tagName)) return null;
+    const element = { ...opening, start: nextTag, openEnd: tagEnd + 1, elementEnd: opening.selfClosing ? tagEnd + 1 : null };
+    elements.set(nextTag, element);
+    if (!opening.selfClosing && !VOID_ELEMENTS.has(opening.tagName)) stack.push({ tagName: opening.tagName, element });
     index = tagEnd + 1;
   }
-  return stack.length === 0;
-}
-
-function findElementEnd(source, contentStart, tagName) {
-  let depth = 1;
-  let index = contentStart;
-  while (index < source.length) {
-    const nextTag = source.indexOf('<', index);
-    if (nextTag < 0) return -1;
-    if (source.startsWith('<!--', nextTag)) {
-      const commentEnd = source.indexOf('-->', nextTag + 4);
-      if (commentEnd < 0) return -1;
-      index = commentEnd + 3;
-      continue;
-    }
-    const closingMatch = source.slice(nextTag).match(new RegExp(`^</\\s*${tagName.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\s*>`, 'i'));
-    if (closingMatch) {
-      depth -= 1;
-      index = nextTag + closingMatch[0].length;
-      if (!depth) return index;
-      continue;
-    }
-    const candidateName = tagNameFromOpening(source, nextTag);
-    if (!candidateName) {
-      index = nextTag + 1;
-      continue;
-    }
-    const tagEnd = findTagEnd(source, nextTag);
-    if (tagEnd < 0) return -1;
-    const candidate = parseOpeningTag(source, nextTag, tagEnd);
-    if (!candidate) return -1;
-    if (RAW_TEXT_ELEMENTS.has(candidate.tagName)) {
-      const rawEnd = findRawTextEnd(source, tagEnd + 1, candidate.tagName);
-      if (rawEnd < 0) return -1;
-      index = rawEnd;
-      continue;
-    }
-    if (candidate.tagName === tagName && !candidate.selfClosing) depth += 1;
-    index = tagEnd + 1;
-  }
-  return -1;
+  return stack.length === 0 ? { elements, protectedRanges } : null;
 }
 
 export function transformHtmlElements(sourceValue, replaceElement) {
   const source = String(sourceValue ?? '');
-  if (!validateHtmlDocument(source)) return source;
+  const tokenized = tokenizeHtmlDocument(source);
+  if (!tokenized) return source;
+  const { elements, protectedRanges } = tokenized;
   let output = '';
   let index = 0;
   while (index < source.length) {
     const nextTag = source.indexOf('<', index);
     if (nextTag < 0) return output + source.slice(index);
     output += source.slice(index, nextTag);
-    if (source.startsWith('<!--', nextTag)) {
-      const commentEnd = source.indexOf('-->', nextTag + 4);
-      if (commentEnd < 0) return output + source.slice(nextTag);
-      output += source.slice(nextTag, commentEnd + 3);
-      index = commentEnd + 3;
+    const protectedEnd = protectedRanges.get(nextTag);
+    if (protectedEnd !== undefined) {
+      output += source.slice(nextTag, protectedEnd);
+      index = protectedEnd;
       continue;
     }
-    if (source.startsWith('<![CDATA[', nextTag)) {
-      const cdataEnd = findCdataEnd(source, nextTag + 9);
-      if (cdataEnd < 0) return source;
-      output += source.slice(nextTag, cdataEnd);
-      index = cdataEnd;
-      continue;
-    }
-    const tagName = tagNameFromOpening(source, nextTag);
-    if (!tagName) {
+    const opening = elements.get(nextTag);
+    if (!opening) {
       output += '<';
       index = nextTag + 1;
       continue;
     }
-    const tagEnd = findTagEnd(source, nextTag);
-    if (tagEnd < 0) return output + source.slice(nextTag);
-    const opening = parseOpeningTag(source, nextTag, tagEnd);
-    if (!opening) return output + source.slice(nextTag);
-    if (RAW_TEXT_ELEMENTS.has(opening.tagName)) {
-      const rawEnd = findRawTextEnd(source, tagEnd + 1, opening.tagName);
-      if (rawEnd < 0) return output + source.slice(nextTag);
-      output += source.slice(nextTag, rawEnd);
-      index = rawEnd;
-      continue;
-    }
-    const replacement = replaceElement({ ...opening, start: nextTag, end: tagEnd });
+    const replacement = replaceElement({ ...opening, end: opening.openEnd - 1 });
     if (replacement !== undefined && replacement !== null) {
-      const elementEnd = opening.selfClosing ? tagEnd + 1 : findElementEnd(source, tagEnd + 1, opening.tagName);
-      if (elementEnd < 0) return output + source.slice(nextTag);
       output += String(replacement);
-      index = elementEnd;
+      index = opening.elementEnd;
       continue;
     }
-    output += source.slice(nextTag, tagEnd + 1);
-    index = tagEnd + 1;
+    output += source.slice(nextTag, opening.openEnd);
+    index = opening.openEnd;
   }
   return output;
 }
