@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderDynamicForm } from '../server/dynamic-form.mjs';
+import { createHash } from 'node:crypto';
+import { runInNewContext } from 'node:vm';
+import { renderDynamicForm, renderCompletion } from '../server/dynamic-form.mjs';
 import { normalizeFormInput } from '../server/form-store.mjs';
+import { parseCollectPayload } from '../server/analytics-collect.mjs';
 
 const form = {
   id: '123',
@@ -192,4 +195,74 @@ test('renderiza VSL com embed absoluto resolvido e fallback acessível sem expor
   const missing = renderDynamicForm({ ...form, steps: [{ id: 'sem-vsl', type: 'vsl', publicId: 'missing-vsl', title: 'Oferta' }] }, '/submit', { vslEmbedUrls: new Map() });
   assert.match(missing, /VSL não está disponível|VSL não encontrada|publique a VSL/i);
   assert.match(missing, /role="status"|role="alert"/);
+});
+
+test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte', () => {
+  const html = renderDynamicForm(form, '/api/public/forms/123/submit');
+  assert.equal(html.length, 18689);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '160435ef31bc85536d494d8376820fb42ebfca9cd9180ed415544bb5de259f45');
+});
+
+test('sem nonce, renderCompletion é preservado byte a byte', () => {
+  const html = renderCompletion('Tudo certo!', 'Recebemos suas respostas.');
+  assert.equal(html.length, 1240);
+  assert.equal(createHash('sha256').update(html).digest('hex'), 'dc2ba647ceced6df839ddd2ecee6ad370ee6b30659bc24cebb6d6b17d98e21ca');
+});
+
+test('nonce aparece no script do runner e no script do tracker público', () => {
+  const html = renderDynamicForm(form, '/api/public/forms/123/submit', { nonce: 'abc123', trackerPublicId: 'track-xyz' });
+  assert.match(html, /<script nonce="abc123">/);
+  assert.match(html, /<script src="\/tracker\.js" data-alva-tracker="track-xyz" nonce="abc123"><\/script>/);
+});
+
+test('runner instrumentado referencia form_start, form_step e form_submit_attempt sem ler valor de campo', () => {
+  const html = renderDynamicForm(form, '/api/public/forms/123/submit', { trackerPublicId: 'track-xyz' });
+  const scriptMatch = html.match(/<script(?: nonce="[^"]*")?>([\s\S]*?)<\/script>\s*(?:<script src="\/tracker\.js"|<\/body>)/);
+  assert.ok(scriptMatch, 'script do runner deve estar presente');
+  const runnerSource = scriptMatch[1];
+  assert.match(runnerSource, /form_start/);
+  assert.match(runnerSource, /form_step/);
+  assert.match(runnerSource, /form_submit_attempt/);
+  const iifeStart = runnerSource.indexOf('(()=>');
+  const trackingHelperCode = iifeStart >= 0 ? runnerSource.slice(0, iifeStart) : runnerSource;
+  assert.doesNotMatch(trackingHelperCode, /\.value/);
+});
+
+test('trackFormEvent do runner instrumentado gera payload plano aceito por parseCollectPayload', () => {
+  const html = renderDynamicForm(form, '/api/public/forms/123/submit', { trackerPublicId: 'track-xyz' });
+  const scriptMatch = html.match(/<script(?: nonce="[^"]*")?>([\s\S]*?)<\/script>\s*(?:<script src="\/tracker\.js"|<\/body>)/);
+  assert.ok(scriptMatch, 'script do runner deve estar presente');
+  const runnerSource = scriptMatch[1];
+  const iifeStart = runnerSource.indexOf(`(()=>{const form=document.querySelector('form')`);
+  assert.ok(iifeStart > 0, 'deve achar o início do runner original após o código de tracking');
+  const trackingHelperCode = runnerSource.slice(0, iifeStart);
+
+  const sentBodies = [];
+  const context = {
+    location: { pathname: '/f/alva/campanha/captura' },
+    navigator: { sendBeacon: (url, body) => { sentBodies.push(body); return true; } },
+    fetch: () => Promise.resolve(),
+  };
+  runInNewContext(trackingHelperCode, context);
+
+  context.trackFormEvent('form_start');
+  context.trackFormEvent('form_step');
+  context.trackFormEvent('form_submit_attempt');
+
+  assert.equal(sentBodies.length, 3);
+  const names = sentBodies.map((body) => parseCollectPayload(body, 'text/plain').event.event_name);
+  assert.deepEqual(names, ['form_start', 'form_step', 'form_submit_attempt']);
+});
+
+test('sem trackerPublicId, o runner não ganha instrumentação de eventos', () => {
+  const html = renderDynamicForm(form, '/api/public/forms/123/submit', { nonce: 'abc123' });
+  assert.doesNotMatch(html, /form_start/);
+  assert.doesNotMatch(html, /form_step/);
+  assert.doesNotMatch(html, /form_submit_attempt/);
+  assert.doesNotMatch(html, /tracker\.js/);
+});
+
+test('renderCompletion também aceita nonce sem alterar a saída atual', () => {
+  const html = renderCompletion('Tudo certo!', 'Recebemos suas respostas.', { nonce: 'zzz' });
+  assert.equal(createHash('sha256').update(html).digest('hex'), 'dc2ba647ceced6df839ddd2ecee6ad370ee6b30659bc24cebb6d6b17d98e21ca');
 });
