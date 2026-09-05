@@ -56,7 +56,7 @@ nos:
       tipo: homologação
       espera: Uma URL de vídeo válida gera player acessível, CTA no tempo correto, retomada e embed funcional.
   - id: vsl_nos_editores
-    estado: pendente
+    estado: feito
     faz: Reutilizar cada VSL como bloco nas landing pages e nas microlanding pages dos formulários dinâmicos
     depende:
       - editores_saas
@@ -66,7 +66,7 @@ nos:
       tipo: homologação
       espera: A mesma VSL funciona nos dois editores e referências ausentes ou sem versão publicada impedem uma publicação quebrada.
   - id: leads_integracoes
-    estado: pendente
+    estado: feito
     faz: Consolidar respostas no Studio, exportar CSV e entregar um webhook básico por formulário
     depende:
       - editores_saas
@@ -75,21 +75,42 @@ nos:
     passa_quando:
       tipo: homologação
       espera: Resposta persistida aparece no Studio e no CSV; webhook HTTPS recebe o evento sem misturar projetos.
-  - id: tracking_analytics
+  - id: tracking_coletor
     estado: pendente
-    faz: Integrar primeiro o Umami com UTMs, conversões e eventos essenciais de VSL
+    faz: Coletar visitas, origem, UTMs e eventos de VSL e formulário em um coletor interno compatível com o modelo do Umami, sem cookie e sem dado pessoal
     depende:
       - leads_integracoes
       - vsl_player
     produz: Visualizações, origem, conversão por conteúdo e marcos 25/50/75/100 da VSL no projeto correto
     passa_quando:
-      tipo: homologação
-      espera: Eventos não contêm respostas abertas ou dados pessoais e pertencem ao projeto correto.
+      tipo: arquivo
+      caminho: .estado/tracking_coletor.md
+      casa: "Prova: coletor sem PII, isolado por projeto, [0-9]+ testes verdes"
+  - id: tracking_pixels
+    estado: pendente
+    faz: Injetar pixels de mídia por projeto atrás de consentimento opt-in, com CSP de nonce por resposta e allowlist só dos provedores habilitados
+    depende:
+      - tracking_coletor
+    produz: Meta, GA4, TikTok, LinkedIn e Taboola carregados apenas após consentimento registrado, sem pixel dentro do player de VSL
+    passa_quando:
+      tipo: arquivo
+      caminho: .estado/tracking_pixels.md
+      casa: "Prova: pixel só após consentimento, CSP com nonce e allowlist por projeto, [0-9]+ testes verdes"
+  - id: tracking_conversoes
+    estado: pendente
+    faz: Enviar conversões server-side às plataformas com hashes SHA-256 de e-mail e telefone e click IDs, sem PII em claro e sem IP ou user agent
+    depende:
+      - tracking_pixels
+    produz: Meta CAPI, Google Enhanced Conversions, TikTok Events API, LinkedIn CAPI e Taboola S2S deduplicados por tracking_event_id
+    passa_quando:
+      tipo: arquivo
+      caminho: .estado/tracking_conversoes.md
+      casa: "Prova: payload sem PII em claro, sem IP e sem user agent, deduplicado por tracking_event_id, [0-9]+ testes verdes"
   - id: cobranca_empresa
     estado: pendente
     faz: Integrar uma assinatura empresarial inicial ao Asaas e aplicar o acesso essencial
     depende:
-      - tracking_analytics
+      - tracking_coletor
     produz: Checkout hospedado, webhook idempotente e um plano comercial por empresa
     passa_quando:
       tipo: homologação
@@ -104,7 +125,7 @@ nos:
       tipo: homologação
       espera: Chave não cruza empresa/projeto e nenhum agente publica sem ação humana.
   - id: worker_webhook
-    estado: pendente
+    estado: feito
     faz: Evoluir o webhook básico para fila com tentativas, idempotência, auditoria e defesa contra DNS rebinding
     depende:
       - leads_integracoes
