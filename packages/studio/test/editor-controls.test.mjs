@@ -12,6 +12,7 @@ import {
   componentTreeNodes,
   treeKeyAction,
   restoreTreeFocus,
+  bindTreeItemActivation,
 } from '../public/editor-shell.js';
 
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {
@@ -97,33 +98,30 @@ test('teclado da árvore percorre itens visíveis sem acionar exclusão', () => 
   assert.equal(treeKeyAction({ key: 'Backspace' }, ids, 'button'), null);
 });
 
-test('ativação por clique ou teclado restaura o foco no item recriado da árvore', () => {
-  for (const activation of ['clique', 'Enter', 'Espaço']) {
+test('binding de ativação nativa restaura o foco após click, Enter e Espaço', () => {
+  const activate = (name, event, active) => {
     let focused = false;
-    const activeItem = { dataset: { treeId: 'button' } };
+    const item = { dataset: { treeId: 'button' } };
     const replacement = {
       dataset: { treeId: 'button' },
       focus() {
         focused = true;
       },
     };
+    bindTreeItemActivation(
+      item,
+      (activeItem) => restoreTreeFocus([replacement], 'button', activeItem),
+      () => (active ? item : null),
+    );
 
-    assert.equal(restoreTreeFocus([replacement], 'button', activeItem), true, activation);
-    assert.equal(focused, true, activation);
-  }
-});
-
-test('seleção por mouse sem foco no item não desloca o foco após a árvore ser refeita', () => {
-  let focused = false;
-  const replacement = {
-    dataset: { treeId: 'button' },
-    focus() {
-      focused = true;
-    },
+    item.onclick(event);
+    assert.equal(focused, active, name);
   };
 
-  assert.equal(restoreTreeFocus([replacement], 'button', null), false);
-  assert.equal(focused, false);
+  activate('clique nativo', { type: 'click', detail: 0 }, true);
+  activate('Enter', { type: 'click', detail: 0 }, true);
+  activate('Espaço', { type: 'click', detail: 0 }, true);
+  activate('ponteiro sem foco', { type: 'click', detail: 1 }, false);
 });
 
 test('landing declara árvore acessível e as três regiões persistentes', async () => {

@@ -142,6 +142,10 @@ export function restoreTreeFocus(items, id, activeItem) {
   return true;
 }
 
+export function bindTreeItemActivation(item, onActivate, activeElement = () => document.activeElement) {
+  item.onclick = (event) => onActivate(event?.type === 'click' && activeElement() === item ? item : null);
+}
+
 export function createFriendlyEditor({
   container,
   project,
@@ -315,7 +319,7 @@ export function createFriendlyEditor({
       item.setAttribute('aria-selected', String(node.selected));
       item.style.setProperty('--fe-tree-level', String(node.level));
       item.textContent = node.label;
-      item.onclick = () => selectTreeItem(node.id, document.activeElement === item ? item : null);
+      bindTreeItemActivation(item, (activeItem) => selectTreeItem(node.id, activeItem));
       item.onkeydown = (event) => {
         const next = treeKeyAction(event, visibleIds, node.id);
         if (!next) return;
