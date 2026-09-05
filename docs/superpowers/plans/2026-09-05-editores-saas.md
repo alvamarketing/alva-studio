@@ -245,4 +245,3 @@ Se suíte e as duas inspeções forem aprovadas, marcar editores_saas como feito
 Se gate aprovado: git add packages/studio/public/editor-workspace.js packages/studio/public/editor-shell.js packages/studio/public/editor-shell.css packages/studio/public/forms.js packages/studio/public/forms.css packages/studio/test/editor-workspace.test.mjs packages/studio/test/editor-controls.test.mjs packages/studio/test/editor-header.test.mjs packages/studio/test/forms-ui.test.mjs packages/studio/test/studio-context-boundary.test.mjs packages/studio/test/studio-shell.test.mjs produto/grafo.yaml .estado/editores-saas.md && git commit -m "feat: conclui os editores SaaS por projeto"
 
 Se o gate visual estiver pendente, não incluir produto/grafo.yaml ou .estado/editores-saas.md; registrar a pendência no relatório de execução.
-
