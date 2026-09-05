@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { dashboardModel, isProjectSlug, roleLabel } from './studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createProjectSubmission, dashboardModel, isProjectSlug, roleLabel } from './studio-dashboard.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -27,6 +27,9 @@ let editor,
   ownerUI,
   formsUI,
   studioShell,
+  dashboardContextFlow,
+  dashboardStateOverride,
+  projectSubmission,
   contextBoundary,
   companyOverviewRequest = 0,
   config = { vercelConnected: false };
@@ -59,19 +62,7 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
-  const entries = [
-    ['home', '#nav-home'],
-    ['company', '#nav-company'],
-    ['pages', '#nav-pages'],
-    ['forms', '#nav-forms'],
-  ];
-  for (const [name, selector] of entries) {
-    const button = $(selector);
-    const active = name === view;
-    button.classList.toggle('nav-active', active);
-    if (active) button.setAttribute('aria-current', 'page');
-    else button.removeAttribute('aria-current');
-  }
+  applyDashboardNavigation({ home: $('#nav-home'), company: $('#nav-company'), pages: $('#nav-pages'), forms: $('#nav-forms') }, view);
 }
 function setDashboardView(view) {
   const sections = {
@@ -84,6 +75,14 @@ function setDashboardView(view) {
   setActiveNavigation(view);
   if (view === 'home') renderHome();
   if (view === 'company') renderCompany();
+}
+function dashboardState() {
+  return dashboardStateOverride ?? studioShell.state();
+}
+function renderDashboardState(state) {
+  dashboardStateOverride = state;
+  if (!$('#studio-home').hidden) renderHome();
+  if (!$('#company-view').hidden) renderCompany();
 }
 function clear(node) {
   node.replaceChildren();
@@ -111,13 +110,13 @@ function relativeDate(value) {
 }
 function renderHome() {
   if (!studioShell) return;
-  const state = studioShell.state();
+  const state = dashboardState();
   const model = dashboardModel(state);
   $('#home-display-name').textContent = state.session?.user?.displayName || 'seja bem-vindo';
   const status = $('#studio-dashboard-status');
   status.textContent = model.message;
   status.dataset.state = model.status;
-  $('#new-project').hidden = !studioShell.can('project.manage');
+  $('#new-project').hidden = !canCreateProject(studioShell);
   const companies = clear($('#home-companies'));
   const projects = clear($('#home-projects'));
   const activity = clear($('#home-activity'));
@@ -136,7 +135,7 @@ function renderHome() {
     button.append(name, label);
     button.onclick = action(async () => {
       if (company.id === studioShell.state().currentCompany?.id) return;
-      await studioShell.selectCompany(company.id);
+      await dashboardContextFlow.selectCompany(company.id);
       setDashboardView('home');
     });
     companies.append(button);
@@ -243,15 +242,19 @@ function renderCompanyOverview(overview) {
 }
 async function renderCompany() {
   if (!studioShell) return;
-  const state = studioShell.state();
+  const state = dashboardState();
   const status = $('#company-status');
   const content = clear($('#company-content'));
   if (state.phase === 'loading') {
+    $('#company-view-title').textContent = 'Empresa';
+    $('#company-role').textContent = 'Carregando empresa…';
     status.textContent = 'Carregando empresa…';
     status.dataset.state = 'loading';
     return;
   }
   if (state.phase === 'error' || !state.currentCompany) {
+    $('#company-view-title').textContent = 'Empresa';
+    $('#company-role').textContent = '';
     status.textContent = state.error || 'Não foi possível carregar a empresa atual.';
     status.dataset.state = 'error';
     return;
@@ -718,8 +721,8 @@ studioShell = createStudioShell({
   beforeContextChange: closeOpenEditors,
   onContextChanged: async () => {
     companyOverviewRequest++;
-    const state = studioShell.state();
-    renderCompanySwitcher();
+    dashboardStateOverride = null;
+    const state = dashboardContextFlow.confirm();
     await refreshConfig();
     if (!$('#studio-home').hidden) renderHome();
     if (!$('#company-view').hidden) await renderCompany();
@@ -727,19 +730,23 @@ studioShell = createStudioShell({
     if (!$('#forms-view').hidden && state.currentProject) await formsUI.showForms();
   },
 });
-function renderCompanySwitcher() {
-  const state = studioShell.state();
+function renderCompanySwitcher(state = studioShell.state(), { selectedCompanyId = state.currentCompany?.id || '', disabled = state.phase === 'loading' || !state.companies.length } = {}) {
   const switcher = $('#company-switcher');
   switcher.replaceChildren();
   for (const company of state.companies) {
     const option = document.createElement('option');
     option.value = company.id;
     option.textContent = company.name;
-    option.selected = company.id === state.currentCompany?.id;
+    option.selected = company.id === selectedCompanyId;
     switcher.append(option);
   }
-  switcher.disabled = state.phase === 'loading' || !state.companies.length;
+  switcher.disabled = disabled;
 }
+dashboardContextFlow = createDashboardContextFlow({
+  shell: studioShell,
+  renderState: renderDashboardState,
+  renderSwitcher: renderCompanySwitcher,
+});
 $('#nav-home').onclick = () => setDashboardView('home');
 $('#nav-company').onclick = () => setDashboardView('company');
 $('#nav-pages').onclick = action(async () => {
@@ -755,8 +762,7 @@ $('#nav-forms').onclick = action(async () => {
 });
 $('#company-switcher').onchange = action(async (event) => {
   if (event.target.value === studioShell.state().currentCompany?.id) return;
-  await studioShell.selectCompany(event.target.value);
-  renderCompanySwitcher();
+  await dashboardContextFlow.selectCompany(event.target.value);
   setDashboardView('home');
 });
 $('#new-project').onclick = () => {
@@ -798,15 +804,17 @@ $('#new-project-form').onsubmit = action(async (event) => {
   const button = event.submitter;
   button.disabled = true;
   try {
-    const project = await api('/projects', 'POST', { name, slug });
-    $('#new-project-dialog').close();
-    await selectProject(project.id);
+    await projectSubmission.submit({ name, slug });
     toast('Projeto criado e selecionado.');
-  } catch (requestError) {
-    error.textContent = requestError.message;
   } finally {
     button.disabled = false;
   }
+});
+projectSubmission = createProjectSubmission({
+  createProject: (input) => api('/projects', 'POST', input),
+  selectProject,
+  closeDialog: () => $('#new-project-dialog').close(),
+  showError: (message) => ($('#new-project-error').textContent = message),
 });
 ownerUI = createOwnerUI({
   api,
