@@ -1,4 +1,4 @@
-const ROLE_CAPABILITIES = Object.freeze({
+export const CLIENT_ROLE_CAPABILITIES = Object.freeze({
   owner: Object.freeze([
     'company.manage',
     'billing.manage',
@@ -6,6 +6,8 @@ const ROLE_CAPABILITIES = Object.freeze({
     'project.manage',
     'page.write',
     'form.write',
+    'video.read',
+    'video.write',
     'submission.read',
     'integration.manage',
     'deployment.publish',
@@ -15,12 +17,14 @@ const ROLE_CAPABILITIES = Object.freeze({
     'project.manage',
     'page.write',
     'form.write',
+    'video.read',
+    'video.write',
     'submission.read',
     'integration.manage',
     'deployment.publish',
   ]),
-  editor: Object.freeze(['page.write', 'form.write', 'submission.read']),
-  analyst: Object.freeze(['submission.read', 'analytics.read']),
+  editor: Object.freeze(['page.write', 'form.write', 'video.read', 'video.write', 'submission.read']),
+  analyst: Object.freeze(['submission.read', 'analytics.read', 'video.read']),
   viewer: Object.freeze([]),
 });
 
@@ -141,7 +145,7 @@ export function createStudioShell({ api, beforeContextChange = async () => {}, o
 
   function can(capability) {
     const role = current.currentCompany?.role ?? current.session?.role ?? 'viewer';
-    return ROLE_CAPABILITIES[role]?.includes(capability) ?? false;
+    return CLIENT_ROLE_CAPABILITIES[role]?.includes(capability) ?? false;
   }
 
   return { initialize, selectCompany, selectProject, state, can };

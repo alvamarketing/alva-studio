@@ -242,12 +242,32 @@ test('ignora a falha de uma seleção superada', async () => {
   assert.equal(shell.state().error, '');
 });
 
+test('shell mantém capacidades de VSL alinhadas por papel', async () => {
+  for (const [role, expected] of Object.entries({
+    owner: { read: true, write: true, publish: true },
+    admin: { read: true, write: true, publish: true },
+    editor: { read: true, write: true, publish: false },
+    analyst: { read: true, write: false, publish: false },
+    viewer: { read: false, write: false, publish: false },
+  })) {
+    const shell = createStudioShell({ api: async (path) => {
+      if (path === '/session') return { authenticated: true, role, currentCompanyId: 'company-1', currentProjectId: 'project-1' };
+      if (path === '/companies') return [{ id: 'company-1', role }];
+      return [{ id: 'project-1' }];
+    } });
+    await shell.initialize();
+    assert.equal(shell.can('video.read'), expected.read, role);
+    assert.equal(shell.can('video.write'), expected.write, role);
+    assert.equal(shell.can('deployment.publish'), expected.publish, role);
+  }
+});
+
 test('deriva capacidades dos papéis conhecidos e bloqueia viewer', async () => {
   const expected = {
-    owner: ['company.manage', 'billing.manage', 'member.manage', 'project.manage', 'page.write', 'form.write', 'submission.read', 'integration.manage', 'deployment.publish'],
-    admin: ['member.manage', 'project.manage', 'page.write', 'form.write', 'submission.read', 'integration.manage', 'deployment.publish'],
-    editor: ['page.write', 'form.write', 'submission.read'],
-    analyst: ['submission.read', 'analytics.read'],
+    owner: ['company.manage', 'billing.manage', 'member.manage', 'project.manage', 'page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'integration.manage', 'deployment.publish'],
+    admin: ['member.manage', 'project.manage', 'page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'integration.manage', 'deployment.publish'],
+    editor: ['page.write', 'form.write', 'video.read', 'video.write', 'submission.read'],
+    analyst: ['submission.read', 'analytics.read', 'video.read'],
     viewer: [],
   };
   const allCapabilities = [...new Set(Object.values(expected).flat())];

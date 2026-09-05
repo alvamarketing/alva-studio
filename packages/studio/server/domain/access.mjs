@@ -6,6 +6,7 @@ const ROLE_CAPABILITIES = {
     'project.manage',
     'page.write',
     'form.write',
+    'video.read',
     'video.write',
     'submission.read',
     'integration.manage',
@@ -16,12 +17,13 @@ const ROLE_CAPABILITIES = {
     'project.manage',
     'page.write',
     'form.write',
+    'video.read',
     'video.write',
     'submission.read',
     'integration.manage',
     'deployment.publish',
   ],
-  editor: ['page.write', 'form.write', 'video.write', 'submission.read'],
+  editor: ['page.write', 'form.write', 'video.read', 'video.write', 'submission.read'],
   analyst: ['submission.read', 'analytics.read', 'video.read'],
 };
 

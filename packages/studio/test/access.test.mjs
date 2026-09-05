@@ -12,8 +12,17 @@ import {
 
 test('editor escreve conteúdo atribuído mas não publica', () => {
   assert.equal(hasCapability('editor', 'page.write'), true);
+  assert.equal(hasCapability('editor', 'video.read'), true);
   assert.equal(hasCapability('editor', 'video.write'), true);
   assert.equal(hasCapability('editor', 'deployment.publish'), false);
+});
+
+test('analyst lê VSL e viewer não acessa a superfície', () => {
+  assert.equal(hasCapability('analyst', 'video.read'), true);
+  assert.equal(hasCapability('analyst', 'video.write'), false);
+  assert.equal(hasCapability('analyst', 'deployment.publish'), false);
+  assert.equal(hasCapability('viewer', 'video.read'), false);
+  assert.equal(hasCapability('viewer', 'video.write'), false);
 });
 
 test('expõe papéis e capacidades imutáveis', () => {
