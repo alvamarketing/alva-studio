@@ -123,7 +123,9 @@ test('editor mantém headerElements vazio editável sem substituir o schema', as
   ]) elements.set(selector, element());
   const headerButton = { dataset: { treeNode: 'header' }, focus() {} };
   globalThis.document = {
-    querySelector: (selector) => ['[data-element-duplicate]', '[data-element-delete]'].includes(selector) ? null : elements.get(selector) || element(),
+    querySelector: (selector) => [
+      '[data-screen-duplicate]', '[data-screen-delete]', '[data-element-duplicate]', '[data-element-delete]',
+    ].includes(selector) ? null : elements.get(selector) || element(),
     querySelectorAll: (selector) => selector === '[data-tree-node]' ? [headerButton] : [],
   };
   try {
