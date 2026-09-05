@@ -64,7 +64,7 @@ function publicConfiguration(configuration = {}) {
 }
 
 export class ProjectIntegrationRepository {
-  constructor(database, { vault = new SecretVault(), provider = 'vercel', environment = 'production' } = {}) {
+  constructor(database, { vault = null, provider = 'vercel', environment = 'production' } = {}) {
     if (!database || typeof database.query !== 'function') throw new Error('Banco inválido para integrações.');
     this.database = database;
     this.vault = vault;
@@ -195,6 +195,15 @@ export class DeploymentRepository {
     return runRecord(rows[0]);
   }
 
+  async latestReady({ companyId, projectId, environment }) {
+    const { rows } = await this.database.query(
+      `SELECT * FROM deployment_runs WHERE company_id = $1 AND project_id = $2 AND environment = $3
+         AND status = 'READY' ORDER BY completed_at DESC NULLS LAST, created_at DESC, id DESC LIMIT 1`,
+      [companyId, projectId, environment],
+    );
+    return runRecord(rows[0]);
+  }
+
   async createOrGet({ companyId, projectId, environment, snapshotHash, expectedRevision, requestedBy, idempotencyKey }) {
     deploymentInput({ environment, snapshotHash, expectedRevision });
     const key = String(idempotencyKey || `${environment}:${snapshotHash}`);
@@ -219,14 +228,33 @@ export class DeploymentRepository {
     return concurrent;
   }
 
+  async claim({ companyId, projectId, runId, leaseMs = 60_000 }) {
+    const { randomUUID } = await import('node:crypto');
+    const token = randomUUID();
+    const { rows } = await this.database.query(
+      `UPDATE deployment_runs
+          SET claim_token = $4, lease_expires_at = now() + ($5::int * interval '1 millisecond'), status = 'INITIALIZING', started_at = COALESCE(started_at, now())
+        WHERE company_id = $1 AND project_id = $2 AND id = $3
+          AND external_deployment_id IS NULL
+          AND status NOT IN ('ERROR', 'CANCELED', 'BLOCKED', 'READY')
+          AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+        RETURNING *`,
+      [companyId, projectId, runId, token, leaseMs],
+    );
+    if (rows[0]) return { claimed: true, run: runRecord(rows[0]) };
+    const current = await this.find({ companyId, projectId, runId });
+    return { claimed: false, run: current };
+  }
+
   async updateExternal({ companyId, projectId, runId, externalDeploymentId, externalProjectId, url, status }) {
     const nextStatus = String(status || 'QUEUED').toUpperCase();
-    if (!['QUEUED', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado externo inválido.', 400);
+    if (!['QUEUED', 'INITIALIZING', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado externo inválido.', 400);
     const { rows } = await this.database.query(
       `UPDATE deployment_runs
           SET external_deployment_id = COALESCE($4, external_deployment_id),
               external_project_id = COALESCE($5, external_project_id),
               external_url = COALESCE($6, external_url),
+              claim_token = NULL, lease_expires_at = NULL,
               status = $7,
               started_at = COALESCE(started_at, now()),
               completed_at = CASE WHEN $7 = ANY($8::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
@@ -242,13 +270,14 @@ export class DeploymentRepository {
 
   async updateStatus({ companyId, projectId, runId, status, url, error }) {
     const nextStatus = String(status || '').toUpperCase();
-    if (!['QUEUED', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado inválido.', 400);
+    if (!['QUEUED', 'INITIALIZING', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado inválido.', 400);
     const { rows } = await this.database.query(
       `UPDATE deployment_runs
           SET status = $4, external_url = COALESCE($5, external_url),
-              completed_at = CASE WHEN $4 = ANY($6::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
+              error = COALESCE($6, error), claim_token = NULL, lease_expires_at = NULL,
+              completed_at = CASE WHEN $4 = ANY($7::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
         WHERE company_id = $1 AND project_id = $2 AND id = $3 RETURNING *`,
-      [companyId, projectId, runId, nextStatus, url || null, [...TERMINAL_STATES]],
+      [companyId, projectId, runId, nextStatus, url || null, error || null, [...TERMINAL_STATES]],
     );
     if (!rows.length) throw fail('Execução não encontrada.', 404);
     const result = runRecord(rows[0]);
@@ -263,17 +292,37 @@ export class ProjectDomainRepository {
   async save({ companyId, projectId, environment = 'production', domain, verificationStatus = 'pending' }) {
     const value = String(domain || '').trim().toLowerCase();
     if (!value || value.length > 253) throw fail('Domínio inválido.', 400);
-    const { rows } = await this.database.query(
-      `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status, updated_at)
-       VALUES ($1, $2, $3, $4, true, $5, now())
-       ON CONFLICT (lower(domain)) DO UPDATE
-         SET company_id = EXCLUDED.company_id, project_id = EXCLUDED.project_id,
-             environment = EXCLUDED.environment, is_canonical = true,
-             verification_status = EXCLUDED.verification_status, updated_at = now()
-       RETURNING id, company_id, project_id, environment, domain, is_canonical, verification_status, updated_at`,
-      [companyId, projectId, environment, value, verificationStatus],
-    );
-    const row = rows[0];
+    const run = async (client) => {
+      const existing = await client.query(
+        `SELECT * FROM project_domains WHERE lower(domain) = lower($1) FOR UPDATE`, [value],
+      );
+      if (existing.rows[0] && (existing.rows[0].company_id !== companyId || existing.rows[0].project_id !== projectId || existing.rows[0].environment !== environment))
+        throw fail('Este domínio já está conectado a outro projeto.', 409);
+      await client.query(
+        `UPDATE project_domains SET is_canonical = false, updated_at = now()
+          WHERE company_id = $1 AND project_id = $2 AND environment = $3`, [companyId, projectId, environment],
+      );
+      const result = existing.rows[0]
+        ? await client.query(
+          `UPDATE project_domains SET is_canonical = true, verification_status = $5, updated_at = now()
+            WHERE id = $4 RETURNING id, company_id, project_id, environment, domain, is_canonical, verification_status, updated_at`,
+          [companyId, projectId, environment, existing.rows[0].id, verificationStatus],
+        )
+        : await client.query(
+          `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status, updated_at)
+           VALUES ($1, $2, $3, $4, true, $5, now())
+           RETURNING id, company_id, project_id, environment, domain, is_canonical, verification_status, updated_at`,
+          [companyId, projectId, environment, value, verificationStatus],
+        );
+      return result.rows[0];
+    };
+    let row;
+    try {
+      row = this.database.transaction ? await this.database.transaction(run) : await run(this.database);
+    } catch (error) {
+      if (error?.code === '23505') throw fail('Este domínio já está conectado a outro projeto.', 409);
+      throw error;
+    }
     return row ? { id: row.id, companyId: row.company_id, projectId: row.project_id, environment: row.environment, domain: row.domain, isCanonical: row.is_canonical, verificationStatus: row.verification_status, updatedAt: row.updated_at } : null;
   }
 }

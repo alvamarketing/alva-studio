@@ -27,6 +27,9 @@ export class PublicationService {
     const { credentials, publisher } = await this.publisher(scope);
     const run = await this.deployments.createOrGet({ companyId, projectId, environment, snapshotHash: snapshot.hash, expectedRevision, requestedBy, idempotencyKey });
     if (run.externalDeploymentId) return publicRun(run, snapshot);
+    if (String(run.status).toUpperCase() === 'ERROR') return publicRun(run, snapshot);
+    const claim = this.deployments.claim ? await this.deployments.claim({ companyId, projectId, runId: run.id }) : { claimed: true, run };
+    if (!claim.claimed) return publicRun(claim.run || run, snapshot);
     try {
       const result = await publisher.publish({
         projectId: credentials.vercelProjectId,
@@ -36,6 +39,7 @@ export class PublicationService {
         snapshotHash: snapshot.hash,
         revision: expectedRevision,
       });
+      if (!result?.id) throw fail('A Vercel não devolveu o identificador da publicação.', 502);
       const persisted = await this.deployments.updateExternal({
         companyId, projectId, runId: run.id,
         externalDeploymentId: result.id,
@@ -59,9 +63,17 @@ export class PublicationService {
   }
 
   async overview({ companyId, projectId }) {
+    const production = await this.deployments.latest({ companyId, projectId, environment: 'production' });
+    const preview = await this.deployments.latest({ companyId, projectId, environment: 'preview' });
+    const latestPreviewReady = this.deployments.latestReady
+      ? await this.deployments.latestReady({ companyId, projectId, environment: 'preview' })
+      : preview && String(preview.status).toUpperCase() === 'READY' ? preview : null;
     return {
       integration: await this.integrations.publicSettings({ companyId, projectId }),
-      run: await this.deployments.latest({ companyId, projectId }),
+      run: production,
+      production,
+      preview,
+      latestPreviewReady,
     };
   }
 
@@ -70,7 +82,8 @@ export class PublicationService {
     if (!input.previewRunId) throw fail('Valide uma prévia antes de publicar em produção.', 409);
     const snapshot = await this.snapshotBuilder.build(input);
     const preview = await this.deployments.find({ companyId: input.companyId, projectId: input.projectId, runId: input.previewRunId });
-    if (!preview || preview.status !== 'READY' || preview.snapshotHash.toLowerCase() !== snapshot.hash.toLowerCase()) throw fail('A prévia validada não corresponde ao snapshot atual.', 409);
+    const credentials = await this.integrations.credentials({ companyId: input.companyId, projectId: input.projectId });
+    if (!preview || preview.environment !== 'preview' || String(preview.status).toUpperCase() !== 'READY' || preview.snapshotHash.toLowerCase() !== snapshot.hash.toLowerCase() || preview.externalProjectId !== credentials?.vercelProjectId) throw fail('A prévia validada não corresponde ao snapshot atual.', 409);
     await this.audit.record({ companyId: input.companyId, projectId: input.projectId, actorUserId: input.requestedBy, action: 'deployment.production.request', resourceType: 'project', resourceId: input.projectId, revision: input.expectedRevision, result: 'requested', metadata: { snapshotHash: snapshot.hash, previewRunId: input.previewRunId } });
     return this.send({ ...input, environment: 'production', snapshot });
   }
@@ -78,7 +91,7 @@ export class PublicationService {
   async status({ companyId, projectId, runId }) {
     const run = await this.deployments.find({ companyId, projectId, runId });
     if (!run) throw fail('Execução não encontrada.', 404);
-    if (!run.externalDeploymentId || ['READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(run.status)) return run;
+    if (!run.externalDeploymentId || ['READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(String(run.status).toUpperCase())) return run;
     const { publisher } = await this.publisher({ companyId, projectId });
     const state = await publisher.status(run.externalDeploymentId);
     return this.deployments.updateStatus({ companyId, projectId, runId, status: state.state, url: state.url });
@@ -87,7 +100,7 @@ export class PublicationService {
   async domain({ companyId, projectId, requestedBy, runId, domain }) {
     const run = await this.deployments.find({ companyId, projectId, runId });
     if (!run || run.environment !== 'production') throw fail('Publique em produção antes de configurar o domínio.', 409);
-    if (run.status !== 'READY') throw fail('O domínio só pode ser configurado após a publicação estar no ar.', 409);
+    if (String(run.status).toUpperCase() !== 'READY') throw fail('O domínio só pode ser configurado após a publicação estar no ar.', 409);
     const { credentials, publisher } = await this.publisher({ companyId, projectId });
     const result = await publisher.domain({ projectId: credentials.vercelProjectId, domain });
     if (this.domains) await this.domains.save({ companyId, projectId, environment: 'production', domain: result.name || domain, verificationStatus: result.verified ? 'verified' : 'pending' });
