@@ -6,7 +6,17 @@ export function vercelPayload({ token, teamId }) {
   if (String(token || '').trim()) payload.token = String(token).trim();
   return payload;
 }
-export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsChanged, beforeLogout, toast }) {
+export function settingsAccess({ canManageIntegration = false, requestedTab = 'account' } = {}) {
+  const integration = Boolean(canManageIntegration);
+  return { integration, tab: integration && requestedTab === 'vercel' ? 'vercel' : 'account' };
+}
+
+export function createSettingsLoader({ api, canManageIntegration = () => true } = {}) {
+  if (typeof api !== 'function') throw new Error('A API de configurações é obrigatória.');
+  return async () => canManageIntegration() ? api('/settings') : null;
+}
+
+export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsChanged, beforeLogout, toast, canManageIntegration = () => true }) {
   let session = null;
   const host = document.createElement('div');
   host.id = 'owner-root';
@@ -23,6 +33,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   const gate = $('#access-gate');
   const accessForm = $('#access-form');
   const dialog = $('#owner-dialog');
+  const loadSettings = createSettingsLoader({ api, canManageIntegration });
   function showAccess(setupRequired = false) {
     if (dialog.open) dialog.close();
     gate.hidden = false;
@@ -89,6 +100,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     });
   };
   function selectTab(tab) {
+    tab = settingsAccess({ canManageIntegration: canManageIntegration(), requestedTab: tab }).tab;
     host.querySelectorAll('[data-owner-tab]').forEach((button) => {
       const selected = button.dataset.ownerTab === tab;
       button.setAttribute('aria-selected', String(selected));
@@ -107,8 +119,15 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       }
     };
   });
+  function applyIntegrationAccess(requestedTab) {
+    const access = settingsAccess({ canManageIntegration: canManageIntegration(), requestedTab });
+    $('#tab-vercel').hidden = !access.integration;
+    $('#panel-vercel').hidden = !access.integration;
+    return access;
+  }
   async function refreshSettings() {
-    const settings = await api('/settings');
+    const settings = await loadSettings();
+    if (!settings) return null;
     const vercel = settings.vercel || {};
     const configured = Boolean(vercel.tokenConfigured || vercel.connected);
     const form = $('#vercel-form');
@@ -134,9 +153,10 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       form.elements.email.value = session.owner?.email || '';
       $('#account-error').textContent = '';
       $('#vercel-error').textContent = '';
-      selectTab(tab);
+      const access = applyIntegrationAccess(tab);
+      selectTab(access.tab);
       if (!dialog.open) dialog.showModal();
-      await refreshSettings();
+      if (access.integration) await refreshSettings();
     } catch (error) {
       toast(error.message);
     }
@@ -170,6 +190,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     event.preventDefault();
     const form = event.currentTarget;
     await busy(form, $('#vercel-error'), async () => {
+      if (!canManageIntegration()) return;
       await api('/settings/vercel', 'PUT', vercelPayload(Object.fromEntries(new FormData(form))));
       form.elements.token.value = '';
       await refreshSettings();
@@ -177,6 +198,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     });
   };
   $('#vercel-test').onclick = async () => {
+    if (!canManageIntegration()) return;
     const button = $('#vercel-test');
     button.disabled = true;
     $('#vercel-error').textContent = '';
@@ -192,6 +214,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     }
   };
   $('#vercel-disconnect').onclick = async () => {
+    if (!canManageIntegration()) return;
     if (!confirm('Desconectar a Vercel deste Studio? Suas páginas publicadas continuarão no ar.')) return;
     try {
       await api('/settings/vercel', 'PUT', { disconnect: true });

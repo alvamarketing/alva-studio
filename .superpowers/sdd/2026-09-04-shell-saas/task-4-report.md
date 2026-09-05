@@ -43,6 +43,14 @@ Também foram executados `node --check` em `app.js`, `forms.js` e `studio-dashbo
 
 Verificação do fix: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — 153 aprovados, 0 falhas.
 
+## Fix final antes do push
+
+- O cliente HTTP agora trata 401 de qualquer rota autenticada de forma uniforme, incluindo overviews de empresa/projeto e `PATCH /session`; setup, login e fluxos públicos continuam fora desse tratamento.
+- A administração mantém a aba de conta disponível, mas oculta Vercel e não chama `/settings` para papéis sem `integration.manage`.
+- `vsl_player` passou a depender de `shell_saas` e de `midia_cdn` no grafo do produto.
+
+Verificação: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — 156 aprovados, 0 falhas.
+
 ## Fix round 2
 
 - O controlador do drawer passou a ser a única fonte do estado visual: abre e remove `is-open` junto com `inert`, `aria-hidden` e `aria-expanded`.

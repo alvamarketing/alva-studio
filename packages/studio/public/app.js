@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, roleLabel } from './studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, roleLabel } from './studio-dashboard.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -37,6 +37,7 @@ let editor,
   mobileMenuTrigger,
   mobileDrawer,
   config = { vercelConnected: false };
+const authenticatedApi = createAuthenticatedApi({ request: fetch, onSessionExpired: () => ownerUI?.sessionExpired() });
 function toast(message) {
   $('#toast').textContent = message;
   $('#toast').hidden = false;
@@ -44,17 +45,7 @@ function toast(message) {
   toastTimer = setTimeout(() => ($('#toast').hidden = true), 6000);
 }
 async function api(path, method = 'GET', data) {
-  const response = await fetch('/api' + path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
-  });
-  const result = await response.json();
-  if (!response.ok) {
-    if (response.status === 401 && /^\/(pages|config|settings)/.test(path)) ownerUI?.sessionExpired();
-    throw Object.assign(new Error(result.error || 'Não foi possível concluir.'), { status: response.status });
-  }
-  return result;
+  return authenticatedApi.request(path, method, data);
 }
 function action(fn) {
   return async (event) => {
@@ -1034,6 +1025,7 @@ ownerUI = createOwnerUI({
     }
   },
   beforeLogout: save,
+  canManageIntegration: () => !studioShell?.state().session?.user || studioShell.can('integration.manage'),
   onLoggedOut: async () => {
     clearTimeout(timer);
     editor?.destroy();
@@ -1050,6 +1042,10 @@ ownerUI = createOwnerUI({
 });
 $('#app-settings').onclick = () => ownerUI.openSettings();
 $('#page-vercel-settings').onclick = () => {
+  if (!studioShell.can('integration.manage')) {
+    toast('Você não tem permissão para configurar integrações.');
+    return;
+  }
   $('#settings-dialog').close();
   ownerUI.openSettings('vercel');
 };

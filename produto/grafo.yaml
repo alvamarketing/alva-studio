@@ -69,6 +69,7 @@ nos:
     faz: Criar player público de VSL com autoplay compatível, progresso, retomada, CTA temporizado e embed responsivo
     depende:
       - midia_cdn
+      - shell_saas
     produz: Vídeos configuráveis com versões publicadas em /v/<publicId> e /embed/v/<publicId>, sem configurações sensíveis na URL
     passa_quando:
       tipo: homologação

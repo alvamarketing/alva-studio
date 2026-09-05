@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel } from '../public/studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel } from '../public/studio-dashboard.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
@@ -272,4 +272,30 @@ test('drawer móvel remove controles fechados da navegação e prende Tab com re
   assert.equal(drawer.inert, true);
   assert.equal(classes.has('is-open'), false);
   assert.equal(trigger.focusCalls, 1);
+});
+
+test('401 em overview e PATCH de sessão encerram a sessão do shell', async () => {
+  const expired = [];
+  const api = createAuthenticatedApi({
+    request: async () => ({ ok: false, status: 401, json: async () => ({ error: 'Sessão expirada' }) }),
+    onSessionExpired: () => expired.push('expired'),
+  });
+
+  await assert.rejects(() => api.request('/companies/company-a/overview'), /Sessão expirada/);
+  await assert.rejects(() => api.request('/projects/project-a/overview'), /Sessão expirada/);
+  await assert.rejects(() => api.request('/session', 'PATCH', { projectId: 'project-a' }), /Sessão expirada/);
+  assert.deepEqual(expired, ['expired', 'expired', 'expired']);
+});
+
+test('login, setup e rotas públicas não encerram a sessão do shell em 401', async () => {
+  let expired = 0;
+  const api = createAuthenticatedApi({
+    request: async () => ({ ok: false, status: 401, json: async () => ({ error: 'Inválido' }) }),
+    onSessionExpired: () => expired++,
+  });
+
+  await assert.rejects(() => api.request('/login', 'POST', {}));
+  await assert.rejects(() => api.request('/setup', 'POST', {}));
+  await assert.rejects(() => api.request('/public/forms/demo/submissions', 'POST', {}));
+  assert.equal(expired, 0);
 });

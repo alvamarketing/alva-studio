@@ -2,6 +2,26 @@ export function isProjectSlug(value) {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(value ?? ''));
 }
 
+export function createAuthenticatedApi({ request = globalThis.fetch, onSessionExpired = () => {}, prefix = '/api' } = {}) {
+  if (typeof request !== 'function') throw new Error('A requisição HTTP do Studio é obrigatória.');
+  const isPublicFlow = (path) => ['/setup', '/login'].includes(path) || path.startsWith('/public/');
+  return {
+    async request(path, method = 'GET', data) {
+      const response = await request(prefix + path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        if (response.status === 401 && !isPublicFlow(path)) onSessionExpired();
+        throw Object.assign(new Error(result.error || 'Não foi possível concluir.'), { status: response.status });
+      }
+      return result;
+    },
+  };
+}
+
 export function applyDashboardNavigation(navigation, active) {
   for (const [name, element] of Object.entries(navigation)) {
     const current = name === active;
