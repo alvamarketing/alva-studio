@@ -144,6 +144,7 @@ export function createApp({
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],
     '/forms.js': ['public/forms.js', 'text/javascript'],
+    '/editor-workspace.js': ['public/editor-workspace.js', 'text/javascript'],
     '/studio-shell.js': ['public/studio-shell.js', 'text/javascript'],
     '/studio-context-boundary.js': ['public/studio-context-boundary.js', 'text/javascript'],
     '/context-list.js': ['public/context-list.js', 'text/javascript'],

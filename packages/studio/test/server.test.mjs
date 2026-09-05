@@ -91,6 +91,7 @@ test('servidor entrega todo o grafo de módulos importado pelo app', async (t) =
     seen.add(path);
     const response = await fetch(base + path);
     assert.equal(response.status, 200, `${path} precisa ser servido`);
+    if (path.endsWith('.js')) assert.match(response.headers.get('content-type'), /text\/javascript/);
     const source = await response.text();
     const imports = [...source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)].map((match) => match[1]);
     await Promise.all(imports.map((specifier) => visit(new URL(specifier, base + path).pathname)));
