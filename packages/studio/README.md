@@ -39,7 +39,7 @@ O Studio mantém páginas criáveis, duplicáveis, renomeáveis e removíveis, m
 
 No modo SaaS, salvar o formulário mantém um rascunho; publicar é uma ação explícita de quem tem permissão de publicação. A rota pública local usa empresa, projeto e formulário, como `/f/<empresa>/<projeto>/<formulario>`. Em um domínio conectado, o servidor aceita publicamente somente o `GET` dessa experiência e o `POST` da submissão; o painel e as demais rotas continuam fechados.
 
-A submissão é persistida antes do webhook. O destino HTTPS configurado é validado para não alcançar endereços privados, porém a entrega assíncrona ainda permanece com estado `pending` e não faz saída de rede nesta fundação. O webhook não recebe credenciais do Studio. Nome, e-mail, telefone e respostas abertas não devem ser enviados a Analytics ou logs.
+A submissão é persistida antes do webhook. Nesta fundação, configurar o destino valida somente uma URL HTTPS sem credenciais; não há consulta DNS, bloqueio de endereço privado ou proteção contra DNS rebinding ainda. A entrega assíncrona permanece com estado `pending` e não faz saída de rede. Validação de destino completa e o worker de entrega são próximas etapas. O webhook não recebe credenciais do Studio. Nome, e-mail, telefone e respostas abertas não devem ser enviados a Analytics ou logs.
 
 ## Preparar o PostgreSQL
 

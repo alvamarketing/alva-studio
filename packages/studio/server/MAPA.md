@@ -12,7 +12,7 @@
 - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
 - `project-api.mjs`: API multiempresa e compatibilidade das rotas atuais do editor.
-- `outbound-webhook.mjs`: valida destino HTTPS público contra SSRF; a entrega assíncrona ainda fica pendente e não faz egress nesta fundação.
+- `outbound-webhook.mjs`: valida somente sintaxe HTTPS sem credenciais; resolução DNS, proteção contra SSRF/rebinding e entrega assíncrona ficam pendentes e não há egress nesta fundação.
 - `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
 - `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.
 - `dynamic-form.mjs`: documento público sequencial com mídia, gráficos, movimento e confirmação de envio.
