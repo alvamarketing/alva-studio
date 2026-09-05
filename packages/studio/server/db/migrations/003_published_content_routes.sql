@@ -4,6 +4,12 @@ ALTER TABLE page_versions
 ALTER TABLE form_versions
   ADD COLUMN published_path varchar(120);
 
+ALTER TABLE page_versions
+  DISABLE TRIGGER page_versions_immutable;
+
+ALTER TABLE form_versions
+  DISABLE TRIGGER form_versions_immutable;
+
 UPDATE page_versions version
 SET published_path = route.path
 FROM pages page
@@ -23,6 +29,12 @@ JOIN project_routes route
  AND route.project_id = form.project_id
 WHERE version.form_id = form.id
   AND version.published_path IS NULL;
+
+ALTER TABLE page_versions
+  ENABLE TRIGGER page_versions_immutable;
+
+ALTER TABLE form_versions
+  ENABLE TRIGGER form_versions_immutable;
 
 CREATE INDEX page_versions_published_path
   ON page_versions (company_id, project_id, lower(published_path));

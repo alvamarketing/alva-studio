@@ -30,10 +30,22 @@ test('normaliza slugs com Unicode e hífens', () => {
   assert.throws(() => normalizeProjectSlug(''), /slug/i);
 });
 
+test('rejeita slugs ausentes, não textuais ou em branco', () => {
+  for (const value of [undefined, null, 123, {}, [], '   ']) {
+    assert.throws(() => normalizeProjectSlug(value), /slug/i);
+  }
+});
+
 test('normaliza rotas e rejeita caminhos reservados', () => {
   assert.equal(normalizeRoute(' Imobiliárias/ '), '/imobiliarias');
   assert.equal(normalizeRoute('/'), '/');
   assert.throws(() => normalizeRoute('/api/leads'), /reservada/);
+});
+
+test('rejeita rotas ausentes, não textuais ou em branco', () => {
+  for (const value of [undefined, null, 123, {}, [], '   ']) {
+    assert.throws(() => normalizeRoute(value), /rota/i);
+  }
 });
 
 test('rejeita segmentos inválidos e rotas longas', () => {

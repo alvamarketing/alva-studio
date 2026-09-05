@@ -54,12 +54,14 @@ export function hasCapability(role, capability) {
 }
 
 export function normalizeProjectSlug(value) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('slug inválido');
   const slug = slugify(value);
   if (!slug) throw new Error('slug inválido');
   return slug;
 }
 
 export function normalizeRoute(value) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('rota inválida');
   const text = foldText(value).trim();
   if (text === '/') return '/';
 

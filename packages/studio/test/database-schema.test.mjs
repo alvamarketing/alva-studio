@@ -148,6 +148,55 @@ test('migração de convites atualiza um banco que já aplicou somente a fundaç
   }
 });
 
+test('upgrade de 001 populada preserva rotas publicadas e imutabilidade dos snapshots', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const { createDatabase, migrate } = await import('../server/db/postgres.mjs');
+  const database = createDatabase({ connectionString });
+  const temporaryMigrations = await mkdtemp(join(tmpdir(), 'alva-migrations-upgrade-'));
+  t.after(() => rm(temporaryMigrations, { recursive: true, force: true }));
+
+  try {
+    await writeFile(join(temporaryMigrations, '001_saas_foundation.sql'), await readFile(join(sourceMigrations, '001_saas_foundation.sql')));
+    await migrate(database, { migrationsPath: temporaryMigrations });
+
+    const seed = await seedProject(database, { email: 'upgrade@alva.test', companyName: 'Upgrade', slug: 'upgrade' });
+    const savedPage = await page(database, seed, '/pagina-publicada');
+    const savedForm = await form(database, seed, '/formulario-publicado');
+    const pageVersion = await row(
+      database,
+      "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '<h1>Página</h1>') RETURNING id",
+      [seed.company.id, seed.project.id, savedPage.id],
+    );
+    const formVersion = await row(
+      database,
+      "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema) VALUES ($1, $2, $3, 1, '{\"fields\":[\"email\"]}'::jsonb) RETURNING id",
+      [seed.company.id, seed.project.id, savedForm.id],
+    );
+
+    for (const migrationName of [
+      '002_invitations.sql',
+      '003_published_content_routes.sql',
+      '004_local_imports.sql',
+      '005_session_project_context.sql',
+    ]) {
+      await writeFile(join(temporaryMigrations, migrationName), await readFile(join(sourceMigrations, migrationName)));
+    }
+    await migrate(database, { migrationsPath: temporaryMigrations });
+
+    const upgradedPageVersion = await row(database, 'SELECT published_path FROM page_versions WHERE id = $1', [pageVersion.id]);
+    const upgradedFormVersion = await row(database, 'SELECT published_path FROM form_versions WHERE id = $1', [formVersion.id]);
+    assert.equal(upgradedPageVersion.published_path, '/pagina-publicada');
+    assert.equal(upgradedFormVersion.published_path, '/formulario-publicado');
+    await assert.rejects(
+      () => database.query("UPDATE page_versions SET rendered_html = '<h1>Alterada</h1>' WHERE id = $1", [pageVersion.id]),
+      /imutáveis/i,
+    );
+    await assert.rejects(() => database.query('DELETE FROM form_versions WHERE id = $1', [formVersion.id]), /imutáveis/i);
+  } finally {
+    await database.close();
+  }
+});
+
 test('JSONB preserva estado do editor e schema do formulário', async (t) => {
   const database = await migratedDatabase(t);
   try {
