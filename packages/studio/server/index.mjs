@@ -179,6 +179,7 @@ export function createApp({
     '/vendor/grapes.min.css': ['node_modules/grapesjs/dist/css/grapes.min.css', 'text/css'],
     '/vendor/pt.js': ['node_modules/grapesjs/locale/pt.js', 'text/javascript'],
     '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
+    '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
   };
   return createServer(async (req, res) => {

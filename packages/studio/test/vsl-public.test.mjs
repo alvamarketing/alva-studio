@@ -57,5 +57,6 @@ test('rotas HTTP servem somente versão publicada e o hls.js local', async (t) =
   assert.equal(embed.headers.get('x-frame-options'), null);
   assert.equal((await fetch(`${base}/v/missing-public-id`)).status, 404);
   assert.equal((await fetch(`${base}/vendor/hls.min.js`)).status, 200);
+  assert.equal((await fetch(`${base}/vsl-ui.js`)).status, 200);
   await database.close();
 });
