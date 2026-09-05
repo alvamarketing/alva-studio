@@ -17,6 +17,7 @@
 - `project-content.test.mjs`: páginas, formulários, versões, rotas e respostas por projeto.
 - `import-local.test.mjs`: inspeção, importação idempotente e rollback transacional do legado local.
 - `project-api.test.mjs`: sessão persistente, API de empresas/projetos e bloqueio de acessos cruzados.
+- `vsl-repository.test.mjs` e `vsl-api.test.mjs`: VSLs, snapshots, validação e rotas autenticadas por projeto.
 
 - `templates.test.mjs`: catálogo e consistência dos formulários.
 - `editor*.test.mjs`: controles do editor guiado.

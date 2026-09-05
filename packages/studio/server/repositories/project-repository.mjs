@@ -119,7 +119,12 @@ export class ProjectRepository {
               AND form.deleted_at IS NULL AND form.published_version_id IS NOT NULL) AS "publishedForms",
            (SELECT count(*)::int FROM form_submissions submission
             JOIN forms form ON form.id = submission.form_id
-            WHERE submission.company_id = $1 AND submission.project_id = $2 AND form.deleted_at IS NULL) AS submissions`,
+            WHERE submission.company_id = $1 AND submission.project_id = $2 AND form.deleted_at IS NULL) AS submissions,
+           (SELECT count(*)::int FROM videos video
+            WHERE video.company_id = $1 AND video.project_id = $2 AND video.deleted_at IS NULL) AS videos,
+           (SELECT count(*)::int FROM videos video
+            WHERE video.company_id = $1 AND video.project_id = $2 AND video.deleted_at IS NULL
+              AND video.published_version_id IS NOT NULL) AS "publishedVideos"`,
         [companyId, projectId],
       ),
       this.database.query(
@@ -145,6 +150,12 @@ export class ProjectRepository {
             AND route.project_id = form.project_id
             AND route.deleted_at IS NULL
            WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL
+           UNION ALL
+           SELECT video.id, 'video' AS kind, video.name, NULL AS route,
+                  (video.published_version_id IS NOT NULL) AS published, video.updated_at,
+                  0::int AS submission_count
+           FROM videos video
+           WHERE video.company_id = $1 AND video.project_id = $2 AND video.deleted_at IS NULL
          ) content
          ORDER BY updated_at DESC, kind, id`,
         [companyId, projectId],
@@ -170,9 +181,14 @@ export class ProjectRepository {
         .filter((row) => integrationIsConfigured(row.configuration))
         .map((row) => row.provider),
     );
+    const countsRecord = { ...counts.rows[0] };
+    if (!Number(countsRecord.videos)) {
+      delete countsRecord.videos;
+      delete countsRecord.publishedVideos;
+    }
     return {
       project,
-      counts: counts.rows[0],
+      counts: countsRecord,
       content: content.rows.map((row) => ({
         id: row.id,
         kind: row.kind,

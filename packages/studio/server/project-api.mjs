@@ -116,6 +116,7 @@ export function createProjectApi({
   validateWebhook = async (value) => value,
   integrations,
   publication,
+  videos,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -297,6 +298,44 @@ export function createProjectApi({
           ? await content.createPage({ ...pageInput(input), companyId: context.companyId, projectId, actorId: context.user.id })
           : await content.createForm({ ...formInput(input), companyId: context.companyId, projectId, actorId: context.user.id });
         return json(record, 201);
+      }
+    }
+
+    const videoCollection = path.match(/^\/api\/projects\/([^/]+)\/videos$/);
+    if (videoCollection) {
+      const [, projectId] = videoCollection;
+      await sessionService.authorize(context, null, projectId);
+      if (!videos) throw fail('O player de VSL ainda não está disponível.', 409);
+      if (method === 'GET') return json(await videos.listVideos({ companyId: context.companyId, projectId, actorId: context.user.id }));
+      if (method === 'POST') {
+        await sessionService.authorize(context, 'video.write', projectId);
+        const input = await body(req);
+        return json(await videos.createVideo({ ...input, companyId: context.companyId, projectId, actorId: context.user.id }), 201);
+      }
+    }
+
+    const video = path.match(/^\/api\/projects\/([^/]+)\/videos\/([^/]+)(?:\/(duplicate|publish))?$/);
+    if (video) {
+      const [, projectId, videoId, action] = video;
+      await sessionService.authorize(context, null, projectId);
+      if (!videos) throw fail('O player de VSL ainda não está disponível.', 409);
+      if (!action && method === 'GET') return json(await videos.getVideo({ companyId: context.companyId, projectId, actorId: context.user.id, videoId }));
+      if (!action && method === 'PUT') {
+        await sessionService.authorize(context, 'video.write', projectId);
+        return json(await videos.updateVideo({ ...(await body(req)), companyId: context.companyId, projectId, actorId: context.user.id, videoId }));
+      }
+      if (!action && method === 'DELETE') {
+        await sessionService.authorize(context, 'video.write', projectId);
+        return json(await videos.removeVideo({ ...(await body(req)), companyId: context.companyId, projectId, actorId: context.user.id, videoId }));
+      }
+      if (action === 'duplicate' && method === 'POST') {
+        await sessionService.authorize(context, 'video.write', projectId);
+        await body(req);
+        return json(await videos.duplicateVideo({ companyId: context.companyId, projectId, actorId: context.user.id, videoId }), 201);
+      }
+      if (action === 'publish' && method === 'POST') {
+        await sessionService.authorize(context, 'deployment.publish', projectId);
+        return json(await videos.publishVideo({ ...(await body(req)), companyId: context.companyId, projectId, actorId: context.user.id, videoId }), 201);
       }
     }
 

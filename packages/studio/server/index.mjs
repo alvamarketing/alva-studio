@@ -12,6 +12,7 @@ import { createProjectApi } from './project-api.mjs';
 import { CompanyRepository } from './repositories/company-repository.mjs';
 import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
+import { VideoRepository } from './repositories/video-repository.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
 import { normalizeRoute } from './domain/access.mjs';
 import { createDatabase, migrate } from './db/postgres.mjs';
@@ -19,6 +20,7 @@ import { PublicationSnapshotBuilder } from './publication-snapshot.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
+import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 
@@ -121,6 +123,7 @@ export function createApp({
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
   const content = database ? new ContentRepository(database) : null;
+  const videos = database ? new VideoRepository(database) : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
   const deployments = database ? new DeploymentRepository(database) : null;
   const publication = database
@@ -139,6 +142,7 @@ export function createApp({
       companies: new CompanyRepository(database),
       projects: new ProjectRepository(database),
       content,
+      videos,
       body,
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),
@@ -174,6 +178,8 @@ export function createApp({
     '/vendor/grapes.min.js': ['node_modules/grapesjs/dist/grapes.min.js', 'text/javascript'],
     '/vendor/grapes.min.css': ['node_modules/grapesjs/dist/css/grapes.min.css', 'text/css'],
     '/vendor/pt.js': ['node_modules/grapesjs/locale/pt.js', 'text/javascript'],
+    '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
+    '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
   };
   return createServer(async (req, res) => {
     const json = (data, status = 200) => {
@@ -189,6 +195,7 @@ export function createApp({
       const localHost = req.headers.host === expected || req.headers.host === 'localhost:' + res.socket.localPort;
       const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
       const path = new URL(req.url, 'http://' + expected).pathname;
+      const publicVsl = req.method === 'GET' ? path.match(/^\/(embed\/)?v\/([^/]+)$/) : null;
       const studioHost = publicOrigin && req.headers.host === new URL(publicOrigin).host;
       const domainScope = Boolean(publicOrigin && !studioHost);
       const publicFormRequest = content ? parsePublicFormRequest(path, req.method, domainScope) : null;
@@ -201,9 +208,9 @@ export function createApp({
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicVsl && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicVsl && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
@@ -227,6 +234,15 @@ export function createApp({
       if (projectApi && path.startsWith('/api/') && !path.startsWith('/api/public/')) {
         const handled = await projectApi({ req, res, path, method: req.method, json });
         if (handled !== false) return handled;
+      }
+      if (content && videos && publicVsl) {
+        const embed = Boolean(publicVsl[1]);
+        const video = await videos.getPublicVideo(publicVsl[2]);
+        res.removeHeader('X-Frame-Options');
+        res.setHeader('Content-Security-Policy', vslContentSecurityPolicy(video.sourceUrl, { embed }));
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.end(renderVslPage(video, { embed }));
       }
       if (req.method === 'GET' && path === '/api/session') return json(await auth.state(req));
       if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {

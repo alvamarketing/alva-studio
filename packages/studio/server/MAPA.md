@@ -10,8 +10,11 @@
   - `migrations/005_session_project_context.sql`: projeto atual persistido na sessão.
   - `migrations/006_deployment_external_url.sql`: URL externa persistida na execução da publicação.
   - `migrations/007_deployment_claim_error.sql`: lease atômico e erro persistido da execução.
+  - `migrations/008_vsl_player.sql`: VSLs por projeto e snapshots publicados imutáveis.
+  - `migrations/009_vsl_published_lock.sql`: revisão do rascunho usada para o estado de alterações não publicadas.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
-- `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
+  - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
+    - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
 - `project-api.mjs`: API multiempresa e compatibilidade das rotas atuais do editor.
 - `outbound-webhook.mjs`: valida somente sintaxe HTTPS sem credenciais; resolução DNS, proteção contra SSRF/rebinding e entrega assíncrona ficam pendentes e não há egress nesta fundação.
