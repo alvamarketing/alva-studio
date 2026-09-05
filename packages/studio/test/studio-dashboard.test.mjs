@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel } from '../public/studio-dashboard.js';
+import { analyticsPanelModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel } from '../public/studio-dashboard.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
@@ -389,3 +389,33 @@ test('login, setup e rotas públicas não encerram a sessão do shell em 401', a
   await assert.rejects(() => api.request('/public/forms/demo/submissions', 'POST', {}));
   assert.equal(expired, 0);
 });
+
+test('painel "Visitas nos últimos 7 dias" usa as classes do wireframe, sem citar Umami e sem token novo', async () => {
+  const [html, css, app] = await Promise.all([
+    readFile(htmlPath, 'utf8'),
+    readFile(new URL('../public/styles.css', import.meta.url), 'utf8'),
+    readFile(appPath, 'utf8'),
+  ]);
+
+  assert.match(html, /<section id="analytics-panel"[^>]*class="surface analytics-card"[^>]*hidden/);
+  assert.match(html, /<h2 id="analytics-panel-title">Visitas nos últimos 7 dias<\/h2>/);
+  assert.match(html, /class="button ghost">Abrir Analytics</);
+  assert.match(html, /id="analytics-chart" class="chart"/);
+  assert.match(html, /id="analytics-journey" class="journey"/);
+  assert.doesNotMatch(html, /Umami/);
+  assert.doesNotMatch(css, /Umami/);
+
+  assert.match(css, /\.chart\s*i\s*\{[^}]*background:\s*linear-gradient\(var\(--alva-blue\),\s*var\(--alva-blue-light\)\)/);
+  assert.match(css, /\.surface\s*\{[^}]*border:\s*1px solid var\(--alva-line\)/);
+  assert.match(css, /\.journey\s*span\s*\{[^}]*background:\s*var\(--alva-cloud\)/);
+  const analyticsBlockMatch = css.match(/\/\* Task 10[\s\S]*?\/\* fim Task 10 \*\//);
+  assert.ok(analyticsBlockMatch, 'bloco de CSS do painel de analytics deve existir, delimitado por comentários');
+  assert.doesNotMatch(analyticsBlockMatch[0], /#[0-9a-fA-F]{3,8}\b/, 'nenhuma cor hexadecimal nova — só var() de tokens já existentes');
+
+  assert.match(app, /studioShell\?\.can\?\.\('analytics\.read'\)/);
+  assert.match(app, /analyticsPanelModel\(/);
+  assert.match(app, /analytics\/summary\?from=.*&to=/, 'a rota exige from/to (server/project-api.mjs: analyticsRange) — sem isso o resumo sempre responde 400');
+  assert.match(css, /@media\s*\(max-width:\s*900px\)\s*\{\s*\.project-columns\s*>\s*\.analytics-card\s*\{\s*grid-column:\s*1\s*\/\s*-1;/, 'o painel deve colapsar no breakpoint de 900px do wireframe, numa regra própria');
+  assert.match(css, /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.project-metrics,\s*\n\s*\.project-columns\s*\{\s*\n\s*grid-template-columns:\s*1fr;/, 'o breakpoint geral de 760px das demais seções continua intacto');
+});
+

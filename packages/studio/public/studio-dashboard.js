@@ -148,6 +148,45 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
   };
 }
 
+const ANALYTICS_DAYS = 7;
+const ANALYTICS_FUNNEL_STEPS = 4;
+const ANALYTICS_WEEKDAY = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' });
+
+// GET /api/projects/:id/analytics/summary exige from/to (server/project-api.mjs, analyticsRange) —
+// sem isso o endpoint sempre responde 400. "Últimos 7 dias" é o recorte que o próprio título do cartão promete.
+export function analyticsRangeParams(now = new Date()) {
+  const to = new Date(now);
+  const from = new Date(to.getTime() - ANALYTICS_DAYS * 24 * 60 * 60 * 1000);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+export function analyticsPanelModel(summary, { phase = 'ready', error = '', canRead = true } = {}) {
+  if (!canRead) return { phase: 'hidden', bars: [], funnel: [], updatedLabel: '' };
+  if (phase === 'loading') return { phase: 'loading', bars: [], funnel: [], updatedLabel: '' };
+  if (phase === 'error') return { phase: 'error', message: error || 'Não foi possível carregar as visitas.', bars: [], funnel: [], updatedLabel: '' };
+
+  const days = Array.isArray(summary?.dailyVisits) ? summary.dailyVisits.slice(-ANALYTICS_DAYS) : [];
+  const padded = Array.from({ length: ANALYTICS_DAYS }, (_, index) => days[index] || null);
+  const max = Math.max(1, ...padded.map((day) => Number(day?.visits) || 0));
+  const bars = padded.map((day) => {
+    const visitas = Number(day?.visits) || 0;
+    return {
+      dia: day?.date ? ANALYTICS_WEEKDAY.format(new Date(day.date)) : '',
+      visitas,
+      altura: Math.round((visitas / max) * 100),
+    };
+  });
+  const funnel = Array.isArray(summary?.funnel) ? summary.funnel.slice(0, ANALYTICS_FUNNEL_STEPS) : [];
+  const hasVisits = bars.some((bar) => bar.visitas > 0);
+
+  return {
+    phase: hasVisits || funnel.length ? 'ready' : 'empty',
+    bars,
+    funnel,
+    updatedLabel: 'Coletor interno · atualizado agora',
+  };
+}
+
 export function publicationModel({ connectionStatus = 'pending', run = null, routes = [], canPublish = undefined } = {}) {
   const count = Array.isArray(routes) ? routes.length : Number(routes || 0);
   if (canPublish === false) return { state: 'blocked', label: 'Sem permissão', routes: count, canPreview: false, canProduction: false, publishMessage: 'Você não tem permissão para publicar. Peça acesso a um administrador.' };

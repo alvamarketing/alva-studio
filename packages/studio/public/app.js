@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { analyticsPanelModel, analyticsRangeParams, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 const $ = (s) => document.querySelector(s);
@@ -45,6 +45,7 @@ let editor,
   mobileDrawer,
   config = { vercelConnected: false };
 const homeOverviewGuard = createLatestRequestGuard();
+const analyticsPanelGuard = createLatestRequestGuard();
 const authenticatedApi = createAuthenticatedApi({ request: fetch, onSessionExpired: () => ownerUI?.sessionExpired() });
 function toast(message) {
   $('#toast').textContent = message;
@@ -600,11 +601,62 @@ function renderPublication(overview, publication = {}) {
   connection.elements.teamId.value = publication.integration?.teamId || '';
   connection.elements.token.value = '';
 }
+function paintAnalyticsPanel(model) {
+  const card = $('#analytics-panel');
+  if (!card) return;
+  card.hidden = model.phase === 'hidden';
+  if (card.hidden) return;
+  const status = $('#analytics-status');
+  const chart = $('#analytics-chart');
+  const journey = $('#analytics-journey');
+  const messages = { loading: 'Carregando visitas…', error: model.message, empty: 'Ainda não há visitas neste período.' };
+  status.textContent = messages[model.phase] || '';
+  status.dataset.state = model.phase;
+  chart.hidden = model.phase !== 'ready' && model.phase !== 'empty';
+  journey.hidden = model.phase !== 'ready' || model.funnel.length === 0;
+  clear(chart);
+  for (const bar of model.bars) {
+    const barNode = document.createElement('i');
+    barNode.style.height = `${bar.altura}%`;
+    const label = `${bar.dia || 'Dia sem data'}: ${bar.visitas} ${bar.visitas === 1 ? 'visita' : 'visitas'}`;
+    barNode.setAttribute('aria-label', label);
+    barNode.title = label;
+    chart.append(barNode);
+  }
+  clear(journey);
+  model.funnel.forEach((step, index) => {
+    if (index > 0) {
+      const arrow = document.createElement('span');
+      arrow.className = 'material-symbols-outlined';
+      arrow.textContent = 'arrow_forward';
+      journey.append(arrow);
+    }
+    const span = document.createElement('span');
+    span.textContent = typeof step === 'string' ? step : step.label;
+    journey.append(span);
+  });
+}
+async function renderAnalyticsPanel(projectId) {
+  const canRead = Boolean(studioShell?.can?.('analytics.read'));
+  if (!canRead) return paintAnalyticsPanel(analyticsPanelModel(null, { canRead }));
+  const request = analyticsPanelGuard.next();
+  paintAnalyticsPanel(analyticsPanelModel(null, { phase: 'loading', canRead }));
+  try {
+    const { from, to } = analyticsRangeParams();
+    const summary = await api(`/projects/${projectId}/analytics/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
+    paintAnalyticsPanel(analyticsPanelModel(summary, { canRead }));
+  } catch (error) {
+    if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
+    paintAnalyticsPanel(analyticsPanelModel(null, { phase: 'error', error: error.message, canRead }));
+  }
+}
 async function renderProject() {
   if (!studioShell) return;
   leadsRequest += 1;
   updateLeadsFilter();
   const state = dashboardState();
+  $('#analytics-panel').hidden = true;
   if (projectContentFilter === 'leads') return renderProjectLeads(state);
   const status = $('#project-status');
   $('#project-leads-controls').hidden = true;
@@ -644,6 +696,7 @@ async function renderProject() {
     status.textContent = model.message;
     renderProjectOverview(overview);
     renderPublication(overview, publication);
+    renderAnalyticsPanel(state.currentProject.id);
   } catch (error) {
     if (request !== projectOverviewRequest) return;
     const model = projectOverviewModel(null, { phase: 'error', error: error.message });
