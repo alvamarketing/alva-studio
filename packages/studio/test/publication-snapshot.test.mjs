@@ -148,6 +148,22 @@ test('snapshot injeta no HTML da página somente o embed absoluto da versão pub
   assert.doesNotMatch(html, /draft\.example|sourceUrl|version_id|page-version-vsl-html/i);
 });
 
+test('snapshot reescreve iframe materializado no cliente usando somente a origem pública do servidor', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-client-origin', version_id: 'page-version-vsl-client-origin', version_number: 1, path: '/vsl-client-origin',
+    rendered_html: '<main><iframe class="alva-vsl-frame" src="https://client.example.test/embed/v/public-vsl-client-origin" title="VSL"></iframe></main>',
+    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-client-origin' }] },
+  }];
+  const snapshot = await buildPublishableSnapshot({
+    database: database(rows, [{ public_id: 'public-vsl-client-origin', version_number: 3 }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
+  });
+  const html = snapshot.files[0].data;
+  assert.match(html, /src="https:\/\/public\.example\.test\/embed\/v\/public-vsl-client-origin"/i);
+  assert.doesNotMatch(html, /client\.example\.test/);
+});
+
 test('snapshot deduplica VSL repetida entre página e formulário', async () => {
   const rows = [
     {
