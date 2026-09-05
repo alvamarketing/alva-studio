@@ -114,6 +114,8 @@ export function createProjectApi({
   limit,
   setupAllowed = () => true,
   validateWebhook = async (value) => value,
+  integrations,
+  publication,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -146,21 +148,30 @@ export function createProjectApi({
     };
     if (method === 'GET' && path === '/api/config') {
       await requireIntegration();
-      return json({ vercelConnected: false, pending: true });
+      if (!integrations) return json({ vercelConnected: false, pending: true });
+      const settings = await integrations.publicSettings({ companyId: context.companyId, projectId: context.currentProjectId });
+      return json({ vercelConnected: settings.connectionStatus === 'configured', ...(settings.connectionStatus === 'configured' ? {} : { pending: true }), vercel: settings });
     }
     if (method === 'GET' && path === '/api/settings') {
       await requireIntegration();
-      return json({ vercel: pendingVercel() });
+      if (!integrations) return json({ vercel: pendingVercel() });
+      const settings = await integrations.publicSettings({ companyId: context.companyId, projectId: context.currentProjectId });
+      return json({ vercel: { connected: settings.connectionStatus === 'configured', tokenConfigured: settings.connectionStatus === 'configured', teamId: settings.teamId, vercelProjectId: settings.vercelProjectId, source: settings.connectionStatus === 'configured' ? 'saved' : null } });
     }
     if (method === 'PUT' && path === '/api/settings/vercel') {
       await requireIntegration();
-      await body(req);
-      throw fail('A conexão Vercel por projeto ainda está pendente.', 409);
+      if (!integrations) { await body(req); throw fail('A conexão Vercel por projeto ainda está pendente.', 409); }
+      const input = await body(req);
+      if (input.disconnect) return json(await integrations.disconnect({ companyId: context.companyId, projectId: context.currentProjectId }));
+      return json(await integrations.save({ companyId: context.companyId, projectId: context.currentProjectId, ...input }));
     }
     if (method === 'POST' && path === '/api/settings/vercel/test') {
       await requireIntegration();
+      if (!integrations) { await body(req); throw fail('A conexão Vercel por projeto ainda está pendente.', 409); }
       await body(req);
-      throw fail('A conexão Vercel por projeto ainda está pendente.', 409);
+      const credentials = await integrations.credentials({ companyId: context.companyId, projectId: context.currentProjectId });
+      if (!credentials) throw fail('Conecte a Vercel neste projeto antes de testar.', 409);
+      return json(await publication.publisher({ companyId: context.companyId, projectId: context.currentProjectId }).then(({ publisher }) => publisher.testConnection()));
     }
     if (method === 'GET' && path === '/api/companies') return json(await sessionService.companiesFor(context.user.id));
     if (method === 'GET' && path === '/api/projects') return json(await projects.listForUser({ companyId: context.companyId, userId: context.user.id }));
@@ -219,6 +230,49 @@ export function createProjectApi({
         const archived = await projects.archive({ companyId: context.companyId, projectId, actorUserId: context.user.id });
         await sessionService.clearCurrentProject(projectId);
         return json(archived);
+      }
+    }
+
+    const publicationRoute = path.match(/^\/api\/projects\/([^/]+)\/publication(?:\/(vercel|preview|production|runs|domain)(?:\/([^/]+))?)?$/);
+    if (publicationRoute) {
+      const [, projectId, action = 'settings', value] = publicationRoute;
+      await sessionService.authorize(context, null, projectId);
+      if (!integrations || !publication) throw fail('A publicação Vercel por projeto ainda está pendente.', 409);
+      if (action === 'vercel') {
+        await sessionService.authorize(context, 'integration.manage', projectId);
+        if (method === 'GET') return json(await integrations.publicSettings({ companyId: context.companyId, projectId }));
+        if (method === 'PUT') {
+          const input = await body(req);
+          return json(input.disconnect
+            ? await integrations.disconnect({ companyId: context.companyId, projectId })
+            : await integrations.save({ companyId: context.companyId, projectId, ...input }));
+        }
+        if (method === 'POST') {
+          await body(req);
+          const credentials = await integrations.credentials({ companyId: context.companyId, projectId });
+          if (!credentials) throw fail('Conecte a Vercel neste projeto antes de testar.', 409);
+          return json(await publication.publisher({ companyId: context.companyId, projectId }).then(({ publisher }) => publisher.testConnection()));
+        }
+      }
+      if (action === 'settings' && method === 'GET') return json({ integration: await integrations.publicSettings({ companyId: context.companyId, projectId }) });
+      if (action === 'preview' && method === 'POST') {
+        await sessionService.authorize(context, 'deployment.publish', projectId);
+        const input = await body(req);
+        return json(await publication.preview({ companyId: context.companyId, projectId, requestedBy: context.user.id, expectedRevision: input.revision ?? input.expectedRevision ?? 0, idempotencyKey: input.idempotencyKey }));
+      }
+      if (action === 'production' && method === 'POST') {
+        await sessionService.authorize(context, 'deployment.publish', projectId);
+        const input = await body(req);
+        return json(await publication.production({ companyId: context.companyId, projectId, requestedBy: context.user.id, expectedRevision: input.revision ?? input.expectedRevision ?? 0, previewRunId: input.previewRunId, confirmed: input.confirmed === true, idempotencyKey: input.idempotencyKey }));
+      }
+      if (action === 'runs' && method === 'GET') {
+        await sessionService.authorize(context, 'deployment.publish', projectId);
+        return json(await publication.status({ companyId: context.companyId, projectId, runId: value }));
+      }
+      if (action === 'domain' && method === 'POST') {
+        await sessionService.authorize(context, 'integration.manage', projectId);
+        const input = await body(req);
+        return json(await publication.domain({ companyId: context.companyId, projectId, requestedBy: context.user.id, runId: input.runId, domain: input.domain }));
       }
     }
 

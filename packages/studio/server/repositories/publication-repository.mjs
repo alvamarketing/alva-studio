@@ -91,7 +91,7 @@ export class ProjectIntegrationRepository {
     const cleanTeam = cleanTeamId(teamId);
     const clean = cleanToken(token);
     const secretName = 'access_token';
-    const encrypted = this.vault.encrypt(clean);
+    const encrypted = (this.vault || new SecretVault()).encrypt(clean);
     const run = async (client) => {
       await client.query(
         `INSERT INTO company_secrets (company_id, provider, secret_name, encrypted_value, key_version, rotated_at)
@@ -125,7 +125,7 @@ export class ProjectIntegrationRepository {
     );
     if (!rows[0]) return null;
     return {
-      token: this.vault.decrypt(rows[0].encrypted_value),
+      token: (this.vault || new SecretVault()).decrypt(rows[0].encrypted_value),
       teamId: configuration.teamId || '',
       vercelProjectId: configuration.vercelProjectId,
     };
@@ -244,5 +244,36 @@ export class DeploymentRepository {
     if (url !== undefined) result.url = url;
     if (error !== undefined) result.error = error;
     return result;
+  }
+}
+
+export class ProjectDomainRepository {
+  constructor(database) { this.database = database; }
+  async save({ companyId, projectId, environment = 'production', domain, verificationStatus = 'pending' }) {
+    const value = String(domain || '').trim().toLowerCase();
+    if (!value || value.length > 253) throw fail('Domínio inválido.', 400);
+    const { rows } = await this.database.query(
+      `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status, updated_at)
+       VALUES ($1, $2, $3, $4, true, $5, now())
+       ON CONFLICT (lower(domain)) DO UPDATE
+         SET company_id = EXCLUDED.company_id, project_id = EXCLUDED.project_id,
+             environment = EXCLUDED.environment, is_canonical = true,
+             verification_status = EXCLUDED.verification_status, updated_at = now()
+       RETURNING id, company_id, project_id, environment, domain, is_canonical, verification_status, updated_at`,
+      [companyId, projectId, environment, value, verificationStatus],
+    );
+    const row = rows[0];
+    return row ? { id: row.id, companyId: row.company_id, projectId: row.project_id, environment: row.environment, domain: row.domain, isCanonical: row.is_canonical, verificationStatus: row.verification_status, updatedAt: row.updated_at } : null;
+  }
+}
+
+export class AuditRepository {
+  constructor(database) { this.database = database; }
+  async record({ companyId, projectId, actorUserId, action, resourceType, resourceId, revision, result, metadata = {} }) {
+    await this.database.query(
+      `INSERT INTO audit_events (company_id, project_id, actor_user_id, action, resource_type, resource_id, revision, result, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
+      [companyId, projectId || null, actorUserId || null, action, resourceType, resourceId || null, revision ?? null, result, JSON.stringify(metadata)],
+    );
   }
 }

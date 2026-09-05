@@ -15,6 +15,9 @@ import { ContentRepository } from './repositories/content-repository.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
 import { normalizeRoute } from './domain/access.mjs';
 import { createDatabase, migrate } from './db/postgres.mjs';
+import { PublicationSnapshotBuilder } from './publication-snapshot.mjs';
+import { PublicationService } from './publication-service.mjs';
+import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 
@@ -117,6 +120,18 @@ export function createApp({
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
   const content = database ? new ContentRepository(database) : null;
+  const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
+  const deployments = database ? new DeploymentRepository(database) : null;
+  const publication = database
+    ? new PublicationService({
+      snapshotBuilder: new PublicationSnapshotBuilder({ database, publicOrigin }),
+      integrations,
+      deployments,
+      publisherFactory: (credentials) => injectedPublisher || new Publisher(credentials),
+      audit: new AuditRepository(database),
+      domains: new ProjectDomainRepository(database),
+    })
+    : null;
   const projectApi = database
     ? createProjectApi({
       sessionService: new SessionService(database, sessionOptions),
@@ -127,6 +142,8 @@ export function createApp({
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),
       validateWebhook: validateWebhookUrl,
+      integrations,
+      publication,
       setupAllowed: (req) => {
         const expected = `127.0.0.1:${req.socket.localPort}`;
         const localHost = req.headers.host === expected || req.headers.host === `localhost:${req.socket.localPort}`;
