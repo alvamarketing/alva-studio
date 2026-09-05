@@ -68,6 +68,10 @@ function client(base, initialCookie = '') {
   return { request, cookie: () => cookie };
 }
 
+function assertKeys(value, expected) {
+  assert.deepEqual(Object.keys(value).sort(), [...expected].sort());
+}
+
 async function seed(database) {
   const password = 'senha-legada-segura';
   const alice = (await database.query(
@@ -811,6 +815,8 @@ test('overview de empresa reúne somente os projetos e contagens autorizados', a
   assert.equal(typeof owner.company.createdAt, 'string');
   assert.equal(typeof owner.company.updatedAt, 'string');
   assert.equal(owner.role, 'owner');
+  assertKeys(owner, ['company', 'role', 'counts', 'projects', 'members']);
+  assertKeys(owner.company, ['id', 'name', 'slug', 'status', 'createdAt', 'updatedAt']);
   assert.deepEqual(owner.counts, { projects: 2, pages: 1, forms: 1, submissions: 1, members: 2 });
   assert.deepEqual(owner.projects.map(({ id, slug }) => ({ id, slug })), [
     { id: records.projectA.id, slug: 'projeto-a' },
@@ -839,12 +845,13 @@ test('overview de empresa reúne somente os projetos e contagens autorizados', a
   assert.equal(editorOverview.status, 200);
   const editorPayload = await editorOverview.json();
   assert.equal(editorPayload.role, 'editor');
-  assert.deepEqual(editorPayload.counts, { projects: 1, pages: 1, forms: 1, submissions: 1, members: 0 });
+  assert.deepEqual(editorPayload.counts, { projects: 1, pages: 1, forms: 1, submissions: 1, members: null });
   assert.deepEqual(editorPayload.projects.map((project) => project.id), [records.projectA.id]);
   assert.equal(editorPayload.members, null);
 
   assert.equal((await editorClient.request(`/api/companies/${records.companyB.id}/overview`)).status, 404);
   assert.equal((await editorClient.request(`/api/projects/${hiddenProject.id}/overview`)).status, 404);
+  assert.equal((await alice.request(`/api/projects/${records.projectB.id}/overview`)).status, 404);
   await database.close();
 });
 
@@ -885,13 +892,20 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
      VALUES ($1, $2, 'production', 'studio.alva.test', true, 'verified')`,
     [records.companyA.id, records.projectA.id],
   );
-  for (const provider of ['vercel', 'analytics', 'agents']) {
-    await database.query(
-      `INSERT INTO project_integrations (company_id, project_id, provider, environment, configuration)
-       VALUES ($1, $2, $3, 'production', '{"token":"não-expor"}'::jsonb)`,
-      [records.companyA.id, records.projectA.id, provider],
-    );
-  }
+  await database.query(
+    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status)
+     VALUES ($1, $2, 'production', 'pendente.alva.test', false, 'pending'),
+            ($1, $2, 'preview', 'preview.alva.test', true, 'verified')`,
+    [records.companyA.id, records.projectA.id],
+  );
+  await database.query(
+    `INSERT INTO project_integrations (company_id, project_id, provider, environment, configuration)
+     VALUES ($1, $2, 'vercel', 'production', '{"connectionStatus":"configured","token":"não-expor"}'::jsonb),
+            ($1, $2, 'analytics', 'production', '{}'::jsonb),
+            ($1, $2, 'agents', 'production', '{"connectionStatus":"pending"}'::jsonb),
+            ($1, $2, 'analytics', 'preview', '{"connectionStatus":"configured"}'::jsonb)`,
+    [records.companyA.id, records.projectA.id],
+  );
   await database.query(
     `INSERT INTO company_secrets (company_id, provider, secret_name, encrypted_value)
      VALUES ($1, 'vercel', 'token', 'segredo-nunca-exposto')`,
@@ -900,7 +914,7 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
 
   const response = await alice.request(`/api/projects/${records.projectA.id}/overview`);
   assert.equal(response.status, 200);
-  const overview = await response.json();
+  let overview = await response.json();
   assert.equal(overview.project.id, records.projectA.id);
   assert.deepEqual(overview.counts, { pages: 2, forms: 1, publishedPages: 1, publishedForms: 1, submissions: 1 });
   assert.deepEqual(overview.content.map(({ id, kind, name, route, published, submissionCount }) => ({ id, kind, name, route, published, submissionCount })), [
@@ -910,16 +924,60 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   ]);
   assert.ok(overview.content.every((item) => typeof item.updatedAt === 'string'));
   assert.deepEqual(overview.domain, { domain: 'studio.alva.test', verificationStatus: 'verified' });
+  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'pending', agents: 'pending' });
+
+  await database.query(
+    `UPDATE project_integrations
+     SET configuration = '{"connectionStatus":"configured","requiresReconnect":true}'::jsonb
+     WHERE company_id = $1 AND project_id = $2 AND provider = 'agents' AND environment = 'production'`,
+    [records.companyA.id, records.projectA.id],
+  );
+  const reconnectOverview = await alice.request(`/api/projects/${records.projectA.id}/overview`);
+  assert.equal(reconnectOverview.status, 200);
+  assert.equal((await reconnectOverview.json()).integrations.agents, 'pending');
+
+  await database.query(
+    `UPDATE project_integrations
+     SET configuration = '{"connectionStatus":"configured"}'::jsonb
+     WHERE company_id = $1 AND project_id = $2 AND provider IN ('analytics', 'agents') AND environment = 'production'`,
+    [records.companyA.id, records.projectA.id],
+  );
+  const configuredOverview = await alice.request(`/api/projects/${records.projectA.id}/overview`);
+  assert.equal(configuredOverview.status, 200);
+  overview = await configuredOverview.json();
   assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'configured', agents: 'configured' });
+  assertKeys(overview, ['project', 'counts', 'content', 'domain', 'integrations']);
+  assertKeys(overview.project, ['id', 'companyId', 'name', 'slug', 'status', 'createdBy', 'createdAt', 'updatedAt']);
+  assertKeys(overview.counts, ['pages', 'forms', 'publishedPages', 'publishedForms', 'submissions']);
+  assert.ok(overview.content.every((item) => {
+    assertKeys(item, ['id', 'kind', 'name', 'route', 'published', 'updatedAt', 'submissionCount']);
+    return true;
+  }));
+  assertKeys(overview.domain, ['domain', 'verificationStatus']);
+  assertKeys(overview.integrations, ['vercel', 'analytics', 'agents']);
   assert.equal(JSON.stringify(overview).includes('configuration'), false);
   assert.equal(JSON.stringify(overview).includes('não-expor'), false);
   assert.equal(JSON.stringify(overview).includes('segredo-nunca-exposto'), false);
   assert.equal(JSON.stringify(overview).includes('lead@alva.test'), false);
 
   const empty = await (await alice.request('/api/projects', 'POST', { name: 'Projeto vazio', slug: 'projeto-vazio' })).json();
+  await database.query(
+    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status)
+     VALUES ($1, $2, 'production', 'pendente-vazio.alva.test', true, 'pending'),
+            ($1, $2, 'preview', 'preview-vazio.alva.test', true, 'verified')`,
+    [records.companyA.id, empty.id],
+  );
+  await database.query(
+    `INSERT INTO project_integrations (company_id, project_id, provider, environment, configuration)
+     VALUES ($1, $2, 'vercel', 'preview', '{"connectionStatus":"configured"}'::jsonb)`,
+    [records.companyA.id, empty.id],
+  );
   const emptyOverview = await alice.request(`/api/projects/${empty.id}/overview`);
   assert.equal(emptyOverview.status, 200);
-  assert.deepEqual((await emptyOverview.json()).counts, { pages: 0, forms: 0, publishedPages: 0, publishedForms: 0, submissions: 0 });
+  const emptyPayload = await emptyOverview.json();
+  assert.deepEqual(emptyPayload.counts, { pages: 0, forms: 0, publishedPages: 0, publishedForms: 0, submissions: 0 });
+  assert.equal(emptyPayload.domain, null);
+  assert.deepEqual(emptyPayload.integrations, { vercel: 'pending', analytics: 'pending', agents: 'pending' });
   await database.close();
 });
 

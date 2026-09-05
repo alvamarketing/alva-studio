@@ -210,7 +210,7 @@ export class CompanyRepository {
            CASE WHEN $3 THEN (
              SELECT count(*)::int FROM company_memberships member
              WHERE member.company_id = $1 AND member.status = 'active'
-           ) ELSE 0 END AS members`,
+           ) ELSE NULL::int END AS members`,
         [companyId, userId, hasCapability(membership.role, 'member.manage')],
       ),
     ]);

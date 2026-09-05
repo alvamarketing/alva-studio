@@ -31,6 +31,10 @@ function projectRecord(row) {
   };
 }
 
+function integrationIsConfigured(configuration) {
+  return configuration?.connectionStatus === 'configured' && configuration.requiresReconnect !== true;
+}
+
 const AUTHORIZED_PROJECTS = `
   SELECT p.*
   FROM projects p
@@ -154,14 +158,18 @@ export class ProjectRepository {
         [companyId, projectId],
       ),
       this.database.query(
-        `SELECT provider
+        `SELECT provider, configuration
          FROM project_integrations
          WHERE company_id = $1 AND project_id = $2
            AND environment = 'production' AND provider IN ('vercel', 'analytics', 'agents')`,
         [companyId, projectId],
       ),
     ]);
-    const configured = new Set(integrationRows.rows.map((row) => row.provider));
+    const configured = new Set(
+      integrationRows.rows
+        .filter((row) => integrationIsConfigured(row.configuration))
+        .map((row) => row.provider),
+    );
     return {
       project,
       counts: counts.rows[0],
