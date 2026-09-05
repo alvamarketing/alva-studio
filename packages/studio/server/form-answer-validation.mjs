@@ -51,7 +51,13 @@ export function validateFormAnswers(schema, input) {
     const allowedOptions = (step.options ?? []).map((option) => typeof option === 'string' ? option : option.label);
     if (['single_choice', 'image_choice'].includes(step.type) && value && !allowedOptions.includes(value)) throw fail('Escolha uma resposta válida.');
     if (step.type === 'number' && value && !Number.isFinite(Number(value))) throw fail('Informe um número válido.');
-    if (step.type === 'scale' && value && (Number(value) < step.range?.min || Number(value) > step.range?.max)) throw fail('Escolha um valor válido na escala.');
+    if (step.type === 'scale' && value) {
+      const scale = Number(value);
+      const minimum = Number(step.range?.min);
+      const maximum = Number(step.range?.max);
+      if (!Number.isFinite(scale) || !Number.isFinite(minimum) || !Number.isFinite(maximum) || scale < minimum || scale > maximum)
+        throw fail('Escolha um valor válido na escala.');
+    }
     answers[step.id] = value;
   }
   return answers;

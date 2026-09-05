@@ -1,10 +1,11 @@
 import { withTransaction } from '../db/postgres.mjs';
-import { hasCapability, normalizeRoute } from '../domain/access.mjs';
+import { hasCapability, normalizeProjectSlug, normalizeRoute } from '../domain/access.mjs';
 import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from '../form-answer-validation.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
+  error.status = statusCode;
   error.statusCode = statusCode;
   return error;
 }
@@ -81,6 +82,7 @@ function formRecord(row) {
     id: row.id,
     companyId: row.company_id,
     projectId: row.project_id,
+    projectSlug: row.project_slug,
     name: row.name,
     route: row.route,
     draftSchema: row.draft_schema,
@@ -194,9 +196,10 @@ async function scopedPage(client, { companyId, projectId, pageId, lock }) {
 
 async function scopedForm(client, { companyId, projectId, formId, lock }) {
   const { rows } = await client.query(
-    `SELECT f.*, route.path AS route,
+    `SELECT f.*, project.slug AS project_slug, route.path AS route,
             (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = f.id) AS submission_count
      FROM forms f
+     JOIN projects project ON project.id = f.project_id AND project.company_id = f.company_id
      JOIN project_routes route
        ON route.id = f.route_id
       AND route.company_id = f.company_id
@@ -305,7 +308,10 @@ export class ContentRepository {
            RETURNING *`,
           [companyId, projectId, routeId, formName, JSON.stringify(schema), actorId],
         );
-        return formRecord({ ...rows[0], route: formRoute });
+        const project = await client.query(
+          'SELECT slug FROM projects WHERE company_id = $1 AND id = $2', [companyId, projectId],
+        );
+        return formRecord({ ...rows[0], route: formRoute, project_slug: project.rows[0].slug });
       });
     } catch (error) {
       throw routeConflict(error);
@@ -328,9 +334,10 @@ export class ContentRepository {
   async listForms({ companyId, projectId, actorId }) {
     await authorizedProject(this.database, { companyId, projectId, actorId });
     const { rows } = await this.database.query(
-    `SELECT f.*, route.path AS route,
+    `SELECT f.*, project.slug AS project_slug, route.path AS route,
             (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = f.id) AS submission_count
        FROM forms f
+       JOIN projects project ON project.id = f.project_id AND project.company_id = f.company_id
        JOIN project_routes route ON route.id = f.route_id AND route.deleted_at IS NULL
        WHERE f.company_id = $1 AND f.project_id = $2 AND f.deleted_at IS NULL
        ORDER BY f.created_at, f.id`,
@@ -504,7 +511,7 @@ export class ContentRepository {
            VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING *`,
           [companyId, projectId, routeId, `${source.name} — cópia`.slice(0, 100), JSON.stringify(schema), actorId],
         );
-        return formRecord({ ...rows[0], route: nextRoute });
+        return formRecord({ ...rows[0], route: nextRoute, project_slug: source.project_slug });
       });
     } catch (error) {
       throw routeConflict(error);
@@ -552,7 +559,7 @@ export class ContentRepository {
     if (domainValue === undefined && webhookValue === undefined) return this.pageSettings({ companyId, projectId, actorId, pageId });
     try {
       return await withTransaction(this.database, async (client) => {
-        await authorizedProject(client, { companyId, projectId, actorId, capability: 'page.write' });
+        await authorizedProject(client, { companyId, projectId, actorId, capability: 'integration.manage' });
         await scopedPage(client, { companyId, projectId, pageId, lock: true });
         if (domainValue !== undefined) {
           const nextDomain = domain(domainValue);
@@ -626,35 +633,74 @@ export class ContentRepository {
     }
   }
 
-  async publishedFormBySlug(client, slug) {
+  async publishedFormForProject(client, { projectSlug, slug }) {
     const publishedPath = publicSlug(slug);
+    const normalizedProject = normalizeProjectSlug(projectSlug);
     const { rows } = await client.query(
-      `SELECT form.id, form.company_id, form.project_id, form.name, version.id AS version_id, version.schema
+      `SELECT form.id, form.company_id, form.project_id, form.name, version.id AS version_id, version.schema,
+              project.slug AS project_slug
        FROM forms form
+       JOIN projects project ON project.id = form.project_id AND project.company_id = form.company_id
        JOIN project_routes route ON route.id = form.route_id AND route.deleted_at IS NULL
        JOIN form_versions version ON version.id = form.published_version_id
-       WHERE route.path = $1 AND form.deleted_at IS NULL
-       ORDER BY form.created_at, form.id LIMIT 2`, [publishedPath],
+       WHERE project.slug = $1 AND route.path = $2 AND form.deleted_at IS NULL
+       LIMIT 1`, [normalizedProject, publishedPath],
     );
-    if (rows.length !== 1) throw fail('Formulário publicado não encontrado.', 404);
+    if (!rows.length) throw fail('Formulário publicado não encontrado.', 404);
     return rows[0];
   }
 
-  async publicForm(slug) {
-    const form = await this.publishedFormBySlug(this.database, slug);
+  async publishedFormForDomain(client, { host, slug }) {
+    const publishedPath = publicSlug(slug);
+    const normalizedHost = domain(String(host).replace(/^\[/, '').replace(/\]$/, '').split(':')[0]);
+    if (!normalizedHost) throw fail('Formulário publicado não encontrado.', 404);
+    const { rows } = await client.query(
+      `SELECT form.id, form.company_id, form.project_id, form.name, version.id AS version_id, version.schema,
+              project.slug AS project_slug
+       FROM project_domains project_domain
+       JOIN projects project ON project.id = project_domain.project_id AND project.company_id = project_domain.company_id
+       JOIN forms form ON form.project_id = project.id AND form.company_id = project.company_id AND form.deleted_at IS NULL
+       JOIN project_routes route ON route.id = form.route_id AND route.deleted_at IS NULL
+       JOIN form_versions version ON version.id = form.published_version_id
+       WHERE lower(project_domain.domain) = lower($1) AND route.path = $2
+       LIMIT 1`, [normalizedHost, publishedPath],
+    );
+    if (!rows.length) throw fail('Formulário publicado não encontrado.', 404);
+    return rows[0];
+  }
+
+  publicFormRecord(form, slug) {
     return {
       id: form.id,
       companyId: form.company_id,
       projectId: form.project_id,
+      projectSlug: form.project_slug,
       versionId: form.version_id,
       name: form.name,
+      slug,
       ...form.schema,
     };
   }
 
-  async submitPublicForm(slug, input) {
+  async publicFormForProject({ projectSlug, slug }) {
+    return this.publicFormRecord(await this.publishedFormForProject(this.database, { projectSlug, slug }), slug);
+  }
+
+  async publicFormForDomain({ host, slug }) {
+    return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, slug }), slug);
+  }
+
+  async submitPublicFormForProject({ projectSlug, slug, input }) {
+    return this.submitPublishedForm({ resolve: (client) => this.publishedFormForProject(client, { projectSlug, slug }), slug, input });
+  }
+
+  async submitPublicFormForDomain({ host, slug, input }) {
+    return this.submitPublishedForm({ resolve: (client) => this.publishedFormForDomain(client, { host, slug }), slug, input });
+  }
+
+  async submitPublishedForm({ resolve, slug, input }) {
     return withTransaction(this.database, async (client) => {
-      const form = await this.publishedFormBySlug(client, slug);
+      const form = await resolve(client);
       const answers = validateFormAnswers(form.schema, input);
       const { rows } = await client.query(
         `INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers)
@@ -663,7 +709,7 @@ export class ContentRepository {
       );
       return {
         id: rows[0].id,
-        form: { id: form.id, name: form.name, slug },
+        form: { id: form.id, name: form.name, slug, projectSlug: form.project_slug },
         schema: form.schema,
         answers,
         submittedAt: rows[0].submitted_at,
@@ -698,10 +744,12 @@ export class ContentRepository {
     });
   }
 
-  async publishForm({ companyId, projectId, actorId, formId }) {
+  async publishForm({ companyId, projectId, actorId, formId, lockVersion: expectedLockVersion }) {
     return withTransaction(this.database, async (client) => {
       await authorizedProject(client, { companyId, projectId, actorId, capability: 'deployment.publish' });
       const form = await scopedForm(client, { companyId, projectId, formId, lock: true });
+      if (expectedLockVersion !== undefined && form.lock_version !== lockVersion(expectedLockVersion))
+        throw fail('O formulário mudou em outra aba. Reabra antes de publicar.', 409);
       await assertPublishedPathAvailable(client, {
         companyId, projectId, path: form.route, contentId: formId, contentType: 'form',
       });

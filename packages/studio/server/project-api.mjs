@@ -96,12 +96,6 @@ async function legacyPageFor(content, context, page) {
   return legacyPage(page, settings);
 }
 
-async function publishLegacyForm(content, context, projectId, form) {
-  await content.publishForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: form.id });
-  return legacyForm(await content.getForm({
-    companyId: context.companyId, projectId, actorId: context.user.id, formId: form.id,
-  }));
-}
 
 export function createProjectApi({
   sessionService,
@@ -112,6 +106,7 @@ export function createProjectApi({
   secure = false,
   limit,
   setupAllowed = () => true,
+  validateWebhook = async (value) => value,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -208,6 +203,10 @@ export function createProjectApi({
         await sessionService.authorize(context, kind === 'pages' ? 'page.write' : 'form.write', projectId);
         const input = await body(req);
         rejectsLegacyProject(input);
+        if (kind === 'forms' && input.draftSchema?.webhook !== undefined) {
+          await sessionService.authorize(context, 'integration.manage', projectId);
+          if (input.draftSchema.webhook) input.draftSchema.webhook = await validateWebhook(input.draftSchema.webhook);
+        }
         const record = kind === 'pages'
           ? await content.createPage({ ...pageInput(input), companyId: context.companyId, projectId, actorId: context.user.id })
           : await content.createForm({ ...formInput(input), companyId: context.companyId, projectId, actorId: context.user.id });
@@ -236,6 +235,15 @@ export function createProjectApi({
       if (method === 'POST') {
         await sessionService.authorize(context, capability, projectId);
         const input = await body(req);
+        const requestedWebhook = !isPage ? (input.webhook ?? input.draftSchema?.webhook) : undefined;
+        if (!isPage && requestedWebhook !== undefined) {
+          await sessionService.authorize(context, 'integration.manage', projectId);
+          if (requestedWebhook) {
+            const safeWebhook = await validateWebhook(requestedWebhook);
+            input.webhook = safeWebhook;
+            input.draftSchema = { ...(input.draftSchema ?? {}), webhook: safeWebhook };
+          }
+        }
         const record = isPage
           ? await content.createPage({
             name: input.name,
@@ -250,12 +258,12 @@ export function createProjectApi({
           : await content.createForm({
             name: input.name,
             route: input.route ?? input.slug ?? routeFor(input.name),
-            draftSchema: input.draftSchema ?? initialLegacyForm(),
+            draftSchema: { ...(input.draftSchema ?? initialLegacyForm()), ...(input.webhook === undefined ? {} : { webhook: input.webhook }) },
             companyId: context.companyId,
             projectId,
             actorId: context.user.id,
           });
-        return json(isPage ? legacyPage(record) : await publishLegacyForm(content, context, projectId, record), 201);
+        return json(isPage ? legacyPage(record) : legacyForm(record), 201);
       }
     }
 
@@ -269,7 +277,21 @@ export function createProjectApi({
       if (method === 'PUT') {
         await sessionService.authorize(context, capability, projectId);
         const input = await body(req);
-        if (isPage) content.validatePageSettings({ domain: input.domain, webhook: input.webhook });
+        const changesIntegration = input.domain !== undefined || input.webhook !== undefined;
+        if (isPage && changesIntegration) {
+          await sessionService.authorize(context, 'integration.manage', projectId);
+          content.validatePageSettings({ domain: input.domain, webhook: input.webhook });
+          if (input.webhook !== undefined && input.webhook) input.webhook = await validateWebhook(input.webhook);
+        }
+        const requestedWebhook = !isPage ? (input.webhook ?? input.draftSchema?.webhook) : undefined;
+        if (!isPage && requestedWebhook !== undefined) {
+          await sessionService.authorize(context, 'integration.manage', projectId);
+          if (requestedWebhook) {
+            const safeWebhook = await validateWebhook(requestedWebhook);
+            input.webhook = safeWebhook;
+            input.draftSchema = { ...(input.draftSchema ?? {}), webhook: safeWebhook };
+          }
+        }
         const record = isPage
           ? await content.updatePage({
             name: input.name,
@@ -296,7 +318,7 @@ export function createProjectApi({
             domain: input.domain, webhook: input.webhook,
           })
           : null;
-        return json(isPage ? legacyPage(record, settings) : await publishLegacyForm(content, context, projectId, record));
+        return json(isPage ? legacyPage(record, settings) : legacyForm(record));
       }
       if (method === 'DELETE') {
         await sessionService.authorize(context, capability, projectId);
@@ -314,7 +336,18 @@ export function createProjectApi({
       const record = isPage
         ? await content.duplicatePage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })
         : await content.duplicateForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-      return json(isPage ? legacyPage(record) : await publishLegacyForm(content, context, projectId, record), 201);
+      return json(isPage ? legacyPage(record) : legacyForm(record), 201);
+    }
+    if (!isPage && method === 'POST' && action === 'publish') {
+      await sessionService.authorize(context, 'deployment.publish', projectId);
+      const input = await body(req);
+      await content.publishForm({
+        companyId: context.companyId, projectId, actorId: context.user.id, formId: id,
+        lockVersion: input.revision ?? input.lockVersion,
+      });
+      return json(legacyForm(await content.getForm({
+        companyId: context.companyId, projectId, actorId: context.user.id, formId: id,
+      })), 201);
     }
     if (!isPage && method === 'GET' && action === 'submissions') {
       await sessionService.authorize(context, 'submission.read', projectId);

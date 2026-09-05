@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
 import { promisify } from 'node:util';
+import { request as httpRequest } from 'node:http';
 import { createApp } from '../server/index.mjs';
+import { validateFormAnswers } from '../server/form-answer-validation.mjs';
 import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
@@ -15,17 +17,32 @@ async function legacyPassword(password) {
 }
 
 async function start(t, database, options = {}) {
-  const { publicOrigin, authOptions, sessionOptions = {} } = options;
+  const { publicOrigin, authOptions, sessionOptions = {}, dnsLookup, webhookFetch } = options;
   const server = createApp({
     database,
     publicOrigin,
     authOptions,
+    dnsLookup,
+    webhookFetch,
     sessionOptions: { sessionTTL: 60_000, ...sessionOptions },
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
   return { server, base };
+}
+
+async function publicRequest(base, path, host) {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(base + path, { headers: { Host: host } }, (response) => {
+      let content = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { content += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode, text: content }));
+    });
+    request.on('error', reject);
+    request.end();
+  });
 }
 
 function client(base, initialCookie = '') {
@@ -166,7 +183,7 @@ test('a borda SaaS ignora identificadores de escopo enviados no corpo', async (t
   const database = createDatabase({ connectionString });
   await migrate(database);
   const records = await seed(database);
-  const app = await start(t, database);
+  const app = await start(t, database, { dnsLookup: async () => [{ address: '93.184.216.34', family: 4 }] });
   const alice = client(app.base);
   await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
 
@@ -313,12 +330,16 @@ test('rotas legadas continuam o fluxo do painel sem usar Auth local nem segredo 
   await database.close();
 });
 
-test('formulário SaaS publicado usa slug público, persiste respostas e mantém configurações', async (t) => {
+test('formulário SaaS mantém rascunho, publica explicitamente em rota pública isolada e persiste respostas', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
   await migrate(database);
   const records = await seed(database);
-  const app = await start(t, database);
+  let delivery;
+  const app = await start(t, database, {
+    dnsLookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    webhookFetch: async (url, init) => { delivery = { url, init }; return new Response('', { status: 204 }); },
+  });
   const alice = client(app.base);
   await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
 
@@ -338,17 +359,27 @@ test('formulário SaaS publicado usa slug público, persiste respostas e mantém
     webhook: 'https://hooks.example.test/receber',
   })).json();
   assert.equal(form.webhook, 'https://hooks.example.test/receber');
-  const publicPage = await fetch(`${app.base}/f/${form.slug}`);
+  assert.equal(form.publishedVersionId, null, 'salvar no editor não publica o rascunho');
+  const draftPublic = await fetch(`${app.base}/f/${form.projectSlug}/${form.slug}`);
+  assert.equal(draftPublic.status, 404, await draftPublic.text());
+  const published = await alice.request(`/api/forms/${form.id}/publish`, 'POST', { revision: form.revision });
+  assert.equal(published.status, 201);
+  form = await published.json();
+  assert.ok(form.publishedVersionId);
+  const publicPage = await fetch(`${app.base}/f/${form.projectSlug}/${form.slug}`);
   const publicHtml = await publicPage.text();
   assert.equal(publicPage.status, 200, publicHtml);
-  assert.match(publicHtml, new RegExp(`/api/public/forms/${form.slug}/submissions`));
-  const submitted = await fetch(`${app.base}/api/public/forms/${form.slug}/submissions`, {
+  assert.equal((await fetch(`${app.base}/f/${form.slug}`)).status, 404);
+  assert.match(publicHtml, new RegExp(`/api/public/forms/${form.projectSlug}/${form.slug}/submissions`));
+  const submitted = await fetch(`${app.base}/api/public/forms/${form.projectSlug}/${form.slug}/submissions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: { email: 'lead@alva.test' } }),
   });
   const completionHtml = await submitted.text();
   assert.equal(submitted.status, 200, completionHtml);
   assert.match(completionHtml, /Recebemos/);
-  assert.equal((await fetch(`${app.base}/api/public/forms/${form.slug}/submissions`, {
+  assert.equal(delivery.url, 'https://hooks.example.test/receber');
+  assert.equal(delivery.init.redirect, 'manual');
+  assert.equal((await fetch(`${app.base}/api/public/forms/${form.projectSlug}/${form.slug}/submissions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: {} }),
   })).status, 400);
   const listed = await (await alice.request('/api/forms')).json();
@@ -423,4 +454,101 @@ test('expiração e remoção revogam sessões; atualização preserva contexto 
   );
   assert.equal((await (await alice.request('/api/session')).json()).authenticated, false);
   await database.close();
+});
+
+test('rotas públicas não colidem entre projetos e domínio resolve o projeto conectado', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database, { dnsLookup: async () => [{ address: '93.184.216.34', family: 4 }] });
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  const createPublished = async (name) => {
+    const created = await (await alice.request('/api/forms', 'POST', { name, slug: 'contato' })).json();
+    const draft = await (await alice.request(`/api/forms/${created.id}`, 'PUT', {
+      revision: created.revision,
+      steps: [{ id: 'email', type: 'email', title: 'E-mail', required: true }],
+    })).json();
+    const published = await alice.request(`/api/forms/${created.id}/publish`, 'POST', { revision: draft.revision });
+    assert.equal(published.status, 201);
+    return published.json();
+  };
+
+  const formA = await createPublished('Contato A');
+  await alice.request('/api/session', 'PATCH', { companyId: records.companyB.id, projectId: records.projectB.id });
+  const formB = await createPublished('Contato B');
+  assert.equal((await fetch(`${app.base}/f/${formA.projectSlug}/contato`)).status, 200);
+  const bPage = await fetch(`${app.base}/f/${formB.projectSlug}/contato`);
+  assert.equal(bPage.status, 200);
+  assert.match(await bPage.text(), /Contato B/);
+  assert.equal((await fetch(`${app.base}/f/contato`)).status, 404);
+
+  await database.query(
+    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical)
+     VALUES ($1, $2, 'production', 'a.local.test', true), ($3, $4, 'production', 'b.local.test', true)`,
+    [records.companyA.id, records.projectA.id, records.companyB.id, records.projectB.id],
+  );
+  const domainApp = await start(t, database, {
+    publicOrigin: 'https://a.local.test', dnsLookup: async () => [{ address: '93.184.216.34', family: 4 }],
+  });
+  const domainPage = await publicRequest(domainApp.base, '/f/contato', 'a.local.test');
+  assert.equal(domainPage.status, 200);
+  assert.match(domainPage.text, /Contato A/);
+  await database.close();
+});
+
+test('integrações exigem capacidade própria e bloqueiam destinos webhook inseguros', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const editor = (await database.query(
+    `INSERT INTO users (email, password_hash, display_name) VALUES ('editor@alva.test', $1, 'Editora') RETURNING id`,
+    [await legacyPassword(records.password)],
+  )).rows[0];
+  const membership = (await database.query(
+    `INSERT INTO company_memberships (company_id, user_id, role, joined_at)
+     VALUES ($1, $2, 'editor', now()) RETURNING id`, [records.companyA.id, editor.id],
+  )).rows[0];
+  await database.query(
+    'INSERT INTO project_grants (company_id, membership_id, project_id) VALUES ($1, $2, $3)',
+    [records.companyA.id, membership.id, records.projectA.id],
+  );
+  const app = await start(t, database, { dnsLookup: async () => [{ address: '127.0.0.1', family: 4 }] });
+  const alice = client(app.base);
+  const editora = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  await editora.request('/api/login', 'POST', { email: 'editor@alva.test', password: records.password });
+
+  const form = await (await alice.request('/api/forms', 'POST', { name: 'Contato seguro' })).json();
+  const page = await (await alice.request('/api/pages', 'POST', { name: 'Página segura' })).json();
+  const savedDraft = await editora.request(`/api/forms/${form.id}`, 'PUT', {
+    revision: form.revision, name: 'Contato salvo pela editora', steps: [{ id: 'nome', type: 'short_text', title: 'Nome', required: true }],
+  });
+  assert.equal(savedDraft.status, 200);
+  assert.equal((await savedDraft.json()).publishedVersionId, null);
+  assert.equal((await editora.request(`/api/forms/${form.id}/publish`, 'POST', { revision: 1 })).status, 403);
+  assert.equal((await editora.request('/api/forms', 'POST', { name: 'Webhook proibido', draftSchema: { webhook: 'https://example.test/hook' } })).status, 403);
+  assert.equal((await editora.request(`/api/forms/${form.id}`, 'PUT', { revision: 1, webhook: 'https://example.test/hook' })).status, 403);
+  assert.equal((await editora.request(`/api/pages/${page.id}`, 'PUT', {
+    revision: page.revision, project: {}, html: '', domain: 'editor.local.test',
+  })).status, 403);
+
+  const rejected = await alice.request(`/api/forms/${form.id}`, 'PUT', { revision: 1, webhook: 'https://127.0.0.1/hook' });
+  assert.equal(rejected.status, 400);
+  assert.equal((await alice.request(`/api/forms/${form.id}`, 'PUT', { revision: 1, webhook: 'https://[::1]/hook' })).status, 400);
+  const unchanged = await (await alice.request(`/api/forms/${form.id}`)).json();
+  assert.equal(unchanged.webhook, '');
+  assert.equal((await alice.request(`/api/forms/${form.id}`, 'PUT', { revision: 1, webhook: 'https://hooks.example.test/hook' })).status, 400);
+  await database.close();
+});
+
+
+test('validação de escala rejeita valores não finitos', () => {
+  const schema = { steps: [{ id: 'avaliacao', type: 'scale', title: 'Avaliação', required: true, range: { min: 1, max: 5 } }] };
+  assert.throws(() => validateFormAnswers(schema, { answers: { avaliacao: 'Infinity' } }), /escala/);
+  assert.throws(() => validateFormAnswers(schema, { answers: { avaliacao: 'NaN' } }), /escala/);
+  assert.deepEqual(validateFormAnswers(schema, { answers: { avaliacao: '3' } }), { avaliacao: '3' });
 });

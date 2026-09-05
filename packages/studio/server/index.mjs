@@ -12,6 +12,7 @@ import { createProjectApi } from './project-api.mjs';
 import { CompanyRepository } from './repositories/company-repository.mjs';
 import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
+import { deliverWebhook, validateWebhookUrl } from './outbound-webhook.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 async function body(req) {
@@ -52,6 +53,8 @@ export function createApp({
   sessionOptions,
   publicOrigin = process.env.PUBLIC_ORIGIN,
   webhookFetch = fetch,
+  dnsLookup,
+  webhookTimeoutMs = 5000,
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -63,6 +66,7 @@ export function createApp({
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
   const content = database ? new ContentRepository(database) : null;
+  const sendWebhook = (url, payload) => deliverWebhook(url, payload, { lookup: dnsLookup, fetchImpl: webhookFetch, timeoutMs: webhookTimeoutMs });
   const projectApi = database
     ? createProjectApi({
       sessionService: new SessionService(database, sessionOptions),
@@ -72,6 +76,7 @@ export function createApp({
       body,
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),
+      validateWebhook: (value) => validateWebhookUrl(value, { lookup: dnsLookup }),
       setupAllowed: (req) => {
         const expected = `127.0.0.1:${req.socket.localPort}`;
         const localHost = req.headers.host === expected || req.headers.host === `localhost:${req.socket.localPort}`;
@@ -111,7 +116,7 @@ export function createApp({
       const localHost = req.headers.host === expected || req.headers.host === 'localhost:' + res.socket.localPort;
       const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
       const path = new URL(req.url, 'http://' + expected).pathname;
-      const publicSubmission = req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/(?:submit|submissions)$/.test(path);
+      const publicSubmission = req.method === 'POST' && /^\/api\/public\/forms\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\/(?:submit|submissions)$/.test(path);
       if (publicOrigin ? req.headers.host !== new URL(publicOrigin).host : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
@@ -139,36 +144,41 @@ export function createApp({
         auth.issue(res, secure);
         return json({ setupRequired: false, authenticated: true, owner }, path === '/api/setup' ? 201 : 200);
       }
-      const publicForm = path.match(/^\/f\/([a-z0-9-]+)$/);
-      if (req.method === 'GET' && publicForm) {
-        if (content) {
-          const form = await content.publicForm(publicForm[1]);
-          res.setHeader('Content-Type', 'text/html; charset=utf-8');
-          res.setHeader('Cache-Control', 'no-store');
-          res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-          return res.end(renderDynamicForm(form, `/api/public/forms/${publicForm[1]}/submissions`));
-        }
-        const form = await formStore.getBySlug(publicForm[1]);
+      const localPublicForm = path.match(/^\/f\/([a-z0-9-]+)\/([a-z0-9-]+)$/);
+      const domainPublicForm = publicOrigin ? path.match(/^\/f\/([a-z0-9-]+)$/) : null;
+      if (req.method === 'GET' && content && (localPublicForm || domainPublicForm)) {
+        const form = localPublicForm
+          ? await content.publicFormForProject({ projectSlug: localPublicForm[1], slug: localPublicForm[2] })
+          : await content.publicFormForDomain({ host: req.headers.host, slug: domainPublicForm[1] });
+        const action = localPublicForm
+          ? `/api/public/forms/${localPublicForm[1]}/${localPublicForm[2]}/submissions`
+          : `/api/public/forms/${domainPublicForm[1]}/submissions`;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        return res.end(renderDynamicForm(form, action));
+      }
+      const localForm = !content && path.match(/^\/f\/([a-z0-9-]+)$/);
+      if (req.method === 'GET' && localForm) {
+        const form = await formStore.getBySlug(localForm[1]);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Frame-Options', 'SAMEORIGIN');
         return res.end(renderDynamicForm(form, `/api/public/forms/${form.id}/submit`));
       }
       const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
-      const saasSubmission = path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/submissions$/);
-      if (req.method === 'POST' && content && saasSubmission) {
-        const saved = await content.submitPublicForm(saasSubmission[1], await publicAnswers(req));
+      const localSaasSubmission = path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/([a-z0-9-]+)\/submissions$/);
+      const domainSaasSubmission = publicOrigin ? path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/submissions$/) : null;
+      if (req.method === 'POST' && content && (localSaasSubmission || domainSaasSubmission)) {
+        const saved = localSaasSubmission
+          ? await content.submitPublicFormForProject({ projectSlug: localSaasSubmission[1], slug: localSaasSubmission[2], input: await publicAnswers(req) })
+          : await content.submitPublicFormForDomain({ host: req.headers.host, slug: domainSaasSubmission[1], input: await publicAnswers(req) });
         const form = { ...saved.schema, id: saved.form.id, name: saved.form.name, slug: saved.form.slug };
         if (form.webhook) {
           try {
-            await webhookFetch(form.webhook, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ form: saved.form, id: saved.id, answers: saved.answers, submittedAt: saved.submittedAt }),
-              signal: AbortSignal.timeout(5000),
-            });
+            await sendWebhook(form.webhook, { form: saved.form, id: saved.id, answers: saved.answers, submittedAt: saved.submittedAt });
           } catch {
-            // The submission remains persisted when a recipient is unavailable.
+            // The persisted response is retained if an approved receiver is unavailable.
           }
         }
         const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };
@@ -182,14 +192,9 @@ export function createApp({
         const saved = await formStore.submit(form.id, await publicAnswers(req));
         if (form.webhook) {
           try {
-            await webhookFetch(form.webhook, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ form: { id: form.id, name: form.name, slug: form.slug }, ...saved }),
-              signal: AbortSignal.timeout(5000),
-            });
+            await sendWebhook(form.webhook, { form: { id: form.id, name: form.name, slug: form.slug }, ...saved });
           } catch {
-            // The local response remains saved even when an integration is unavailable.
+            // The local response remains saved even when a recipient is unavailable.
           }
         }
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
