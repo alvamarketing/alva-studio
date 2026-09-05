@@ -31,7 +31,7 @@
     </svg>
     <div id="startup" role="status" style="padding: 40px; text-align: center">Abrindo seu Studio…</div>
     <section id="dashboard" hidden>
-      <aside>
+      <aside id="studio-sidebar">
         <a class="brand" href="/" aria-label="Alva Studio">
           <svg class="brand-symbol" aria-hidden="true" viewBox="0 0 720.5 1000"><use href="#alva-symbol" /></svg>
           <strong>ALVA</strong>
@@ -45,6 +45,10 @@
         <button class="nav-item nav-active" id="nav-home" aria-current="page" title="Início">
           <span class="material-symbols-outlined" aria-hidden="true">home</span>
           <span class="sidebar-label">Início</span>
+        </button>
+        <button class="nav-item" id="nav-project" title="Visão geral do projeto">
+          <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+          <span class="sidebar-label">Projeto</span>
         </button>
         <button class="nav-item" id="nav-pages" title="Projetos">
           <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -85,6 +89,9 @@
         </div>
       </aside>
       <main>
+        <button id="mobile-menu" class="mobile-menu" type="button" aria-label="Abrir menu" aria-controls="studio-sidebar" aria-expanded="false">
+          <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+        </button>
         <section id="studio-home" aria-labelledby="studio-home-title">
           <header class="dashboard-header studio-home-header">
             <div>
@@ -120,6 +127,36 @@
           <p id="company-status" class="dashboard-status" role="status" aria-live="polite"></p>
           <div id="company-content" class="company-overview"></div>
           <footer>Dados da empresa atual. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="project-view" aria-labelledby="project-view-title" hidden>
+          <header class="dashboard-header project-header">
+            <div>
+              <div class="eyebrow">PROJETO</div>
+              <h1 id="project-view-title">Projeto<span class="accent">.</span></h1>
+              <p id="project-slug">Carregando projeto…</p>
+            </div>
+            <span id="project-domain" class="project-domain" data-state="pending">Domínio ainda não verificado</span>
+          </header>
+          <p id="project-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <div id="project-metrics" class="project-metrics"></div>
+          <div class="project-columns">
+            <section class="project-surface" aria-labelledby="project-content-title">
+              <div class="section-heading">
+                <h2 id="project-content-title">Conteúdos</h2>
+                <nav id="project-content-filter" class="project-filter" aria-label="Filtrar conteúdos">
+                  <button type="button" data-project-filter="all" aria-current="page">Visão geral</button>
+                  <button type="button" data-project-filter="pages">Landing pages</button>
+                  <button type="button" data-project-filter="forms">Formulários</button>
+                </nav>
+              </div>
+              <div id="project-content-list" class="project-content-list" aria-live="polite"></div>
+            </section>
+            <section class="project-surface" aria-labelledby="project-modules-title">
+              <h2 id="project-modules-title">Próximos módulos</h2>
+              <div id="project-modules" class="project-modules"></div>
+            </section>
+          </div>
+          <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>
         <section id="pages-view" hidden>
           <header class="dashboard-header">

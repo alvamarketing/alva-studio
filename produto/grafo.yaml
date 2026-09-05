@@ -28,7 +28,7 @@ nos:
       tipo: homologação
       espera: Worker revalida o destino no momento da entrega, não acessa rede privada e registra cada tentativa sem expor respostas em logs.
   - id: shell_saas
-    estado: pendente
+    estado: feito
     faz: Aplicar Home, Empresa e Projeto do wireframe aos dados reais da fundação
     depende:
       - fundacao_saas

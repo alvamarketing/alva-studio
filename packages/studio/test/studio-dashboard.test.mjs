@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createProjectSubmission, dashboardModel, isProjectSlug } from '../public/studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectOverviewModel } from '../public/studio-dashboard.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
@@ -166,4 +166,61 @@ test('navegação atualiza aria-current e a ação de projeto depende da capacid
   assert.equal(navigation.pages.attribute('aria-current'), undefined);
   assert.equal(canCreateProject({ can: (capability) => capability === 'project.manage' }), true);
   assert.equal(canCreateProject({ can: () => false }), false);
+});
+
+test('visão do projeto mostra somente o overview autorizado, estados e contagens reais', () => {
+  const overview = {
+    project: { id: 'project-a', name: 'Campanha real', slug: 'campanha-real' },
+    counts: { pages: 2, forms: 1, publishedPages: 1, publishedForms: 0, submissions: 7 },
+    content: [
+      { id: 'page-a', kind: 'page', name: 'Página real', route: '/', published: true, updatedAt: '2026-09-04T12:00:00.000Z', submissionCount: 0 },
+      { id: 'form-a', kind: 'form', name: 'Formulário real', route: '/diagnostico', published: false, updatedAt: '2026-09-04T11:00:00.000Z', submissionCount: 7 },
+    ],
+    domain: { domain: 'exemplo.com.br', verificationStatus: 'verified' },
+    integrations: { vercel: 'configured', analytics: 'pending', agents: 'pending' },
+  };
+
+  const model = projectOverviewModel(overview);
+
+  assert.equal(model.status, 'ready');
+  assert.equal(model.title, 'Campanha real');
+  assert.equal(model.domain.label, 'exemplo.com.br');
+  assert.deepEqual(model.metrics, [
+    ['Landing pages', 2], ['Formulários', 1], ['Publicados', 1], ['Respostas', 7],
+  ]);
+  assert.equal(model.content[0].status, 'Publicado');
+  assert.equal(model.content[1].status, 'Rascunho');
+  assert.equal(model.content[1].responses, 7);
+  assert.deepEqual(filterProjectContent(model.content, 'pages').map((item) => item.id), ['page-a']);
+  assert.deepEqual(filterProjectContent(model.content, 'forms').map((item) => item.id), ['form-a']);
+  assert.deepEqual(model.modules, [
+    ['Analytics', 'Ainda não configurado'], ['Rastreamento', 'Em breve'], ['Publicação', 'Configurado'], ['Agentes', 'Ainda não configurado'],
+  ]);
+});
+
+test('visão do projeto separa carregamento, erro e projeto vazio', () => {
+  assert.equal(projectOverviewModel(null, { phase: 'loading' }).status, 'loading');
+  assert.equal(projectOverviewModel(null, { phase: 'error', error: 'Sem acesso' }).message, 'Sem acesso');
+  const empty = projectOverviewModel({
+    project: { id: 'project-empty', name: 'Vazio', slug: 'vazio' },
+    counts: { pages: 0, forms: 0, publishedPages: 0, publishedForms: 0, submissions: 0 }, content: [], domain: null,
+    integrations: { vercel: 'pending', analytics: 'pending', agents: 'pending' },
+  });
+  assert.equal(empty.status, 'empty');
+  assert.equal(empty.domain.label, 'Domínio ainda não verificado');
+});
+
+test('Projeto possui destinos, filtros, estado assíncrono e controles responsivos acessíveis', async () => {
+  const [html, css, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(new URL('../public/styles.css', import.meta.url), 'utf8'), readFile(appPath, 'utf8')]);
+
+  assert.match(html, /<section id="project-view"[^>]*aria-labelledby="project-view-title"/);
+  assert.match(html, /id="project-content-filter"/);
+  assert.match(html, /id="project-content-list"[^>]*aria-live="polite"/);
+  assert.match(html, /id="mobile-menu"[^>]*aria-expanded="false"/);
+  assert.match(html, /id="project-status"[^>]*role="status"/);
+  assert.match(app, /api\(`\/projects\/\$\{state\.currentProject\.id\}\/overview`\)/);
+  assert.match(app, /event\.key === 'Escape'/);
+  assert.match(css, /@media\s*\(max-width:\s*760px\)/);
+  assert.match(css, /#dashboard > aside\.is-open/);
+  assert.match(css, /min-height:\s*44px/);
 });

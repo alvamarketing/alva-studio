@@ -390,6 +390,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {} }
   return {
     showPages,
     showForms,
+    openForm: open,
     loadList,
     async closeEditor() {
       await save();

@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createProjectSubmission, dashboardModel, isProjectSlug, roleLabel } from './studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectOverviewModel, roleLabel } from './studio-dashboard.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -32,6 +32,9 @@ let editor,
   projectSubmission,
   contextBoundary,
   companyOverviewRequest = 0,
+  projectOverviewRequest = 0,
+  projectContentFilter = 'all',
+  mobileMenuTrigger,
   config = { vercelConnected: false };
 function toast(message) {
   $('#toast').textContent = message;
@@ -62,12 +65,13 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
-  applyDashboardNavigation({ home: $('#nav-home'), company: $('#nav-company'), pages: $('#nav-pages'), forms: $('#nav-forms') }, view);
+  applyDashboardNavigation({ home: $('#nav-home'), company: $('#nav-company'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms') }, view);
 }
 function setDashboardView(view) {
   const sections = {
     home: '#studio-home',
     company: '#company-view',
+    project: '#project-view',
     pages: '#pages-view',
     forms: '#forms-view',
   };
@@ -75,6 +79,7 @@ function setDashboardView(view) {
   setActiveNavigation(view);
   if (view === 'home') renderHome();
   if (view === 'company') renderCompany();
+  if (view === 'project') renderProject();
 }
 function dashboardState() {
   return dashboardStateOverride ?? studioShell.state();
@@ -83,6 +88,7 @@ function renderDashboardState(state) {
   dashboardStateOverride = state;
   if (!$('#studio-home').hidden) renderHome();
   if (!$('#company-view').hidden) renderCompany();
+  if (!$('#project-view').hidden) renderProject();
 }
 function clear(node) {
   node.replaceChildren();
@@ -171,9 +177,8 @@ function projectCard(project) {
 }
 async function selectProject(projectId) {
   await studioShell.selectProject(projectId);
-  setDashboardView('pages');
-  formsUI.showPages();
-  await loadList();
+  projectContentFilter = 'all';
+  setDashboardView('project');
 }
 function renderCompanyOverview(overview) {
   const content = clear($('#company-content'));
@@ -296,6 +301,123 @@ function exportHtml() {
     editor.getJs() +
     '</script></body></html>'
   );
+}
+function projectEmpty(title, text) {
+  const element = document.createElement('div');
+  element.className = 'dashboard-empty';
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+  const detail = document.createElement('p');
+  detail.textContent = text;
+  element.append(heading, detail);
+  return element;
+}
+function renderProjectContent(model) {
+  const list = clear($('#project-content-list'));
+  const content = filterProjectContent(model.content, projectContentFilter);
+  if (!content.length) {
+    const label = projectContentFilter === 'pages' ? 'landing pages' : projectContentFilter === 'forms' ? 'formulários' : 'conteúdos';
+    list.append(projectEmpty(`Nenhum ${label} disponível.`, projectContentFilter === 'all' ? 'Crie uma landing page ou formulário para começar.' : 'Mude o filtro ou crie um novo conteúdo.'));
+    return;
+  }
+  for (const item of content) {
+    const row = document.createElement('article');
+    row.className = 'project-content-row';
+    const icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined project-content-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = item.kind === 'page' ? 'web' : 'dynamic_form';
+    const details = document.createElement('div');
+    const name = document.createElement('strong');
+    name.textContent = item.name;
+    const meta = document.createElement('span');
+    meta.textContent = `${item.route || '/'} · ${item.status}${item.kind === 'form' ? ` · ${item.responses} ${item.responses === 1 ? 'resposta' : 'respostas'}` : ''}`;
+    details.append(name, meta);
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'project-content-open';
+    edit.textContent = item.kind === 'page' ? 'Editar página' : 'Editar formulário';
+    edit.onclick = action(() => item.kind === 'page' ? openPage(item.id) : formsUI.openForm(item.id));
+    row.append(icon, details, edit);
+    list.append(row);
+  }
+}
+function renderProjectOverview(overview) {
+  const model = projectOverviewModel(overview);
+  $('#project-view-title').textContent = model.title;
+  $('#project-slug').textContent = model.slug ? `/${model.slug}` : 'Projeto selecionado';
+  const domain = $('#project-domain');
+  domain.textContent = model.domain.label;
+  domain.dataset.state = model.domain.state;
+  const metrics = clear($('#project-metrics'));
+  for (const [label, amount] of model.metrics) {
+    const item = document.createElement('div');
+    const value = document.createElement('strong');
+    value.textContent = String(amount);
+    const caption = document.createElement('span');
+    caption.textContent = label;
+    item.append(value, caption);
+    metrics.append(item);
+  }
+  const modules = clear($('#project-modules'));
+  for (const [name, state] of model.modules) {
+    const item = document.createElement('div');
+    const nameNode = document.createElement('strong');
+    nameNode.textContent = name;
+    const stateNode = document.createElement('span');
+    stateNode.textContent = state;
+    item.append(nameNode, stateNode);
+    modules.append(item);
+  }
+  for (const button of $('#project-content-filter').querySelectorAll('button')) {
+    if (button.dataset.projectFilter === projectContentFilter) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  }
+  renderProjectContent(model);
+}
+async function renderProject() {
+  if (!studioShell) return;
+  const state = dashboardState();
+  const status = $('#project-status');
+  const list = clear($('#project-content-list'));
+  clear($('#project-metrics'));
+  clear($('#project-modules'));
+  if (state.phase === 'loading') {
+    status.dataset.state = 'loading';
+    status.textContent = 'Carregando projeto…';
+    $('#project-view-title').textContent = 'Projeto';
+    $('#project-slug').textContent = '';
+    list.append(projectEmpty('Carregando conteúdos…', 'Aguarde enquanto preparamos o projeto.'));
+    return;
+  }
+  if (!state.currentProject) {
+    const model = projectOverviewModel(null, { phase: 'empty' });
+    status.dataset.state = model.status;
+    status.textContent = model.message;
+    $('#project-view-title').textContent = 'Projeto';
+    $('#project-slug').textContent = '';
+    list.append(projectEmpty('Nenhum projeto selecionado.', model.message));
+    return;
+  }
+  const request = ++projectOverviewRequest;
+  status.dataset.state = 'loading';
+  status.textContent = 'Carregando projeto…';
+  $('#project-view-title').textContent = state.currentProject.name || 'Projeto';
+  $('#project-slug').textContent = '';
+  try {
+    const overview = await api(`/projects/${state.currentProject.id}/overview`);
+    if (request !== projectOverviewRequest || state.currentProject.id !== studioShell.state().currentProject?.id) return;
+    const model = projectOverviewModel(overview);
+    status.dataset.state = model.status;
+    status.textContent = model.message;
+    renderProjectOverview(overview);
+  } catch (error) {
+    if (request !== projectOverviewRequest) return;
+    const model = projectOverviewModel(null, { phase: 'error', error: error.message });
+    status.dataset.state = model.status;
+    status.textContent = model.message;
+    list.append(projectEmpty('Não foi possível carregar o projeto.', model.message));
+  }
 }
 async function save() {
   await flushChanges(() => dirty, saveOnce);
@@ -493,8 +615,7 @@ $('#back').onclick = action(async () => {
   $('#editing').hidden = true;
   $('#dashboard').hidden = false;
   await returnToProject(projectId);
-  formsUI.showPages();
-  await loadList();
+  setDashboardView('project');
 });
 $('#device').onchange = () => editor.setDevice($('#device').value);
 $('#preview').onclick = action(async () => {
@@ -721,11 +842,13 @@ studioShell = createStudioShell({
   beforeContextChange: closeOpenEditors,
   onContextChanged: async () => {
     companyOverviewRequest++;
+    projectOverviewRequest++;
     dashboardStateOverride = null;
     const state = dashboardContextFlow.confirm();
     await refreshConfig();
     if (!$('#studio-home').hidden) renderHome();
     if (!$('#company-view').hidden) await renderCompany();
+    if (!$('#project-view').hidden) await renderProject();
     if (!$('#pages-view').hidden && state.currentProject) await loadList();
     if (!$('#forms-view').hidden && state.currentProject) await formsUI.showForms();
   },
@@ -749,6 +872,11 @@ dashboardContextFlow = createDashboardContextFlow({
 });
 $('#nav-home').onclick = () => setDashboardView('home');
 $('#nav-company').onclick = () => setDashboardView('company');
+$('#nav-project').onclick = action(async () => {
+  if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar sua visão geral.');
+  projectContentFilter = 'all';
+  setDashboardView('project');
+});
 $('#nav-pages').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
   setDashboardView('pages');
@@ -759,6 +887,34 @@ $('#nav-forms').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
   setDashboardView('forms');
   await formsUI.showForms();
+});
+$('#project-content-filter').onclick = (event) => {
+  const button = event.target.closest('[data-project-filter]');
+  if (!button) return;
+  projectContentFilter = button.dataset.projectFilter;
+  for (const item of $('#project-content-filter').querySelectorAll('button')) {
+    if (item === button) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
+  }
+  renderProject();
+};
+mobileMenuTrigger = $('#mobile-menu');
+mobileMenuTrigger.onclick = () => {
+  const sidebar = $('#studio-sidebar');
+  const open = !sidebar.classList.contains('is-open');
+  sidebar.classList.toggle('is-open', open);
+  mobileMenuTrigger.setAttribute('aria-expanded', String(open));
+  if (open) sidebar.querySelector('a, button, select')?.focus();
+};
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    const sidebar = $('#studio-sidebar');
+    if (sidebar.classList.contains('is-open')) {
+      sidebar.classList.remove('is-open');
+      mobileMenuTrigger.setAttribute('aria-expanded', 'false');
+      mobileMenuTrigger.focus();
+    }
+  }
 });
 $('#company-switcher').onchange = action(async (event) => {
   if (event.target.value === studioShell.state().currentCompany?.id) return;

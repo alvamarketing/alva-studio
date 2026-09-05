@@ -22,6 +22,49 @@ export function dashboardModel({ phase = 'empty', error = '', companies = [], pr
   return { status: 'ready', message: '', companies, projects, activity: [...projects].sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt))) };
 }
 
+export function filterProjectContent(content = [], filter = 'all') {
+  const kind = filter === 'pages' ? 'page' : filter === 'forms' ? 'form' : '';
+  return kind ? content.filter((item) => item.kind === kind) : [...content];
+}
+
+export function projectOverviewModel(overview, { phase = 'ready', error = '' } = {}) {
+  if (phase === 'loading') return { status: 'loading', message: 'Carregando projeto…', content: [], metrics: [], modules: [] };
+  if (phase === 'error') return { status: 'error', message: error || 'Não foi possível carregar este projeto.', content: [], metrics: [], modules: [] };
+  if (!overview?.project) return { status: 'empty', message: 'Escolha ou crie um projeto para continuar.', content: [], metrics: [], modules: [] };
+
+  const counts = overview.counts || {};
+  const content = (overview.content || []).map((item) => ({
+    ...item,
+    status: item.published ? 'Publicado' : 'Rascunho',
+    responses: Number(item.submissionCount || 0),
+  }));
+  const published = Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0);
+  const configured = (value) => value === 'configured' ? 'Configurado' : 'Ainda não configurado';
+  return {
+    status: content.length ? 'ready' : 'empty',
+    message: content.length ? '' : 'Este projeto ainda não tem conteúdos.',
+    title: overview.project.name,
+    slug: overview.project.slug,
+    project: overview.project,
+    metrics: [
+      ['Landing pages', Number(counts.pages || 0)],
+      ['Formulários', Number(counts.forms || 0)],
+      ['Publicados', published],
+      ['Respostas', Number(counts.submissions || 0)],
+    ],
+    content,
+    domain: overview.domain?.verificationStatus === 'verified'
+      ? { label: overview.domain.domain, state: 'verified' }
+      : { label: 'Domínio ainda não verificado', state: 'pending' },
+    modules: [
+      ['Analytics', configured(overview.integrations?.analytics)],
+      ['Rastreamento', 'Em breve'],
+      ['Publicação', configured(overview.integrations?.vercel)],
+      ['Agentes', configured(overview.integrations?.agents)],
+    ],
+  };
+}
+
 export function roleLabel(role) {
   return ({ owner: 'Proprietário', admin: 'Administrador', editor: 'Editor', analyst: 'Analista', viewer: 'Visualizador' })[role] || 'Membro';
 }
