@@ -13,7 +13,9 @@ import { CompanyRepository } from './repositories/company-repository.mjs';
 import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
 import { VideoRepository } from './repositories/video-repository.mjs';
-import { deliverWebhook, validateWebhookUrl } from './outbound-webhook.mjs';
+import { validateWebhookUrl } from './outbound-webhook.mjs';
+import { WebhookDeliveryRepository } from './repositories/webhook-repository.mjs';
+import { startWebhookWorker } from './webhook-worker.mjs';
 import { normalizeRoute } from './domain/access.mjs';
 import { createDatabase, migrate } from './db/postgres.mjs';
 import { PublicationSnapshotBuilder, extractVslReferences } from './publication-snapshot.mjs';
@@ -113,9 +115,10 @@ export function createApp({
   database,
   sessionOptions,
   publicOrigin = process.env.PUBLIC_ORIGIN,
-  webhookFetch = globalThis.fetch,
+  webhookFetch,
   dnsLookup,
   webhookTimeoutMs,
+  webhookIntervalMs,
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -128,6 +131,15 @@ export function createApp({
   const formStore = new FormStore(dataDir);
   const content = database ? new ContentRepository(database, { publicOrigin }) : null;
   const videos = database ? new VideoRepository(database) : null;
+  const webhookWorker = database
+    ? startWebhookWorker({
+      repository: new WebhookDeliveryRepository(database),
+      dnsLookup,
+      fetchImpl: webhookFetch,
+      ...(webhookTimeoutMs === undefined ? {} : { timeoutMs: webhookTimeoutMs }),
+      ...(webhookIntervalMs === undefined ? {} : { intervalMs: webhookIntervalMs }),
+    })
+    : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
   const deployments = database ? new DeploymentRepository(database) : null;
   const publication = database
@@ -187,7 +199,7 @@ export function createApp({
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
   };
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     const json = (data, status = 200) => {
       res.writeHead(status, {
         'Content-Type': 'application/json; charset=utf-8',
@@ -303,37 +315,10 @@ export function createApp({
             input,
           });
         const form = { ...saved.schema, id: saved.form.id, name: saved.form.name, slug: saved.form.slug };
-        if (form.webhook) {
-          let status = 'failed';
-          const tracking = {
-            companyId: saved.form.companyId ?? saved.companyId,
-            projectId: saved.form.projectId ?? saved.projectId,
-            formId: saved.form.id,
-            submissionId: saved.id,
-          };
-          try {
-            status = (await deliverWebhook({
-              url: form.webhook,
-              event: {
-                eventId: saved.eventId,
-                event: 'form.submitted',
-                companyId: tracking.companyId,
-                projectId: tracking.projectId,
-                formId: tracking.formId,
-                submittedAt: saved.submittedAt,
-                answers: saved.answers,
-              },
-              fetchImpl: webhookFetch,
-              dnsLookup,
-              ...(webhookTimeoutMs === undefined ? {} : { timeoutMs: webhookTimeoutMs }),
-            })).status;
-            await content.markSubmissionTracking({ ...tracking, status });
-          } catch {
-            status = 'failed';
-            await content.markSubmissionTracking({ ...tracking, status }).catch(() => {});
-          }
-          res.setHeader('X-Webhook-Delivery', status);
-        }
+        // A entrega do webhook é enfileirada por submitPublishedForm (mesma transação da
+        // submissão) e processada de forma assíncrona pelo webhookWorker — a resposta ao
+        // visitante nunca espera uma tentativa de rede de saída.
+        if (saved.webhookDelivery) res.setHeader('X-Webhook-Delivery', saved.webhookDelivery.status);
         const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
@@ -455,6 +440,11 @@ export function createApp({
       else res.end();
     }
   });
+  if (webhookWorker) {
+    server.webhookWorker = webhookWorker;
+    server.once('close', () => webhookWorker.stop());
+  }
+  return server;
 }
 function validateHost(host, publicOrigin) {
   if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !process.env.PUBLIC_ORIGIN)

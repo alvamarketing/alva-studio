@@ -6,7 +6,7 @@ CREATE TABLE webhook_deliveries (
   submission_id uuid NOT NULL REFERENCES form_submissions(id),
   url text NOT NULL,
   event jsonb NOT NULL,
-  status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'failed', 'dead')),
+  status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'dead')),
   attempt_count integer NOT NULL DEFAULT 0,
   next_attempt_at timestamptz NOT NULL DEFAULT now(),
   claim_token uuid,

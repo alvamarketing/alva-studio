@@ -6,6 +6,7 @@ import { normalizeFormInput } from '../form-store.mjs';
 import { allowedPublicationOrigin } from '../publication-cors.mjs';
 import { extractVslReferences } from '../publication-snapshot.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from '../vsl-reference.mjs';
+import { WebhookDeliveryRepository } from './webhook-repository.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -310,6 +311,7 @@ export class ContentRepository {
   constructor(database, { publicOrigin = process.env.PUBLIC_ORIGIN } = {}) {
     this.database = database;
     this.publicOrigin = publicOrigin;
+    this.webhookDeliveries = new WebhookDeliveryRepository(database);
   }
 
   async assertPublishedVslReferences(client, { companyId, projectId, editorState, schema }) {
@@ -838,17 +840,6 @@ export class ContentRepository {
     });
   }
 
-  async markSubmissionTracking({ companyId, projectId, formId, submissionId, status }) {
-    if (!['delivered', 'failed'].includes(status)) throw fail('Status de entrega inválido.', 400);
-    const result = await this.database.query(
-      `UPDATE form_submissions
-       SET tracking_status = $5
-       WHERE company_id = $1 AND project_id = $2 AND form_id = $3 AND id = $4`,
-      [companyId, projectId, formId, submissionId, status],
-    );
-    if (result.rowCount !== 1) throw fail('Resposta enviada não encontrada.', 404);
-  }
-
   async submitPublishedForm({ resolve, route: routeValue, input }) {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
@@ -858,9 +849,33 @@ export class ContentRepository {
          VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id, tracking_event_id, submitted_at`,
         [form.company_id, form.project_id, form.id, form.version_id, JSON.stringify(answers)],
       );
+      const submissionId = rows[0].id;
+      const eventId = rows[0].tracking_event_id;
+      let webhookDelivery = null;
+      if (form.schema.webhook) {
+        // Enfileira na mesma transação da submissão: a entrega nunca fica órfã (submissão sem
+        // fila) nem duplicada (fila sem submissão) — os dois só existem juntos, ou nenhum existe.
+        await this.webhookDeliveries.enqueue(client, {
+          companyId: form.company_id,
+          projectId: form.project_id,
+          formId: form.id,
+          submissionId,
+          url: form.schema.webhook,
+          event: {
+            eventId,
+            event: 'form.submitted',
+            companyId: form.company_id,
+            projectId: form.project_id,
+            formId: form.id,
+            submittedAt: rows[0].submitted_at,
+            answers,
+          },
+        });
+        webhookDelivery = { status: 'queued' };
+      }
       return {
-        id: rows[0].id,
-        eventId: rows[0].tracking_event_id,
+        id: submissionId,
+        eventId,
         form: {
           id: form.id,
           companyId: form.company_id,
@@ -873,7 +888,7 @@ export class ContentRepository {
         schema: form.schema,
         answers,
         submittedAt: rows[0].submitted_at,
-        webhookDelivery: { status: 'pending', executed: false },
+        webhookDelivery,
       };
     });
   }
