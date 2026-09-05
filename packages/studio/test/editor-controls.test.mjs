@@ -18,6 +18,7 @@ import {
   vslEmbedUrl,
   createVslComponentType,
   renderVslReferences,
+  buildPageExportHtml,
 } from '../public/editor-shell.js';
 
 test('referência de VSL no editor persiste somente o identificador público', () => {
@@ -101,10 +102,18 @@ test('prévia do componente troca e remove o iframe público e a saída transfor
   assert.match(renderVslReferences('<div data-alva-vsl="public-vsl-123456"></div>', { publicOrigin: 'https://studio.example.test' }), /<iframe[^>]+src="https:\/\/studio\.example\.test\/embed\/v\/public-vsl-123456"/);
 });
 
-test('prévia e download da página usam a mesma saída com referências VSL materializadas', async () => {
-  const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(source, /const pageHtml = renderVslReferences\(editor\.getHtml\(\)/);
-  assert.match(source, /new Blob\(\[exportHtml\(\)\]/);
+test('fluxo comportamental de exportação materializa o iframe público com título seguro', () => {
+  const output = buildPageExportHtml({
+    title: 'Página <VSL>',
+    css: '.alva-vsl-frame{aspect-ratio:16/9}',
+    html: '<main><div data-alva-vsl="public-vsl-123456"></div></main>',
+    js: 'window.pageReady = true;',
+    publicOrigin: 'https://studio.example.test',
+  });
+  assert.match(output, /<title>Página &lt;VSL&gt;<\/title>/);
+  assert.match(output, /<iframe[^>]+src="https:\/\/studio\.example\.test\/embed\/v\/public-vsl-123456"/);
+  assert.match(output, /window\.pageReady/);
+  assert.doesNotMatch(output, /data-alva-vsl/);
 });
 
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {

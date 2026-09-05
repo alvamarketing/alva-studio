@@ -38,3 +38,16 @@
 - `node --test packages/studio/test/*.test.mjs`: 227 testes, 227 passaram, 0 falharam.
 - `node --check packages/studio/public/editor-shell.js` e `node --check packages/studio/public/app.js`: sem erros.
 - `git diff --check`: sem erros.
+
+## Correções após a rodada 2 de revisão
+
+- A exportação foi coberta por teste comportamental do materializador da página: o HTML final contém o iframe absoluto da versão pública, remove a referência de editor e escapa o título usado na prévia/download.
+- O extrator do snapshot de publicação agora reduz componentes GrapesJS reais a `{ type: 'vsl', publicId }`, aceitando o `publicId` de topo ou `data-alva-vsl` coerente e rejeitando conflito, ausência e propriedades de configuração.
+- O teste de publicação reproduz um `editor_state` GrapesJS realista com VSL e cobre o conflito que antes era enviado inteiro ao normalizador estrito.
+
+### Validação final da rodada 2
+
+- `node --test packages/studio/test/editor-controls.test.mjs packages/studio/test/publication-snapshot.test.mjs`: 24 testes, 24 passaram.
+- `node --test packages/studio/test/*.test.mjs`: 229 testes, 229 passaram, 0 falharam.
+- `node --check packages/studio/public/editor-shell.js packages/studio/public/app.js packages/studio/server/publication-snapshot.mjs`: sem erros.
+- `git diff --check`: sem erros.

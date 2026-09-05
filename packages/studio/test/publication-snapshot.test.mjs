@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPublishableSnapshot } from '../server/publication-snapshot.mjs';
 
-function database(rows) {
-  return { query: async () => ({ rows }) };
+function database(rows, videoRows = []) {
+  return { query: async (text) => ({ rows: /FROM videos/i.test(text) ? videoRows : rows }) };
 }
 
 test('snapshot inclui todas as páginas e formulários publicados em ordem estável', async () => {
@@ -47,5 +47,36 @@ test('snapshot rejeita vazio, rota duplicada e registros de outra empresa', asyn
   await assert.rejects(
     () => buildPublishableSnapshot({ database: database(foreign), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
     /nenhuma rota publicada|outra empresa/i,
+  );
+});
+
+test('snapshot extrai a referência canônica do componente GrapesJS e aceita somente a versão publicada', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl', version_id: 'page-version-vsl', version_number: 1, path: '/vsl',
+    rendered_html: '<div data-alva-vsl="public-vsl-123456"></div>',
+    editor_state: {
+      components: [{ type: 'vsl', publicId: 'public-vsl-123456', tagName: 'div', droppable: false, attributes: { 'data-alva-vsl': 'public-vsl-123456' } }],
+    },
+  }];
+  const snapshot = await buildPublishableSnapshot({
+    database: database(rows, [{ public_id: 'public-vsl-123456', version_number: 2 }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+  });
+  assert.equal(snapshot.manifest[0].path, '/vsl');
+});
+
+test('snapshot rejeita conflito entre publicId do componente e data-alva-vsl', async () => {
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-conflito', version_id: 'page-version-vsl-conflito', version_number: 1, path: '/vsl-conflito',
+    rendered_html: '<div data-alva-vsl="public-vsl-a"></div>',
+    editor_state: {
+      components: [{ type: 'vsl', publicId: 'public-vsl-a', attributes: { 'data-alva-vsl': 'public-vsl-b' } }],
+    },
+  }];
+  await assert.rejects(
+    () => buildPublishableSnapshot({ database: database(rows, [{ public_id: 'public-vsl-a', version_number: 1 }]), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
+    /referência de VSL inválida/i,
   );
 });

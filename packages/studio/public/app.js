@@ -1,6 +1,6 @@
 import { flushChanges } from './save-cycle.js';
 import { templates, getTemplate, normalizeForms } from './templates.js';
-import { createFriendlyEditor, renderVslReferences } from './editor-shell.js';
+import { buildPageExportHtml, createFriendlyEditor } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createFormsUI } from './forms.js';
@@ -301,19 +301,13 @@ function markDirty() {
   timer = setTimeout(() => save().catch((e) => toast(e.message)), 1500);
 }
 function exportHtml() {
-  const title = escape($('#page-name').value.trim());
-  const pageHtml = renderVslReferences(editor.getHtml(), { publicOrigin: window.location.origin });
-  return (
-    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
-    title +
-    '</title><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block" rel="stylesheet"><style>' +
-    editor.getCss() +
-    '</style></head><body>' +
-    pageHtml +
-    '<script>' +
-    editor.getJs() +
-    '</script></body></html>'
-  );
+  return buildPageExportHtml({
+    title: $('#page-name').value.trim(),
+    css: editor.getCss(),
+    html: editor.getHtml(),
+    js: editor.getJs(),
+    publicOrigin: window.location.origin,
+  });
 }
 function projectEmpty(title, text) {
   const element = document.createElement('div');
