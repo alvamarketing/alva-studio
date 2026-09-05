@@ -11,6 +11,7 @@ import {
   editorKeyboardAction,
   componentTreeNodes,
   treeKeyAction,
+  restoreTreeFocus,
 } from '../public/editor-shell.js';
 
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {
@@ -94,6 +95,35 @@ test('teclado da árvore percorre itens visíveis sem acionar exclusão', () => 
   assert.equal(treeKeyAction({ key: 'End' }, ids, 'section'), 'button');
   assert.equal(treeKeyAction({ key: 'Delete' }, ids, 'button'), null);
   assert.equal(treeKeyAction({ key: 'Backspace' }, ids, 'button'), null);
+});
+
+test('ativação por clique ou teclado restaura o foco no item recriado da árvore', () => {
+  for (const activation of ['clique', 'Enter', 'Espaço']) {
+    let focused = false;
+    const activeItem = { dataset: { treeId: 'button' } };
+    const replacement = {
+      dataset: { treeId: 'button' },
+      focus() {
+        focused = true;
+      },
+    };
+
+    assert.equal(restoreTreeFocus([replacement], 'button', activeItem), true, activation);
+    assert.equal(focused, true, activation);
+  }
+});
+
+test('seleção por mouse sem foco no item não desloca o foco após a árvore ser refeita', () => {
+  let focused = false;
+  const replacement = {
+    dataset: { treeId: 'button' },
+    focus() {
+      focused = true;
+    },
+  };
+
+  assert.equal(restoreTreeFocus([replacement], 'button', null), false);
+  assert.equal(focused, false);
 });
 
 test('landing declara árvore acessível e as três regiões persistentes', async () => {

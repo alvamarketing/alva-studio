@@ -134,6 +134,14 @@ export function treeKeyAction(event, visibleIds, selectedId) {
   return null;
 }
 
+export function restoreTreeFocus(items, id, activeItem) {
+  if (!activeItem) return false;
+  const item = Array.from(items || []).find((candidate) => candidate.dataset?.treeId === id);
+  if (!item) return false;
+  item.focus();
+  return true;
+}
+
 export function createFriendlyEditor({
   container,
   project,
@@ -267,18 +275,16 @@ export function createFriendlyEditor({
   function announce(message) {
     status.textContent = message;
   }
-  function focusTreeItem(id) {
-    tree.querySelectorAll('[data-tree-id]').forEach((item) => {
-      if (item.dataset.treeId === id) item.focus();
-    });
+  function focusTreeItem(id, activeItem) {
+    return restoreTreeFocus(tree.querySelectorAll('[data-tree-id]'), id, activeItem);
   }
-  function selectTreeItem(id, focus = false) {
+  function selectTreeItem(id, activeItem = null) {
     const component = treeComponents.get(id);
     if (!component) return;
     editor.select(component, { scroll: true });
     activeModel = null;
     render();
-    if (focus) focusTreeItem(id);
+    focusTreeItem(id, activeItem);
   }
   function renderTree() {
     const wrapper = editor.getWrapper();
@@ -309,12 +315,12 @@ export function createFriendlyEditor({
       item.setAttribute('aria-selected', String(node.selected));
       item.style.setProperty('--fe-tree-level', String(node.level));
       item.textContent = node.label;
-      item.onclick = () => selectTreeItem(node.id);
+      item.onclick = () => selectTreeItem(node.id, document.activeElement === item ? item : null);
       item.onkeydown = (event) => {
         const next = treeKeyAction(event, visibleIds, node.id);
         if (!next) return;
         event.preventDefault();
-        selectTreeItem(next, true);
+        selectTreeItem(next, item);
       };
       tree.append(item);
     }
