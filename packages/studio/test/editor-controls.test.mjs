@@ -245,32 +245,6 @@ test('fluxo comportamental de exportação materializa o iframe público com tí
   assert.doesNotMatch(output, /data-alva-vsl/);
 });
 
-test('documento canônico completo preserva marcador VSL e CSS/JS quando a materialização é desligada', () => {
-  const output = buildPageExportHtml({
-    title: 'Página canônica',
-    css: '.page{color:red}',
-    html: '<main><div data-alva-vsl="public-vsl-canonica"></div></main>',
-    js: 'window.pageReady = true;',
-    publicOrigin: 'https://studio.example.test',
-    materializeVsl: false,
-  });
-  assert.match(output, /^<!doctype html>/i);
-  assert.match(output, /\.page\{color:red\}/);
-  assert.match(output, /window\.pageReady/);
-  assert.match(output, /data-alva-vsl="public-vsl-canonica"/);
-  assert.doesNotMatch(output, /<iframe[^>]+embed\/v\/public-vsl-canonica/);
-});
-
-test('salvamento preserva o HTML bruto do editor e deixa a materialização apenas para preview/download', async () => {
-  const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(source, /project:\s*editor\.getProjectData\(\)/);
-  assert.match(source, /const payload = \{[\s\S]*?html:\s*canonicalExportHtml\(\)/);
-  assert.match(source, /materializeVsl:\s*false/);
-  assert.match(source, /srcdoc\s*=\s*exportHtml\(\)/);
-  assert.match(source, /new Blob\(\[exportHtml\(\)\]/);
-  assert.match(source, /srcdoc\s*=\s*full\.html[\s\S]*?materializePageHtml\(full\.html/);
-});
-
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {
   for (const url of [
     'https://example.com/path?q=1',

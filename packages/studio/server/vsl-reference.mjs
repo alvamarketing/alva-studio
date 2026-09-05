@@ -61,50 +61,14 @@ export async function resolvePublishedVslReferences({ database, companyId, proje
 
 export function renderPublishedVslReferences(html, { vslEmbedUrls = new Map() } = {}) {
   const source = String(html ?? '');
-  const rendered = source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, _tag, _attributes, doubleId, singleId) => {
+  return source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, _tag, _attributes, doubleId, singleId) => {
     const publicId = String(doubleId ?? singleId ?? '').trim();
     const value = vslEmbedUrls instanceof Map ? vslEmbedUrls.get(publicId) : vslEmbedUrls?.[publicId];
     const embedUrl = typeof value === 'string' ? value : value?.embedUrl;
     if (!/^https?:\/\/[^\s]+$/i.test(String(embedUrl || ''))) {
       throw fail(`A VSL referenciada (${publicId || 'sem publicId'}) não está publicada neste projeto. Publique a VSL antes de publicar o conteúdo.`, 409);
     }
-    return publishedVslIframeMarkup(embedUrl);
-  });
-  return rewriteKnownVslIframes(rendered, vslEmbedUrls);
-}
-
-function publishedVslIframeMarkup(embedUrl) {
-  return `<iframe class="alva-vsl-frame" src="${escapeHtml(embedUrl)}" title="VSL" aria-label="VSL" allow="autoplay; fullscreen; picture-in-picture" loading="lazy" allowfullscreen></iframe>`;
-}
-
-function rewriteKnownVslIframes(html, vslEmbedUrls) {
-  const source = String(html ?? '');
-  return source.replace(/<iframe\b([^>]*)>([\s\S]*?)<\/iframe\s*>/gi, (whole, attributes) => {
-    const classMatch = attributes.match(/\bclass\s*=\s*(["'])([\s\S]*?)\1/i);
-    if (!classMatch || !classMatch[2].split(/\s+/).includes('alva-vsl-frame')) return whole;
-    const srcMatch = attributes.match(/\bsrc\s*=\s*(["'])([\s\S]*?)\1/i);
-    if (!srcMatch) return whole;
-    let url;
-    try {
-      url = new URL(srcMatch[2]);
-    } catch {
-      return whole;
-    }
-    if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash) return whole;
-    const prefix = '/embed/v/';
-    if (!url.pathname.startsWith(prefix)) return whole;
-    const encodedPublicId = url.pathname.slice(prefix.length);
-    if (!encodedPublicId || encodedPublicId.includes('/')) return whole;
-    let publicId;
-    try {
-      publicId = decodeURIComponent(encodedPublicId);
-    } catch {
-      return whole;
-    }
-    const value = vslEmbedUrls instanceof Map ? vslEmbedUrls.get(publicId) : vslEmbedUrls?.[publicId];
-    const embedUrl = typeof value === 'string' ? value : value?.embedUrl;
-    if (!/^https?:\/\/[^\s]+$/i.test(String(embedUrl || ''))) return whole;
-    return publishedVslIframeMarkup(embedUrl);
+    return `<iframe class="alva-vsl-frame" src="${escapeHtml(embedUrl)}" title="VSL" aria-label="VSL" allow="autoplay; fullscreen; picture-in-picture" loading="lazy" allowfullscreen></iframe>`;
   });
 }
 

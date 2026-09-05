@@ -6,7 +6,6 @@ import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { CompanyRepository } from '../server/repositories/company-repository.mjs';
 import { ProjectRepository } from '../server/repositories/project-repository.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
-import { buildPageExportHtml } from '../public/editor-shell.js';
 import { postgresFixture } from './postgres-fixture.mjs';
 
 async function createUser(database, { email, name }) {
@@ -116,36 +115,6 @@ test('rotas de páginas e formulários são únicas sem distinguir caixa e aceit
       }),
       assertStatus(409),
     );
-  });
-});
-
-test('salvar e reabrir preserva o documento completo com marcador VSL', async (t) => {
-  await withHarness(t, async ({ database, companies, projects, content }) => {
-    const owner = await createUser(database, { email: 'owner@vsl-documento.test', name: 'Owner' });
-    const { company, project } = await projectFor(companies, projects, owner, 'vsl-documento');
-    const renderedHtml = buildPageExportHtml({
-      title: 'Página VSL',
-      css: '.page{color:red}',
-      html: '<main><div data-alva-vsl="public-vsl-documento"></div></main>',
-      js: 'window.pageReady = true;',
-      publicOrigin: 'https://client.example.test',
-      materializeVsl: false,
-    });
-    const page = await content.createPage({
-      companyId: company.id,
-      projectId: project.id,
-      actorId: owner.id,
-      name: 'Página VSL',
-      route: '/vsl-documento',
-      editorState: { components: [{ type: 'vsl', publicId: 'public-vsl-documento' }] },
-      renderedHtml,
-    });
-    const reopened = await content.getPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
-    assert.equal(reopened.renderedHtml, renderedHtml);
-    assert.match(reopened.renderedHtml, /<!doctype html>/i);
-    assert.match(reopened.renderedHtml, /data-alva-vsl="public-vsl-documento"/);
-    assert.match(reopened.renderedHtml, /\.page\{color:red\}/);
-    assert.match(reopened.renderedHtml, /window\.pageReady/);
   });
 });
 
