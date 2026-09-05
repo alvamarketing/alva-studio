@@ -272,6 +272,15 @@ main {
 .mobile-menu {
   display: none;
 }
+.mobile-drawer-backdrop {
+  display: none;
+}
+.read-only,
+.project-content-read-only {
+  color: var(--alva-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -1124,6 +1133,16 @@ dialog label select {
   }
   #dashboard > aside.is-open {
     transform: translateX(0);
+  }
+  .mobile-drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: rgba(16, 24, 40, 0.35);
   }
   #dashboard main {
     margin-left: 0;

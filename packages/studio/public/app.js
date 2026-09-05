@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectOverviewModel, roleLabel } from './studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, roleLabel } from './studio-dashboard.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -35,6 +35,7 @@ let editor,
   projectOverviewRequest = 0,
   projectContentFilter = 'all',
   mobileMenuTrigger,
+  mobileDrawer,
   config = { vercelConnected: false };
 function toast(message) {
   $('#toast').textContent = message;
@@ -76,10 +77,21 @@ function setDashboardView(view) {
     forms: '#forms-view',
   };
   for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
+  closeMobileDrawer();
   setActiveNavigation(view);
   if (view === 'home') renderHome();
   if (view === 'company') renderCompany();
   if (view === 'project') renderProject();
+}
+function mobileDrawerActive() {
+  return window.matchMedia('(max-width: 760px)').matches;
+}
+function closeMobileDrawer(options = { returnFocus: false }) {
+  if (mobileDrawerActive()) {
+    $('#studio-sidebar').classList.remove('is-open');
+    $('#mobile-drawer-backdrop').hidden = true;
+    mobileDrawer?.close(options);
+  }
 }
 function dashboardState() {
   return dashboardStateOverride ?? studioShell.state();
@@ -333,12 +345,19 @@ function renderProjectContent(model) {
     const meta = document.createElement('span');
     meta.textContent = `${item.route || '/'} · ${item.status}${item.kind === 'form' ? ` · ${item.responses} ${item.responses === 1 ? 'resposta' : 'respostas'}` : ''}`;
     details.append(name, meta);
-    const edit = document.createElement('button');
-    edit.type = 'button';
-    edit.className = 'project-content-open';
-    edit.textContent = item.kind === 'page' ? 'Editar página' : 'Editar formulário';
-    edit.onclick = action(() => item.kind === 'page' ? openPage(item.id) : formsUI.openForm(item.id));
-    row.append(icon, details, edit);
+    if (projectContentAction(studioShell, item) === 'edit') {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'project-content-open';
+      edit.textContent = item.kind === 'page' ? 'Editar página' : 'Editar formulário';
+      edit.onclick = action(() => item.kind === 'page' ? openPage(item.id) : formsUI.openForm(item.id));
+      row.append(icon, details, edit);
+    } else {
+      const readOnly = document.createElement('span');
+      readOnly.className = 'project-content-read-only';
+      readOnly.textContent = 'Somente leitura';
+      row.append(icon, details, readOnly);
+    }
     list.append(row);
   }
 }
@@ -503,6 +522,7 @@ function renderList() {
   for (const p of filtered) {
     const card = document.createElement('article');
     card.className = 'page-card';
+    const editable = studioShell?.can('page.write');
     const state = p.deployment?.state;
     const label =
       state === 'READY'
@@ -521,19 +541,21 @@ function renderList() {
       label +
       '</span></div><p>' +
       escape(p.domain || 'Domínio ainda não conectado') +
-      '</p><div class="card-actions"><button class="edit">Editar página ↗</button><button class="duplicate" title="Duplicar página">Duplicar</button><button class="delete" title="Excluir página">Excluir</button></div></div>';
-    card.querySelector('.edit').onclick = action(() => openPage(p.id));
-    card.querySelector('.duplicate').onclick = action(async () => {
-      await api('/pages/' + p.id + '/duplicate', 'POST', {});
-      await loadList();
-      toast('Cópia criada. O domínio foi deixado em branco.');
-    });
-    card.querySelector('.delete').onclick = action(async () => {
-      if (!confirm('Excluir “' + p.name + '” deste computador? Uma publicação existente na Vercel continuará no ar.'))
-        return;
-      await api('/pages/' + p.id, 'DELETE', {});
-      await loadList();
-    });
+      `</p><div class="card-actions">${editable ? '<button class="edit">Editar página ↗</button><button class="duplicate" title="Duplicar página">Duplicar</button><button class="delete" title="Excluir página">Excluir</button>' : '<span class="read-only">Somente leitura</span>'}</div></div>`;
+    if (editable) {
+      card.querySelector('.edit').onclick = action(() => openPage(p.id));
+      card.querySelector('.duplicate').onclick = action(async () => {
+        await api('/pages/' + p.id + '/duplicate', 'POST', {});
+        await loadList();
+        toast('Cópia criada. O domínio foi deixado em branco.');
+      });
+      card.querySelector('.delete').onclick = action(async () => {
+        if (!confirm('Excluir “' + p.name + '” deste computador? Uma publicação existente na Vercel continuará no ar.'))
+          return;
+        await api('/pages/' + p.id, 'DELETE', {});
+        await loadList();
+      });
+    }
     list.append(card);
     const frame = document.createElement('iframe');
     frame.title = 'Miniatura de ' + p.name;
@@ -823,7 +845,7 @@ function resetPageList() {
 async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
-formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject });
+formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability) });
 contextBoundary = createStudioContextBoundary({
   savePage: save,
   closePageEditor: () => {
@@ -880,6 +902,7 @@ $('#nav-project').onclick = action(async () => {
 $('#nav-pages').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
   setDashboardView('pages');
+  $('#new-page').hidden = !studioShell.can('page.write');
   formsUI.showPages();
   await loadList();
 });
@@ -899,22 +922,45 @@ $('#project-content-filter').onclick = (event) => {
   renderProject();
 };
 mobileMenuTrigger = $('#mobile-menu');
-mobileMenuTrigger.onclick = () => {
+mobileDrawer = createMobileDrawerController({
+  drawer: $('#studio-sidebar'),
+  trigger: mobileMenuTrigger,
+  focusable: () => [...$('#studio-sidebar').querySelectorAll('a[href], button:not([disabled]), select:not([disabled])')],
+});
+function syncMobileDrawer() {
   const sidebar = $('#studio-sidebar');
-  const open = !sidebar.classList.contains('is-open');
-  sidebar.classList.toggle('is-open', open);
-  mobileMenuTrigger.setAttribute('aria-expanded', String(open));
-  if (open) sidebar.querySelector('a, button, select')?.focus();
-};
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    const sidebar = $('#studio-sidebar');
-    if (sidebar.classList.contains('is-open')) {
-      sidebar.classList.remove('is-open');
-      mobileMenuTrigger.setAttribute('aria-expanded', 'false');
-      mobileMenuTrigger.focus();
-    }
+  const backdrop = $('#mobile-drawer-backdrop');
+  if (mobileDrawerActive()) {
+    sidebar.classList.remove('is-open');
+    backdrop.hidden = true;
+    mobileDrawer.close({ returnFocus: false });
+  } else {
+    sidebar.inert = false;
+    sidebar.setAttribute('aria-hidden', 'false');
+    mobileMenuTrigger.setAttribute('aria-expanded', 'false');
+    backdrop.hidden = true;
   }
+}
+syncMobileDrawer();
+window.addEventListener('resize', syncMobileDrawer);
+mobileMenuTrigger.onclick = () => {
+  if (!mobileDrawerActive()) return;
+  const sidebar = $('#studio-sidebar');
+  if (sidebar.classList.contains('is-open')) {
+    closeMobileDrawer({ returnFocus: true });
+  } else {
+    sidebar.classList.add('is-open');
+    $('#mobile-drawer-backdrop').hidden = false;
+    mobileDrawer.open();
+  }
+};
+$('#mobile-drawer-backdrop').onclick = () => closeMobileDrawer({ returnFocus: true });
+document.addEventListener('keydown', (event) => {
+  if (!mobileDrawerActive() || $('dialog[open]')) return;
+  const sidebar = $('#studio-sidebar');
+  if (!sidebar.classList.contains('is-open')) return;
+  mobileDrawer.handleKeydown(event);
+  if (event.key === 'Escape') $('#mobile-drawer-backdrop').hidden = true;
 });
 $('#company-switcher').onchange = action(async (event) => {
   if (event.target.value === studioShell.state().currentCompany?.id) return;

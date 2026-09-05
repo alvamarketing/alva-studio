@@ -31,7 +31,7 @@
     </svg>
     <div id="startup" role="status" style="padding: 40px; text-align: center">Abrindo seu Studio…</div>
     <section id="dashboard" hidden>
-      <aside id="studio-sidebar">
+      <aside id="studio-sidebar" aria-hidden="true" inert>
         <a class="brand" href="/" aria-label="Alva Studio">
           <svg class="brand-symbol" aria-hidden="true" viewBox="0 0 720.5 1000"><use href="#alva-symbol" /></svg>
           <strong>ALVA</strong>
@@ -88,6 +88,7 @@
           </button>
         </div>
       </aside>
+      <button id="mobile-drawer-backdrop" class="mobile-drawer-backdrop" type="button" aria-label="Fechar menu" hidden></button>
       <main>
         <button id="mobile-menu" class="mobile-menu" type="button" aria-label="Abrir menu" aria-controls="studio-sidebar" aria-expanded="false">
           <span class="material-symbols-outlined" aria-hidden="true">menu</span>

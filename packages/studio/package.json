@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env server/index.mjs",
+    "start:legacy": "node --env-file-if-exists=.env server/index.mjs --legacy",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

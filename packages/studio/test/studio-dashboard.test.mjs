@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectOverviewModel } from '../public/studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel } from '../public/studio-dashboard.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
@@ -223,4 +223,46 @@ test('Projeto possui destinos, filtros, estado assíncrono e controles responsiv
   assert.match(css, /@media\s*\(max-width:\s*760px\)/);
   assert.match(css, /#dashboard > aside\.is-open/);
   assert.match(css, /min-height:\s*44px/);
+});
+
+test('ações de conteúdo respeitam as capacidades de escrita por tipo', () => {
+  const denied = { can: () => false };
+  const page = { kind: 'page' };
+  const form = { kind: 'form' };
+
+  assert.equal(projectContentAction(denied, page), 'read');
+  assert.equal(projectContentAction(denied, form), 'read');
+  assert.equal(projectContentAction({ can: (capability) => capability === 'page.write' }, page), 'edit');
+  assert.equal(projectContentAction({ can: (capability) => capability === 'form.write' }, form), 'edit');
+});
+
+test('drawer móvel remove controles fechados da navegação e prende Tab com retorno de foco', () => {
+  const attributes = new Map();
+  const drawer = { inert: false, setAttribute: (name, value) => attributes.set(name, value) };
+  const trigger = { focusCalls: 0, setAttribute: (name, value) => attributes.set(name, value), focus() { this.focusCalls++; } };
+  const first = { focusCalls: 0, focus() { this.focusCalls++; } };
+  const last = { focusCalls: 0, focus() { this.focusCalls++; } };
+  let active = first;
+  const controller = createMobileDrawerController({ drawer, trigger, focusable: () => [first, last], activeElement: () => active });
+
+  controller.close({ returnFocus: false });
+  assert.equal(drawer.inert, true);
+  assert.equal(attributes.get('aria-hidden'), 'true');
+  controller.open();
+  assert.equal(drawer.inert, false);
+  assert.equal(attributes.get('aria-hidden'), 'false');
+  assert.equal(first.focusCalls, 1);
+  const tab = { key: 'Tab', shiftKey: false, preventDefaultCalls: 0, preventDefault() { this.preventDefaultCalls++; } };
+  active = last;
+  controller.handleKeydown(tab);
+  assert.equal(tab.preventDefaultCalls, 1);
+  assert.equal(first.focusCalls, 2);
+  active = first;
+  const shiftTab = { key: 'Tab', shiftKey: true, preventDefaultCalls: 0, preventDefault() { this.preventDefaultCalls++; } };
+  controller.handleKeydown(shiftTab);
+  assert.equal(shiftTab.preventDefaultCalls, 1);
+  assert.equal(last.focusCalls, 1);
+  controller.handleKeydown({ key: 'Escape', preventDefault() {} });
+  assert.equal(drawer.inert, true);
+  assert.equal(trigger.focusCalls, 1);
 });

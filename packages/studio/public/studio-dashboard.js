@@ -27,6 +27,43 @@ export function filterProjectContent(content = [], filter = 'all') {
   return kind ? content.filter((item) => item.kind === kind) : [...content];
 }
 
+export function projectContentAction(shell, item) {
+  const capability = item?.kind === 'form' ? 'form.write' : 'page.write';
+  return shell?.can?.(capability) ? 'edit' : 'read';
+}
+
+export function createMobileDrawerController({ drawer, trigger, focusable, activeElement = () => document.activeElement } = {}) {
+  if (!drawer || !trigger || typeof focusable !== 'function') throw new Error('Os controles do menu móvel são obrigatórios.');
+  const setOpen = (open, { returnFocus = false } = {}) => {
+    drawer.inert = !open;
+    drawer.setAttribute('aria-hidden', String(!open));
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) focusable()[0]?.focus();
+    else if (returnFocus) trigger.focus();
+  };
+  return {
+    open: () => setOpen(true),
+    close: (options) => setOpen(false, options),
+    handleKeydown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false, { returnFocus: true });
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const controls = focusable();
+      if (!controls.length) return;
+      const first = controls[0];
+      const last = controls.at(-1);
+      const active = activeElement();
+      if ((event.shiftKey && active === first) || (!event.shiftKey && active === last)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
+    },
+  };
+}
+
 export function projectOverviewModel(overview, { phase = 'ready', error = '' } = {}) {
   if (phase === 'loading') return { status: 'loading', message: 'Carregando projeto…', content: [], metrics: [], modules: [] };
   if (phase === 'error') return { status: 'error', message: error || 'Não foi possível carregar este projeto.', content: [], metrics: [], modules: [] };

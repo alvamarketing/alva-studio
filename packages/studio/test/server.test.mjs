@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp } from '../server/index.mjs';
+import { createApp, startSaaS } from '../server/index.mjs';
 async function setup(t, options = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'alva-http-'));
   const server = createApp({ dataDir, ...options });
@@ -81,6 +81,66 @@ test('controlador de aparência é entregue como módulo do Studio', async (t) =
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /text\/javascript/);
   assert.match(await response.text(), /createUIPreferences/);
+});
+
+test('servidor entrega todo o grafo de módulos importado pelo app', async (t) => {
+  const { base } = await setup(t);
+  const seen = new Set();
+  const visit = async (path) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const response = await fetch(base + path);
+    assert.equal(response.status, 200, `${path} precisa ser servido`);
+    const source = await response.text();
+    const imports = [...source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)].map((match) => match[1]);
+    await Promise.all(imports.map((specifier) => visit(new URL(specifier, base + path).pathname)));
+  };
+
+  await visit('/app.js');
+  assert.ok(seen.has('/studio-shell.js'));
+  assert.ok(seen.has('/studio-dashboard.js'));
+});
+
+test('inicialização SaaS exige DATABASE_URL e só inicia o app depois de migrar o banco', async () => {
+  await assert.rejects(() => startSaaS({ connectionString: '' }), /DATABASE_URL/);
+
+  const calls = [];
+  const database = { close: async () => calls.push('close') };
+  const runtime = await startSaaS({
+    connectionString: 'postgres://nao-registre-esta-url',
+    createDatabaseFn: ({ connectionString }) => {
+      calls.push(connectionString);
+      return database;
+    },
+    migrateFn: async (value) => calls.push(value === database ? 'migrate' : 'wrong-database'),
+    appFactory: ({ database: value }) => {
+      calls.push(value === database ? 'app' : 'wrong-app-database');
+      return createApp({ dataDir: join(tmpdir(), 'alva-saas-runtime-test') });
+    },
+    port: 0,
+    host: '127.0.0.1',
+    log: () => {},
+  });
+
+  assert.deepEqual(calls.slice(0, 3), ['postgres://nao-registre-esta-url', 'migrate', 'app']);
+  await runtime.close();
+  assert.deepEqual(calls.at(-1), 'close');
+});
+
+test('falha de boot SaaS fecha a conexão sem registrar a URL', async () => {
+  const calls = [];
+  const database = { close: async () => calls.push('close') };
+  await assert.rejects(
+    () => startSaaS({
+      connectionString: 'postgres://segredo-nao-deve-aparecer',
+      createDatabaseFn: () => database,
+      migrateFn: async () => {},
+      appFactory: () => { throw new Error('porta indisponível'); },
+      log: () => { throw new Error('não deve registrar durante falha'); },
+    }),
+    /porta indisponível/,
+  );
+  assert.deepEqual(calls, ['close']);
 });
 
 test('formulários dinâmicos têm administração protegida e execução pública', async (t) => {

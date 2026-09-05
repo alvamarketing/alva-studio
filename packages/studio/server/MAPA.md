@@ -1,6 +1,6 @@
 # server
 
-- `index.mjs`: servidor HTTP, modo local legado e composição da API SaaS quando recebe uma conexão PostgreSQL.
+- `index.mjs`: servidor HTTP, mapa dos módulos públicos e entrypoints SaaS (PostgreSQL obrigatório) e legado explícito para migração/rollback.
 - `db/`: adaptador PostgreSQL e migrações ordenadas do schema SaaS.
   - `postgres.mjs`: pool, transações e executor idempotente de migrações com checksum.
   - `migrations/001_saas_foundation.sql`: empresas, memberships, projetos, conteúdo, versões, integrações e auditoria.

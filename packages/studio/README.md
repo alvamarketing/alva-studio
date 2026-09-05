@@ -4,9 +4,9 @@ Construtor visual de landing pages e formulários dinâmicos da Alva Marketing, 
 
 ## Dois modos durante a transição
 
-O modo local existente continua disponível para preservar o editor atual e os dados em disco. Ele é iniciado sem conexão de banco e mantém a conta única local.
+`pnpm --ignore-workspace start` é o caminho SaaS. Ele exige `DATABASE_URL`, abre a conexão PostgreSQL, executa as migrações antes de aceitar requisições e encerra o pool ao desligar. Usuários podem participar de empresas, escolher um projeto atual e acessar somente o conteúdo autorizado daquele projeto.
 
-Quando `createApp` recebe uma conexão PostgreSQL já migrada, o Studio ativa a API SaaS: usuários podem participar de empresas, escolher um projeto atual e acessar somente o conteúdo autorizado daquele projeto. A inicialização padrão ainda não lê uma variável de banco por conta própria; a ligação do processo de produção ao PostgreSQL é o próximo passo do shell SaaS. Não exponha o modo local como serviço público.
+O modo JSON existe apenas para migração ou rollback local: use `pnpm --ignore-workspace start:legacy`. Ele mantém a conta única e os dados em disco. Não o exponha como serviço público nem o use para novas gravações depois do corte SaaS.
 
 ## Executar localmente
 
@@ -18,7 +18,7 @@ pnpm --ignore-workspace install --frozen-lockfile
 pnpm --ignore-workspace start
 ```
 
-Abra o endereço impresso, normalmente http://127.0.0.1:4178. No primeiro acesso local, crie a conta do dono com nome, e-mail e uma senha de pelo menos 12 caracteres.
+Antes de iniciar, defina `DATABASE_URL` no ambiente ou em `.env`; nunca a registre em logs, documentos versionados ou no navegador. Abra o endereço impresso, normalmente http://127.0.0.1:4178. Para acessar um snapshot JSON apenas durante migração ou rollback, rode `pnpm --ignore-workspace start:legacy`.
 
 ## Fundação SaaS comprovada
 

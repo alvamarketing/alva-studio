@@ -14,6 +14,7 @@ import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
 import { normalizeRoute } from './domain/access.mjs';
+import { createDatabase, migrate } from './db/postgres.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 
@@ -143,6 +144,10 @@ export function createApp({
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],
     '/forms.js': ['public/forms.js', 'text/javascript'],
+    '/studio-shell.js': ['public/studio-shell.js', 'text/javascript'],
+    '/studio-context-boundary.js': ['public/studio-context-boundary.js', 'text/javascript'],
+    '/context-list.js': ['public/context-list.js', 'text/javascript'],
+    '/studio-dashboard.js': ['public/studio-dashboard.js', 'text/javascript'],
     '/forms.css': ['public/forms.css', 'text/css'],
     '/save-cycle.js': ['public/save-cycle.js', 'text/javascript'],
     '/styles.css': ['public/styles.css', 'text/css'],
@@ -355,11 +360,88 @@ export function createApp({
     }
   });
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const port = Number(process.env.PORT || 4178);
-  const host = process.env.HOST || '127.0.0.1';
+function validateHost(host, publicOrigin) {
   if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !process.env.PUBLIC_ORIGIN)
     throw new Error('HOST externo exige PUBLIC_ORIGIN HTTPS.');
-  const app = createApp();
-  app.listen(port, host, () => console.log(`Alva Studio: http://127.0.0.1:${port}`));
+}
+
+export async function startSaaS({
+  connectionString = process.env.DATABASE_URL,
+  port = Number(process.env.PORT || 4178),
+  host = process.env.HOST || '127.0.0.1',
+  createDatabaseFn = createDatabase,
+  migrateFn = migrate,
+  appFactory = createApp,
+  log = console.log,
+} = {}) {
+  if (typeof connectionString !== 'string' || !connectionString.trim())
+    throw new Error('DATABASE_URL é obrigatória para iniciar o Studio SaaS. Use start:legacy apenas para migração ou rollback local.');
+  validateHost(host, process.env.PUBLIC_ORIGIN);
+  let database;
+  let app;
+  try {
+    database = createDatabaseFn({ connectionString });
+    await migrateFn(database);
+    app = appFactory({ database });
+    await new Promise((resolve, reject) => {
+      app.once('error', reject);
+      app.listen(port, host, () => {
+        app.off('error', reject);
+        resolve();
+      });
+    });
+  } catch (startupError) {
+    await database?.close?.().catch(() => {});
+    throw startupError;
+  }
+  let closed = false;
+  return {
+    app,
+    database,
+    async close() {
+      if (closed) return;
+      closed = true;
+      await new Promise((resolve) => app.close(resolve));
+      await database.close();
+    },
+    address: () => app.address(),
+    log: () => log(`Alva Studio SaaS: http://${host}:${app.address().port}`),
+  };
+}
+
+export async function startLegacy({
+  port = Number(process.env.PORT || 4178),
+  host = process.env.HOST || '127.0.0.1',
+  appFactory = createApp,
+  log = console.log,
+} = {}) {
+  validateHost(host, process.env.PUBLIC_ORIGIN);
+  const app = appFactory();
+  await new Promise((resolve, reject) => {
+    app.once('error', reject);
+    app.listen(port, host, () => {
+      app.off('error', reject);
+      resolve();
+    });
+  });
+  log(`Alva Studio legado: http://${host}:${app.address().port}`);
+  return app;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const legacy = process.argv.includes('--legacy');
+  try {
+    const runtime = legacy ? { app: await startLegacy() } : await startSaaS();
+    if (!legacy) runtime.log();
+    const shutdown = async () => {
+      if (runtime.close) await runtime.close();
+      else await new Promise((resolve) => runtime.app.close(resolve));
+      process.exit(0);
+    };
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
+  } catch {
+    console.error(legacy ? 'Não foi possível iniciar o Studio legado.' : 'Não foi possível iniciar o Studio SaaS.');
+    process.exitCode = 1;
+  }
 }

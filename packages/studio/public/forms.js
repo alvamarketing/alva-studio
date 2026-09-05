@@ -141,7 +141,7 @@ export function parseOptions(value) {
   return [...new Set(String(value).split('\n').map((item) => item.trim()).filter(Boolean))];
 }
 
-export function createFormsUI({ api, toast, onReturnToProject = async () => {} }) {
+export function createFormsUI({ api, toast, onReturnToProject = async () => {}, can = () => true }) {
   const $ = (selector) => document.querySelector(selector);
   let forms = [];
   let current = null;
@@ -170,6 +170,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {} }
 
   const showForms = async () => {
     setActiveNav('forms');
+    $('#new-form').hidden = !can('form.write');
     await loadList();
   };
 
@@ -190,20 +191,23 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {} }
     for (const form of filtered) {
       const card = document.createElement('article');
       card.className = 'page-card form-card';
-      card.innerHTML = `<div class="form-card-cover"><span>${form.stepCount}</span><strong>${form.stepCount === 1 ? 'etapa' : 'etapas'}</strong><small>${form.submissionCount} ${form.submissionCount === 1 ? 'resposta' : 'respostas'}</small></div><div class="card-content"><div class="card-top"><h3>${escape(form.name)}</h3><span class="badge">ATIVO</span></div><p>${escape(form.publicPath || 'Ainda não publicado')}</p><div class="card-actions"><button class="edit">Editar formulário ↗</button><button class="duplicate" title="Duplicar formulário">Duplicar</button><button class="delete" title="Excluir formulário">Excluir</button></div></div>`;
-      card.querySelector('.edit').onclick = () => run(() => open(form.id));
-      card.querySelector('.duplicate').onclick = () =>
-        run(async () => {
-          await api(`/forms/${form.id}/duplicate`, 'POST', {});
-          await loadList();
-          toast('Cópia do formulário criada.');
-        });
-      card.querySelector('.delete').onclick = () =>
-        run(async () => {
-          if (!confirm(`Excluir “${form.name}” e todas as respostas recebidas?`)) return;
-          await api(`/forms/${form.id}`, 'DELETE', {});
-          await loadList();
-        });
+      const editable = can('form.write');
+      card.innerHTML = `<div class="form-card-cover"><span>${form.stepCount}</span><strong>${form.stepCount === 1 ? 'etapa' : 'etapas'}</strong><small>${form.submissionCount} ${form.submissionCount === 1 ? 'resposta' : 'respostas'}</small></div><div class="card-content"><div class="card-top"><h3>${escape(form.name)}</h3><span class="badge">ATIVO</span></div><p>${escape(form.publicPath || 'Ainda não publicado')}</p><div class="card-actions">${editable ? '<button class="edit">Editar formulário ↗</button><button class="duplicate" title="Duplicar formulário">Duplicar</button><button class="delete" title="Excluir formulário">Excluir</button>' : '<span class="read-only">Somente leitura</span>'}</div></div>`;
+      if (editable) {
+        card.querySelector('.edit').onclick = () => run(() => open(form.id));
+        card.querySelector('.duplicate').onclick = () =>
+          run(async () => {
+            await api(`/forms/${form.id}/duplicate`, 'POST', {});
+            await loadList();
+            toast('Cópia do formulário criada.');
+          });
+        card.querySelector('.delete').onclick = () =>
+          run(async () => {
+            if (!confirm(`Excluir “${form.name}” e todas as respostas recebidas?`)) return;
+            await api(`/forms/${form.id}`, 'DELETE', {});
+            await loadList();
+          });
+      }
       list.append(card);
     }
   }
