@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createDatabase, migrate } from '../server/db/postgres.mjs';
+import { VideoRepository } from '../server/repositories/video-repository.mjs';
+import { postgresFixture } from './postgres-fixture.mjs';
 import {
   normalizeVslReference,
   resolvePublishedVsl,
@@ -47,6 +50,34 @@ test('retorna 404 para VSL ausente e deduplica referências no mapa', async () =
   ] });
   assert.equal(queries, 1);
   assert.deepEqual([...result.keys()], ['public-vsl-123456']);
+});
+
+test('isola a resolução por empresa/projeto e exige versão publicada', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const user = (await database.query("INSERT INTO users (email, password_hash, display_name) VALUES ('vsl-reference@test', 'hash', 'Pessoa') RETURNING id")).rows[0];
+  const company = (await database.query("INSERT INTO companies (name, slug) VALUES ('Empresa', 'vsl-reference') RETURNING id")).rows[0];
+  const otherCompany = (await database.query("INSERT INTO companies (name, slug) VALUES ('Outra', 'vsl-reference-other') RETURNING id")).rows[0];
+  await database.query("INSERT INTO company_memberships (company_id, user_id, role, joined_at) VALUES ($1, $2, 'owner', now())", [company.id, user.id]);
+  const project = (await database.query("INSERT INTO projects (company_id, name, slug, created_by) VALUES ($1, 'Projeto', 'projeto', $2) RETURNING id", [company.id, user.id])).rows[0];
+  const otherProject = (await database.query("INSERT INTO projects (company_id, name, slug, created_by) VALUES ($1, 'Projeto', 'projeto', $2) RETURNING id", [otherCompany.id, user.id])).rows[0];
+  const repository = new VideoRepository(database);
+  try {
+    const input = { companyId: company.id, projectId: project.id, actorId: user.id, name: 'VSL', sourceUrl: 'https://media.example.test/vsl.mp4', sourceType: 'mp4' };
+    const draft = await repository.createVideo(input);
+    await assert.rejects(() => resolvePublishedVsl({ database, companyId: company.id, projectId: project.id, publicId: draft.publicId, publicOrigin: 'https://studio.example.test' }), (error) => error.status === 404);
+    await repository.publishVideo({ ...input, videoId: draft.id, lockVersion: 0 });
+    await assert.rejects(() => resolvePublishedVsl({ database, companyId: otherCompany.id, projectId: otherProject.id, publicId: draft.publicId, publicOrigin: 'https://studio.example.test' }), (error) => error.status === 404);
+    await assert.rejects(() => resolvePublishedVsl({ database, companyId: company.id, projectId: otherProject.id, publicId: draft.publicId, publicOrigin: 'https://studio.example.test' }), (error) => error.status === 404);
+  } finally {
+    await database.close();
+  }
+});
+
+test('resolvePublishedVsl valida a origem pública', async () => {
+  const database = { query: async () => ({ rows: [{ public_id: 'public-vsl-123456', version_number: 1 }] }) };
+  await assert.rejects(() => resolvePublishedVsl({ database, companyId: 'c', projectId: 'p', publicId: 'public-vsl-123456', publicOrigin: 'javascript:alert(1)' }), (error) => error.status === 400);
 });
 
 test('snapshot resolve referências antes de gerar arquivos públicos', async () => {

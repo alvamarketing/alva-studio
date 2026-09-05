@@ -21,3 +21,14 @@
 
 - A Task 1 valida e resolve referências antes do renderer. A injeção do iframe no HTML renderizado permanece para a Task 4, conforme o plano.
 - A ausência de uma versão publicada retorna erro 404 com status/statusCode, mantendo a fronteira HTTP existente.
+
+## Correção após revisão
+
+- Adicionado teste com PostgreSQL efêmero e `VideoRepository` real, cobrindo VSL sem publicação, empresa incorreta e projeto incorreto; todos retornam 404.
+- `resolvePublishedVsl` agora valida sua própria `publicOrigin` e rejeita esquemas, credenciais, caminhos, query strings ou fragmentos inválidos.
+
+### Nova validação
+
+- `node --test packages/studio/test/vsl-reference.test.mjs`: 7 testes, 7 passaram.
+- `node --test packages/studio/test/publication-snapshot.test.mjs packages/studio/test/vsl-reference.test.mjs`: executado após a correção; todos os testes passaram.
+- `git diff --check`: sem erros.

@@ -2,6 +2,17 @@ function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
 }
 
+function validatePublicOrigin(value) {
+  try {
+    const origin = new URL(String(value));
+    if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash)
+      throw new Error('origin');
+    return origin.origin;
+  } catch {
+    throw fail('PUBLIC_ORIGIN deve ser uma origem absoluta válida.', 400);
+  }
+}
+
 export function normalizeVslReference(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('Referência de VSL inválida.');
   const keys = Object.keys(value);
@@ -13,6 +24,7 @@ export function normalizeVslReference(value) {
 export async function resolvePublishedVsl({ database, companyId, projectId, publicId, publicOrigin }) {
   if (!database || typeof database.query !== 'function') throw new Error('Banco inválido para referência de VSL.');
   const reference = normalizeVslReference({ type: 'vsl', publicId });
+  const origin = validatePublicOrigin(publicOrigin);
   const { rows } = await database.query(
     `SELECT version.public_id, version.version_number
        FROM videos video
@@ -26,7 +38,7 @@ export async function resolvePublishedVsl({ database, companyId, projectId, publ
   return {
     publicId: reference.publicId,
     versionNumber: rows[0].version_number,
-    embedUrl: `${String(publicOrigin).replace(/\/$/, '')}/embed/v/${encodeURIComponent(reference.publicId)}`,
+    embedUrl: `${origin}/embed/v/${encodeURIComponent(reference.publicId)}`,
   };
 }
 
