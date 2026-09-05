@@ -36,6 +36,14 @@ test('embed permite ancestrais HTTPS, mantém proporção e inclui allow autopla
   assert.match(vslContentSecurityPolicy(video.sourceUrl, { embed: true, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl }), /frame-ancestors https:/);
 });
 
+test('player público reorganiza controles e quebra mensagens em telas estreitas', () => {
+  const html = renderVslPage(video);
+  assert.match(html, /\.vsl-controls\{[^}]*flex-wrap:wrap/);
+  assert.match(html, /\.vsl-seek\{[^}]*min-width:0/);
+  assert.match(html, /\.vsl-status\{[^}]*overflow-wrap:anywhere/);
+  assert.match(html, /@media\(max-width:520px\)/);
+});
+
 test('rotas HTTP servem somente versão publicada e o hls.js local', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
