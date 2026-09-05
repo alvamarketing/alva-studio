@@ -33,3 +33,28 @@ test('APIs do projeto encaminham preview, produção confirmada, status e domín
   assert.equal(result.value.verified, true);
   assert.deepEqual(calls.filter(([name, capability]) => name === 'authorize' && capability).map(([, capability]) => capability), ['deployment.publish', 'deployment.publish', 'deployment.publish', 'integration.manage']);
 });
+
+test('rotas legadas passam revisão ao publishPage e usam publication.status no status', async () => {
+  const calls = [];
+  const sessionService = {
+    async require() { return { user: { id: 'user-a' }, companyId: 'company-a', currentProjectId: 'project-a' }; },
+    async authorize() {},
+  };
+  const content = {
+    async publishPage(input) { calls.push(['publishPage', input]); return { id: 'version-1' }; },
+    async getPage() { return { id: 'page-a', projectId: 'project-a', lockVersion: 8, editorState: {}, renderedHtml: '<p>ok</p>' }; },
+  };
+  const publication = {
+    async preview() { return { id: 'preview-1', status: 'QUEUED' }; },
+    async overview() { calls.push(['overview']); return { production: { id: 'run-production' } }; },
+    async status(input) { calls.push(['status', input]); return { id: input.runId, status: 'READY' }; },
+  };
+  const api = createProjectApi({ sessionService, integrations: {}, publication, content, body: async (req) => req.bodyValue });
+  const json = (value, status = 200) => ({ value, status });
+  const requestWith = (bodyValue) => ({ ...request(bodyValue), bodyValue });
+  await api({ req: requestWith({ revision: 7 }), res: {}, path: '/api/pages/page-a/publish', method: 'POST', json });
+  assert.equal(calls.find(([name]) => name === 'publishPage')[1].lockVersion, 7);
+  const result = await api({ req: requestWith(), res: {}, path: '/api/pages/page-a/status', method: 'GET', json });
+  assert.equal(result.value.status, 'READY');
+  assert.deepEqual(calls.at(-1), ['status', { companyId: 'company-a', projectId: 'project-a', runId: 'run-production' }]);
+});

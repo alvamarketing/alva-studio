@@ -5,7 +5,8 @@
 - `save-cycle.test.mjs`: salvamento durante edição.
 - `publisher.test.mjs`: contrato Vercel com transporte simulado.
 - `publication-snapshot.test.mjs` e `publication-integration.test.mjs`: snapshot, isolamento e cofre de conexão por projeto.
-- `publication-deployment.test.mjs`: idempotência de execução e publicação multi rota com retry.
+- `publication-deployment.test.mjs`: idempotência, claim atômico, estados Vercel e publicação multi rota com retry seguro.
+- `publication-cors.test.mjs`: origens autorizadas para formulários publicados por projeto.
 - `publication-service.test.mjs` e `publication-api.test.mjs`: fronteira de produção confirmada e APIs por projeto.
 - `studio-dashboard.test.mjs`: estados simples e responsividade da seção Publicação.
 

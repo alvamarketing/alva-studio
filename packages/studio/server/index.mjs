@@ -38,7 +38,7 @@ function parsePublicFormRequest(path, method, domainScope) {
     else if (path.startsWith('/f/')) encoded = path.slice(3);
     else return null;
     if (encoded.endsWith('/')) encoded = encoded.slice(0, -1);
-  } else if (method === 'POST') {
+  } else if (method === 'POST' || method === 'OPTIONS') {
     const prefix = '/api/public/forms';
     const suffix = '/submissions';
     if ((path !== prefix && !path.startsWith(`${prefix}/`)) || !path.endsWith(suffix)) return null;
@@ -195,16 +195,27 @@ export function createApp({
       const publicSubmission = legacyPublicSubmission || Boolean(publicFormRequest && req.method === 'POST');
       const publicDomainRead = Boolean(publicFormRequest && domainScope && req.method === 'GET');
       const publicDomainRequest = Boolean(publicFormRequest && domainScope);
+      const publicProjectSubmission = Boolean(publicFormRequest && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
       if (publicOrigin ? (!studioHost && !publicDomainRequest) : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if (!publicSubmission && !publicDomainRead && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
-      if (!publicSubmission && !publicDomainRead && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
+      if (content && publicProjectSubmission) {
+        const requestOrigin = req.headers.origin;
+        const allowed = requestOrigin && await content.isPublicOriginAllowed({ companySlug: publicFormRequest.companySlug, projectSlug: publicFormRequest.projectSlug, origin: requestOrigin });
+        if (!allowed) throw error('Origem não autorizada para este projeto.', 403);
+        res.setHeader('Access-Control-Allow-Origin', requestOrigin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+      }
       if (projectApi && path.startsWith('/api/') && !path.startsWith('/api/public/')) {
         const handled = await projectApi({ req, res, path, method: req.method, json });
         if (handled !== false) return handled;

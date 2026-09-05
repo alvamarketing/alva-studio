@@ -926,8 +926,8 @@ $('#publication-production').onclick = action(async () => {
   if (!projectId) throw new Error('Escolha um projeto antes de publicar.');
   if (!confirm('Publicar todas as rotas deste projeto em produção?')) return;
   const publication = await api(`/projects/${projectId}/publication`);
-  if (!publication.run?.id) throw new Error('Crie uma prévia antes de publicar em produção.');
-  await api(`/projects/${projectId}/publication/production`, 'POST', { confirmed: true, previewRunId: publication.run.id, revision: 0 });
+  if (!publication.latestPreviewReady?.id) throw new Error('Crie uma prévia pronta antes de publicar em produção.');
+  await api(`/projects/${projectId}/publication/production`, 'POST', { confirmed: true, previewRunId: publication.latestPreviewReady.id, revision: 0 });
   toast('Publicação enviada.');
   await renderProject();
 });
@@ -944,7 +944,7 @@ $('#publication-domain-form').onsubmit = action(async (event) => {
   const projectId = studioShell.state().currentProject?.id;
   const publication = await api(`/projects/${projectId}/publication`);
   const data = Object.fromEntries(new FormData(event.target));
-  await api(`/projects/${projectId}/publication/domain`, 'POST', { ...data, runId: publication.run?.id });
+  await api(`/projects/${projectId}/publication/domain`, 'POST', { ...data, runId: publication.production?.id });
   toast('Domínio conectado.');
   await renderProject();
 });

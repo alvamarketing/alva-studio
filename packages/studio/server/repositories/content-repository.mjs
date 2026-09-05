@@ -3,6 +3,7 @@ import { hasCapability, normalizeProjectSlug, normalizeRoute } from '../domain/a
 import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from '../form-answer-validation.mjs';
 import { normalizeFormInput } from '../form-store.mjs';
+import { allowedPublicationOrigin } from '../publication-cors.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -724,6 +725,22 @@ export class ContentRepository {
     return this.publicFormRecord(await this.publishedFormForProject(this.database, { companySlug, projectSlug, route: path }), path);
   }
 
+  async isPublicOriginAllowed({ companySlug, projectSlug, origin }) {
+    const { rows } = await this.database.query(
+      `SELECT domain AS origin FROM project_domains domain
+        JOIN companies company ON company.id = domain.company_id AND company.slug = $1
+        JOIN projects project ON project.id = domain.project_id AND project.company_id = domain.company_id AND project.slug = $2
+       WHERE domain.environment IN ('preview', 'production') AND domain.verification_status = 'verified'
+       UNION ALL
+       SELECT run.external_url AS origin FROM deployment_runs run
+        JOIN companies company ON company.id = run.company_id AND company.slug = $1
+        JOIN projects project ON project.id = run.project_id AND project.company_id = run.company_id AND project.slug = $2
+       WHERE run.status = 'READY' AND run.external_url IS NOT NULL`,
+      [companySlug, projectSlug],
+    );
+    return allowedPublicationOrigin(origin, rows.map((row) => String(row.origin).startsWith('http') ? row.origin : `https://${row.origin}`));
+  }
+
   async publicFormForDomain({ host, route: routeValue, slug }) {
     const path = publicRoute(routeValue ?? slug);
     return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, route: path }), path);
@@ -773,10 +790,12 @@ export class ContentRepository {
     });
   }
 
-  async publishPage({ companyId, projectId, actorId, pageId }) {
+  async publishPage({ companyId, projectId, actorId, pageId, lockVersion: expectedLockVersion }) {
     return withTransaction(this.database, async (client) => {
       await authorizedProject(client, { companyId, projectId, actorId, capability: 'deployment.publish' });
       const page = await scopedPage(client, { companyId, projectId, pageId, lock: true });
+      if (expectedLockVersion !== undefined && page.lock_version !== lockVersion(expectedLockVersion))
+        throw fail('A página mudou em outra aba. Reabra antes de publicar.', 409);
       await assertPublishedPathAvailable(client, {
         companyId, projectId, path: page.route, contentId: pageId, contentType: 'page',
       });

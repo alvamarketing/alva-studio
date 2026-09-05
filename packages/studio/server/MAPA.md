@@ -9,6 +9,7 @@
   - `migrations/004_local_imports.sql`: registro idempotente de importações locais.
   - `migrations/005_session_project_context.sql`: projeto atual persistido na sessão.
   - `migrations/006_deployment_external_url.sql`: URL externa persistida na execução da publicação.
+  - `migrations/007_deployment_claim_error.sql`: lease atômico e erro persistido da execução.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
 - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
@@ -19,6 +20,7 @@
 - `dynamic-form.mjs`: documento público sequencial com mídia, gráficos, movimento e confirmação de envio.
 - `publication-snapshot.mjs`: snapshot determinístico de todas as rotas publicadas de um projeto.
 - `publication-service.mjs`: coordenação de preview, produção confirmada, status, domínio e auditoria.
+- `publication-cors.mjs`: validação de origens HTTPS autorizadas para submissões públicas do projeto.
 - `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto e execuções idempotentes.
 - `publisher.mjs`: chamadas Vercel para previews, produção, status e domínio, com retry temporário.
 - `auth.mjs`: conta única, sessões e credencial Vercel cifrada em disco do modo local legado.

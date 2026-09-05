@@ -462,13 +462,13 @@ export function createProjectApi({
       if (!publication || !integrations) { if (method === 'POST') await body(req); throw fail('A publicação Vercel por projeto ainda está pendente.', 409); }
       if (action === 'publish' && method === 'POST') {
         const input = await body(req);
-        const pageVersion = await content.publishPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id });
+        const pageVersion = await content.publishPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id, lockVersion: input.revision ?? input.lockVersion });
         const deployment = await publication.preview({ companyId: context.companyId, projectId, requestedBy: context.user.id, expectedRevision: input.revision ?? input.lockVersion ?? 0 });
         return json({ ...legacyPage(await content.getPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })), deployment, publishedVersionId: pageVersion.id }, 201);
       }
       if (action === 'status' && method === 'GET') {
         const latest = await publication.overview({ companyId: context.companyId, projectId });
-        return json(latest.run);
+        return json(latest.production ? await publication.status({ companyId: context.companyId, projectId, runId: latest.production.id }) : null);
       }
       if (action === 'domain' && method === 'POST') {
         const pageSettings = await content.pageSettings({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id });
