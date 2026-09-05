@@ -13,6 +13,9 @@ import { CompanyRepository } from './repositories/company-repository.mjs';
 import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
 import { VideoRepository } from './repositories/video-repository.mjs';
+import { AnalyticsRepository } from './repositories/analytics-repository.mjs';
+import { parseCollectPayload, createCollectLimiter } from './analytics-collect.mjs';
+import { createNonce, formContentSecurityPolicy } from './content-security-policy.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
 import { WebhookDeliveryRepository } from './repositories/webhook-repository.mjs';
 import { startWebhookWorker } from './webhook-worker.mjs';
@@ -108,6 +111,50 @@ async function publicAnswers(req) {
   if (!req.headers['content-type']?.startsWith('application/x-www-form-urlencoded')) throw error('Envie o formulário no formato esperado.', 415);
   return { answers: Object.fromEntries(new URLSearchParams(raw)) };
 }
+async function collectBody(req) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    // Teto generoso: parseCollectPayload já recusa acima de 64 KB com a mensagem
+    // e o status corretos; este limite é só uma rede de segurança contra leitura ilimitada.
+    if (size > 128 * 1024) throw error('Corpo muito grande.', 413);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+// getPublicVideo() propositalmente não devolve companyId/projectId (dado interno, não público);
+// resolvemos o tracker do projeto direto pelo public_id do vídeo, sem tocar em video-repository.mjs.
+async function trackerPublicIdForVideo(database, videoPublicId) {
+  const { rows } = await database.query(
+    `SELECT website.tracker_public_id
+       FROM videos video
+       JOIN analytics_websites website
+         ON website.company_id = video.company_id AND website.project_id = video.project_id AND website.environment = 'production'
+      WHERE video.public_id = $1`,
+    [videoPublicId],
+  );
+  return rows[0]?.tracker_public_id || null;
+}
+
+// Mesmo padrão de startWebhookWorker: laço independente do ciclo de requisição,
+// unref() para não segurar o processo vivo, e parado explicitamente no close do servidor.
+function startAnalyticsRetentionWorker({ analytics, intervalMs = 24 * 60 * 60 * 1000 }) {
+  let stopped = false;
+  const runOnce = () => analytics.purgeExpired();
+  const tick = async () => {
+    if (stopped) return;
+    try { await runOnce(); } catch { /* um tick com erro não deve interromper o próximo */ }
+  };
+  const timer = setInterval(tick, intervalMs);
+  timer.unref?.();
+  return {
+    stop: () => { stopped = true; clearInterval(timer); },
+    runOnce,
+  };
+}
+
 export function createApp({
   dataDir = process.env.DATA_DIR || join(root, '.data'),
   publisher: injectedPublisher,
@@ -119,6 +166,8 @@ export function createApp({
   dnsLookup,
   webhookTimeoutMs,
   webhookIntervalMs,
+  analyticsRetentionIntervalMs,
+  collectLimiterOptions,
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -131,6 +180,14 @@ export function createApp({
   const formStore = new FormStore(dataDir);
   const content = database ? new ContentRepository(database, { publicOrigin }) : null;
   const videos = database ? new VideoRepository(database) : null;
+  const analytics = database ? new AnalyticsRepository(database) : null;
+  const collectLimiter = createCollectLimiter(collectLimiterOptions);
+  const analyticsRetention = analytics
+    ? startAnalyticsRetentionWorker({
+      analytics,
+      ...(analyticsRetentionIntervalMs === undefined ? {} : { intervalMs: analyticsRetentionIntervalMs }),
+    })
+    : null;
   const webhookWorker = database
     ? startWebhookWorker({
       repository: new WebhookDeliveryRepository(database),
@@ -159,6 +216,7 @@ export function createApp({
       projects: new ProjectRepository(database),
       content,
       videos,
+      analytics,
       body,
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),
@@ -195,6 +253,7 @@ export function createApp({
     '/vendor/grapes.min.css': ['node_modules/grapesjs/dist/css/grapes.min.css', 'text/css'],
     '/vendor/pt.js': ['node_modules/grapesjs/locale/pt.js', 'text/javascript'],
     '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
+    '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
@@ -222,18 +281,28 @@ export function createApp({
       const publicDomainRead = Boolean(publicFormRequest && domainScope && req.method === 'GET');
       const publicDomainRequest = Boolean(publicFormRequest && domainScope);
       const publicProjectSubmission = Boolean(publicFormRequest && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
+      const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
       if (publicOrigin ? (!studioHost && !publicDomainRequest) : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicVsl && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicVsl && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
       // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
       const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicVsl && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicVsl && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
+      // Report-Only por enquanto: só reporta violação, nunca bloqueia — a migração para modo
+      // reforçado é decisão futura, depois que todo script inline aceitar o nonce.
+      const publicHtmlNonce = (actionOrigin) => {
+        const nonce = createNonce();
+        res.setHeader('Content-Security-Policy-Report-Only', formContentSecurityPolicy({
+          nonce, studioOrigin: publicOrigin || expectedOrigin, actionOrigin, reportOnly: true,
+        }));
+        return nonce;
+      };
       if (content && publicProjectSubmission) {
         const requestOrigin = req.headers.origin;
         const allowedOrigins = requestOrigin && requestOrigin !== expectedOrigin
@@ -251,6 +320,56 @@ export function createApp({
       }
       if (content && publicDomainRequest && !customDomainOriginAllowed(origin, req.headers.host))
         throw error('Origem não autorizada para este domínio.', 403);
+      if (analytics && content && publicCollect) {
+        if (req.method === 'OPTIONS') {
+          if (origin) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Vary', 'Origin');
+          }
+          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          res.writeHead(204);
+          return res.end();
+        }
+        // Gate barato por IP antes de ler/parsear qualquer corpo: descarta abuso sem tocar no banco.
+        if (!collectLimiter.allow({ ip: req.socket.remoteAddress })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
+        // O escopo (empresa/projeto) vem sempre de resolveWebsite(), nunca do corpo enviado pelo navegador.
+        const { trackerPublicId, event } = parseCollectPayload(await collectBody(req), req.headers['content-type']);
+        if (!collectLimiter.allow({ ip: req.socket.remoteAddress, trackerPublicId })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
+        const website = await analytics.resolveWebsite({ trackerPublicId });
+        const allowedOrigins = website && origin && origin !== expectedOrigin
+          ? await content.publicationOrigins({ companySlug: website.companySlug, projectSlug: website.projectSlug })
+          : [];
+        const cors = publicSubmissionCors({ method: 'POST', origin, expectedOrigin, allowedOrigins });
+        // Tracker inexistente e origem não autorizada respondem igual: um 404 aqui vazaria se um
+        // tracker_public_id qualquer existe ou não para quem tenta adivinhar um (revisão de segurança).
+        if (!website || !cors.allowed) throw error('Não foi possível registrar o evento.', 403);
+        if (cors.corsOrigin) {
+          res.setHeader('Access-Control-Allow-Origin', cors.corsOrigin);
+          res.setHeader('Vary', 'Origin');
+        }
+        const visitorHash = analytics.visitorHash({
+          websiteId: website.websiteId,
+          address: req.socket.remoteAddress,
+          userAgent: req.headers['user-agent'],
+        });
+        await analytics.ingest({
+          websiteId: website.websiteId,
+          companyId: website.companyId,
+          projectId: website.projectId,
+          visitorHash,
+          event: {
+            type: event.event_name === 'pageview' ? 'pageview' : 'custom',
+            eventName: event.event_name,
+            urlPath: event.url_path,
+            urlQuery: event.url_query,
+            referrer: event.referrer,
+          },
+        });
+        // Nenhuma resposta do coletor devolve conteúdo — só status, para não vazar nada ao visitante.
+        res.writeHead(204);
+        return res.end();
+      }
       if (projectApi && path.startsWith('/api/') && !path.startsWith('/api/public/')) {
         const handled = await projectApi({ req, res, path, method: req.method, json });
         if (handled !== false) return handled;
@@ -259,10 +378,11 @@ export function createApp({
         const embed = Boolean(publicVsl[1]);
         const video = await videos.getPublicVideo(publicVsl[2]);
         res.removeHeader('X-Frame-Options');
-        res.setHeader('Content-Security-Policy', vslContentSecurityPolicy(video.sourceUrl, { embed, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl }));
+        res.setHeader('Content-Security-Policy', vslContentSecurityPolicy(video.sourceUrl, { embed, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl, studioOrigin: publicOrigin || expectedOrigin }));
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
-        return res.end(renderVslPage(video, { embed, publicOrigin: publicOrigin || expectedOrigin }));
+        const trackerPublicId = analytics ? await trackerPublicIdForVideo(database, publicVsl[2]) : null;
+        return res.end(renderVslPage(video, { embed, publicOrigin: publicOrigin || expectedOrigin, trackerPublicId }));
       }
       if (req.method === 'GET' && path === '/api/session') return json(await auth.state(req));
       if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {
@@ -293,7 +413,8 @@ export function createApp({
           references: extractVslReferences(form),
         });
         const vslEmbedUrls = new Map([...resolved].map(([publicId, value]) => [publicId, value.embedUrl]));
-        return res.end(renderDynamicForm(form, publicFormRequest.action, { vslEmbedUrls }));
+        const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
+        return res.end(renderDynamicForm(form, publicFormRequest.action, { vslEmbedUrls, nonce }));
       }
       const localForm = !content && path.match(/^\/f\/([a-z0-9-]+)$/);
       if (req.method === 'GET' && localForm) {
@@ -301,7 +422,9 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        return res.end(renderDynamicForm(form, `/api/public/forms/${form.id}/submit`));
+        const action = `/api/public/forms/${form.id}/submit`;
+        const nonce = publicHtmlNonce(`${expectedOrigin}${action}`);
+        return res.end(renderDynamicForm(form, action, { nonce }));
       }
       const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
       if (req.method === 'POST' && content && publicFormRequest) {
@@ -322,7 +445,8 @@ export function createApp({
         const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
-        return res.end(renderCompletion(completion.title, completion.message));
+        const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
+        return res.end(renderCompletion(completion.title, completion.message, { nonce }));
       }
       if (content && submission) throw error('Formulário publicado não encontrado.', 404);
       if (req.method === 'POST' && submission) {
@@ -331,7 +455,8 @@ export function createApp({
         if (form.webhook) res.setHeader('X-Webhook-Delivery', 'pending');
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
-        return res.end(renderCompletion(form.completion.title, form.completion.message));
+        const nonce = publicHtmlNonce(`${expectedOrigin}/api/public/forms/${submission[1]}/submit`);
+        return res.end(renderCompletion(form.completion.title, form.completion.message, { nonce }));
       }
       if (path.startsWith('/api/') && !(await auth.state(req)).authenticated)
         throw error('Entre na sua conta para continuar.', 401);
@@ -443,6 +568,10 @@ export function createApp({
   if (webhookWorker) {
     server.webhookWorker = webhookWorker;
     server.once('close', () => webhookWorker.stop());
+  }
+  if (analyticsRetention) {
+    server.analyticsRetention = analyticsRetention;
+    server.once('close', () => analyticsRetention.stop());
   }
   return server;
 }

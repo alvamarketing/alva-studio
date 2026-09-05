@@ -1092,6 +1092,178 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
 });
 
 
+test('coletor público ingere evento de origem publicada, recusa origem não publicada e não revela se o tracker existe', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  await database.query(
+    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-collect-a')",
+    [records.companyA.id, records.projectA.id],
+  );
+  await database.query(
+    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status)
+     VALUES ($1, $2, 'production', 'painel.alva-a.test', true, 'verified')`,
+    [records.companyA.id, records.projectA.id],
+  );
+
+  const send = (origin, body) => fetch(`${app.base}/api/public/collect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
+    body: JSON.stringify(body),
+  });
+
+  const ok = await send('https://painel.alva-a.test', { trackerPublicId: 'trk-collect-a', event_name: 'pageview', url_path: '/oferta' });
+  assert.equal(ok.status, 204, await ok.text());
+  assert.equal(await ok.text(), '');
+
+  const eventRow = await database.query(
+    'SELECT event_type, url_path FROM analytics_events WHERE company_id = $1 AND project_id = $2',
+    [records.companyA.id, records.projectA.id],
+  );
+  assert.equal(eventRow.rowCount, 1);
+  assert.equal(eventRow.rows[0].event_type, 'pageview');
+  assert.equal(eventRow.rows[0].url_path, '/oferta');
+
+  const forbidden = await send('https://attacker.example.test', { trackerPublicId: 'trk-collect-a', event_name: 'pageview' });
+  assert.equal(forbidden.status, 403, await forbidden.text());
+
+  const missing = await send('https://painel.alva-a.test', { trackerPublicId: 'trk-inexistente', event_name: 'pageview' });
+  assert.equal(missing.status, 403, await missing.text());
+  await database.close();
+});
+
+test('OPTIONS do coletor responde 204 com Access-Control-Allow-Origin', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  await seed(database);
+  const app = await start(t, database);
+  const response = await fetch(`${app.base}/api/public/collect`, {
+    method: 'OPTIONS',
+    headers: { Origin: 'https://qualquer-origem.example.test', 'Access-Control-Request-Method': 'POST' },
+  });
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('access-control-allow-origin'), 'https://qualquer-origem.example.test');
+  await database.close();
+});
+
+test('coletor recusa corpo de mais de 64 KB com 413', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  await database.query(
+    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-collect-grande')",
+    [records.companyA.id, records.projectA.id],
+  );
+  const bigBody = JSON.stringify({ trackerPublicId: 'trk-collect-grande', event_name: 'pageview', url_path: 'a'.repeat(70 * 1024) });
+  const response = await fetch(`${app.base}/api/public/collect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: bigBody,
+  });
+  assert.equal(response.status, 413, await response.text());
+  await database.close();
+});
+
+test('resposta pública do formulário emite CSP-Report-Only com nonce e sem unsafe-inline em script-src', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  const created = await alice.request('/api/forms', 'POST', { name: 'CSP público' });
+  let form = await created.json();
+  form = await (await alice.request(`/api/forms/${form.id}`, 'PUT', {
+    revision: form.revision,
+    headerElements: [],
+    steps: [{ id: 'inicio', title: 'Comece', elements: [{ id: 'email', type: 'email', title: 'E-mail', required: true }] }],
+    completion: { title: 'Recebemos', message: 'Obrigado.' },
+  })).json();
+  form = await (await alice.request(`/api/forms/${form.id}/publish`, 'POST', { revision: form.revision })).json();
+
+  const publicPage = await fetch(`${app.base}${form.publicPath}`);
+  assert.equal(publicPage.status, 200);
+  const csp = publicPage.headers.get('content-security-policy-report-only');
+  assert.ok(csp, 'deveria emitir Content-Security-Policy-Report-Only');
+  const scriptSrc = csp.split('; ').find((directive) => directive.startsWith('script-src'));
+  assert.match(scriptSrc, /'nonce-[^']+'/);
+  assert.doesNotMatch(scriptSrc, /unsafe-inline/);
+  await database.close();
+});
+
+test('laço de retenção do analytics remove eventos expirados via runOnce e pode ser parado ao fechar o servidor', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const website = (await database.query(
+    "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id) VALUES ($1, $2, 'trk-retencao') RETURNING id",
+    [records.companyA.id, records.projectA.id],
+  )).rows[0];
+  await database.query(
+    "INSERT INTO analytics_events (company_id, project_id, website_id, event_at, event_type, url_path) VALUES ($1, $2, $3, now() - interval '91 days', 'pageview', '/')",
+    [records.companyA.id, records.projectA.id, website.id],
+  );
+
+  assert.ok(app.server.analyticsRetention, 'servidor deveria expor o laço de retenção, como webhookWorker');
+  await app.server.analyticsRetention.runOnce();
+  const remaining = await database.query('SELECT count(*)::int AS count FROM analytics_events WHERE company_id = $1', [records.companyA.id]);
+  assert.equal(remaining.rows[0].count, 0);
+
+  await new Promise((resolve) => app.server.close(resolve));
+  assert.doesNotThrow(() => app.server.analyticsRetention.stop());
+  await database.close();
+});
+
+test('CSP da VSL pública inclui a origem do próprio Studio em connect-src', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  const created = await alice.request(`/api/projects/${records.projectA.id}/videos`, 'POST', {
+    name: 'VSL pública', sourceUrl: 'https://cdn.example.test/video.mp4',
+  });
+  const video = await created.json();
+  assert.equal(created.status, 201, JSON.stringify(video));
+  const published = await alice.request(`/api/projects/${records.projectA.id}/videos/${video.id}/publish`, 'POST', { lockVersion: video.lockVersion });
+  const publicVideo = await published.json();
+  assert.equal(published.status, 201, JSON.stringify(publicVideo));
+
+  const response = await fetch(`${app.base}/v/${publicVideo.publicId}`);
+  assert.equal(response.status, 200);
+  const csp = response.headers.get('content-security-policy');
+  const connectSrc = csp.split('; ').find((directive) => directive.startsWith('connect-src'));
+  assert.match(connectSrc, new RegExp(app.base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  await database.close();
+});
+
+test('resumo de analytics do projeto responde 200 agora que o repositório está conectado ao createProjectApi', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  const from = encodeURIComponent(new Date(Date.now() - 86_400_000).toISOString());
+  const to = encodeURIComponent(new Date(Date.now() + 86_400_000).toISOString());
+  const response = await alice.request(`/api/projects/${records.projectA.id}/analytics/summary?from=${from}&to=${to}`);
+  const summary = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(summary));
+  assert.equal(typeof summary.totalEvents, 'number');
+  await database.close();
+});
+
 test('validação de escala rejeita valores não finitos', () => {
   const schema = { steps: [{ id: 'avaliacao', type: 'scale', title: 'Avaliação', required: true, range: { min: 1, max: 5 } }] };
   assert.throws(() => validateFormAnswers(schema, { answers: { avaliacao: 'Infinity' } }), /escala/);

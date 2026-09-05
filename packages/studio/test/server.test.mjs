@@ -259,3 +259,20 @@ test('formulários dinâmicos têm administração protegida e execução públi
   assert.equal(submissions[0].answers.email, 'pessoa@example.com');
   assert.equal((await fetch(base + '/api/forms')).status, 401);
 });
+test('serve /tracker.js como um arquivo estático de primeira parte', async (t) => {
+  const { base } = await setup(t);
+  const response = await fetch(base + '/tracker.js');
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /text\/javascript/);
+  assert.match(await response.text(), /createTracker/);
+});
+test('Sec-Fetch-Site: cross-site não bloqueia o coletor público, só rotas autenticadas', async (t) => {
+  const { base } = await setup(t);
+  const collect = await rawRequest(base, '/api/public/collect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty' },
+    body: '{}',
+  });
+  assert.notEqual(collect.status, 403);
+  assert.doesNotMatch(collect.body, /Origem não permitida/);
+});
