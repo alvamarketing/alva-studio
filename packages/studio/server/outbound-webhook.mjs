@@ -1,4 +1,6 @@
 import { lookup } from 'node:dns/promises';
+import { request as httpRequest, Agent as HttpAgent } from 'node:http';
+import { request as httpsRequest, Agent as HttpsAgent } from 'node:https';
 
 function fail(message = 'Informe um webhook HTTPS válido.', status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -77,25 +79,61 @@ function destinationHost(url) {
   return url.hostname.replace(/^\[/, '').replace(/\]$/, '');
 }
 
+export async function resolveAndValidateDestination(url, dnsLookup = lookup) {
+  const addresses = await dnsLookup(destinationHost(url), { all: true, verbatim: true });
+  const resolved = Array.isArray(addresses) ? addresses : [addresses];
+  if (!resolved.length || resolved.some(({ address }) => forbiddenAddress(address))) return null;
+  return resolved[0];
+}
+
+export function pinnedLookup(pinnedAddress) {
+  const family = pinnedAddress.includes(':') ? 6 : 4;
+  return (_hostname, options, callback) => {
+    if (typeof options === 'function') { callback = options; options = {}; }
+    if (options?.all) return callback(null, [{ address: pinnedAddress, family }]);
+    callback(null, pinnedAddress, family);
+  };
+}
+
+// Faz a chamada HTTP real presa ao endereço já validado (pinnedAddress), em vez de deixar o
+// transporte resolver o hostname de novo — fecha a janela de DNS rebinding entre a checagem e o envio.
+export function pinnedFetch(urlString, { method = 'GET', headers = {}, body, signal } = {}, pinnedAddress) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(urlString);
+    const isHttps = target.protocol === 'https:';
+    const transport = isHttps ? httpsRequest : httpRequest;
+    const AgentCtor = isHttps ? HttpsAgent : HttpAgent;
+    const agent = new AgentCtor({ lookup: pinnedLookup(pinnedAddress) });
+    const req = transport(target, { method, headers, agent, signal }, (res) => {
+      res.resume();
+      res.on('end', () => resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode }));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
 export async function deliverWebhook({
   url: rawUrl,
   event,
-  fetchImpl = globalThis.fetch,
+  fetchImpl,
   dnsLookup = lookup,
   timeoutMs = 3000,
 }) {
   try {
     const url = new URL(validateWebhookUrl(rawUrl));
-    const addresses = await dnsLookup(destinationHost(url), { all: true, verbatim: true });
-    const resolved = Array.isArray(addresses) ? addresses : [addresses];
-    if (!resolved.length || resolved.some(({ address }) => forbiddenAddress(address))) return { status: 'failed' };
-    const response = await fetchImpl(url.toString(), {
+    const target = await resolveAndValidateDestination(url, dnsLookup);
+    if (!target) return { status: 'failed' };
+    const options = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(event),
       redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),
-    });
+    };
+    const transport = fetchImpl || ((u, o) => pinnedFetch(u, o, target.address));
+    const response = await transport(url.toString(), options, target.address);
     return { status: response?.ok ? 'delivered' : 'failed' };
   } catch {
     return { status: 'failed' };

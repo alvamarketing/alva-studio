@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deliverWebhook } from '../server/outbound-webhook.mjs';
+import { createServer } from 'node:http';
+import { deliverWebhook, pinnedLookup, pinnedFetch } from '../server/outbound-webhook.mjs';
 
 const publicDns = async () => [{ address: '93.184.216.34', family: 4 }];
 const event = {
@@ -82,4 +83,55 @@ test('falha em timeout, resposta não-2xx e redirecionamento remoto', async () =
     fetchImpl: async () => ({ ok: false, status: 302, redirected: true }),
   });
   assert.deepEqual(redirect, { status: 'failed' });
+});
+
+test('pinnedLookup sempre resolve para o endereço já validado, ignorando o hostname pedido', async () => {
+  const lookup = pinnedLookup('93.184.216.34');
+  const result = await new Promise((resolve, reject) => {
+    lookup('qualquer-outro-host.invalid', {}, (error, address, family) => (error ? reject(error) : resolve({ address, family })));
+  });
+  assert.deepEqual(result, { address: '93.184.216.34', family: 4 });
+
+  const ipv6Lookup = pinnedLookup('2001:db8::1');
+  const ipv6Result = await new Promise((resolve, reject) => {
+    ipv6Lookup('outro-host.invalid', {}, (error, address, family) => (error ? reject(error) : resolve({ address, family })));
+  });
+  assert.deepEqual(ipv6Result, { address: '2001:db8::1', family: 6 });
+});
+
+test('pinnedFetch conecta sempre no endereço fixado, mesmo quando o hostname da URL não resolveria para lá', async (t) => {
+  const server = createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ receivedPath: req.url, receivedBody: body }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const port = server.address().port;
+
+  const response = await pinnedFetch(
+    `http://este-host-nao-existe-de-verdade.invalid:${port}/lead`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true }) },
+    '127.0.0.1',
+  );
+  assert.equal(response.ok, true);
+  assert.equal(response.status, 200);
+});
+
+test('deliverWebhook repassa ao transporte o endereço já revalidado nesta tentativa', async () => {
+  const calls = [];
+  const result = await deliverWebhook({
+    url: 'https://hooks.example.test/lead',
+    event,
+    dnsLookup: async () => [{ address: '93.184.216.34', family: 4 }],
+    fetchImpl: async (url, options, pinnedAddress) => {
+      calls.push(pinnedAddress);
+      return { ok: true };
+    },
+  });
+  assert.deepEqual(result, { status: 'delivered' });
+  assert.deepEqual(calls, ['93.184.216.34']);
 });
