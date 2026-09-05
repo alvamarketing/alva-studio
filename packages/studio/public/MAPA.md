@@ -12,3 +12,4 @@
 - `templates.js`: catálogo de modelos, blocos de ícone e gráficos, movimentos e aparência independente dos formulários.
 - `ui-preferences.js`: preferências locais de aparência e largura do menu.
 - `forms.js` e `forms.css`: catálogo rico, ícones, movimentos, editor por etapas, prévia e consulta de respostas dos formulários dinâmicos.
+- `leads-ui.js`: normalização de linhas, estados de carregamento/erro/vazio, rótulos de entrega e URL de exportação CSV por projeto e formulário.

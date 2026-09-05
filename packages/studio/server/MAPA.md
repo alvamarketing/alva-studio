@@ -16,10 +16,12 @@
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
-- `project-api.mjs`: API multiempresa e compatibilidade das rotas atuais do editor.
-- `outbound-webhook.mjs`: valida somente sintaxe HTTPS sem credenciais; resolução DNS, proteção contra SSRF/rebinding e entrega assíncrona ficam pendentes e não há egress nesta fundação.
+- `project-api.mjs`: API multiempresa, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
+- `outbound-webhook.mjs`: entrega best-effort pós-persistência por HTTPS, com timeout, sem credenciais/cabeçalhos repassados, bloqueio de destinos locais/privados e status `delivered`/`failed`; fila, retry, idempotência e defesa contra DNS rebinding ficam no nó `worker_webhook`.
 - `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
 - `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.
+- `repositories/content-repository.mjs`: submissões paginadas por projeto, CSV por formulário e atualização escopada do status de entrega.
+- `leads-csv.mjs`: serialização CSV UTF-8 com BOM, colunas estáveis e neutralização de fórmulas de planilha.
 - `dynamic-form.mjs`: documento público sequencial com mídia, gráficos, movimento e confirmação de envio.
 - `publication-snapshot.mjs`: snapshot determinístico de todas as rotas publicadas de um projeto.
 - `publication-service.mjs`: coordenação de preview, produção confirmada, status, domínio e auditoria.
