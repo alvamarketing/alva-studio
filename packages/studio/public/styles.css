@@ -115,6 +115,40 @@ a:focus-visible {
 [hidden] {
   display: none !important;
 }
+.vsl-list {
+  display: grid;
+  gap: 10px;
+  margin: 24px 0;
+}
+.vsl-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--alva-white);
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-card);
+}
+.vsl-list-row span { color: var(--alva-muted); font-size: 13px; }
+.vsl-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 760px;
+  padding: 22px;
+  background: var(--alva-white);
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-card);
+}
+.vsl-form h2, .vsl-form-actions { grid-column: 1 / -1; }
+.vsl-form label { display: grid; gap: 7px; color: var(--alva-muted); font-size: 13px; }
+.vsl-form input, .vsl-form select { width: 100%; }
+.vsl-form-actions { display: flex; gap: 10px; justify-content: flex-end; }
+@media (max-width: 620px) {
+  .vsl-list-row, .vsl-form { grid-template-columns: 1fr; }
+  .vsl-form h2, .vsl-form-actions { grid-column: auto; }
+}
 #dashboard {
   display: flex;
   min-height: 100vh;

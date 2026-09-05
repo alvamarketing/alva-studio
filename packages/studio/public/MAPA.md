@@ -5,6 +5,7 @@
 - `save-cycle.js`: esgotamento das alterações pendentes antes de sair.
 - `templates.js`: modelo inicial e blocos.
 - `styles.css`: aparência do painel.
+- `vsl-player.js` e `vsl-ui.js`: runtime acessível do player público e tela de configuração de VSLs.
 
 - `editor-shell.js` e `editor-shell.css`: editor guiado com blocos e controles contextuais.
 - `owner.js` e `owner.css`: acesso do dono e configurações do aplicativo.

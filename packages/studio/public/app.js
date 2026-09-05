@@ -8,6 +8,7 @@ import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
 import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { createVslUI } from './vsl-ui.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -57,7 +58,7 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
-  applyDashboardNavigation({ home: $('#nav-home'), company: $('#nav-company'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms') }, view);
+  applyDashboardNavigation({ home: $('#nav-home'), company: $('#nav-company'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl') }, view);
 }
 function setDashboardView(view) {
   const sections = {
@@ -66,6 +67,7 @@ function setDashboardView(view) {
     project: '#project-view',
     pages: '#pages-view',
     forms: '#forms-view',
+    vsl: '#vsl-view',
   };
   for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
   closeMobileDrawer();
@@ -73,6 +75,7 @@ function setDashboardView(view) {
   if (view === 'home') renderHome();
   if (view === 'company') renderCompany();
   if (view === 'project') renderProject();
+  if (view === 'vsl') vslUI.show();
 }
 function mobileDrawerActive() {
   return window.matchMedia('(max-width: 760px)').matches;
@@ -319,7 +322,7 @@ function renderProjectContent(model) {
   const list = clear($('#project-content-list'));
   const content = filterProjectContent(model.content, projectContentFilter);
   if (!content.length) {
-    const label = projectContentFilter === 'pages' ? 'landing pages' : projectContentFilter === 'forms' ? 'formulários' : 'conteúdos';
+    const label = projectContentFilter === 'pages' ? 'landing pages' : projectContentFilter === 'forms' ? 'formulários' : projectContentFilter === 'videos' ? 'VSLs' : 'conteúdos';
     list.append(projectEmpty(`Nenhum ${label} disponível.`, projectContentFilter === 'all' ? 'Crie uma landing page ou formulário para começar.' : 'Mude o filtro ou crie um novo conteúdo.'));
     return;
   }
@@ -329,7 +332,7 @@ function renderProjectContent(model) {
     const icon = document.createElement('span');
     icon.className = 'material-symbols-outlined project-content-icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = item.kind === 'page' ? 'web' : 'dynamic_form';
+    icon.textContent = item.kind === 'page' ? 'web' : item.kind === 'video' ? 'play_circle' : 'dynamic_form';
     const details = document.createElement('div');
     const name = document.createElement('strong');
     name.textContent = item.name;
@@ -340,8 +343,12 @@ function renderProjectContent(model) {
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'project-content-open';
-      edit.textContent = item.kind === 'page' ? 'Editar página' : 'Editar formulário';
-      edit.onclick = action(() => item.kind === 'page' ? openPage(item.id) : formsUI.openForm(item.id));
+      edit.textContent = item.kind === 'page' ? 'Editar página' : item.kind === 'video' ? 'Editar VSL' : 'Editar formulário';
+      edit.onclick = action(() => {
+        if (item.kind === 'page') return openPage(item.id);
+        if (item.kind === 'video') { setDashboardView('vsl'); return vslUI.edit(item); }
+        return formsUI.openForm(item.id);
+      });
       row.append(icon, details, edit);
     } else {
       const readOnly = document.createElement('span');
@@ -861,6 +868,7 @@ async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
 formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability) });
+const vslUI = createVslUI({ api, shell: studioShell, toast });
 contextBoundary = createStudioContextBoundary({
   savePage: save,
   closePageEditor: () => {
@@ -888,6 +896,7 @@ studioShell = createStudioShell({
     if (!$('#project-view').hidden) await renderProject();
     if (!$('#pages-view').hidden && state.currentProject) await loadList();
     if (!$('#forms-view').hidden && state.currentProject) await formsUI.showForms();
+    if (!$('#vsl-view').hidden && state.currentProject) await vslUI.reload();
   },
 });
 function renderCompanySwitcher(state = studioShell.state(), { selectedCompanyId = state.currentCompany?.id || '', disabled = state.phase === 'loading' || !state.companies.length } = {}) {
@@ -960,6 +969,11 @@ $('#nav-forms').onclick = action(async () => {
   setDashboardView('forms');
   await formsUI.showForms();
 });
+$('#nav-vsl').onclick = action(async () => {
+  if (!studioShell.state().currentProject) throw new Error('Escolha um projeto antes de acessar suas VSLs.');
+  setDashboardView('vsl');
+});
+$('#new-vsl').onclick = () => vslUI.edit();
 $('#project-content-filter').onclick = (event) => {
   const button = event.target.closest('[data-project-filter]');
   if (!button) return;

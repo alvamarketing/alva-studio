@@ -43,12 +43,12 @@ export function dashboardModel({ phase = 'empty', error = '', companies = [], pr
 }
 
 export function filterProjectContent(content = [], filter = 'all') {
-  const kind = filter === 'pages' ? 'page' : filter === 'forms' ? 'form' : '';
+  const kind = filter === 'pages' ? 'page' : filter === 'forms' ? 'form' : filter === 'videos' ? 'video' : '';
   return kind ? content.filter((item) => item.kind === kind) : [...content];
 }
 
 export function projectContentAction(shell, item) {
-  const capability = item?.kind === 'form' ? 'form.write' : 'page.write';
+  const capability = item?.kind === 'form' ? 'form.write' : item?.kind === 'video' ? 'video.write' : 'page.write';
   return shell?.can?.(capability) ? 'edit' : 'read';
 }
 

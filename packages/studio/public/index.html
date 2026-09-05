@@ -65,6 +65,10 @@
           </svg>
           <span class="sidebar-label">Formulários Dinâmicos</span>
         </button>
+        <button class="nav-item" id="nav-vsl" title="VSLs">
+          <span class="material-symbols-outlined" aria-hidden="true">play_circle</span>
+          <span class="sidebar-label">VSLs</span>
+        </button>
         <button class="nav-item" id="nav-company" title="Empresa e equipe">
           <span class="material-symbols-outlined" aria-hidden="true">corporate_fare</span>
           <span class="sidebar-label">Empresa e equipe</span>
@@ -148,6 +152,7 @@
                   <button type="button" data-project-filter="all" aria-current="page">Visão geral</button>
                   <button type="button" data-project-filter="pages">Landing pages</button>
                   <button type="button" data-project-filter="forms">Formulários</button>
+                  <button type="button" data-project-filter="videos">VSLs</button>
                 </nav>
               </div>
               <div id="project-content-list" class="project-content-list" aria-live="polite"></div>
@@ -182,6 +187,30 @@
           </div>
           <div id="page-list" class="page-grid" aria-live="polite"></div>
           <footer>Feito para tirar suas campanhas do papel. <span>ALVA STUDIO / 01</span></footer>
+        </section>
+        <section id="vsl-view" hidden aria-labelledby="vsl-title">
+          <header class="dashboard-header">
+            <div><div class="eyebrow">VÍDEOS DE VENDA</div><h1 id="vsl-title">Minhas VSLs<span class="accent">.</span></h1><p>Use uma URL HTTPS de MP4 ou HLS pronto para publicar seu vídeo.</p></div>
+            <button class="primary" id="new-vsl" type="button">＋ Nova VSL</button>
+          </header>
+          <p id="vsl-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <div id="vsl-list" class="vsl-list"></div>
+          <form id="vsl-form" class="vsl-form" hidden>
+            <h2>Configurar VSL</h2>
+            <label>Nome<input name="name" required maxlength="100"></label>
+            <label>URL da mídia<input name="sourceUrl" type="url" placeholder="https://…" required></label>
+            <label>Tipo<select name="sourceType"><option value="mp4">MP4</option><option value="hls">HLS</option></select></label>
+            <label>Poster<input name="posterUrl" type="url" placeholder="https://…"></label>
+            <label>Legenda VTT<input name="captionsUrl" type="url" placeholder="https://…"></label>
+            <label>Cor do player<input name="accentColor" type="text" value="#286eea" pattern="#[0-9a-fA-F]{6}"></label>
+            <label>Proporção<select name="aspectRatio"><option>16:9</option><option>9:16</option><option>1:1</option></select></label>
+            <label>Texto do CTA<input name="ctaText" maxlength="200"></label>
+            <label>Destino do CTA<input name="ctaUrl" placeholder="https://… ou /checkout"></label>
+            <label>Exibir CTA após (segundos)<input name="ctaSeconds" type="number" min="0"></label>
+            <label><input name="autoplayMuted" type="checkbox" checked> Começar sem som</label>
+            <label><input name="resumeEnabled" type="checkbox" checked> Retomar de onde parou</label>
+            <div class="vsl-form-actions"><button type="submit" class="primary">Salvar alterações</button><button type="button" name="publish">Publicar versão</button></div>
+          </form>
         </section>
         <section id="forms-view" hidden>
           <header class="dashboard-header">
