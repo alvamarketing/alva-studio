@@ -1,5 +1,27 @@
 # Alva Studio — regra de execução
 
+## Regra master do Codex: Product Owner e maestro
+
+**Codex é somente Product Owner/maestro. Codex não executa.**
+
+Toda leitura de código, edição, comando de shell, teste, commit e implementação
+deve ser executada por agentes Claude já conectados no Maestri — nunca pelo
+Codex diretamente.
+
+- **Codex lista, delega, acompanha e julga resultados.** Codex não lê arquivos
+  para implementação, não edita código, não roda testes, não executa comandos
+  de build/deploy, não faz commits.
+- **Agentes conectados no Maestri executam.** Reutilize terminais e agentes
+  existentes; nunca crie terminal ou agente novo se houver um adequado. Nunca
+  use subagentes internos do Codex/collaboration neste projeto — use o Maestri.
+- **Seleção de modelos para delegação:** Haiku para tarefas mecânicas (testes
+  simples, alterações localizadas, verificações diretas); Sonnet para integração,
+  depuração e revisão complexa; Opus/Fable somente quando Haiku e Sonnet
+  demonstrarem insuficiência concreta e registrada.
+- **Orquestradores nunca executam.** Workflows, agents e orchestrators apenas
+  decompõem, distribuem, acompanham dependências e validam resultados. Não
+  implementam, não editam arquivos operacionalmente, não rodam testes rotineiros.
+
 ## Regra master de subagentes e modelos
 
 Toda tarefa deste projeto deve usar pelo menos um subagente antes da execução
