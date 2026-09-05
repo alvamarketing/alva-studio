@@ -182,7 +182,7 @@ export function createFormsUI({ api, toast }) {
     for (const form of filtered) {
       const card = document.createElement('article');
       card.className = 'page-card form-card';
-      card.innerHTML = `<div class="form-card-cover"><span>${form.stepCount}</span><strong>${form.stepCount === 1 ? 'etapa' : 'etapas'}</strong><small>${form.submissionCount} ${form.submissionCount === 1 ? 'resposta' : 'respostas'}</small></div><div class="card-content"><div class="card-top"><h3>${escape(form.name)}</h3><span class="badge">ATIVO</span></div><p>/f/${escape(form.projectSlug || 'projeto')}/${escape(form.slug)}</p><div class="card-actions"><button class="edit">Editar formulário ↗</button><button class="duplicate" title="Duplicar formulário">Duplicar</button><button class="delete" title="Excluir formulário">Excluir</button></div></div>`;
+      card.innerHTML = `<div class="form-card-cover"><span>${form.stepCount}</span><strong>${form.stepCount === 1 ? 'etapa' : 'etapas'}</strong><small>${form.submissionCount} ${form.submissionCount === 1 ? 'resposta' : 'respostas'}</small></div><div class="card-content"><div class="card-top"><h3>${escape(form.name)}</h3><span class="badge">ATIVO</span></div><p>${escape(form.publicPath || 'Ainda não publicado')}</p><div class="card-actions"><button class="edit">Editar formulário ↗</button><button class="duplicate" title="Duplicar formulário">Duplicar</button><button class="delete" title="Excluir formulário">Excluir</button></div></div>`;
       card.querySelector('.edit').onclick = () => run(() => open(form.id));
       card.querySelector('.duplicate').onclick = () =>
         run(async () => {
@@ -371,7 +371,7 @@ export function createFormsUI({ api, toast }) {
     run(async () => {
       await save();
       current = await api('/forms/' + current.id + '/publish', 'POST', { revision: current.revision });
-      if (opened) opened.location.href = '/f/' + current.projectSlug + '/' + current.slug;
+      if (opened) opened.location.href = current.publicPath;
       else toast('Permita a abertura de uma nova aba para visualizar o formulário.');
     });
   };

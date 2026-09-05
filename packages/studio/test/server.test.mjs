@@ -115,9 +115,8 @@ test('formulários dinâmicos têm administração protegida e execução públi
   });
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Obrigado!/);
-  assert.equal(webhooks.length, 1);
-  assert.equal(webhooks[0].payload.answers.email, 'pessoa@example.com');
-  assert.equal(webhooks[0].payload.answers.campo_falso, undefined);
+  assert.equal(response.headers.get('x-webhook-delivery'), 'pending');
+  assert.equal(webhooks.length, 0);
 
   const submissions = await (await request('/api/forms/' + form.id + '/submissions')).json();
   assert.equal(submissions.length, 1);

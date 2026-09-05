@@ -133,13 +133,25 @@ export function createProjectApi({
     if (method === 'PUT' && path === '/api/account') return json(await sessionService.account(req, await body(req), res, secure));
 
     const context = await sessionService.require(req);
-    if (method === 'GET' && path === '/api/config') return json({ vercelConnected: false, pending: true });
-    if (method === 'GET' && path === '/api/settings') return json({ vercel: pendingVercel() });
+    const requireIntegration = async () => {
+      if (!context.currentProjectId) throw fail('Escolha um projeto ativo.', 409);
+      await sessionService.authorize(context, 'integration.manage', context.currentProjectId);
+    };
+    if (method === 'GET' && path === '/api/config') {
+      await requireIntegration();
+      return json({ vercelConnected: false, pending: true });
+    }
+    if (method === 'GET' && path === '/api/settings') {
+      await requireIntegration();
+      return json({ vercel: pendingVercel() });
+    }
     if (method === 'PUT' && path === '/api/settings/vercel') {
+      await requireIntegration();
       await body(req);
       throw fail('A conexão Vercel por projeto ainda está pendente.', 409);
     }
     if (method === 'POST' && path === '/api/settings/vercel/test') {
+      await requireIntegration();
       await body(req);
       throw fail('A conexão Vercel por projeto ainda está pendente.', 409);
     }
@@ -277,19 +289,32 @@ export function createProjectApi({
       if (method === 'PUT') {
         await sessionService.authorize(context, capability, projectId);
         const input = await body(req);
-        const changesIntegration = input.domain !== undefined || input.webhook !== undefined;
-        if (isPage && changesIntegration) {
-          await sessionService.authorize(context, 'integration.manage', projectId);
-          content.validatePageSettings({ domain: input.domain, webhook: input.webhook });
-          if (input.webhook !== undefined && input.webhook) input.webhook = await validateWebhook(input.webhook);
+        let pageSettingsPatch = {};
+        let currentForm = null;
+        if (isPage && (input.domain !== undefined || input.webhook !== undefined)) {
+          const currentSettings = await content.pageSettings({
+            companyId: context.companyId, projectId, actorId: context.user.id, pageId: id,
+          });
+          const nextDomain = input.domain === undefined ? undefined : String(input.domain).trim().toLowerCase();
+          const nextWebhook = input.webhook === undefined ? undefined : String(input.webhook).trim();
+          if (nextDomain !== undefined && nextDomain !== currentSettings.domain) pageSettingsPatch.domain = input.domain;
+          if (nextWebhook !== undefined && nextWebhook !== currentSettings.webhook) pageSettingsPatch.webhook = input.webhook;
+          if (Object.keys(pageSettingsPatch).length) {
+            await sessionService.authorize(context, 'integration.manage', projectId);
+            content.validatePageSettings(pageSettingsPatch);
+            if (pageSettingsPatch.webhook) pageSettingsPatch.webhook = await validateWebhook(pageSettingsPatch.webhook);
+          }
         }
-        const requestedWebhook = !isPage ? (input.webhook ?? input.draftSchema?.webhook) : undefined;
-        if (!isPage && requestedWebhook !== undefined) {
-          await sessionService.authorize(context, 'integration.manage', projectId);
-          if (requestedWebhook) {
-            const safeWebhook = await validateWebhook(requestedWebhook);
-            input.webhook = safeWebhook;
-            input.draftSchema = { ...(input.draftSchema ?? {}), webhook: safeWebhook };
+        if (!isPage) {
+          currentForm = await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
+          const requestedWebhook = input.webhook ?? input.draftSchema?.webhook;
+          if (requestedWebhook !== undefined && String(requestedWebhook).trim() !== String(currentForm.draftSchema?.webhook ?? '').trim()) {
+            await sessionService.authorize(context, 'integration.manage', projectId);
+            if (requestedWebhook) {
+              const safeWebhook = await validateWebhook(requestedWebhook);
+              input.webhook = safeWebhook;
+              input.draftSchema = { ...(input.draftSchema ?? {}), webhook: safeWebhook };
+            }
           }
         }
         const record = isPage
@@ -306,7 +331,7 @@ export function createProjectApi({
             pageId: id,
           })
           : await content.updateForm({
-            ...legacyFormPatch(input, await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id })),
+            ...legacyFormPatch(input, currentForm),
             companyId: context.companyId,
             projectId,
             actorId: context.user.id,
@@ -315,7 +340,7 @@ export function createProjectApi({
         const settings = isPage
           ? await content.updatePageSettings({
             companyId: context.companyId, projectId, actorId: context.user.id, pageId: id,
-            domain: input.domain, webhook: input.webhook,
+            ...pageSettingsPatch,
           })
           : null;
         return json(isPage ? legacyPage(record, settings) : legacyForm(record));
@@ -354,6 +379,7 @@ export function createProjectApi({
       return json(await content.submissions({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id }));
     }
     if (isPage && ['publish', 'status', 'domain'].includes(action)) {
+      await sessionService.authorize(context, action === 'publish' ? 'deployment.publish' : 'integration.manage', projectId);
       if (method === 'POST') await body(req);
       throw fail('A publicação Vercel por projeto ainda está pendente.', 409);
     }
