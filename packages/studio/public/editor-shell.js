@@ -1,6 +1,5 @@
 import { blocks, normalizeForms, templateCss } from './templates.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
-import { transformHtmlElements } from '../vsl-html.js';
 
 const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -233,10 +232,10 @@ function vslIframeMarkup(publicId, publicOrigin) {
 }
 
 export function renderVslReferences(html, { publicOrigin } = {}) {
-  return transformHtmlElements(html, ({ attributes }) => {
-    const attribute = attributes.find(({ name }) => name === VSL_ATTRIBUTE);
-    if (!attribute || attribute.value === null) return null;
-    return vslIframeMarkup(String(attribute.value ?? '').trim(), publicOrigin);
+  const source = String(html ?? '');
+  return source.replace(/<([a-z][\w:-]*)\b([^>]*\bdata-alva-vsl(?:\s*=\s*(?:"([^"]*)"|'([^']*)'))?[^>]*)>([\s\S]*?)<\/\1\s*>/gi, (whole, tag, attrs, doubleId, singleId) => {
+    const publicId = String(doubleId ?? singleId ?? '').trim();
+    return vslIframeMarkup(publicId, publicOrigin);
   });
 }
 
