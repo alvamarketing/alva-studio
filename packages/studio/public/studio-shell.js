@@ -28,6 +28,18 @@ export const CLIENT_ROLE_CAPABILITIES = Object.freeze({
   viewer: Object.freeze([]),
 });
 
+export function vslCapabilityPolicy({ can = () => false, consumer = 'page' } = {}) {
+  const read = Boolean(can('video.read'));
+  const consumerWrite = Boolean(can(consumer === 'form' ? 'form.write' : 'page.write'));
+  return {
+    canList: read,
+    canSelect: read && consumerWrite,
+    canEditConsumer: consumerWrite,
+    canManageVideo: Boolean(can('video.write')),
+    canPublish: Boolean(can('deployment.publish')),
+  };
+}
+
 function emptyState(phase = 'empty', error = '') {
   return {
     phase,

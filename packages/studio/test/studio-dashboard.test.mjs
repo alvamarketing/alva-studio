@@ -223,6 +223,13 @@ test('publicação traduz estados técnicos em linguagem simples e preserva o re
   assert.equal(publicationModel({ connectionStatus: 'configured', run: { status: 'BUILDING' } }).label, 'Preparando');
 });
 
+test('publicação bloqueada por capacidade explica como prosseguir', () => {
+  const model = publicationModel({ connectionStatus: 'configured', canPublish: false, routes: [{ path: '/' }] });
+  assert.equal(model.canPreview, false);
+  assert.equal(model.canProduction, false);
+  assert.match(model.publishMessage, /permissão|administrador/i);
+});
+
 test('Projeto possui destinos, filtros, estado assíncrono e controles responsivos acessíveis', async () => {
   const [html, css, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(new URL('../public/styles.css', import.meta.url), 'utf8'), readFile(appPath, 'utf8')]);
 
@@ -236,6 +243,21 @@ test('Projeto possui destinos, filtros, estado assíncrono e controles responsiv
   assert.match(css, /@media\s*\(max-width:\s*760px\)/);
   assert.match(css, /#dashboard > aside\.is-open/);
   assert.match(css, /min-height:\s*44px/);
+});
+
+test('publicação nos editores declara bloqueio acionável para quem não pode publicar', async () => {
+  const [html, app, forms] = await Promise.all([
+    readFile(htmlPath, 'utf8'),
+    readFile(appPath, 'utf8'),
+    readFile(new URL('../public/forms.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(html, /id="publish"[^>]+aria-describedby="publish-help"/);
+  assert.match(html, /id="publish-help"[^>]*role="status"/);
+  assert.match(html, /id="form-public-link"[^>]+aria-describedby="form-public-link-help"/);
+  assert.match(app, /deployment\.publish/);
+  assert.match(app, /Você não tem permissão para publicar/);
+  assert.match(forms, /deployment\.publish/);
+  assert.match(forms, /form-public-link-help/);
 });
 
 test('ações de conteúdo respeitam as capacidades de escrita por tipo', () => {

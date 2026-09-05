@@ -123,8 +123,9 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
   };
 }
 
-export function publicationModel({ connectionStatus = 'pending', run = null, routes = [] } = {}) {
+export function publicationModel({ connectionStatus = 'pending', run = null, routes = [], canPublish = undefined } = {}) {
   const count = Array.isArray(routes) ? routes.length : Number(routes || 0);
+  if (canPublish === false) return { state: 'blocked', label: 'Sem permissão', routes: count, canPreview: false, canProduction: false, publishMessage: 'Você não tem permissão para publicar. Peça acesso a um administrador.' };
   if (connectionStatus !== 'configured') return { state: 'pending', label: 'Conecte a Vercel', routes: count, canPreview: false, canProduction: false };
   const status = String(run?.status || '').toUpperCase();
   const state = status === 'READY' ? 'ready' : ['ERROR', 'CANCELED', 'BLOCKED'].includes(status) ? 'error' : status ? 'preparing' : 'idle';

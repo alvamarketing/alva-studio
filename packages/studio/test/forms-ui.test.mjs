@@ -179,6 +179,16 @@ test('editor de formulários lista VSLs publicadas do projeto e mantém somente 
   assert.match(css, /dynamic-vsl/);
 });
 
+test('editor de formulários oferece opções visuais e estados acessíveis da VSL', async () => {
+  const source = await readFile(formsPath, 'utf8');
+  assert.match(source, /dynamic-vsl-options/);
+  assert.match(source, /data-vsl-option/);
+  assert.match(source, /status.*Publicada/);
+  assert.match(source, /VSL não encontrada\. Publique a VSL antes de usar/);
+  assert.match(source, /aria-label="Prévia da VSL/);
+  assert.match(source, /disabled = !editable/);
+});
+
 test('opções eliminam linhas vazias e preservam rótulos únicos', () => {
   assert.deepEqual(parseOptions(' Empresa\n\nProfissional\nEmpresa '), ['Empresa', 'Profissional']);
 });

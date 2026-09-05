@@ -145,6 +145,7 @@ a:focus-visible {
 .vsl-form label { display: grid; gap: 7px; color: var(--alva-muted); font-size: 13px; }
 .vsl-form input, .vsl-form select { width: 100%; }
 .vsl-form-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.editor-action-help { display: block; color: var(--alva-muted); font-size: 11px; line-height: 1.4; }
 @media (max-width: 620px) {
   .vsl-list-row, .vsl-form { grid-template-columns: 1fr; }
   .vsl-form h2, .vsl-form-actions { grid-column: auto; }

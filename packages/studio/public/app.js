@@ -396,17 +396,17 @@ function renderProjectOverview(overview) {
 function renderPublication(overview, publication = {}) {
   const configured = publication.integration?.connectionStatus === 'configured' || overview.integrations?.vercel === 'configured';
   const publishedRoutes = (overview.content || []).filter((item) => item.published);
-  const model = publicationModel({ connectionStatus: configured ? 'configured' : 'pending', run: publication.run, routes: publishedRoutes });
+  const model = publicationModel({ connectionStatus: configured ? 'configured' : 'pending', run: publication.run, routes: publishedRoutes, canPublish: studioShell.can('deployment.publish') });
   $('#publication-state').textContent = model.label;
   $('#publication-state').dataset.state = model.state;
   $('#publication-routes').textContent = publishedRoutes.length
     ? `${publishedRoutes.length} ${publishedRoutes.length === 1 ? 'rota publicada' : 'rotas publicadas'}: ${publishedRoutes.map((item) => item.route).join(', ')}`
     : 'Nenhuma rota publicada ainda.';
-  $('#publication-summary').textContent = configured
+  $('#publication-summary').textContent = model.publishMessage || (configured
     ? 'Prévia e produção enviam todas as rotas publicadas deste projeto juntas.'
-    : 'Conecte a Vercel uma vez para publicar todas as rotas deste projeto juntas.';
-  $('#publication-preview').disabled = !model.canPreview || !studioShell.can('deployment.publish');
-  $('#publication-production').disabled = !model.canProduction || !studioShell.can('deployment.publish');
+    : 'Conecte a Vercel uma vez para publicar todas as rotas deste projeto juntas.');
+  $('#publication-preview').disabled = !model.canPreview;
+  $('#publication-production').disabled = !model.canProduction;
   $('#publication-domain-form').hidden = !model.canProduction || !studioShell.can('integration.manage');
   const connection = $('#publication-connection-form');
   connection.elements.vercelProjectId.value = publication.integration?.vercelProjectId || '';
@@ -595,6 +595,21 @@ function renderList() {
       });
   }
 }
+function syncPagePublishControl() {
+  const publish = $('#publish');
+  if (!publish) return;
+  const canPublish = Boolean(studioShell?.can?.('deployment.publish'));
+  const connected = Boolean(config.vercelConnected);
+  publish.disabled = !canPublish || !connected;
+  publish.title = canPublish
+    ? (connected ? 'Publicar página' : 'Conecte a Vercel nas configurações do app')
+    : 'Você não tem permissão para publicar. Peça acesso a um administrador.';
+  const help = $('#publish-help');
+  if (help) help.textContent = !canPublish
+    ? 'Você não tem permissão para publicar. Peça acesso a um administrador.'
+    : connected ? '' : 'Conecte a Vercel nas configurações do app para publicar.';
+}
+
 async function openPage(id) {
   const result = await api('/pages/' + id);
   page = result;
@@ -632,8 +647,7 @@ async function openPage(id) {
   loading = false;
   if (!page.project || editor.__alvaMigrated) markDirty();
   $('#device').value = 'Desktop';
-  $('#publish').disabled = !config.vercelConnected;
-  $('#publish').title = config.vercelConnected ? 'Publicar na Vercel' : 'Conecte sua conta em Configurações do app';
+  syncPagePublishControl();
 }
 $('#new-page').onclick = () => {
   renderTemplates();
@@ -749,6 +763,7 @@ $('#settings-form').onsubmit = action(async (event) => {
   $('#settings-dialog').close();
 });
 $('#publish').onclick = action(async () => {
+  if (!studioShell?.can?.('deployment.publish')) throw new Error('Você não tem permissão para publicar. Peça acesso a um administrador.');
   await save();
   if (editor.getWrapper().find('form').length && !page.webhook)
     throw new Error('Configure o destino do formulário antes de publicar.');
@@ -758,7 +773,7 @@ $('#publish').onclick = action(async () => {
     page.deployment = await api('/pages/' + page.id + '/publish', 'POST', { revision: page.revision });
     toast('Enviada à Vercel. Consulte o andamento em Configurar.');
   } finally {
-    $('#publish').disabled = !config.vercelConnected;
+    syncPagePublishControl();
   }
 });
 $('#check-publication').onclick = action(async () => {
@@ -862,13 +877,11 @@ function renderTemplates() {
 async function refreshConfig() {
   if (!studioShell?.state().currentProject || !studioShell.can('integration.manage')) {
     config = { vercelConnected: false };
+    syncPagePublishControl();
     return config;
   }
   config = await api('/config');
-  if (page) {
-    $('#publish').disabled = !config.vercelConnected;
-    $('#publish').title = config.vercelConnected ? 'Publicar na Vercel' : 'Conecte a Vercel nas configurações do app';
-  }
+  syncPagePublishControl();
 }
 async function closeOpenEditors() {
   await contextBoundary.close();

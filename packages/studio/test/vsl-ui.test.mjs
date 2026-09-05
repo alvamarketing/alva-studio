@@ -39,3 +39,10 @@ test('abrir VSL resolve o shell depois do bootstrap', async () => {
     else globalThis.document = originalDocument;
   }
 });
+
+test('tela de VSL não expõe URL da mídia nem JSON na lista visual', async () => {
+  const source = await (await import('node:fs/promises')).readFile(new URL('../public/vsl-ui.js', import.meta.url), 'utf8');
+  assert.match(source, /vsl-list-row/);
+  assert.match(source, /Publicado|Publicada/);
+  assert.doesNotMatch(source, /JSON\.stringify\(video\)/);
+});

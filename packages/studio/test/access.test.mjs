@@ -9,6 +9,7 @@ import {
   normalizeProjectSlug,
   normalizeRoute,
 } from '../server/domain/access.mjs';
+import { vslCapabilityPolicy } from '../public/studio-shell.js';
 
 test('editor escreve conteúdo atribuído mas não publica', () => {
   assert.equal(hasCapability('editor', 'page.write'), true);
@@ -64,4 +65,27 @@ test('rejeita segmentos inválidos e rotas longas', () => {
   assert.throws(() => normalizeRoute('/foo/../bar'), /reservado/);
   assert.throws(() => normalizeRoute('/foo_bar'), /permitidos/);
   assert.throws(() => normalizeRoute(`/${'a'.repeat(120)}`), /120/);
+});
+
+test('separa leitura, edição do conteúdo consumidor e CRUD da VSL', () => {
+  assert.deepEqual(vslCapabilityPolicy({
+    can: (capability) => capability === 'video.write',
+    consumer: 'page',
+  }), {
+    canList: false,
+    canSelect: false,
+    canEditConsumer: false,
+    canManageVideo: true,
+    canPublish: false,
+  });
+  assert.deepEqual(vslCapabilityPolicy({
+    can: (capability) => ['video.read', 'page.write'].includes(capability),
+    consumer: 'page',
+  }), {
+    canList: true,
+    canSelect: true,
+    canEditConsumer: true,
+    canManageVideo: false,
+    canPublish: false,
+  });
 });

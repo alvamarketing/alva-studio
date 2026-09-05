@@ -43,6 +43,25 @@ export function publishedVslOptions(videos = []) {
     .map((video) => ({ publicId: String(video.publicId), name: String(video.name || 'VSL'), status: 'Publicada' }));
 }
 
+export function vslEditorOptions(videos = []) {
+  return publishedVslOptions(videos).map(({ publicId, name, status }) => ({ publicId, name, status }));
+}
+
+export function vslCanvasMessage({ publicId = '', canRead = true, loadError = '' } = {}) {
+  if (loadError) return 'Não foi possível carregar as VSLs. Tente novamente.';
+  if (!canRead) return 'Você não tem permissão para visualizar VSLs.';
+  return publicId ? 'VSL não encontrada. Publique a VSL antes de usar.' : 'Escolha uma VSL publicada.';
+}
+
+export function renderVslOptionCards(videos = [], selectedId = '') {
+  const options = vslEditorOptions(videos);
+  const selected = String(selectedId || '').trim();
+  if (selected && !options.some((option) => option.publicId === selected))
+    options.push({ publicId: selected, name: 'VSL não encontrada', status: 'Indisponível', invalid: true });
+  if (!options.length) return '<p class="fe-help">Ainda não há VSLs publicadas neste projeto.</p>';
+  return `<div class="fe-vsl-options" role="radiogroup" aria-label="VSL publicada">${options.map((option) => `<button type="button" class="fe-vsl-option${option.invalid ? ' is-invalid' : ''}" data-vsl-option="${escapeText(option.publicId)}" aria-pressed="${option.publicId === selected}"${option.invalid ? ' disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">play_circle</span><span><strong>${escapeText(option.name)}</strong><small>${escapeText(option.status)}</small></span></button>`).join('')}</div>`;
+}
+
 const VSL_MODEL_KEYS = new Set(['type', 'publicId', 'tagName', 'attributes', 'components', 'style', 'classes', 'droppable']);
 
 function cleanVslModel(model, publicId) {
@@ -92,11 +111,7 @@ export function createVslComponentType({ publishedVslById = new Map(), publicOri
         }
         const message = this.el.ownerDocument.createElement('p');
         message.className = 'alva-vsl-empty';
-        message.textContent = loadError
-          ? 'Não foi possível carregar as VSLs. Tente novamente.'
-          : publicId
-          ? (canReadVsl() ? 'VSL não encontrada. Escolha uma VSL publicada.' : 'Você não tem permissão para visualizar VSLs.')
-          : 'Escolha uma VSL publicada.';
+        message.textContent = vslCanvasMessage({ publicId, canRead: canReadVsl(), loadError });
         this.el.append(message);
       },
       removed() {
@@ -753,11 +768,17 @@ export function createFriendlyEditor({
     if (isVsl) {
       const currentId = String(model.get('publicId') || attrs[VSL_ATTRIBUTE] || '').trim();
       if (canReadVsl() && !vslLoadError) {
-        const choices = [['', 'Escolha uma VSL publicada'], ...publishedVslOptions(vslVideos).map((video) => [video.publicId, video.name])];
-        if (currentId && !publishedVslById.has(currentId)) choices.push([currentId, 'VSL não encontrada']);
-        const selector = field(content, 'VSL publicada', currentId, (value) => model.set('publicId', String(value || '').trim()), { choices });
-        selector.className = 'fe-vsl-selector';
-        selector.disabled = !canInsertVsl();
+        const label = document.createElement('h4');
+        label.textContent = 'VSL publicada';
+        content.append(label);
+        content.insertAdjacentHTML('beforeend', renderVslOptionCards(vslVideos, currentId));
+        content.querySelectorAll('[data-vsl-option]').forEach((option) => {
+          option.onclick = () => {
+            if (!canInsertVsl() || option.disabled) return;
+            model.set('publicId', String(option.dataset.vslOption || '').trim());
+            render();
+          };
+        });
         help(content, publishedVslById.size ? 'A prévia usa a versão publicada da VSL.' : 'Ainda não há VSLs publicadas neste projeto.');
       } else help(content, !canReadVsl() ? 'Você não tem permissão para visualizar VSLs.' : vslLoadError || 'Não foi possível carregar as VSLs. Tente novamente.');
     }
@@ -1021,6 +1042,7 @@ export function createFriendlyEditor({
     styleNumber(advanced, model, 'Altura mínima (px)', 'min-height', '', 3000);
     if (['section', 'div', 'main', 'article'].includes(tag))
       styleNumber(advanced, model, 'Distância entre elementos (px)', 'gap', 0);
+    if (!can('page.write')) props.querySelectorAll('input, select, textarea, .fe-element-actions button, .fe-vsl-option').forEach((control) => { control.disabled = true; });
   }
   props.addEventListener('focusout', () => {
     repaint = setTimeout(render, 100);

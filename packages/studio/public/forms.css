@@ -465,7 +465,6 @@
 .dynamic-vsl {
   width: 100%;
   aspect-ratio: 16 / 9;
-  min-height: 180px;
   overflow: hidden;
   border: 1px solid var(--alva-line);
   border-radius: 16px;
@@ -475,9 +474,17 @@
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 180px;
   border: 0;
 }
+.dynamic-vsl-fieldset { display: grid; gap: 8px; min-width: 0; border: 0; padding: 0; }
+.dynamic-vsl-fieldset legend { padding: 0; color: var(--alva-muted); font-size: 12px; }
+.dynamic-vsl-options { display: grid; gap: 8px; }
+.dynamic-vsl-option { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 9px 11px; border: 1px solid var(--alva-line); border-radius: 10px; background: var(--alva-white); color: var(--alva-ink); text-align: left; cursor: pointer; }
+.dynamic-vsl-option[aria-pressed='true'] { border-color: var(--alva-blue); box-shadow: 0 0 0 2px rgb(40 110 234 / 15%); }
+.dynamic-vsl-option.is-invalid { color: var(--alva-muted); cursor: default; }
+.dynamic-vsl-option > .material-symbols-outlined { color: var(--alva-blue); }
+.dynamic-vsl-option span:last-child { display: grid; gap: 2px; min-width: 0; }
+.dynamic-vsl-option small { color: var(--alva-muted); font-size: 11px; }
 .dynamic-vsl-empty {
   display: grid;
   place-items: center;

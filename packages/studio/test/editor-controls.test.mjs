@@ -19,6 +19,8 @@ import {
   createVslComponentType,
   renderVslReferences,
   buildPageExportHtml,
+  vslEditorOptions,
+  vslCanvasMessage,
 } from '../public/editor-shell.js';
 
 test('referência de VSL no editor persiste somente o identificador público', () => {
@@ -41,6 +43,16 @@ test('catálogo do editor mostra somente VSLs publicadas e a prévia usa o embed
   );
   assert.equal(vslEmbedUrl('https://studio.example.test', 'public/vsl'), 'https://studio.example.test/embed/v/public%2Fvsl');
   assert.throws(() => vslEmbedUrl('javascript:alert(1)', 'public-vsl-123456'), /origem pública/i);
+});
+
+test('catálogo visual da VSL expõe somente nome, status e estado de prévia', () => {
+  assert.deepEqual(vslEditorOptions([
+    { publicId: 'draft', name: 'Rascunho' },
+    { publicId: 'published', name: 'Oferta', publishedVersionId: 'version-1', sourceUrl: 'https://private.invalid/video.mp4' },
+  ]), [{ publicId: 'published', name: 'Oferta', status: 'Publicada' }]);
+  assert.equal(vslCanvasMessage({ publicId: 'missing', canRead: true }), 'VSL não encontrada. Publique a VSL antes de usar.');
+  assert.equal(vslCanvasMessage({ publicId: '', canRead: true }), 'Escolha uma VSL publicada.');
+  assert.equal(vslCanvasMessage({ publicId: 'missing', canRead: false }), 'Você não tem permissão para visualizar VSLs.');
 });
 
 test('modelo VSL montado no caminho headless do GrapesJS elimina configuração legada', () => {

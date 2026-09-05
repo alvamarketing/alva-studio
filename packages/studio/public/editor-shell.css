@@ -191,9 +191,36 @@
 .fe-vsl-selector {
   width: 100%;
 }
+.fe-vsl-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.fe-vsl-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 9px 11px;
+  border: 1px solid var(--alva-line);
+  border-radius: 10px;
+  background: var(--alva-white);
+  color: var(--alva-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.fe-vsl-option[aria-pressed='true'] {
+  border-color: var(--alva-blue);
+  box-shadow: 0 0 0 2px rgb(40 110 234 / 15%);
+}
+.fe-vsl-option.is-invalid { color: var(--alva-muted); cursor: default; }
+.fe-vsl-option > .material-symbols-outlined { color: var(--alva-blue); }
+.fe-vsl-option span:last-child { display: grid; gap: 2px; min-width: 0; }
+.fe-vsl-option small { color: var(--alva-muted); font-size: 11px; }
 .alva-vsl {
   width: 100%;
-  min-height: 220px;
+  aspect-ratio: 16 / 9;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -204,7 +231,7 @@
 .alva-vsl-frame {
   display: block;
   width: 100%;
-  min-height: 220px;
+  height: 100%;
   aspect-ratio: 16 / 9;
   border: 0;
   background: #101828;

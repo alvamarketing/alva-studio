@@ -38,6 +38,12 @@ const escape = (value) =>
     (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char],
   );
 
+export function vslCanvasMessage({ publicId = '', canRead = true, loadError = '' } = {}) {
+  if (loadError) return 'Não foi possível carregar as VSLs. Tente novamente.';
+  if (!canRead) return 'Você não tem permissão para visualizar VSLs.';
+  return publicId ? 'VSL não encontrada. Publique a VSL antes de usar.' : 'Escolha uma VSL publicada.';
+}
+
 export function createStep(type = 'short_text', id = `etapa-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`) {
   const selected = TYPES[type] ? type : 'short_text';
   const step = {
@@ -205,8 +211,13 @@ function optionsEditor(step, { vslVideos = [], canReadVsl = true, loadError = ''
   if (step.type === 'timer') return `<label>Duração em segundos<input data-field-number="durationSeconds" type="number" min="1" max="86400" value="${step.durationSeconds || 60}"></label><label>Direção<select data-field="timerDirection"><option value="down"${step.timerDirection !== 'up' ? ' selected' : ''}>Contagem regressiva</option><option value="up"${step.timerDirection === 'up' ? ' selected' : ''}>Cronômetro crescente</option></select></label><label class="dynamic-check"><input data-field="autoStart" type="checkbox"${step.autoStart ? ' checked' : ''}> Iniciar automaticamente</label>`;
   if (step.type === 'vsl') {
     if (!canReadVsl) return '<p class="dynamic-vsl-permission">Você não tem permissão para visualizar VSLs.</p>';
-    const options = [['', 'Escolha uma VSL publicada'], ...vslVideos.map((video) => [video.publicId, video.name])];
-    return `<label>VSL publicada<select data-field="publicId"${!vslVideos.length ? ' disabled' : ''}>${options.map(([value, label]) => `<option value="${escape(value)}"${value === (step.publicId || '') ? ' selected' : ''}>${escape(label)}</option>`).join('')}</select></label><label>Movimento<select data-field="motion">${MOTIONS.map(([value, label]) => `<option value="${value}"${value === (step.motion || 'none') ? ' selected' : ''}>${label}</option>`).join('')}</select></label><small class="dynamic-vsl-help">${escape(loadError || (vslVideos.length ? 'A prévia usa a versão publicada desta VSL.' : 'Ainda não há VSLs publicadas neste projeto.'))}</small>`;
+    const selected = String(step.publicId || '').trim();
+    const options = vslVideos.map((video) => ({ publicId: String(video.publicId), name: String(video.name || 'VSL'), status: 'Publicada' }));
+    if (selected && !options.some((option) => option.publicId === selected)) options.push({ publicId: selected, name: 'VSL não encontrada', status: 'Indisponível', invalid: true });
+    const cards = options.length
+      ? `<div class="dynamic-vsl-options" role="radiogroup" aria-label="VSL publicada">${options.map((option) => `<button type="button" class="dynamic-vsl-option${option.invalid ? ' is-invalid' : ''}" data-vsl-option="${escape(option.publicId)}" aria-pressed="${option.publicId === selected}"${option.invalid ? ' disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">play_circle</span><span><strong>${escape(option.name)}</strong><small>${escape(option.status)}</small></span></button>`).join('')}</div>`
+      : '<p class="dynamic-vsl-help">Ainda não há VSLs publicadas neste projeto.</p>';
+    return `<fieldset class="dynamic-vsl-fieldset"><legend>VSL publicada</legend>${cards}</fieldset><label>Movimento<select data-field="motion">${MOTIONS.map(([value, label]) => `<option value="${value}"${value === (step.motion || 'none') ? ' selected' : ''}>${label}</option>`).join('')}</select></label><small class="dynamic-vsl-help">${escape(loadError || (vslVideos.length ? 'A prévia usa a versão publicada desta VSL.' : ''))}</small>`;
   }
   if (['single_choice', 'multiple_choice'].includes(step.type)) return `<label>Opções<textarea data-field="options" rows="6">${escape((step.options || []).join('\n'))}</textarea><small>Uma opção por linha.</small></label>`;
   if (step.type === 'image_choice') return `<label>Opções visuais<textarea data-field="visualOptions" rows="6">${escape((step.options || []).map((option) => `${option.label}|${option.imageUrl || ''}|${option.icon || ''}`).join('\n'))}</textarea><small>Uma por linha: Nome | URL da imagem | ícone Google.</small></label>`;
@@ -218,7 +229,7 @@ function optionsEditor(step, { vslVideos = [], canReadVsl = true, loadError = ''
   return `<label>Exemplo dentro do campo<input data-field="placeholder" maxlength="160" value="${escape(step.placeholder)}"></label>`;
 }
 
-function previewAnswer(step, { vslEmbedUrls = new Map() } = {}) {
+function previewAnswer(step, { vslEmbedUrls = new Map(), canReadVsl = true, vslLoadError = '' } = {}) {
   if (step.type === 'logo') return step.mediaUrl ? `<img class="dynamic-preview-logo" src="${escape(step.mediaUrl)}" alt="${escape(step.altText || 'Logo')}" style="width:${step.width || 120}px">` : `<div class="dynamic-preview-logo-placeholder"><span class="material-symbols-outlined">branding_watermark</span> Sua logo</div>`;
   if (step.type === 'progress') return `<div class="dynamic-preview-inline-progress"><span style="width:42%"></span></div>${step.showValue ? '<small class="dynamic-preview-percent">42%</small>' : ''}`;
   if (step.type === 'countdown') return `<div class="dynamic-preview-clock"><strong>03</strong><span>:</span><strong>18</strong><span>:</span><strong>42</strong></div>`;
@@ -228,7 +239,7 @@ function previewAnswer(step, { vslEmbedUrls = new Map() } = {}) {
   if (step.type === 'video') return `<div class="dynamic-preview-media dynamic-video-placeholder"><span class="material-symbols-outlined">play_circle</span>Prévia do vídeo</div>`;
   if (step.type === 'vsl') {
     const source = vslEmbedUrls.get?.(step.publicId) || '';
-    return source ? `<div class="dynamic-vsl" data-vsl-public-id="${escape(step.publicId)}"><iframe src="${escape(source)}" title="${escape(step.title || 'VSL')}" allow="autoplay; fullscreen; picture-in-picture" loading="lazy"></iframe></div>` : '<div class="dynamic-vsl dynamic-vsl-empty" role="status"><span class="material-symbols-outlined">play_circle</span>Escolha uma VSL publicada.</div>';
+    return source ? `<div class="dynamic-vsl" data-vsl-public-id="${escape(step.publicId)}"><iframe src="${escape(source)}" title="${escape(step.title || 'VSL')}" aria-label="Prévia da VSL ${escape(step.title || '')}" allow="autoplay; fullscreen; picture-in-picture" loading="lazy"></iframe></div>` : `<div class="dynamic-vsl dynamic-vsl-empty" role="status"><span class="material-symbols-outlined" aria-hidden="true">play_circle</span>${escape(vslCanvasMessage({ publicId: step.publicId, canRead: canReadVsl, loadError: vslLoadError }))}</div>`;
   }
   if (step.type === 'scale') return `<div class="dynamic-preview-scale"><span>${step.range.min}</span><input type="range" min="${step.range.min}" max="${step.range.max}" value="${step.range.min}"><span>${step.range.max}</span></div>`;
   if (step.type === 'chart') return `<div class="dynamic-mini-chart ${step.chart.type}">${step.chart.values.map((value, index) => `<div style="--value:${value}%"><i></i><small>${escape(step.chart.labels[index])}</small></div>`).join('')}</div>`;
@@ -276,6 +287,20 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   let vslLoadError = '';
   const vslEmbedUrls = new Map();
   const workspaceId = `forms-workspace-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+  function syncFormPublicationControl() {
+    const button = $('#form-public-link');
+    if (!button) return;
+    const allowed = Boolean(can('deployment.publish'));
+    button.disabled = !allowed;
+    button.title = allowed ? 'Abrir formulário público' : 'Você não tem permissão para publicar. Peça acesso a um administrador.';
+    const help = $('#form-public-link-help');
+    if (help) help.textContent = allowed ? '' : 'Você não tem permissão para publicar. Peça acesso a um administrador.';
+    const editable = Boolean(can('form.write'));
+    const name = $('#dynamic-form-name');
+    const save = $('#form-save');
+    if (name) name.disabled = !editable;
+    if (save) save.disabled = !editable;
+  }
   const formList = createContextList({
     load: () => api('/forms'),
     apply: (next) => {
@@ -337,6 +362,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   const showForms = async () => {
     setActiveNav('forms');
     $('#new-form').hidden = !can('form.write');
+    syncFormPublicationControl();
     await Promise.all([loadList(), loadVslCatalog()]);
   };
 
@@ -347,7 +373,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       const videos = await api(`/projects/${encodeURIComponent(projectId)}/videos`);
       vslVideos = (Array.isArray(videos) ? videos : [])
         .filter((video) => video?.publishedVersionId)
-        .map((video) => ({ publicId: String(video.publicId || ''), name: String(video.name || 'VSL') }))
+        .map((video) => ({ publicId: String(video.publicId || ''), name: String(video.name || 'VSL'), status: 'Publicada' }))
         .filter((video) => video.publicId);
       vslEmbedUrls.clear();
       for (const video of vslVideos) {
@@ -419,6 +445,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     $('#form-editing').hidden = false;
     $('#dynamic-form-name').value = current.name;
     $('#form-save-state').textContent = 'Salvo neste computador';
+    syncFormPublicationControl();
     await loadVslCatalog();
     renderEditor();
   }
@@ -494,13 +521,15 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     bindWorkspaceTabs();
     syncWorkspacePanels({ focusTab: focusWorkspaceTab });
     bindEditor(treeNodes);
+    if (!editable) $('#dynamic-editor').querySelectorAll('.dynamic-properties-panel input, .dynamic-properties-panel select, .dynamic-properties-panel textarea, .dynamic-properties-panel .dynamic-step-actions button, .dynamic-properties-panel .dynamic-vsl-option').forEach((control) => { control.disabled = true; });
     if (!isCompactWorkspace() && focusTreeNodeId && activeTreeItem) restoreFormTreeFocus(document.querySelectorAll('[data-tree-node]'), focusTreeNodeId, activeTreeItem);
     renderPreview();
   }
 
   function renderPreview() {
     const screen = current.steps[selected];
-    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-browser"><div class="dynamic-preview-fixed">${current.headerElements.map((element, index) => previewHeaderElement(element, index, editingHeader && index === selectedElement, { vslEmbedUrls })).join('')}</div><div class="dynamic-preview-stage"><div class="dynamic-preview-card dynamic-composed" data-motion="${escape(screen.motion || 'fade-up')}"><p>${escape(screen.title).toUpperCase()}</p><div class="dynamic-preview-elements">${screen.elements.map((element,index) => `<button type="button" class="dynamic-preview-element" data-preview-element="${index}" aria-current="${!editingHeader && index === selectedElement}"><span class="dynamic-preview-icon material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><h1>${escape(element.title)}</h1>${element.description ? `<div class="dynamic-preview-description">${escape(element.description)}</div>` : ''}${previewAnswer(element, { vslEmbedUrls })}<span class="dynamic-edit-hint"><i class="material-symbols-outlined">edit</i> Editar</span></button>`).join('')}</div><button class="dynamic-preview-next">${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} <span class="material-symbols-outlined">arrow_forward</span></button></div></div></div>`;
+    const previewOptions = { vslEmbedUrls, canReadVsl: can('video.read'), vslLoadError };
+    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-browser"><div class="dynamic-preview-fixed">${current.headerElements.map((element, index) => previewHeaderElement(element, index, editingHeader && index === selectedElement, previewOptions)).join('')}</div><div class="dynamic-preview-stage"><div class="dynamic-preview-card dynamic-composed" data-motion="${escape(screen.motion || 'fade-up')}"><p>${escape(screen.title).toUpperCase()}</p><div class="dynamic-preview-elements">${screen.elements.map((element,index) => `<button type="button" class="dynamic-preview-element" data-preview-element="${index}" aria-current="${!editingHeader && index === selectedElement}"><span class="dynamic-preview-icon material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><h1>${escape(element.title)}</h1>${element.description ? `<div class="dynamic-preview-description">${escape(element.description)}</div>` : ''}${previewAnswer(element, previewOptions)}<span class="dynamic-edit-hint"><i class="material-symbols-outlined" aria-hidden="true">edit</i> Editar</span></button>`).join('')}</div><button class="dynamic-preview-next" type="button">${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button></div></div></div>`;
     document.querySelectorAll('[data-preview-header]').forEach((button) => { button.onclick = () => { editingHeader = true; selectedElement = Number(button.dataset.previewHeader); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
     document.querySelectorAll('[data-preview-element]').forEach((button) => { button.onclick = () => { editingHeader = false; selectedElement = Number(button.dataset.previewElement); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
   }
@@ -521,6 +550,14 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
         activeWorkspacePanel = 'inspector';
         renderEditor({ focusWorkspaceTab: isCompactWorkspace(), focusTreeNodeId: nodeId, activeTreeItem: activeItem });
       });
+    });
+    document.querySelectorAll('[data-vsl-option]').forEach((button) => {
+      button.onclick = () => {
+        if (!can('form.write') || button.disabled) return;
+        element().publicId = String(button.dataset.vslOption || '').trim();
+        markDirty();
+        renderEditor();
+      };
     });
     document.querySelectorAll('[data-add-screen]').forEach((button) => { button.onclick = () => { if (!can('form.write')) return; current.steps.push(createScreen(button.dataset.addScreen)); selected = current.steps.length - 1; selectedElement = 0; markDirty(); renderEditor(); }; });
     document.querySelectorAll('[data-add-type]').forEach((button) => { button.onclick = () => { if (!can('form.write')) return; elements().push(createStep(button.dataset.addType)); selectedElement = elements().length - 1; markDirty(); renderEditor(); }; });
@@ -590,6 +627,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     await showForms();
   });
   $('#form-public-link').onclick = () => {
+    if (!can('deployment.publish')) return toast('Você não tem permissão para publicar. Peça acesso a um administrador.');
     const opened = window.open('about:blank', '_blank');
     if (opened) opened.opener = null;
     run(async () => {
