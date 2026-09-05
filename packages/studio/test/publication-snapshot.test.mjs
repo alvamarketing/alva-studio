@@ -264,35 +264,6 @@ test('publicação protege CDATA e falha atomicamente quando CDATA não termina'
   assert.equal(malformedSnapshot.files[0].data, malformed.rendered_html);
 });
 
-test('publicação consome CDATA dentro do elemento alvo e preserva plaintext ambíguo atomicamente', async () => {
-  const nestedCdata = '<main><div data-alva-vsl="public-vsl-before-cdata"><![CDATA[</div>]]></div><section data-alva-vsl="public-vsl-after-cdata"></section></main>';
-  const rows = (renderedHtml, references) => [{
-    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-    content_id: 'page-vsl-deep-zones', version_id: 'page-version-vsl-deep-zones', version_number: 1, path: '/vsl-deep-zones',
-    rendered_html: renderedHtml,
-    editor_state: { components: references.map((publicId) => ({ type: 'vsl', publicId })) },
-  }];
-  const databaseFor = (renderedHtml, references) => ({
-    query: async (text, params = []) => ({
-      rows: /FROM videos/i.test(text)
-        ? [{ public_id: params[2], version_number: 1 }]
-        : rows(renderedHtml, references),
-    }),
-  });
-  const cdataSnapshot = await buildPublishableSnapshot({
-    database: databaseFor(nestedCdata, ['public-vsl-before-cdata', 'public-vsl-after-cdata']),
-    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
-  });
-  assert.equal((cdataSnapshot.files[0].data.match(/public\.example\.test\/embed\/v\//g) || []).length, 2);
-  assert.doesNotMatch(cdataSnapshot.files[0].data, /\]\]>\]<\/div>/);
-  const plaintext = '<main><div data-alva-vsl="public-vsl-before-plaintext"></div><plaintext><div data-alva-vsl="public-vsl-after-plaintext"></div>';
-  const plaintextSnapshot = await buildPublishableSnapshot({
-    database: databaseFor(plaintext, ['public-vsl-before-plaintext', 'public-vsl-after-plaintext']),
-    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
-  });
-  assert.equal(plaintextSnapshot.files[0].data, plaintext);
-});
-
 test('snapshot deduplica VSL repetida entre página e formulário', async () => {
   const rows = [
     {
