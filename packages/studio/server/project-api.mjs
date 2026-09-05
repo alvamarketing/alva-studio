@@ -27,6 +27,15 @@ function queryLimit(value) {
   return Math.min(100, Math.max(1, parsed));
 }
 
+function analyticsRange(fromRaw, toRaw) {
+  const from = fromRaw ? new Date(fromRaw) : null;
+  const to = toRaw ? new Date(toRaw) : null;
+  if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) {
+    throw fail('Informe um intervalo de datas válido.', 400);
+  }
+  return { from, to };
+}
+
 function formFields(schema) {
   const steps = Array.isArray(schema?.steps) ? schema.steps : [];
   return steps.flatMap((step) => Array.isArray(step?.elements) ? step.elements : [step])
@@ -142,6 +151,7 @@ export function createProjectApi({
   integrations,
   publication,
   videos,
+  analytics,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -257,6 +267,15 @@ export function createProjectApi({
         cursor = page.nextCursor;
       } while (cursor);
       return sendCsv(res, renderLeadsCsv({ formName: form.name, fields: formFields(form.draftSchema), submissions }));
+    }
+
+    const analyticsSummary = path.match(/^\/api\/projects\/([^/]+)\/analytics\/summary$/);
+    if (analyticsSummary && method === 'GET') {
+      const projectId = analyticsSummary[1];
+      await sessionService.authorize(context, 'analytics.read', projectId);
+      const search = new URL(req.url, 'http://localhost').searchParams;
+      const { from, to } = analyticsRange(search.get('from'), search.get('to'));
+      return json(await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to }));
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);
