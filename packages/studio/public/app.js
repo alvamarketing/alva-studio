@@ -603,6 +603,10 @@ function renderList() {
 async function openPage(id) {
   const result = await api('/pages/' + id);
   page = result;
+  const projectId = page.projectId || studioShell?.state().currentProject?.id;
+  const vslVideos = studioShell?.can?.('video.read') && projectId
+    ? await api(`/projects/${projectId}/videos`).catch(() => [])
+    : [];
   loading = true;
   dirty = false;
   change = 0;
@@ -619,6 +623,9 @@ async function openPage(id) {
     css: template.css,
     onChange: markDirty,
     onOpenFormSettings: () => $('#settings').click(),
+    vslVideos,
+    publicOrigin: window.location.origin,
+    can: (capability) => studioShell?.can?.(capability),
   });
   loading = false;
   if (!page.project || editor.__alvaMigrated) markDirty();

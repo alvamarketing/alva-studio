@@ -299,3 +299,23 @@ test('a rota pública só muda quando a página é republicada', async (t) => {
     );
   });
 });
+
+test('estado da página preserva a referência pública da VSL sem configuração de player', async (t) => {
+  await withHarness(t, async ({ database, companies, projects, content }) => {
+    const owner = await createUser(database, { email: 'owner@pagina-vsl.test', name: 'Owner' });
+    const { company, project } = await projectFor(companies, projects, owner, 'pagina-vsl');
+    const editorState = { components: [{ type: 'vsl', publicId: 'public-vsl-123456' }] };
+    const page = await content.createPage({
+      companyId: company.id,
+      projectId: project.id,
+      actorId: owner.id,
+      name: 'Página com VSL',
+      route: '/vsl',
+      editorState,
+      renderedHtml: '<div data-alva-vsl="public-vsl-123456"></div>',
+    });
+    const loaded = await content.getPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
+    assert.deepEqual(loaded.editorState, editorState);
+    assert.doesNotMatch(JSON.stringify(loaded.editorState), /sourceUrl|cta|version/i);
+  });
+});

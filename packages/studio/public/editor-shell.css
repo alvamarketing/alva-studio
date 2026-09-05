@@ -188,6 +188,35 @@
   background: var(--alva-cloud);
   border-top: 1px solid var(--alva-line);
 }
+.fe-vsl-selector {
+  width: 100%;
+}
+.alva-vsl {
+  width: 100%;
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--alva-line);
+  border-radius: 16px;
+  background: var(--alva-cloud);
+}
+.alva-vsl-frame {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #101828;
+}
+.alva-vsl-empty {
+  max-width: 28rem;
+  padding: 28px;
+  color: var(--alva-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
 .friendly-editor .gjs-cv-canvas {
   width: 100%;
   height: 100%;

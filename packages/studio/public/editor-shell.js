@@ -9,6 +9,7 @@ export const blockIcons = {
   heading: 'T',
   text: '≡',
   image: '▧',
+  vsl: '▶',
   button: '↗',
   icon: '★',
   'bar-chart': '▥',
@@ -21,6 +22,23 @@ export const blockIcons = {
   'faq-section': '?',
   'contact-section': '✉',
 };
+
+export const VSL_ATTRIBUTE = 'data-alva-vsl';
+
+export function vslBlockState(publicId = '') {
+  return { type: 'vsl', publicId: String(publicId ?? '').trim() };
+}
+
+export function vslEmbedUrl(publicOrigin, publicId) {
+  const origin = new URL(String(publicOrigin || globalThis.location?.origin || '')).origin;
+  return `${origin}/embed/v/${encodeURIComponent(String(publicId ?? '').trim())}`;
+}
+
+export function publishedVslOptions(videos = []) {
+  return videos
+    .filter((video) => video?.publicId && (video.publishedVersionId || video.versionId || video.versionNumber !== null && video.versionNumber !== undefined))
+    .map((video) => ({ publicId: String(video.publicId), name: String(video.name || 'VSL'), status: 'Publicada' }));
+}
 
 export const editorActionMeta = Object.freeze({
   undo: { label: 'Desfazer', icon: svg('<path d="M9 7 4 12l5 5"/><path d="M20 17a8 8 0 0 0-13-5"/>') },
@@ -77,6 +95,7 @@ export function safeDestination(value, image = false) {
 export function componentLabel(component) {
   const tag = tagOf(component);
   if (component?.is?.('wrapper')) return 'Página';
+  if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'VSL';
   if (/^h[1-6]$/.test(tag)) return 'Título';
   return (
     {
@@ -154,6 +173,9 @@ export function createFriendlyEditor({
   css = '',
   onChange = () => {},
   onOpenFormSettings = () => {},
+  vslVideos = [],
+  publicOrigin = globalThis.location?.origin || '',
+  can = () => true,
 }) {
   const host = typeof container === 'string' ? document.querySelector(container) : container;
   if (!host) throw new Error('Não foi possível abrir a área de edição.');
@@ -191,6 +213,9 @@ export function createFriendlyEditor({
   let activeModel;
   let treeComponents = new Map();
   const cleanup = [];
+  const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
+  const canInsertVsl = () => Boolean(can('page.write'));
+  const canReadVsl = () => Boolean(can('video.read'));
   const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 740px)').matches;
   function syncWorkspacePanels({ focusTab = false } = {}) {
     const state = workspaceState(activeWorkspacePanel);
@@ -264,7 +289,7 @@ export function createFriendlyEditor({
     blockManager: {
       appendTo: $('.fe-blocks'),
       appendOnClick: (block) => insertBlock(block),
-      blocks: blocks.map(([id, label, category, content]) => ({
+      blocks: blocks.filter(([id]) => id !== 'vsl' || canInsertVsl()).map(([id, label, category, content]) => ({
         id,
         label,
         category,
@@ -307,6 +332,58 @@ export function createFriendlyEditor({
       doc.removeEventListener('keydown', handleCanvasKey, true);
       doc.removeEventListener('click', clearSelection);
     });
+  });
+  editor.DomComponents.addType('vsl', {
+    isComponent: (element) => element?.getAttribute?.(VSL_ATTRIBUTE) !== null,
+    model: {
+      defaults: {
+        tagName: 'div',
+        type: 'vsl',
+        publicId: '',
+        droppable: false,
+        attributes: { [VSL_ATTRIBUTE]: '' },
+      },
+      init() {
+        const attrs = this.get('attributes') || {};
+        const attrId = String(attrs[VSL_ATTRIBUTE] || '').trim();
+        const id = String(this.get('publicId') || attrId).trim();
+        this.set('publicId', id, { silent: true });
+        this.set('attributes', { [VSL_ATTRIBUTE]: id }, { silent: true });
+        this.listenTo(this, 'change:publicId', () => {
+          const next = String(this.get('publicId') || '').trim();
+          this.set('publicId', next, { silent: true });
+          this.set('attributes', { [VSL_ATTRIBUTE]: next }, { silent: true });
+        });
+      },
+    },
+    view: {
+      onRender() {
+        const publicId = String(this.model.get('publicId') || '').trim();
+        this.el.classList.add('alva-vsl');
+        this.el.replaceChildren();
+        const video = publicId ? publishedVslById.get(publicId) : null;
+        if (video && canReadVsl()) {
+          const iframe = this.el.ownerDocument.createElement('iframe');
+          iframe.className = 'alva-vsl-frame';
+          iframe.src = vslEmbedUrl(publicOrigin, publicId);
+          iframe.title = `Prévia da VSL: ${video.name}`;
+          iframe.loading = 'lazy';
+          iframe.allow = 'autoplay';
+          iframe.setAttribute('aria-label', `Prévia da VSL ${video.name}`);
+          this.el.append(iframe);
+          return;
+        }
+        const message = this.el.ownerDocument.createElement('p');
+        message.className = 'alva-vsl-empty';
+        message.textContent = publicId
+          ? (canReadVsl() ? 'VSL não encontrada. Escolha uma VSL publicada.' : 'Você não tem permissão para visualizar VSLs.')
+          : 'Escolha uma VSL publicada.';
+        this.el.append(message);
+      },
+      removed() {
+        this.el?.replaceChildren();
+      },
+    },
   });
   editor.DomComponents.addType('alva-field', {
     isComponent: (element) => element.tagName === 'INPUT',
@@ -393,6 +470,10 @@ export function createFriendlyEditor({
     const selected = editor.getSelected();
     const wrapper = editor.getWrapper();
     const id = block.getId();
+    if (id === 'vsl' && !canInsertVsl()) {
+      announce('Você não tem permissão para inserir uma VSL.');
+      return;
+    }
     const structure = ['section', 'columns'].includes(id) || id.endsWith('-section') || id.startsWith('section-');
     blockStyles();
     let target = selected || wrapper;
@@ -583,6 +664,7 @@ export function createFriendlyEditor({
     }
     const tag = tagOf(model);
     const attrs = model.getAttributes();
+    const isVsl = model.is?.('vsl') || model.get?.('type') === 'vsl';
     const head = section('Editar ' + componentLabel(model).toLocaleLowerCase('pt-BR'));
     const backToLibrary = button(head, '← Adicionar elementos', () => {
       activateWorkspacePanel('structure', { focusTab: isCompactWorkspace() });
@@ -626,6 +708,17 @@ export function createFriendlyEditor({
     );
 
     const content = section('Conteúdo');
+    if (isVsl) {
+      const currentId = String(model.get('publicId') || attrs[VSL_ATTRIBUTE] || '').trim();
+      if (canReadVsl()) {
+        const choices = [['', 'Escolha uma VSL publicada'], ...publishedVslOptions(vslVideos).map((video) => [video.publicId, video.name])];
+        if (currentId && !publishedVslById.has(currentId)) choices.push([currentId, 'VSL não encontrada']);
+        const selector = field(content, 'VSL publicada', currentId, (value) => model.set('publicId', String(value || '').trim()), { choices });
+        selector.className = 'fe-vsl-selector';
+        selector.disabled = !canInsertVsl();
+        help(content, 'A prévia usa a versão publicada da VSL.');
+      } else help(content, 'Você não tem permissão para visualizar VSLs.');
+    }
     const textTags = /^(h[1-6]|p|span|small|strong|em|a|button)$/;
     const hasStructure = model.find('img,form,input,textarea,select,div,section').length > 0;
     if (textTags.test(tag) && !hasStructure) {
@@ -780,7 +873,7 @@ export function createFriendlyEditor({
         help(content, 'Selecione cada campo para mudar seu nome, tipo e obrigatoriedade.');
       }
     }
-    if (['section', 'main', 'div', 'article', 'nav', 'footer'].includes(tag)) {
+    if (!isVsl && ['section', 'main', 'div', 'article', 'nav', 'footer'].includes(tag)) {
       field(
         content,
         'Nome da seção (para links)',

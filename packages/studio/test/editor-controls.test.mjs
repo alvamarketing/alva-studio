@@ -13,7 +13,29 @@ import {
   treeKeyAction,
   restoreTreeFocus,
   bindTreeItemActivation,
+  vslBlockState,
+  publishedVslOptions,
+  vslEmbedUrl,
 } from '../public/editor-shell.js';
+
+test('referência de VSL no editor persiste somente o identificador público', () => {
+  assert.deepEqual(vslBlockState(' public-vsl-123456 '), { type: 'vsl', publicId: 'public-vsl-123456' });
+  assert.deepEqual(vslBlockState(''), { type: 'vsl', publicId: '' });
+  assert.equal(JSON.stringify(vslBlockState('vsl-1')).includes('sourceUrl'), false);
+  assert.equal(JSON.stringify(vslBlockState('vsl-1')).includes('cta'), false);
+  assert.equal(JSON.stringify(vslBlockState('vsl-1')).includes('version'), false);
+});
+
+test('catálogo do editor mostra somente VSLs publicadas e a prévia usa o embed público', () => {
+  assert.deepEqual(
+    publishedVslOptions([
+      { publicId: 'draft', name: 'Rascunho' },
+      { publicId: 'published', name: 'Publicada', publishedVersionId: 'version-1', sourceUrl: 'https://draft.invalid' },
+    ]),
+    [{ publicId: 'published', name: 'Publicada', status: 'Publicada' }],
+  );
+  assert.equal(vslEmbedUrl('https://studio.example.test', 'public/vsl'), 'https://studio.example.test/embed/v/public%2Fvsl');
+});
 
 test('endereços de botão permitem contatos e links de seção sem executar código', () => {
   for (const url of [
@@ -56,6 +78,7 @@ test('nomes visíveis dos componentes usam linguagem de edição', () => {
   assert.equal(componentLabel(component('input')), 'Campo');
   assert.equal(componentLabel(component('section')), 'Seção');
   assert.equal(componentLabel(component('div')), 'Grupo de elementos');
+  assert.equal(componentLabel({ get: (key) => key === 'type' ? 'vsl' : 'div', is: () => false }), 'VSL');
   assert.equal(componentLabel({ is: () => true, get: () => 'body' }), 'Página');
 });
 
