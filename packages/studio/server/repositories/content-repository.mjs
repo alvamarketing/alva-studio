@@ -725,7 +725,7 @@ export class ContentRepository {
     return this.publicFormRecord(await this.publishedFormForProject(this.database, { companySlug, projectSlug, route: path }), path);
   }
 
-  async isPublicOriginAllowed({ companySlug, projectSlug, origin }) {
+  async publicationOrigins({ companySlug, projectSlug }) {
     const { rows } = await this.database.query(
       `SELECT domain AS origin FROM project_domains domain
         JOIN companies company ON company.id = domain.company_id AND company.slug = $1
@@ -738,7 +738,11 @@ export class ContentRepository {
        WHERE run.status = 'READY' AND run.external_url IS NOT NULL`,
       [companySlug, projectSlug],
     );
-    return allowedPublicationOrigin(origin, rows.map((row) => String(row.origin).startsWith('http') ? row.origin : `https://${row.origin}`));
+    return rows.map((row) => String(row.origin).startsWith('http') ? row.origin : `https://${row.origin}`);
+  }
+
+  async isPublicOriginAllowed({ companySlug, projectSlug, origin }) {
+    return allowedPublicationOrigin(origin, await this.publicationOrigins({ companySlug, projectSlug }));
   }
 
   async publicFormForDomain({ host, route: routeValue, slug }) {

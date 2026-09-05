@@ -18,6 +18,7 @@ import { createDatabase, migrate } from './db/postgres.mjs';
 import { PublicationSnapshotBuilder } from './publication-snapshot.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
+import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 
@@ -208,14 +209,21 @@ export function createApp({
       const secure = Boolean(publicOrigin);
       if (content && publicProjectSubmission) {
         const requestOrigin = req.headers.origin;
-        const allowed = requestOrigin && await content.isPublicOriginAllowed({ companySlug: publicFormRequest.companySlug, projectSlug: publicFormRequest.projectSlug, origin: requestOrigin });
-        if (!allowed) throw error('Origem não autorizada para este projeto.', 403);
-        res.setHeader('Access-Control-Allow-Origin', requestOrigin);
-        res.setHeader('Vary', 'Origin');
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        const allowedOrigins = requestOrigin && requestOrigin !== expectedOrigin
+          ? await content.publicationOrigins({ companySlug: publicFormRequest.companySlug, projectSlug: publicFormRequest.projectSlug })
+          : [];
+        const cors = publicSubmissionCors({ method: req.method, origin: requestOrigin, expectedOrigin, allowedOrigins });
+        if (!cors.allowed) throw error('Origem não autorizada para este projeto.', 403);
+        if (cors.corsOrigin) {
+          res.setHeader('Access-Control-Allow-Origin', cors.corsOrigin);
+          res.setHeader('Vary', 'Origin');
+          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        }
         if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
       }
+      if (content && publicDomainRequest && !customDomainOriginAllowed(origin, req.headers.host))
+        throw error('Origem não autorizada para este domínio.', 403);
       if (projectApi && path.startsWith('/api/') && !path.startsWith('/api/public/')) {
         const handled = await projectApi({ req, res, path, method: req.method, json });
         if (handled !== false) return handled;

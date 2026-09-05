@@ -46,7 +46,7 @@ test('rotas legadas passam revisão ao publishPage e usam publication.status no 
   };
   const publication = {
     async preview() { return { id: 'preview-1', status: 'QUEUED' }; },
-    async overview() { calls.push(['overview']); return { production: { id: 'run-production' } }; },
+    async overview() { calls.push(['overview']); return { production: { id: 'run-production' }, preview: { id: 'run-preview' } }; },
     async status(input) { calls.push(['status', input]); return { id: input.runId, status: 'READY' }; },
   };
   const api = createProjectApi({ sessionService, integrations: {}, publication, content, body: async (req) => req.bodyValue });
@@ -56,5 +56,5 @@ test('rotas legadas passam revisão ao publishPage e usam publication.status no 
   assert.equal(calls.find(([name]) => name === 'publishPage')[1].lockVersion, 7);
   const result = await api({ req: requestWith(), res: {}, path: '/api/pages/page-a/status', method: 'GET', json });
   assert.equal(result.value.status, 'READY');
-  assert.deepEqual(calls.at(-1), ['status', { companyId: 'company-a', projectId: 'project-a', runId: 'run-production' }]);
+  assert.deepEqual(calls.at(-1), ['status', { companyId: 'company-a', projectId: 'project-a', runId: 'run-preview' }]);
 });

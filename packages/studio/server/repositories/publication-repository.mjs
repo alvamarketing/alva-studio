@@ -241,12 +241,13 @@ export class DeploymentRepository {
         RETURNING *`,
       [companyId, projectId, runId, token, leaseMs],
     );
-    if (rows[0]) return { claimed: true, run: runRecord(rows[0]) };
+    if (rows[0]) return { claimed: true, token, run: runRecord(rows[0]) };
     const current = await this.find({ companyId, projectId, runId });
     return { claimed: false, run: current };
   }
 
-  async updateExternal({ companyId, projectId, runId, externalDeploymentId, externalProjectId, url, status }) {
+  async updateExternal({ companyId, projectId, runId, claimToken, externalDeploymentId, externalProjectId, url, status }) {
+    if (!claimToken) throw fail('A claim da execução é obrigatória.', 409);
     const nextStatus = String(status || 'QUEUED').toUpperCase();
     if (!['QUEUED', 'INITIALIZING', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado externo inválido.', 400);
     const { rows } = await this.database.query(
@@ -258,14 +259,25 @@ export class DeploymentRepository {
               status = $7,
               started_at = COALESCE(started_at, now()),
               completed_at = CASE WHEN $7 = ANY($8::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
-        WHERE company_id = $1 AND project_id = $2 AND id = $3
+        WHERE company_id = $1 AND project_id = $2 AND id = $3 AND claim_token = $9
         RETURNING *`,
-      [companyId, projectId, runId, externalDeploymentId || null, externalProjectId || null, url || null, nextStatus, [...TERMINAL_STATES]],
+      [companyId, projectId, runId, externalDeploymentId || null, externalProjectId || null, url || null, nextStatus, [...TERMINAL_STATES], claimToken],
     );
-    if (!rows.length) throw fail('Execução não encontrada.', 404);
+    if (!rows.length) return null;
     const result = runRecord(rows[0]);
     if (url) result.url = url;
     return result;
+  }
+
+  async recordFailure({ companyId, projectId, runId, claimToken, error }) {
+    if (!claimToken) throw fail('A claim da execução é obrigatória.', 409);
+    const { rows } = await this.database.query(
+      `UPDATE deployment_runs
+          SET status = 'ERROR', error = $4, claim_token = NULL, lease_expires_at = NULL, completed_at = COALESCE(completed_at, now())
+        WHERE company_id = $1 AND project_id = $2 AND id = $3 AND claim_token = $5 RETURNING *`,
+      [companyId, projectId, runId, error || 'Falha na publicação.', claimToken],
+    );
+    return rows.length ? runRecord(rows[0]) : null;
   }
 
   async updateStatus({ companyId, projectId, runId, status, url, error }) {

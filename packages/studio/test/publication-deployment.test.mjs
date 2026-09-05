@@ -43,6 +43,40 @@ class ClaimDatabase {
   }
 }
 
+class FencedDatabase {
+  constructor() {
+    this.row = {
+      id: 'run-fenced', company_id: 'company-a', project_id: 'project-a', environment: 'preview',
+      snapshot_hash: 'a'.repeat(64), idempotency_key: 'preview:fenced', expected_revision: 1, status: 'queued',
+    };
+    this.claims = 0;
+    this.expireLease = false;
+  }
+
+  async query(sql, params) {
+    if (sql.includes('UPDATE deployment_runs') && sql.includes('SET claim_token = $4')) {
+      if (this.row.claim_token && !this.expireLease) return { rows: [] };
+      this.claims += 1;
+      this.row.status = 'INITIALIZING';
+      this.row.claim_token = params[3];
+      return { rows: [this.row] };
+    }
+    if (sql.includes('UPDATE deployment_runs') && sql.includes('external_deployment_id')) {
+      if (!params[8] || params[8] !== this.row.claim_token) return { rows: [] };
+      this.row.external_deployment_id = params[3];
+      this.row.status = params[6];
+      return { rows: [this.row] };
+    }
+    if (sql.includes("SET status = 'ERROR'") && sql.includes('claim_token = $5')) {
+      if (!params[4] || params[4] !== this.row.claim_token) return { rows: [] };
+      this.row.status = 'ERROR';
+      return { rows: [this.row] };
+    }
+    if (sql.includes('SELECT * FROM deployment_runs') && sql.includes('id = $3')) return { rows: [this.row] };
+    return { rows: [] };
+  }
+}
+
 test('execução combina ambiente e hash e repete sem criar novo deploy', async () => {
   const repository = new DeploymentRepository(new DeploymentDatabase());
   const first = await repository.createOrGet({ companyId: 'company-a', projectId: 'project-a', environment: 'preview', snapshotHash: 'a'.repeat(64), expectedRevision: 2, requestedBy: 'user-a' });
@@ -61,6 +95,20 @@ test('claim do repositório é atômico e o segundo chamador reutiliza a execuç
   assert.equal(first.claimed, true);
   assert.equal(second.claimed, false);
   assert.equal(second.run.id, 'run-1');
+});
+
+test('finalização exige o token da claim e worker atrasado não sobrescreve o vencedor', async () => {
+  const database = new FencedDatabase();
+  const repository = new DeploymentRepository(database);
+  const first = await repository.claim({ companyId: 'company-a', projectId: 'project-a', runId: 'run-fenced' });
+  database.expireLease = true;
+  const second = await repository.claim({ companyId: 'company-a', projectId: 'project-a', runId: 'run-fenced' });
+  const stale = await repository.updateExternal({ companyId: 'company-a', projectId: 'project-a', runId: 'run-fenced', claimToken: first.token, externalDeploymentId: 'dpl-stale', status: 'QUEUED' });
+  assert.equal(stale, null);
+  const winner = await repository.updateExternal({ companyId: 'company-a', projectId: 'project-a', runId: 'run-fenced', claimToken: second.token, externalDeploymentId: 'dpl-winner', status: 'QUEUED' });
+  assert.equal(winner.externalDeploymentId, 'dpl-winner');
+  assert.equal(await repository.recordFailure({ companyId: 'company-a', projectId: 'project-a', runId: 'run-fenced', claimToken: first.token, error: 'falha atrasada' }), null);
+  await assert.rejects(() => repository.updateExternal({ companyId: 'company-a', projectId: 'project-a', runId: 'run-fenced', externalDeploymentId: 'dpl-invalid', status: 'QUEUED' }), /claim|token/i);
 });
 
 test('publicador envia todas as rotas para o projeto estável e separa preview de produção', async () => {

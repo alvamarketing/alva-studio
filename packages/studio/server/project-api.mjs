@@ -468,7 +468,8 @@ export function createProjectApi({
       }
       if (action === 'status' && method === 'GET') {
         const latest = await publication.overview({ companyId: context.companyId, projectId });
-        return json(latest.production ? await publication.status({ companyId: context.companyId, projectId, runId: latest.production.id }) : null);
+        const legacyRun = latest.preview || latest.production;
+        return json(legacyRun ? await publication.status({ companyId: context.companyId, projectId, runId: legacyRun.id }) : null);
       }
       if (action === 'domain' && method === 'POST') {
         const pageSettings = await content.pageSettings({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id });

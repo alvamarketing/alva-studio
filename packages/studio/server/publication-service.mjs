@@ -46,11 +46,14 @@ export class PublicationService {
         externalProjectId: result.projectId || credentials.vercelProjectId,
         url: result.url,
         status: result.state || 'QUEUED',
+        claimToken: claim.token,
       });
+      if (!persisted) return publicRun((await this.deployments.find({ companyId, projectId, runId: run.id })) || run, snapshot);
       await this.audit.record({ companyId, projectId, actorUserId: requestedBy, action: `deployment.${environment}.success`, resourceType: 'deployment_run', resourceId: run.id, revision: expectedRevision, result: 'success', metadata: { snapshotHash: snapshot.hash } });
       return publicRun({ ...persisted, url: result.url || persisted.url }, snapshot);
     } catch (error) {
-      await this.deployments.updateStatus({ companyId, projectId, runId: run.id, status: 'ERROR', error: error.message }).catch(() => {});
+      const persistFailure = this.deployments.recordFailure || this.deployments.updateStatus;
+      await persistFailure({ companyId, projectId, runId: run.id, claimToken: claim.token, status: 'ERROR', error: error.message }).catch(() => {});
       await this.audit.record({ companyId, projectId, actorUserId: requestedBy, action: `deployment.${environment}.failure`, resourceType: 'deployment_run', resourceId: run.id, revision: expectedRevision, result: 'failure', metadata: { snapshotHash: snapshot.hash } }).catch(() => {});
       throw error;
     }
