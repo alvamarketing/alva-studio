@@ -16,7 +16,8 @@ import { VideoRepository } from './repositories/video-repository.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
 import { normalizeRoute } from './domain/access.mjs';
 import { createDatabase, migrate } from './db/postgres.mjs';
-import { PublicationSnapshotBuilder } from './publication-snapshot.mjs';
+import { PublicationSnapshotBuilder, extractVslReferences } from './publication-snapshot.mjs';
+import { resolvePublishedVslReferences } from './vsl-reference.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
@@ -269,7 +270,12 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        return res.end(renderDynamicForm(form, publicFormRequest.action));
+        const resolved = await resolvePublishedVslReferences({
+          database, companyId: form.companyId, projectId: form.projectId, publicOrigin: publicOrigin || expectedOrigin,
+          references: extractVslReferences(form),
+        });
+        const vslEmbedUrls = new Map([...resolved].map(([publicId, value]) => [publicId, value.embedUrl]));
+        return res.end(renderDynamicForm(form, publicFormRequest.action, { vslEmbedUrls }));
       }
       const localForm = !content && path.match(/^\/f\/([a-z0-9-]+)$/);
       if (req.method === 'GET' && localForm) {

@@ -6,12 +6,12 @@ import { validateFormAnswers } from './form-answer-validation.mjs';
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const TYPES = new Set([
   'short_text', 'long_text', 'email', 'phone', 'single_choice', 'multiple_choice',
-  'image_choice', 'image', 'video', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart', 'loader',
+  'image_choice', 'image', 'video', 'vsl', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart', 'loader',
   'logo', 'progress', 'countdown', 'timer',
 ]);
 const MOTIONS = new Set(['none', 'fade-up', 'slide-left', 'zoom-in', 'float']);
-const INFORMATIONAL = new Set(['image', 'video', 'cta', 'statement', 'chart', 'loader', 'logo', 'progress', 'countdown', 'timer']);
-const HEADER_TYPES = new Set(['logo', 'progress', 'countdown', 'timer', 'statement', 'image', 'video', 'chart', 'cta', 'loader']);
+const INFORMATIONAL = new Set(['image', 'video', 'vsl', 'cta', 'statement', 'chart', 'loader', 'logo', 'progress', 'countdown', 'timer']);
+const HEADER_TYPES = new Set(['logo', 'progress', 'countdown', 'timer', 'statement', 'image', 'video', 'vsl', 'chart', 'cta', 'loader']);
 const icon = (value) => (/^[a-z_]{2,40}$/.test(String(value || ''))) ? String(value) : 'arrow_forward';
 const boundedNumber = (value, fallback, min, max) => {
   const number = Number(value);
@@ -66,6 +66,21 @@ function normalizeElement(input, ids) {
     throw fail('Identificador de elemento inválido ou repetido.');
   ids.add(id);
   const type = TYPES.has(input.type) ? input.type : 'short_text';
+  if (type === 'vsl' && ['sourceUrl', 'sourceType', 'source', 'poster', 'posterUrl', 'cta', 'ctaText', 'ctaUrl', 'config', 'configuration', 'version', 'versionId', 'publishedVersionId', 'videoId'].some((key) => Object.hasOwn(input, key)))
+    throw fail('A referência de VSL aceita somente publicId.');
+  if (type === 'vsl') {
+    const element = {
+      id,
+      type,
+      title: text(input.title || 'Escolha uma VSL publicada', 180, 'Título', true),
+      description: text(input.description, 1200, 'Descrição'),
+      required: false,
+      publicId: text(input.publicId, 80, 'Identificador público da VSL'),
+      motion: MOTIONS.has(input.motion) ? input.motion : 'fade-up',
+    };
+    if (input.advanceAfterCta === true) element.advanceAfterCta = true;
+    return element;
+  }
   const element = {
     id,
     type,

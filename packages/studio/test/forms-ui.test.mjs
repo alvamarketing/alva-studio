@@ -152,7 +152,7 @@ test('editor mantém headerElements vazio editável sem substituir o schema', as
 });
 
 test('catálogo dinâmico oferece perguntas, mídia, conversão e gráficos com ícone e movimento', () => {
-  for (const type of ['long_text', 'multiple_choice', 'image', 'video', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart']) {
+  for (const type of ['long_text', 'multiple_choice', 'image', 'video', 'vsl', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart']) {
     const step = createStep(type, `etapa-${type}`);
     assert.equal(step.type, type);
     assert.match(step.icon, /^[a-z_]+$/);
@@ -160,6 +160,19 @@ test('catálogo dinâmico oferece perguntas, mídia, conversão e gráficos com 
   }
   assert.deepEqual(createStep('scale', 'escala').range, { min: 1, max: 10 });
   assert.deepEqual(createStep('chart', 'grafico').chart.values, [72, 48, 86]);
+  assert.equal(createStep('vsl', 'vsl-1').required, false);
+  assert.equal(createStep('vsl', 'vsl-1').publicId, '');
+});
+
+test('editor de formulários lista VSLs publicadas do projeto e mantém somente publicId no schema', async () => {
+  const [css, source] = await Promise.all([readFile(cssPath, 'utf8'), readFile(formsPath, 'utf8')]);
+  assert.match(source, /\/projects\/.*\/videos/);
+  assert.match(source, /video\.read/);
+  assert.match(source, /form\.write/);
+  assert.match(source, /publicId/);
+  assert.doesNotMatch(source, /data-field="sourceUrl"|data-field="posterUrl"|data-field="ctaUrl"/);
+  assert.match(source, /vslEmbedUrl|embed\/v/);
+  assert.match(css, /dynamic-vsl/);
 });
 
 test('opções eliminam linhas vazias e preservam rótulos únicos', () => {

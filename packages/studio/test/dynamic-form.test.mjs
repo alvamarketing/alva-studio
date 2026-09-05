@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderDynamicForm } from '../server/dynamic-form.mjs';
+import { normalizeFormInput } from '../server/form-store.mjs';
 
 const form = {
   id: '123',
@@ -149,4 +150,41 @@ test('escolha única só avança automaticamente quando é a única entrada obri
   const html = renderDynamicForm(composed, '/submit');
   assert.match(html, /function canAutoAdvance/);
   assert.match(html, /querySelectorAll\('\[data-answer\]'/);
+});
+
+test('normaliza VSL como referência pública mínima e migra etapa legada', () => {
+  const normalized = normalizeFormInput({
+    steps: [{
+      id: 'vsl-legada', type: 'vsl', publicId: ' public-vsl-123 ', title: 'Assista à oferta',
+      description: 'Veja a explicação antes de continuar.', motion: 'slide-left', advanceAfterCta: true,
+    }],
+  });
+  assert.deepEqual(normalized.steps[0], {
+    id: 'vsl-legada', type: 'vsl', title: 'Assista à oferta', description: 'Veja a explicação antes de continuar.',
+    required: false, publicId: 'public-vsl-123', motion: 'slide-left', advanceAfterCta: true,
+  });
+  assert.throws(() => normalizeFormInput({ steps: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl', sourceUrl: 'https://cdn.test/video.mp4' }] }), /referência|VSL/i);
+});
+
+test('renderiza VSL com embed absoluto resolvido e fallback acessível sem expor configuração', () => {
+  const composed = {
+    ...form,
+    headerElements: [{ id: 'top-vsl', type: 'vsl', publicId: 'public-vsl-top', title: 'Oferta em vídeo', description: 'Assista', motion: 'float' }],
+    steps: [{ id: 'oferta', title: 'Sua oferta', elements: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl-123', title: 'Conheça a oferta', description: 'Uma explicação rápida.', motion: 'fade-up' }] }],
+  };
+  const html = renderDynamicForm(composed, '/submit', {
+    vslEmbedUrls: new Map([
+      ['public-vsl-top', 'https://studio.example.test/embed/v/public-vsl-top'],
+      ['public-vsl-123', 'https://studio.example.test/embed/v/public-vsl-123'],
+    ]),
+  });
+  assert.equal((html.match(/class="vsl-embed"/g) || []).length, 2);
+  assert.match(html, /<iframe[^>]+src="https:\/\/studio\.example\.test\/embed\/v\/public-vsl-123"/);
+  assert.match(html, /title="Conheça a oferta"/);
+  assert.match(html, /data-motion="fade-up"/);
+  assert.doesNotMatch(html, /sourceUrl|posterUrl|ctaText|ctaUrl|video\.mp4/);
+
+  const missing = renderDynamicForm({ ...form, steps: [{ id: 'sem-vsl', type: 'vsl', publicId: 'missing-vsl', title: 'Oferta' }] }, '/submit', { vslEmbedUrls: new Map() });
+  assert.match(missing, /VSL não está disponível|VSL não encontrada|publique a VSL/i);
+  assert.match(missing, /role="status"|role="alert"/);
 });

@@ -31,7 +31,7 @@ function publicFormAction(publicOrigin, companySlug, projectSlug, path) {
 }
 
 const VSL_COMPONENT_KEYS = new Set([
-  'type', 'publicId', 'tagName', 'attributes', 'components', 'style', 'classes', 'droppable',
+  'id', 'type', 'publicId', 'title', 'description', 'required', 'motion', 'advanceAfterCta', 'tagName', 'attributes', 'components', 'style', 'classes', 'droppable',
 ]);
 const VSL_PRESENTATION_ATTRIBUTES = new Set(['data-alva-vsl', 'data-alva-motion']);
 const VSL_MOTION_VALUES = new Set(['fade-up', 'slide-left', 'zoom-in', 'float']);
@@ -51,6 +51,8 @@ function canonicalVslReference(value) {
   if (attributes?.['data-alva-vsl'] !== undefined && !attributeId) throw fail('Referência de VSL inválida.', 400);
   if (publicId && attributeId && publicId !== attributeId) throw fail('Referência de VSL inválida.', 400);
   if (!publicId && !attributeId) throw fail('Referência de VSL inválida.', 400);
+  if (value.motion !== undefined && (typeof value.motion !== 'string' || !VSL_MOTION_VALUES.has(value.motion.trim()))) throw fail('Referência de VSL inválida.', 400);
+  if (value.advanceAfterCta !== undefined && typeof value.advanceAfterCta !== 'boolean') throw fail('Referência de VSL inválida.', 400);
   return { type: 'vsl', publicId: publicId || attributeId };
 }
 
@@ -79,7 +81,7 @@ function validateOrigin(value) {
   }
 }
 
-function recordForRow(row, publicOrigin) {
+function recordForRow(row, publicOrigin, vslEmbedUrls = new Map()) {
   if (!row || !['page', 'form'].includes(row.kind)) throw fail('Conteúdo publicado inválido.', 409);
   let path;
   try { path = normalizeRoute(row.path); } catch { throw fail('A publicação contém uma rota inválida.', 409); }
@@ -107,7 +109,7 @@ function recordForRow(row, publicOrigin) {
     versionId: row.version_id,
     versionNumber: row.version_number,
     file: pathFile(path),
-    data: renderDynamicForm(form, publicFormAction(publicOrigin, row.company_slug, row.project_slug, path)),
+    data: renderDynamicForm(form, publicFormAction(publicOrigin, row.company_slug, row.project_slug, path), { vslEmbedUrls }),
   };
 }
 
@@ -141,10 +143,11 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
   );
   if (!rows.length) throw fail('Não há nenhuma rota publicada para este projeto.', 409);
   const references = rows.flatMap((row) => vslReferences(row.editor_state).concat(vslReferences(row.schema)));
-  await resolvePublishedVslReferences({ database, companyId, projectId, publicOrigin: origin, references });
+  const resolvedVsl = await resolvePublishedVslReferences({ database, companyId, projectId, publicOrigin: origin, references });
+  const vslEmbedUrls = new Map([...resolvedVsl].map(([publicId, value]) => [publicId, value.embedUrl]));
   const records = rows.map((row) => {
     if (row.company_id !== companyId || row.project_id !== projectId) throw fail('A publicação contém conteúdo de outra empresa.', 403);
-    return recordForRow(row, origin);
+    return recordForRow(row, origin, vslEmbedUrls);
   }).sort((left, right) => left.path.localeCompare(right.path));
   const seen = new Set();
   for (const record of records) {

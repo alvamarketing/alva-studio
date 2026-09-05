@@ -882,7 +882,7 @@ function resetPageList() {
 async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
-formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability) });
+formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability), getProjectId: () => studioShell?.state().currentProject?.id, publicOrigin: window.location.origin });
 const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
 contextBoundary = createStudioContextBoundary({
   savePage: save,
