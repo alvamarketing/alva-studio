@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { normalizeRoute } from './domain/access.mjs';
 import { normalizeFormInput } from './form-store.mjs';
 import { renderDynamicForm } from './dynamic-form.mjs';
+import { resolvePublishedVslReferences } from './vsl-reference.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -27,6 +28,16 @@ function publicFormAction(publicOrigin, companySlug, projectSlug, path) {
   origin.search = '';
   origin.hash = '';
   return origin.toString();
+}
+
+function vslReferences(value, output = []) {
+  if (Array.isArray(value)) {
+    for (const item of value) vslReferences(item, output);
+  } else if (value && typeof value === 'object') {
+    if (value.type === 'vsl') output.push(value);
+    for (const item of Object.values(value)) vslReferences(item, output);
+  }
+  return output;
 }
 
 function validateOrigin(value) {
@@ -80,6 +91,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     `SELECT 'page' AS kind, page.company_id, page.project_id, company.slug AS company_slug,
             project.slug AS project_slug, page.id AS content_id, version.id AS version_id,
             version.version_number, version.published_path AS path, version.rendered_html,
+            version.editor_state,
             NULL::jsonb AS schema, page.name
        FROM pages page
        JOIN companies company ON company.id = page.company_id
@@ -90,6 +102,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
      SELECT 'form' AS kind, form.company_id, form.project_id, company.slug AS company_slug,
             project.slug AS project_slug, form.id AS content_id, version.id AS version_id,
             version.version_number, version.published_path AS path, NULL::text AS rendered_html,
+            NULL::jsonb AS editor_state,
             version.schema, form.name
        FROM forms form
        JOIN companies company ON company.id = form.company_id
@@ -99,6 +112,8 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     [companyId, projectId],
   );
   if (!rows.length) throw fail('Não há nenhuma rota publicada para este projeto.', 409);
+  const references = rows.flatMap((row) => vslReferences(row.editor_state).concat(vslReferences(row.schema)));
+  await resolvePublishedVslReferences({ database, companyId, projectId, publicOrigin: origin, references });
   const records = rows.map((row) => {
     if (row.company_id !== companyId || row.project_id !== projectId) throw fail('A publicação contém conteúdo de outra empresa.', 403);
     return recordForRow(row, origin);
