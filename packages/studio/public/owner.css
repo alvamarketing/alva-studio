@@ -121,6 +121,16 @@
   padding: 30px;
   border-radius: var(--radius-card);
 }
+#owner-dialog {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  background: var(--alva-white);
+  border: 1px solid var(--alva-line);
+  box-shadow: var(--shadow-soft);
+  overflow: auto;
+}
+#settings-view { max-width: 980px; margin-inline: auto; }
 .owner-header {
   display: flex;
   align-items: flex-start;
@@ -154,6 +164,18 @@
   line-height: 1.6;
   color: var(--alva-muted);
 }
+.settings-company-summary {
+  display: grid;
+  gap: 6px;
+  margin: 22px 0;
+  padding: 18px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-field);
+  background: var(--alva-cloud);
+}
+.settings-company-summary strong { font-size: 12px; }
+.settings-company-summary span { font-size: 16px; font-weight: 650; }
+.settings-company-summary small { color: var(--alva-muted); font-size: 11px; }
 .owner-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -361,6 +383,11 @@
   .template-gallery {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  #settings-view { max-width: none; }
+}
+@media (min-width: 521px) and (max-width: 760px) {
+  #owner-dialog { padding: 24px; }
+  .owner-two-col { grid-template-columns: 1fr; gap: 0; }
 }
 @media (max-width: 520px) {
   .owner-two-col {
@@ -372,6 +399,9 @@
   }
   .owner-dialog {
     padding: 20px;
+  }
+  #owner-dialog {
+    width: auto;
   }
   .owner-form-actions {
     flex-direction: column;

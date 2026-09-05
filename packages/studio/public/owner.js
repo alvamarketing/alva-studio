@@ -8,16 +8,22 @@ export function vercelPayload({ token, teamId }) {
 }
 export function settingsAccess({ canManageIntegration = false, requestedTab = 'account' } = {}) {
   const integration = Boolean(canManageIntegration);
-  return { integration, tab: integration && requestedTab === 'vercel' ? 'vercel' : 'account' };
+  const tab = requestedTab === 'company' ? 'company' : integration && requestedTab === 'vercel' ? 'vercel' : 'account';
+  return { integration, tab };
 }
 
 export function createSettingsLoader({ api, canManageIntegration = () => true } = {}) {
   if (typeof api !== 'function') throw new Error('A API de configurações é obrigatória.');
   return async () => canManageIntegration() ? api('/settings') : null;
 }
+export function createSettingsOpenGuard() {
+  let current = 0;
+  return { begin: () => ++current, cancel: () => ++current, isCurrent: (request) => request === current };
+}
 
-export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsChanged, beforeLogout, toast, canManageIntegration = () => true }) {
+export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsChanged, onCompanySettings = () => {}, beforeLogout, onSettingsClosed = () => {}, settingsMount, toast, canManageIntegration = () => true }) {
   let session = null;
+  const settingsGuard = createSettingsOpenGuard();
   const host = document.createElement('div');
   host.id = 'owner-root';
   host.innerHTML = `
@@ -29,7 +35,41 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     <section id="panel-account" role="tabpanel" aria-labelledby="tab-account"><form id="account-form"><p class="owner-description">Estes são os dados de acesso do dono do aplicativo.</p><div class="owner-two-col"><label>Seu nome<input name="name" required maxlength="100" autocomplete="name"></label><label>E-mail de acesso<input name="email" type="email" required maxlength="254" autocomplete="username"></label></div><label>Senha atual<input name="currentPassword" type="password" required autocomplete="current-password" placeholder="Confirme para salvar alterações" maxlength="256"></label><details class="owner-password"><summary>Trocar minha senha</summary><div class="owner-two-col"><label>Nova senha<input name="newPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="Pelo menos 12 caracteres"></label><label>Confirme a nova senha<input name="confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div></details><p class="form-error" id="account-error" role="alert"></p><div class="owner-form-actions"><button class="primary">Salvar minha conta</button></div></form><div class="owner-session"><div><strong>Sessão de acesso</strong><p>Encerre o acesso neste navegador quando terminar.</p></div><button type="button" id="owner-logout">Sair da conta</button></div></section>
     <section id="panel-vercel" role="tabpanel" aria-labelledby="tab-vercel" hidden><div class="vercel-intro"><div class="vercel-symbol" aria-hidden="true">▲</div><div><h3>Conecte sua conta Vercel</h3><p>Configure uma vez. Publique cada página em seu próprio projeto e domínio.</p></div></div><p class="connection" id="owner-vercel-status" role="status">Carregando conexão…</p><form id="vercel-form"><label>Token de acesso da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole seu token de acesso" maxlength="1024"></label><p class="help">O token fica protegido no servidor e não aparece nas páginas. <a href="https://vercel.com/account/tokens" target="_blank" rel="noopener noreferrer">Criar um token na Vercel ↗</a></p><label>Identificador da equipe <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off" maxlength="120"></label><p class="help">Preencha se você publica por uma equipe. Para uma conta pessoal, deixe em branco.</p><p class="form-error" id="vercel-error" role="alert"></p><div class="owner-form-actions"><button type="button" id="vercel-test">Testar conexão salva</button><button class="primary">Salvar conexão</button></div></form><div class="owner-session"><p>O domínio e o destino do formulário são configurados dentro de cada página.</p><button type="button" id="vercel-disconnect">Desconectar</button></div></section></dialog>`;
   document.body.append(host);
-  const $ = (selector) => host.querySelector(selector);
+  const dialogNode = host.querySelector('#owner-dialog');
+  const settingsContainer = settingsMount || host;
+  if (dialogNode?.tagName === 'DIALOG') {
+    const section = document.createElement('section');
+    for (const attribute of dialogNode.attributes) section.setAttribute(attribute.name, attribute.value);
+    section.innerHTML = dialogNode.innerHTML;
+    section.hidden = true;
+    section.setAttribute('aria-labelledby', 'owner-settings-title');
+    section.querySelector('.owner-header h2')?.setAttribute('id', 'owner-settings-title');
+    Object.defineProperty(section, 'open', { get: () => !section.hidden });
+    section.showModal = () => { section.hidden = false; };
+    section.close = () => { section.hidden = true; };
+    if (settingsMount) {
+      settingsMount.append(section);
+      dialogNode.remove();
+    } else dialogNode.replaceWith(section);
+  }
+  const $ = (selector) => settingsContainer.querySelector(selector) || host.querySelector(selector);
+  const ownerTabs = $('.owner-tabs');
+  const companyTab = document.createElement('button');
+  companyTab.type = 'button';
+  companyTab.setAttribute('role', 'tab');
+  companyTab.id = 'tab-company';
+  companyTab.setAttribute('aria-controls', 'panel-company');
+  companyTab.setAttribute('aria-selected', 'false');
+  companyTab.dataset.ownerTab = 'company';
+  companyTab.textContent = 'Empresa e equipe';
+  ownerTabs?.insertBefore(companyTab, $('#tab-vercel'));
+  const companyPanel = document.createElement('section');
+  companyPanel.id = 'panel-company';
+  companyPanel.setAttribute('role', 'tabpanel');
+  companyPanel.setAttribute('aria-labelledby', 'tab-company');
+  companyPanel.hidden = true;
+  companyPanel.innerHTML = '<p class="owner-description">A empresa única organiza seus projetos, acessos e permissões.</p><div class="settings-company-summary"><strong>Empresa atual</strong><span id="settings-company-name">Carregando empresa…</span><small id="settings-company-role"></small></div><p id="settings-company-status" class="dashboard-status" role="status" aria-live="polite"></p><div id="settings-company-content" class="company-overview"></div>';
+  $('#panel-vercel')?.before(companyPanel);
   const gate = $('#access-gate');
   const accessForm = $('#access-form');
   const dialog = $('#owner-dialog');
@@ -107,13 +147,16 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       button.tabIndex = selected ? 0 : -1;
       $('#panel-' + button.dataset.ownerTab).hidden = !selected;
     });
+    if (tab === 'company') onCompanySettings();
   }
-  host.querySelectorAll('[data-owner-tab]').forEach((button) => {
+  settingsContainer.querySelectorAll('[data-owner-tab]').forEach((button) => {
     button.onclick = () => selectTab(button.dataset.ownerTab);
     button.onkeydown = (event) => {
       if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
         event.preventDefault();
-        const tab = button.dataset.ownerTab === 'account' ? 'vercel' : 'account';
+        const tabs = [...settingsContainer.querySelectorAll('[data-owner-tab]:not([hidden])')];
+        const index = tabs.indexOf(button);
+        const tab = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]?.dataset.ownerTab || 'account';
         selectTab(tab);
         $('#tab-' + tab).focus();
       }
@@ -144,8 +187,10 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     await onSettingsChanged(settings);
   }
   async function openSettings(tab = 'account') {
+    const request = settingsGuard.begin();
     try {
       session = await api('/session');
+      if (!settingsGuard.isCurrent(request)) return;
       if (!session.authenticated) return showAccess(session.setupRequired);
       const form = $('#account-form');
       form.reset();
@@ -155,13 +200,23 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       $('#vercel-error').textContent = '';
       const access = applyIntegrationAccess(tab);
       selectTab(access.tab);
+      if (!settingsGuard.isCurrent(request)) return;
       if (!dialog.open) dialog.showModal();
-      if (access.integration) await refreshSettings();
+      ($('#tab-' + access.tab) || dialog.querySelector('h2'))?.focus();
+      if (access.integration) {
+        await refreshSettings();
+        if (!settingsGuard.isCurrent(request)) return;
+      }
     } catch (error) {
       toast(error.message);
     }
   }
-  $('#owner-close').onclick = () => dialog.close();
+  function closeSettings({ notify = true } = {}) {
+    settingsGuard.cancel();
+    dialog.close();
+    if (notify) onSettingsClosed();
+  }
+  $('#owner-close').onclick = () => closeSettings();
   $('#account-form').onsubmit = async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -236,5 +291,5 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       $('#account-error').textContent = error.message;
     }
   };
-  return { initialize: updateSession, openSettings, sessionExpired: () => showAccess(false) };
+  return { initialize: updateSession, openSettings, closeSettings, sessionExpired: () => showAccess(false) };
 }

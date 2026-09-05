@@ -59,27 +59,30 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
-  applyDashboardNavigation({ home: $('#nav-home'), history: $('#nav-history'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl') }, view);
+  applyDashboardNavigation({ home: $('#nav-home'), history: $('#nav-history'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl'), settings: $('#app-settings') }, view);
 }
 function updateVslNavigation() {
   $('#nav-vsl').hidden = !studioShell?.can?.('video.read');
 }
-function setDashboardView(view) {
+function setDashboardView(view, { settingsTab = 'account' } = {}) {
   const sections = {
     home: '#studio-home',
     company: '#company-view',
     history: '#history-view',
+    settings: '#settings-view',
     project: '#project-view',
     pages: '#pages-view',
     forms: '#forms-view',
     vsl: '#vsl-view',
   };
+  if (view !== 'settings') ownerUI?.closeSettings({ notify: false });
   for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
   closeMobileDrawer();
   setActiveNavigation(view);
   updateVslNavigation();
   if (view === 'home') renderHome();
   if (view === 'history') renderHistory();
+  if (view === 'settings') return ownerUI?.openSettings(settingsTab);
   if (view === 'company') renderCompany();
   if (view === 'project') renderProject();
   if (view === 'vsl') vslUI.show();
@@ -240,10 +243,10 @@ async function selectProject(projectId) {
   projectContentFilter = 'all';
   setDashboardView('project');
 }
-function renderCompanyOverview(overview) {
-  const content = clear($('#company-content'));
-  $('#company-view-title').textContent = overview.company.name;
-  $('#company-role').textContent = `Seu papel: ${roleLabel(overview.role)}`;
+function renderCompanyOverview(overview, { content = $('#company-content'), title = $('#company-view-title'), role = $('#company-role') } = {}) {
+  clear(content);
+  if (title) title.textContent = overview.company.name;
+  if (role) role.textContent = `Seu papel: ${roleLabel(overview.role)}`;
   const details = document.createElement('section');
   details.className = 'company-overview-section';
   const detailsTitle = document.createElement('h2');
@@ -1174,6 +1177,23 @@ ownerUI = createOwnerUI({
     }
   },
   beforeLogout: save,
+  onCompanySettings: () => {
+    const state = studioShell?.state();
+    $('#settings-company-name').textContent = state?.currentCompany?.name || 'Empresa atual';
+    $('#settings-company-role').textContent = state?.currentCompany ? `Seu papel: ${roleLabel(state.currentCompany.role || state.session?.role)}` : '';
+    $('#settings-company-status').textContent = 'Carregando dados da empresa…';
+    const target = $('#settings-company-content');
+    if (!state?.currentCompany || !target) return;
+    api(`/companies/${state.currentCompany.id}/overview`).then((overview) => {
+      if (studioShell?.state().currentCompany?.id !== state.currentCompany.id || $('#settings-view').hidden) return;
+      $('#settings-company-status').textContent = '';
+      renderCompanyOverview(overview, { content: target, title: $('#settings-company-name'), role: $('#settings-company-role') });
+    }).catch((error) => {
+      if ($('#settings-view').hidden) return;
+      $('#settings-company-status').textContent = error.message || 'Não foi possível carregar a empresa.';
+    });
+  },
+  onSettingsClosed: () => setDashboardView('home'),
   canManageIntegration: () => !studioShell?.state().session?.user || studioShell.can('integration.manage'),
   onLoggedOut: async () => {
     clearTimeout(timer);
@@ -1188,16 +1208,32 @@ ownerUI = createOwnerUI({
     $('#project-switcher').replaceChildren();
   },
   onSettingsChanged: refreshConfig,
+  settingsMount: $('#settings-view'),
 });
-$('#app-settings').onclick = () => ownerUI.openSettings();
-$('#page-vercel-settings').onclick = () => {
+$('#app-settings').onclick = () => setDashboardView('settings');
+$('#page-vercel-settings').onclick = action(async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
   if (!studioShell.can('integration.manage')) {
     toast('Você não tem permissão para configurar integrações.');
     return;
   }
+  const projectId = page?.projectId;
+  await save();
+  clearTimeout(timer);
+  if (editor) editor.destroy();
+  editor = null;
+  page = null;
+  $('#editing').hidden = true;
+  $('#dashboard').hidden = false;
+  await returnToProject(projectId);
   $('#settings-dialog').close();
-  ownerUI.openSettings('vercel');
-};
+  await setDashboardView('settings', { settingsTab: 'vercel' });
+  } finally {
+    button.disabled = false;
+  }
+});
 try {
   await ownerUI.initialize();
   $('#startup').remove();
