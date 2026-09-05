@@ -7,6 +7,7 @@
 - `publication-snapshot.test.mjs` e `publication-integration.test.mjs`: snapshot, isolamento e cofre de conexão por projeto.
 - `publication-deployment.test.mjs`: idempotência de execução e publicação multi rota com retry.
 - `publication-service.test.mjs` e `publication-api.test.mjs`: fronteira de produção confirmada e APIs por projeto.
+- `studio-dashboard.test.mjs`: estados simples e responsividade da seção Publicação.
 
 - `access.test.mjs`: papéis, capacidades, slugs e rotas públicas permitidas.
 - `database-schema.test.mjs`: migrações PostgreSQL, isolamento estrutural, versões e integridade do schema.

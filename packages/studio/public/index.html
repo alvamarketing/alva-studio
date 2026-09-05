@@ -156,6 +156,13 @@
               <h2 id="project-modules-title">Próximos módulos</h2>
               <div id="project-modules" class="project-modules"></div>
             </section>
+            <section id="project-publication" class="project-surface publication-surface" aria-labelledby="project-publication-title">
+              <div class="section-heading"><div><span class="eyebrow">PUBLICAÇÃO</span><h2 id="project-publication-title">Coloque seu projeto no ar</h2></div><span id="publication-state" class="publication-state" role="status">Conecte a Vercel</span></div>
+              <p id="publication-summary">As rotas publicadas deste projeto serão enviadas juntas para um único destino.</p>
+              <p id="publication-routes" class="publication-routes">Nenhuma rota publicada ainda.</p>
+              <div class="publication-actions"><button type="button" id="publication-preview">Criar prévia</button><button type="button" id="publication-production" class="primary">Publicar em produção</button></div>
+              <details class="publication-details"><summary>Configurar conexão e domínio</summary><form id="publication-connection-form"><label>Projeto da Vercel<input name="vercelProjectId" placeholder="projeto-na-vercel" autocomplete="off"></label><label>Team ID <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off"></label><label>Token da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole o token no servidor"></label><button class="primary">Salvar conexão</button></form><form id="publication-domain-form"><label>Domínio <input name="domain" placeholder="lp.suaempresa.com.br"></label><button type="submit">Conectar domínio</button></form><p id="publication-detail-error" class="form-error" role="alert"></p></details>
+            </section>
           </div>
           <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>

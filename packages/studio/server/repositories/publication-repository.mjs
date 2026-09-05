@@ -156,7 +156,7 @@ function runRecord(row) {
     status: row.status,
     externalDeploymentId: row.external_deployment_id || null,
     externalProjectId: row.external_project_id || null,
-    url: row.url || null,
+    url: row.external_url || row.url || null,
     error: row.error || null,
     createdAt: row.created_at || null,
     startedAt: row.started_at || null,
@@ -182,6 +182,15 @@ export class DeploymentRepository {
     const { rows } = await this.database.query(
       `SELECT * FROM deployment_runs WHERE ${runId ? 'company_id = $1 AND project_id = $2 AND id = $3' : 'project_id = $1 AND environment = $2 AND idempotency_key = $3'} LIMIT 1`,
       params,
+    );
+    return runRecord(rows[0]);
+  }
+
+  async latest({ companyId, projectId, environment }) {
+    const { rows } = await this.database.query(
+      `SELECT * FROM deployment_runs WHERE company_id = $1 AND project_id = $2
+         AND ($3::text IS NULL OR environment = $3) ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [companyId, projectId, environment || null],
     );
     return runRecord(rows[0]);
   }
@@ -217,12 +226,13 @@ export class DeploymentRepository {
       `UPDATE deployment_runs
           SET external_deployment_id = COALESCE($4, external_deployment_id),
               external_project_id = COALESCE($5, external_project_id),
-              status = $6,
+              external_url = COALESCE($6, external_url),
+              status = $7,
               started_at = COALESCE(started_at, now()),
-              completed_at = CASE WHEN $6 = ANY($7::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
+              completed_at = CASE WHEN $7 = ANY($8::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
         WHERE company_id = $1 AND project_id = $2 AND id = $3
         RETURNING *`,
-      [companyId, projectId, runId, externalDeploymentId || null, externalProjectId || null, nextStatus, [...TERMINAL_STATES]],
+      [companyId, projectId, runId, externalDeploymentId || null, externalProjectId || null, url || null, nextStatus, [...TERMINAL_STATES]],
     );
     if (!rows.length) throw fail('Execução não encontrada.', 404);
     const result = runRecord(rows[0]);
@@ -235,9 +245,10 @@ export class DeploymentRepository {
     if (!['QUEUED', 'BUILDING', 'READY', 'ERROR', 'CANCELED', 'BLOCKED'].includes(nextStatus)) throw fail('Estado inválido.', 400);
     const { rows } = await this.database.query(
       `UPDATE deployment_runs
-          SET status = $4, completed_at = CASE WHEN $4 = ANY($5::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
+          SET status = $4, external_url = COALESCE($5, external_url),
+              completed_at = CASE WHEN $4 = ANY($6::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
         WHERE company_id = $1 AND project_id = $2 AND id = $3 RETURNING *`,
-      [companyId, projectId, runId, nextStatus, [...TERMINAL_STATES]],
+      [companyId, projectId, runId, nextStatus, url || null, [...TERMINAL_STATES]],
     );
     if (!rows.length) throw fail('Execução não encontrada.', 404);
     const result = runRecord(rows[0]);

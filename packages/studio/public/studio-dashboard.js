@@ -123,6 +123,15 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
   };
 }
 
+export function publicationModel({ connectionStatus = 'pending', run = null, routes = [] } = {}) {
+  const count = Array.isArray(routes) ? routes.length : Number(routes || 0);
+  if (connectionStatus !== 'configured') return { state: 'pending', label: 'Conecte a Vercel', routes: count, canPreview: false, canProduction: false };
+  const status = String(run?.status || '').toUpperCase();
+  const state = status === 'READY' ? 'ready' : ['ERROR', 'CANCELED', 'BLOCKED'].includes(status) ? 'error' : status ? 'preparing' : 'idle';
+  const label = state === 'ready' ? 'No ar' : state === 'error' ? 'Falhou' : state === 'preparing' ? 'Preparando' : 'Pronto para prévia';
+  return { state, label, routes: count, canPreview: true, canProduction: state === 'ready' };
+}
+
 export function roleLabel(role) {
   return ({ owner: 'Proprietário', admin: 'Administrador', editor: 'Editor', analyst: 'Analista', viewer: 'Visualizador' })[role] || 'Membro';
 }

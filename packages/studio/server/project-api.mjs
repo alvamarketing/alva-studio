@@ -233,7 +233,7 @@ export function createProjectApi({
       }
     }
 
-    const publicationRoute = path.match(/^\/api\/projects\/([^/]+)\/publication(?:\/(vercel|preview|production|runs|domain)(?:\/([^/]+))?)?$/);
+    const publicationRoute = path.match(/^\/api\/projects\/([^/]+)\/(?:publication|integration|integrations)(?:\/(vercel|preview|production|runs|status|domain)(?:\/([^/]+))?)?$/);
     if (publicationRoute) {
       const [, projectId, action = 'settings', value] = publicationRoute;
       await sessionService.authorize(context, null, projectId);
@@ -254,7 +254,7 @@ export function createProjectApi({
           return json(await publication.publisher({ companyId: context.companyId, projectId }).then(({ publisher }) => publisher.testConnection()));
         }
       }
-      if (action === 'settings' && method === 'GET') return json({ integration: await integrations.publicSettings({ companyId: context.companyId, projectId }) });
+      if (action === 'settings' && method === 'GET') return json(await publication.overview({ companyId: context.companyId, projectId }));
       if (action === 'preview' && method === 'POST') {
         await sessionService.authorize(context, 'deployment.publish', projectId);
         const input = await body(req);
@@ -265,7 +265,7 @@ export function createProjectApi({
         const input = await body(req);
         return json(await publication.production({ companyId: context.companyId, projectId, requestedBy: context.user.id, expectedRevision: input.revision ?? input.expectedRevision ?? 0, previewRunId: input.previewRunId, confirmed: input.confirmed === true, idempotencyKey: input.idempotencyKey }));
       }
-      if (action === 'runs' && method === 'GET') {
+      if (['runs', 'status'].includes(action) && method === 'GET') {
         await sessionService.authorize(context, 'deployment.publish', projectId);
         return json(await publication.status({ companyId: context.companyId, projectId, runId: value }));
       }
@@ -445,6 +445,10 @@ export function createProjectApi({
         companyId: context.companyId, projectId, actorId: context.user.id, formId: id,
         lockVersion: input.revision ?? input.lockVersion,
       });
+      if (publication && integrations) {
+        const deployment = await publication.preview({ companyId: context.companyId, projectId, requestedBy: context.user.id, expectedRevision: input.revision ?? input.lockVersion ?? 0 });
+        return json({ ...legacyForm(await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id })), deployment }, 201);
+      }
       return json(legacyForm(await content.getForm({
         companyId: context.companyId, projectId, actorId: context.user.id, formId: id,
       })), 201);
@@ -455,8 +459,22 @@ export function createProjectApi({
     }
     if (isPage && ['publish', 'status', 'domain'].includes(action)) {
       await sessionService.authorize(context, action === 'publish' ? 'deployment.publish' : 'integration.manage', projectId);
-      if (method === 'POST') await body(req);
-      throw fail('A publicação Vercel por projeto ainda está pendente.', 409);
+      if (!publication || !integrations) { if (method === 'POST') await body(req); throw fail('A publicação Vercel por projeto ainda está pendente.', 409); }
+      if (action === 'publish' && method === 'POST') {
+        const input = await body(req);
+        const pageVersion = await content.publishPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id });
+        const deployment = await publication.preview({ companyId: context.companyId, projectId, requestedBy: context.user.id, expectedRevision: input.revision ?? input.lockVersion ?? 0 });
+        return json({ ...legacyPage(await content.getPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })), deployment, publishedVersionId: pageVersion.id }, 201);
+      }
+      if (action === 'status' && method === 'GET') {
+        const latest = await publication.overview({ companyId: context.companyId, projectId });
+        return json(latest.run);
+      }
+      if (action === 'domain' && method === 'POST') {
+        const pageSettings = await content.pageSettings({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id });
+        const latest = await publication.overview({ companyId: context.companyId, projectId });
+        return json(await publication.domain({ companyId: context.companyId, projectId, requestedBy: context.user.id, runId: latest.run?.id, domain: pageSettings.domain }));
+      }
     }
     throw fail('Não encontrado.', 404);
   };

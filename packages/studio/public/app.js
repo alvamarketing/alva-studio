@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, roleLabel } from './studio-dashboard.js';
+import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -385,6 +385,26 @@ function renderProjectOverview(overview) {
   }
   renderProjectContent(model);
 }
+function renderPublication(overview, publication = {}) {
+  const configured = publication.integration?.connectionStatus === 'configured' || overview.integrations?.vercel === 'configured';
+  const publishedRoutes = (overview.content || []).filter((item) => item.published);
+  const model = publicationModel({ connectionStatus: configured ? 'configured' : 'pending', run: publication.run, routes: publishedRoutes });
+  $('#publication-state').textContent = model.label;
+  $('#publication-state').dataset.state = model.state;
+  $('#publication-routes').textContent = publishedRoutes.length
+    ? `${publishedRoutes.length} ${publishedRoutes.length === 1 ? 'rota publicada' : 'rotas publicadas'}: ${publishedRoutes.map((item) => item.route).join(', ')}`
+    : 'Nenhuma rota publicada ainda.';
+  $('#publication-summary').textContent = configured
+    ? 'Prévia e produção enviam todas as rotas publicadas deste projeto juntas.'
+    : 'Conecte a Vercel uma vez para publicar todas as rotas deste projeto juntas.';
+  $('#publication-preview').disabled = !model.canPreview || !studioShell.can('deployment.publish');
+  $('#publication-production').disabled = !model.canProduction || !studioShell.can('deployment.publish');
+  $('#publication-domain-form').hidden = !model.canProduction || !studioShell.can('integration.manage');
+  const connection = $('#publication-connection-form');
+  connection.elements.vercelProjectId.value = publication.integration?.vercelProjectId || '';
+  connection.elements.teamId.value = publication.integration?.teamId || '';
+  connection.elements.token.value = '';
+}
 async function renderProject() {
   if (!studioShell) return;
   const state = dashboardState();
@@ -415,12 +435,16 @@ async function renderProject() {
   $('#project-view-title').textContent = state.currentProject.name || 'Projeto';
   $('#project-slug').textContent = '';
   try {
-    const overview = await api(`/projects/${state.currentProject.id}/overview`);
+    const [overview, publication] = await Promise.all([
+      api(`/projects/${state.currentProject.id}/overview`),
+      api(`/projects/${state.currentProject.id}/publication`).catch(() => ({})),
+    ]);
     if (request !== projectOverviewRequest || state.currentProject.id !== studioShell.state().currentProject?.id) return;
     const model = projectOverviewModel(overview);
     status.dataset.state = model.status;
     status.textContent = model.message;
     renderProjectOverview(overview);
+    renderPublication(overview, publication);
   } catch (error) {
     if (request !== projectOverviewRequest) return;
     const model = projectOverviewModel(null, { phase: 'error', error: error.message });
@@ -889,6 +913,40 @@ $('#nav-project').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar sua visão geral.');
   projectContentFilter = 'all';
   setDashboardView('project');
+});
+$('#publication-preview').onclick = action(async () => {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) throw new Error('Escolha um projeto antes de criar a prévia.');
+  await api(`/projects/${projectId}/publication/preview`, 'POST', { revision: 0 });
+  toast('Prévia preparada.');
+  await renderProject();
+});
+$('#publication-production').onclick = action(async () => {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) throw new Error('Escolha um projeto antes de publicar.');
+  if (!confirm('Publicar todas as rotas deste projeto em produção?')) return;
+  const publication = await api(`/projects/${projectId}/publication`);
+  if (!publication.run?.id) throw new Error('Crie uma prévia antes de publicar em produção.');
+  await api(`/projects/${projectId}/publication/production`, 'POST', { confirmed: true, previewRunId: publication.run.id, revision: 0 });
+  toast('Publicação enviada.');
+  await renderProject();
+});
+$('#publication-connection-form').onsubmit = action(async (event) => {
+  event.preventDefault();
+  const projectId = studioShell.state().currentProject?.id;
+  const data = Object.fromEntries(new FormData(event.target));
+  await api(`/projects/${projectId}/publication/vercel`, 'PUT', data);
+  toast('Conexão Vercel salva.');
+  await renderProject();
+});
+$('#publication-domain-form').onsubmit = action(async (event) => {
+  event.preventDefault();
+  const projectId = studioShell.state().currentProject?.id;
+  const publication = await api(`/projects/${projectId}/publication`);
+  const data = Object.fromEntries(new FormData(event.target));
+  await api(`/projects/${projectId}/publication/domain`, 'POST', { ...data, runId: publication.run?.id });
+  toast('Domínio conectado.');
+  await renderProject();
 });
 $('#nav-pages').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');

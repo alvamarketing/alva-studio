@@ -8,6 +8,7 @@
   - `migrations/003_published_content_routes.sql`: rota preservada nos snapshots publicados.
   - `migrations/004_local_imports.sql`: registro idempotente de importações locais.
   - `migrations/005_session_project_context.sql`: projeto atual persistido na sessão.
+  - `migrations/006_deployment_external_url.sql`: URL externa persistida na execução da publicação.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
 - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
