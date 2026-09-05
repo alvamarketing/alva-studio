@@ -9,6 +9,7 @@ import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
 import { applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
+import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -34,7 +35,12 @@ let editor,
   contextBoundary,
   companyOverviewRequest = 0,
   projectOverviewRequest = 0,
+  leadsRequest = 0,
   projectContentFilter = 'all',
+  leadsFormId = '',
+  leadForms = [],
+  leadsRows = [],
+  leadsNextCursor = null,
   mobileMenuTrigger,
   mobileDrawer,
   config = { vercelConnected: false };
@@ -370,6 +376,136 @@ function projectEmpty(title, text) {
   element.append(heading, detail);
   return element;
 }
+function updateLeadsFilter() {
+  const leadsFilter = $('[data-project-filter="leads"]');
+  if (!leadsFilter) return;
+  leadsFilter.hidden = !studioShell?.can?.('submission.read');
+  if (leadsFilter.hidden && projectContentFilter === 'leads') projectContentFilter = 'all';
+}
+function renderLeadsControls(projectId) {
+  const controls = $('#project-leads-controls');
+  const form = $('#project-leads-form');
+  const knownForms = new Map(leadForms.map((form) => [form.id, form.name || 'Formulário sem nome']));
+  for (const row of leadsRows) if (row.formId) knownForms.set(row.formId, row.formName || 'Formulário sem nome');
+  form.replaceChildren();
+  const all = document.createElement('option');
+  all.value = '';
+  all.textContent = 'Todos os formulários';
+  form.append(all);
+  for (const [id, name] of knownForms) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = name;
+    form.append(option);
+  }
+  form.value = leadsFormId;
+  const exportLink = $('#project-leads-export');
+  exportLink.href = leadsCsvUrl(projectId, leadsFormId);
+  exportLink.hidden = !leadsFormId;
+  $('#project-leads-next').hidden = !leadsNextCursor;
+  controls.hidden = false;
+}
+function renderLeadRows(projectId) {
+  const list = clear($('#project-content-list'));
+  renderLeadsControls(projectId);
+  if (!leadsRows.length) {
+    list.append(projectEmpty('Nenhum lead encontrado.', leadsFormId ? 'Este formulário ainda não recebeu respostas.' : 'As respostas dos seus formulários aparecerão aqui.'));
+    return;
+  }
+  for (const row of leadsRows) list.append(createLeadRow(row));
+}
+function leadsResponseIsCurrent(request, state) {
+  const current = studioShell.state();
+  return request === leadsRequest
+    && projectContentFilter === 'leads'
+    && state.currentProject?.id === current.currentProject?.id
+    && state.currentCompany?.id === current.currentCompany?.id;
+}
+async function loadProjectLeads({ append = false } = {}) {
+  const state = dashboardState();
+  if (!state.currentProject || !studioShell?.can?.('submission.read')) return;
+  const request = ++leadsRequest;
+  const cursor = append ? leadsNextCursor : null;
+  const params = new URLSearchParams({ limit: '25' });
+  if (leadsFormId) params.set('formId', leadsFormId);
+  if (cursor) params.set('cursor', cursor);
+  const list = clear($('#project-content-list'));
+  if (append) for (const row of leadsRows) list.append(createLeadRow(row));
+  else list.append(projectEmpty('Carregando leads…', 'Aguarde enquanto buscamos as respostas do projeto.'));
+  $('#project-leads-controls').hidden = false;
+  try {
+    const [result, overview] = await Promise.all([
+      api(`/projects/${state.currentProject.id}/leads?${params}`),
+      api(`/projects/${state.currentProject.id}/overview`).catch(() => null),
+    ]);
+    if (!leadsResponseIsCurrent(request, state)) return;
+    const rows = (result.items || []).map(normalizeLeadRow);
+    leadsRows = append ? [...leadsRows, ...rows] : rows;
+    leadForms = (overview?.content || []).filter((item) => item.kind === 'form');
+    leadsNextCursor = result.nextCursor || null;
+    renderLeadRows(state.currentProject.id);
+    const model = leadsListModel({ rows: leadsRows });
+    $('#project-status').dataset.state = model.status;
+    $('#project-status').textContent = model.message;
+  } catch (error) {
+    if (!leadsResponseIsCurrent(request, state)) return;
+    leadsRows = [];
+    leadsNextCursor = null;
+    clear($('#project-content-list')).append(projectEmpty('Não foi possível carregar os leads.', error.message));
+    const model = leadsListModel({ phase: 'error', error: error.message });
+    $('#project-status').dataset.state = model.status;
+    $('#project-status').textContent = model.message;
+    renderLeadsControls(state.currentProject.id);
+  }
+}
+function createLeadRow(row) {
+  const item = document.createElement('article');
+  item.className = 'project-lead-row';
+  const header = document.createElement('header');
+  const formName = document.createElement('strong');
+  formName.textContent = row.formName || 'Formulário';
+  const submittedAt = document.createElement('span');
+  submittedAt.textContent = row.submittedAt || 'Data não informada';
+  const delivery = document.createElement('span');
+  delivery.textContent = row.deliveryLabel;
+  header.append(formName, submittedAt, delivery);
+  const answers = document.createElement('dl');
+  for (const answer of row.answers) {
+    const field = document.createElement('dt');
+    field.textContent = answer.field;
+    const value = document.createElement('dd');
+    value.textContent = answer.value;
+    answers.append(field, value);
+  }
+  item.append(header, answers);
+  return item;
+}
+function renderProjectLeads(state) {
+  const status = $('#project-status');
+  const list = clear($('#project-content-list'));
+  clear($('#project-metrics'));
+  clear($('#project-modules'));
+  if (!studioShell?.can?.('submission.read')) {
+    $('#project-leads-controls').hidden = true;
+    status.dataset.state = 'error';
+    status.textContent = 'Você não tem permissão para visualizar leads.';
+    list.append(projectEmpty('Leads indisponíveis.', status.textContent));
+    return;
+  }
+  if (!state.currentProject) {
+    $('#project-leads-controls').hidden = true;
+    status.dataset.state = 'empty';
+    status.textContent = 'Escolha ou crie um projeto para continuar.';
+    list.append(projectEmpty('Nenhum projeto selecionado.', status.textContent));
+    return;
+  }
+  const model = leadsListModel({ phase: 'loading' });
+  status.dataset.state = model.status;
+  status.textContent = model.message;
+  $('#project-view-title').textContent = state.currentProject.name || 'Projeto';
+  $('#project-slug').textContent = '';
+  void loadProjectLeads();
+}
 function renderProjectContent(model) {
   const list = clear($('#project-content-list'));
   const content = filterProjectContent(model.content, projectContentFilter);
@@ -466,8 +602,12 @@ function renderPublication(overview, publication = {}) {
 }
 async function renderProject() {
   if (!studioShell) return;
+  leadsRequest += 1;
+  updateLeadsFilter();
   const state = dashboardState();
+  if (projectContentFilter === 'leads') return renderProjectLeads(state);
   const status = $('#project-status');
+  $('#project-leads-controls').hidden = true;
   const list = clear($('#project-content-list'));
   clear($('#project-metrics'));
   clear($('#project-modules'));
@@ -1057,13 +1197,26 @@ $('#new-vsl').onclick = () => { if (studioShell.can('video.write')) vslUI.edit()
 $('#project-content-filter').onclick = (event) => {
   const button = event.target.closest('[data-project-filter]');
   if (!button) return;
+  if (button.dataset.projectFilter === 'leads' && !studioShell?.can?.('submission.read')) return;
   projectContentFilter = button.dataset.projectFilter;
+  if (projectContentFilter === 'leads') {
+    leadsFormId = '';
+    leadsRows = [];
+    leadsNextCursor = null;
+  }
   for (const item of $('#project-content-filter').querySelectorAll('button')) {
     if (item === button) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');
   }
   renderProject();
 };
+$('#project-leads-form').onchange = () => {
+  leadsFormId = $('#project-leads-form').value;
+  leadsRows = [];
+  leadsNextCursor = null;
+  void loadProjectLeads();
+};
+$('#project-leads-next').onclick = () => void loadProjectLeads({ append: true });
 mobileMenuTrigger = $('#mobile-menu');
 mobileDrawer = createMobileDrawerController({
   drawer: $('#studio-sidebar'),

@@ -288,6 +288,18 @@ test('Projeto possui destinos, filtros, estado assíncrono e controles responsiv
   assert.match(css, /min-height:\s*44px/);
 });
 
+test('analista pode ler e exportar leads, enquanto quem não tem submission.read não vê o filtro', async () => {
+  const [html, app, shell] = await Promise.all([
+    readFile(htmlPath, 'utf8'),
+    readFile(appPath, 'utf8'),
+    readFile(new URL('../public/studio-shell.js', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(shell, /analyst: Object\.freeze\(\['submission\.read'/);
+  assert.match(app, /leadsFilter\.hidden = !studioShell\?\.can\?\.\('submission\.read'\)/);
+  assert.match(html, /data-project-filter="leads"[^>]*>Leads/);
+});
+
 test('publicação nos editores declara bloqueio acionável para quem não pode publicar', async () => {
   const [html, app, forms] = await Promise.all([
     readFile(htmlPath, 'utf8'),

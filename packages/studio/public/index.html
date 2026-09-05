@@ -162,7 +162,13 @@
                   <button type="button" data-project-filter="pages">Páginas</button>
                   <button type="button" data-project-filter="forms">Quizzes</button>
                   <button type="button" data-project-filter="videos">VSLs</button>
+                  <button type="button" data-project-filter="leads" hidden>Leads</button>
                 </nav>
+              </div>
+              <div id="project-leads-controls" class="project-leads-controls" hidden>
+                <label>Formulário <select id="project-leads-form" aria-label="Filtrar leads por formulário"><option value="">Todos os formulários</option></select></label>
+                <a id="project-leads-export" download hidden>Exportar CSV</a>
+                <button type="button" id="project-leads-next" hidden>Carregar mais</button>
               </div>
               <div id="project-content-list" class="project-content-list" aria-live="polite"></div>
             </section>
