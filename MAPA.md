@@ -1,5 +1,7 @@
 # Alva Studio — mapa
 
+- `AGENTS.md`: regra master de execução com subagentes e seleção dinâmica de modelo.
+
 - `packages/core/`: núcleo original do GrapesJS.
 - `packages/cli/`: ferramentas originais de compilação.
 - `packages/studio/`: aplicação Alva Studio, editor e publicação.
