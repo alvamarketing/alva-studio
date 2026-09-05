@@ -32,15 +32,19 @@ async function start(t, database, options = {}) {
   return { server, base };
 }
 
-async function publicRequest(base, path, host) {
+async function publicRequest(base, path, host, { method = 'GET', body } = {}) {
   return new Promise((resolve, reject) => {
-    const request = httpRequest(base + path, { headers: { Host: host } }, (response) => {
+    const request = httpRequest(base + path, {
+      method,
+      headers: { Host: host, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    }, (response) => {
       let content = '';
       response.setEncoding('utf8');
       response.on('data', (chunk) => { content += chunk; });
       response.on('end', () => resolve({ status: response.statusCode, text: content }));
     });
     request.on('error', reject);
+    if (body !== undefined) request.write(JSON.stringify(body));
     request.end();
   });
 }
@@ -496,12 +500,24 @@ test('rotas públicas não colidem entre projetos e domínio resolve o projeto c
      VALUES ($1, $2, 'production', 'a.local.test', true), ($3, $4, 'production', 'b.local.test', true)`,
     [records.companyA.id, records.projectA.id, records.companyB.id, records.projectB.id],
   );
-  const domainApp = await start(t, database, {
-    publicOrigin: 'https://a.local.test', dnsLookup: async () => [{ address: '93.184.216.34', family: 4 }],
-  });
+  const domainApp = await start(t, database, { publicOrigin: 'https://studio.local' });
   const domainPage = await publicRequest(domainApp.base, '/f/contato', 'a.local.test');
   assert.equal(domainPage.status, 200);
   assert.match(domainPage.text, /Contato A/);
+  const secondDomainPage = await publicRequest(domainApp.base, '/f/contato', 'b.local.test');
+  assert.equal(secondDomainPage.status, 200);
+  assert.match(secondDomainPage.text, /Contato B/);
+  const publicSubmission = await publicRequest(domainApp.base, '/api/public/forms/contato/submissions', 'b.local.test', {
+    method: 'POST', body: { answers: { email: 'lead@empresa-b.test' } },
+  });
+  assert.equal(publicSubmission.status, 200);
+  assert.equal((await publicRequest(domainApp.base, '/f/contato', 'desconhecido.local.test')).status, 404);
+  assert.equal((await publicRequest(domainApp.base, '/api/public/forms/contato/submissions', 'desconhecido.local.test', {
+    method: 'POST', body: { answers: { email: 'lead@desconhecido.test' } },
+  })).status, 404);
+  assert.equal((await publicRequest(domainApp.base, '/api/config', 'a.local.test')).status, 403);
+  assert.equal((await publicRequest(domainApp.base, '/api/setup', 'a.local.test', { method: 'POST', body: {} })).status, 403);
+  assert.equal((await publicRequest(domainApp.base, '/api/login', 'a.local.test', { method: 'POST', body: {} })).status, 403);
   await database.close();
 });
 

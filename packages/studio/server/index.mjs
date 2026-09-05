@@ -113,13 +113,17 @@ export function createApp({
       const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
       const path = new URL(req.url, 'http://' + expected).pathname;
       const publicSubmission = req.method === 'POST' && /^\/api\/public\/forms\/(?:[a-z0-9-]+\/){0,2}[a-z0-9-]+\/(?:submit|submissions)$/.test(path);
-      if (publicOrigin ? req.headers.host !== new URL(publicOrigin).host : !localHost)
+      const publicDomainRead = Boolean(content && publicOrigin && req.method === 'GET' && /^\/f\/[a-z0-9-]+$/.test(path));
+      const publicDomainSubmission = Boolean(content && publicOrigin && req.method === 'POST' && /^\/api\/public\/forms\/[a-z0-9-]+\/submissions$/.test(path));
+      const publicDomainRequest = publicDomainRead || publicDomainSubmission;
+      const studioHost = publicOrigin && req.headers.host === new URL(publicOrigin).host;
+      if (publicOrigin ? (!studioHost && !publicDomainRequest) : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if (!publicSubmission && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
+      if (!publicSubmission && !publicDomainRead && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
-      if (!publicSubmission && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicSubmission && !publicDomainRead && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
@@ -140,7 +144,7 @@ export function createApp({
         auth.issue(res, secure);
         return json({ setupRequired: false, authenticated: true, owner }, path === '/api/setup' ? 201 : 200);
       }
-      const localPublicForm = path.match(/^\/f\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)$/);
+      const localPublicForm = (!publicOrigin || studioHost) && path.match(/^\/f\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)$/);
       const domainPublicForm = publicOrigin ? path.match(/^\/f\/([a-z0-9-]+)$/) : null;
       if (req.method === 'GET' && content && (localPublicForm || domainPublicForm)) {
         const form = localPublicForm
@@ -163,7 +167,7 @@ export function createApp({
         return res.end(renderDynamicForm(form, `/api/public/forms/${form.id}/submit`));
       }
       const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
-      const localSaasSubmission = path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\/submissions$/);
+      const localSaasSubmission = (!publicOrigin || studioHost) && path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\/submissions$/);
       const domainSaasSubmission = publicOrigin ? path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/submissions$/) : null;
       if (req.method === 'POST' && content && (localSaasSubmission || domainSaasSubmission)) {
         const saved = localSaasSubmission
