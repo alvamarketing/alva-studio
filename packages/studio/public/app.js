@@ -4,6 +4,7 @@ import { createFriendlyEditor } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createFormsUI } from './forms.js';
+import { createStudioShell } from './studio-shell.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const escape = (value) =>
@@ -22,6 +23,7 @@ let editor,
   saving,
   ownerUI,
   formsUI,
+  studioShell,
   config = { vercelConnected: false };
 function toast(message) {
   $('#toast').textContent = message;
@@ -252,6 +254,7 @@ $('#save').onclick = action(async () => {
   toast('Página salva.');
 });
 $('#back').onclick = action(async () => {
+  const projectId = page?.projectId;
   await save();
   clearTimeout(timer);
   if (editor) {
@@ -261,6 +264,7 @@ $('#back').onclick = action(async () => {
   page = null;
   $('#editing').hidden = true;
   $('#dashboard').hidden = false;
+  await returnToProject(projectId);
   formsUI.showPages();
   await loadList();
 });
@@ -454,11 +458,35 @@ async function refreshConfig() {
     $('#publish').title = config.vercelConnected ? 'Publicar na Vercel' : 'Conecte a Vercel nas configurações do app';
   }
 }
-formsUI = createFormsUI({ api, toast });
+async function closeOpenEditors() {
+  await save();
+  clearTimeout(timer);
+  if (editor) editor.destroy();
+  editor = null;
+  page = null;
+  pages = [];
+  dirty = false;
+  $('#editing').hidden = true;
+  $('#page-list').replaceChildren();
+  await formsUI.closeEditor();
+}
+async function returnToProject(projectId) {
+  if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
+}
+formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject });
+studioShell = createStudioShell({
+  api,
+  beforeContextChange: closeOpenEditors,
+  onContextChanged: async () => {
+    formsUI.showPages();
+    await loadList();
+  },
+});
 ownerUI = createOwnerUI({
   api,
   toast,
   onAuthenticated: async () => {
+    await studioShell.initialize();
     await refreshConfig();
     if (page) {
       $('#editing').hidden = false;

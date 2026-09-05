@@ -139,7 +139,7 @@ export function parseOptions(value) {
   return [...new Set(String(value).split('\n').map((item) => item.trim()).filter(Boolean))];
 }
 
-export function createFormsUI({ api, toast }) {
+export function createFormsUI({ api, toast, onReturnToProject = async () => {} }) {
   const $ = (selector) => document.querySelector(selector);
   let forms = [];
   let current = null;
@@ -359,10 +359,12 @@ export function createFormsUI({ api, toast }) {
     toast('Formulário salvo.');
   });
   $('#form-back').onclick = () => run(async () => {
+    const projectId = current?.projectId;
     await save();
     current = null;
     $('#form-editing').hidden = true;
     $('#dashboard').hidden = false;
+    await onReturnToProject(projectId);
     await showForms();
   });
   $('#form-public-link').onclick = () => {
@@ -381,6 +383,12 @@ export function createFormsUI({ api, toast }) {
     showPages,
     showForms,
     loadList,
+    async closeEditor() {
+      await save();
+      current = null;
+      dirty = false;
+      $('#form-editing').hidden = true;
+    },
     reset() {
       forms = [];
       current = null;
