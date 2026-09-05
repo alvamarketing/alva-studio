@@ -124,7 +124,7 @@ test('binding de ativação nativa restaura o foco após click, Enter e Espaço'
   activate('ponteiro sem foco', { type: 'click', detail: 1 }, false);
 });
 
-test('landing declara árvore acessível e as três regiões persistentes', async () => {
+test('landing declara árvore acessível, regiões persistentes e abas móveis', async () => {
   const [source, css] = await Promise.all([
     readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8'),
     readFile(new URL('../public/editor-shell.css', import.meta.url), 'utf8'),
@@ -137,8 +137,19 @@ test('landing declara árvore acessível e as três regiões persistentes', asyn
   assert.match(source, /data-editor-panel="structure"/);
   assert.match(source, /data-editor-panel="canvas"/);
   assert.match(source, /data-editor-panel="inspector"/);
+  assert.match(source, /workspaceState/);
+  assert.match(source, /workspaceKeyAction/);
+  assert.match(source, /role="tablist"/);
+  assert.match(source, /role="tab"/);
+  assert.match(source, /aria-controls=/);
+  assert.match(source, /role="tabpanel"/);
+  assert.match(source, /aria-labelledby=/);
+  assert.match(source, /panel\.hidden\s*=/);
+  assert.match(source, /panel\.inert\s*=/);
   assert.doesNotMatch(source, /fe-breadcrumb/);
   assert.ok(css.includes('grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px)'));
+  assert.match(css, /\.editor-workspace-tabs/);
+  assert.match(css, /\[data-editor-panel\]\[hidden\]/);
 });
 
 test('ações compactas preservam nomes acessíveis e ícones', () => {
@@ -201,11 +212,13 @@ test('somente o fundo estrutural do canvas fecha a edição', () => {
   assert.equal(isCanvasBackgroundElement(null), false);
 });
 
-test('layout móvel empilha painel e canvas sem largura mínima forçada', async () => {
+test('layout móvel alterna painéis sem largura mínima forçada', async () => {
   const css = await readFile(new URL('../public/editor-shell.css', import.meta.url), 'utf8');
   const mobile = css.match(/@media \(max-width: 740px\) \{([\s\S]+)\}\s*$/)?.[1] || '';
   assert.match(mobile, /grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(mobile, /grid-template-rows:/);
+  assert.match(mobile, /\.editor-workspace-tabs\s*\{[\s\S]*display:\s*flex/);
+  assert.match(mobile, /\[data-editor-panel\]\[hidden\]\s*\{[\s\S]*display:\s*none/);
   assert.match(mobile, /\.fe-element-actions\s*\{[\s\S]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 1050px\)[\s\S]*height:\s*calc\(100dvh - 112px\)/);
 });

@@ -1,4 +1,5 @@
 import { blocks, normalizeForms, templateCss } from './templates.js';
+import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 
 const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -156,9 +157,13 @@ export function createFriendlyEditor({
 }) {
   const host = typeof container === 'string' ? document.querySelector(container) : container;
   if (!host) throw new Error('Não foi possível abrir a área de edição.');
+  let activeWorkspacePanel = 'canvas';
+  const workspaceId = `landing-workspace-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+  const workspace = workspaceState(activeWorkspacePanel);
   host.classList.add('friendly-editor');
   host.innerHTML = `
-    <aside class="fe-sidebar" data-editor-panel="structure">
+    <div class="editor-workspace-tabs" role="tablist" aria-label="Regiões do editor">${workspace.panels.map((panel) => `<button type="button" role="tab" data-workspace-tab="${panel.id}" id="${workspaceId}-tab-${panel.id}" aria-controls="${workspaceId}-panel-${panel.id}" aria-selected="${panel.selected}" tabindex="${panel.selected ? '0' : '-1'}">${panel.label}</button>`).join('')}</div>
+    <aside class="fe-sidebar" data-editor-panel="structure" id="${workspaceId}-panel-structure" role="tabpanel" aria-labelledby="${workspaceId}-tab-structure">
       <div class="fe-panel-heading">
         <span class="fe-eyebrow">CONSTRUA SUA PÁGINA</span>
         <h2>Estrutura</h2>
@@ -171,12 +176,12 @@ export function createFriendlyEditor({
         <div class="fe-library-tip"><strong>Comece pelo essencial</strong><p>Um título claro, uma imagem e um convite para conversar.</p></div>
       </details>
     </aside>
-    <div class="fe-workspace" data-editor-panel="canvas">
+    <div class="fe-workspace" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas">
       <div class="fe-canvas-bar" aria-label="Histórico de edição"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></div>
       <div class="fe-canvas"></div>
       <div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div>
     </div>
-    <aside class="fe-inspector" data-editor-panel="inspector" aria-label="Editar elemento"><div class="fe-properties"></div></aside>`;
+    <aside class="fe-inspector" data-editor-panel="inspector" id="${workspaceId}-panel-inspector" role="tabpanel" aria-labelledby="${workspaceId}-tab-inspector" aria-label="Editar elemento"><div class="fe-properties"></div></aside>`;
   const $ = (selector) => host.querySelector(selector);
   const props = $('.fe-properties');
   const status = $('.fe-status');
@@ -186,6 +191,47 @@ export function createFriendlyEditor({
   let activeModel;
   let treeComponents = new Map();
   const cleanup = [];
+  const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 740px)').matches;
+  function syncWorkspacePanels({ focusTab = false } = {}) {
+    const state = workspaceState(activeWorkspacePanel);
+    const compact = isCompactWorkspace();
+    state.panels.forEach((statePanel) => {
+      const tab = $(`[data-workspace-tab="${statePanel.id}"]`);
+      const panel = $(`[data-editor-panel="${statePanel.id}"]`);
+      tab.setAttribute('aria-selected', String(statePanel.selected));
+      tab.tabIndex = statePanel.selected ? 0 : -1;
+      panel.hidden = compact && !statePanel.selected;
+      panel.inert = compact && !statePanel.selected;
+      if (focusTab && statePanel.selected) tab.focus();
+    });
+  }
+  function activateWorkspacePanel(panel, { focusTab = false } = {}) {
+    activeWorkspacePanel = normalizeWorkspacePanel(panel);
+    syncWorkspacePanels({ focusTab });
+  }
+  function bindWorkspaceTabs() {
+    host.querySelectorAll('[data-workspace-tab]').forEach((tab) => {
+      tab.onclick = () => activateWorkspacePanel(tab.dataset.workspaceTab, { focusTab: true });
+      tab.onkeydown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activateWorkspacePanel(tab.dataset.workspaceTab, { focusTab: true });
+          return;
+        }
+        const next = workspaceKeyAction(event, activeWorkspacePanel);
+        if (!next) return;
+        event.preventDefault();
+        activateWorkspacePanel(next, { focusTab: true });
+      };
+    });
+  }
+  bindWorkspaceTabs();
+  syncWorkspacePanels();
+  if (typeof window !== 'undefined') {
+    const syncOnResize = () => syncWorkspacePanels();
+    window.addEventListener('resize', syncOnResize);
+    cleanup.push(() => window.removeEventListener('resize', syncOnResize));
+  }
   function applyIconButton(element, action, shortcut = '') {
     const meta = editorActionMeta[action];
     const label = shortcut ? `${meta.label} (${shortcut})` : meta.label;
@@ -250,6 +296,7 @@ export function createFriendlyEditor({
     const handleCanvasKey = (event) => handleEditorKey(event, true);
     const clearSelection = (event) => {
       if (isCanvasBackgroundElement(event.target)) {
+        activateWorkspacePanel('canvas', { focusTab: isCompactWorkspace() });
         editor.select(editor.getWrapper());
         render();
       }
@@ -285,10 +332,12 @@ export function createFriendlyEditor({
   function selectTreeItem(id, activeItem = null) {
     const component = treeComponents.get(id);
     if (!component) return;
+    const compact = isCompactWorkspace();
+    activateWorkspacePanel('inspector', { focusTab: compact });
     editor.select(component, { scroll: true });
     activeModel = null;
     render();
-    focusTreeItem(id, activeItem);
+    if (!compact) focusTreeItem(id, activeItem);
   }
   function renderTree() {
     const wrapper = editor.getWrapper();
@@ -535,7 +584,10 @@ export function createFriendlyEditor({
     const tag = tagOf(model);
     const attrs = model.getAttributes();
     const head = section('Editar ' + componentLabel(model).toLocaleLowerCase('pt-BR'));
-    const backToLibrary = button(head, '← Adicionar elementos', () => editor.select(editor.getWrapper()), {
+    const backToLibrary = button(head, '← Adicionar elementos', () => {
+      activateWorkspacePanel('structure', { focusTab: isCompactWorkspace() });
+      editor.select(editor.getWrapper());
+    }, {
       className: 'fe-back-library',
     });
     head.prepend(backToLibrary);
@@ -865,6 +917,7 @@ export function createFriendlyEditor({
   }
   const clearFromCanvasBackground = (event) => {
     if (!event.target.matches('.fe-canvas, .gjs-cv-canvas, .gjs-cv-canvas__frames')) return;
+    activateWorkspacePanel('canvas', { focusTab: isCompactWorkspace() });
     editor.select(editor.getWrapper());
     render();
   };

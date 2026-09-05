@@ -1,4 +1,5 @@
 import { createContextList } from './context-list.js';
+import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 
 const TYPES = {
   short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
@@ -224,6 +225,8 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   let selectedElement = 0;
   let editingHeader = false;
   let dirty = false;
+  let activeWorkspacePanel = 'canvas';
+  const workspaceId = `forms-workspace-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
   const formList = createContextList({
     load: () => api('/forms'),
     apply: (next) => {
@@ -231,6 +234,45 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       renderList();
     },
   });
+
+  const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 740px)').matches;
+  function syncWorkspacePanels({ focusTab = false } = {}) {
+    const root = $('#dynamic-editor');
+    if (!root) return;
+    const compact = isCompactWorkspace();
+    workspaceState(activeWorkspacePanel).panels.forEach((statePanel) => {
+      const tab = root.querySelector(`[data-workspace-tab="${statePanel.id}"]`);
+      const panel = root.querySelector(`[data-editor-panel="${statePanel.id}"]`);
+      if (!tab || !panel) return;
+      tab.setAttribute('aria-selected', String(statePanel.selected));
+      tab.tabIndex = statePanel.selected ? 0 : -1;
+      panel.hidden = compact && !statePanel.selected;
+      panel.inert = compact && !statePanel.selected;
+      if (focusTab && statePanel.selected) tab.focus();
+    });
+  }
+  function activateWorkspacePanel(panel, { focusTab = false } = {}) {
+    activeWorkspacePanel = normalizeWorkspacePanel(panel);
+    syncWorkspacePanels({ focusTab });
+  }
+  function bindWorkspaceTabs() {
+    const root = $('#dynamic-editor');
+    root.querySelectorAll('[data-workspace-tab]').forEach((tab) => {
+      tab.onclick = () => activateWorkspacePanel(tab.dataset.workspaceTab, { focusTab: true });
+      tab.onkeydown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activateWorkspacePanel(tab.dataset.workspaceTab, { focusTab: true });
+          return;
+        }
+        const next = workspaceKeyAction(event, activeWorkspacePanel);
+        if (!next) return;
+        event.preventDefault();
+        activateWorkspacePanel(next, { focusTab: true });
+      };
+    });
+  }
+  if (typeof window !== 'undefined') window.addEventListener('resize', () => syncWorkspacePanels());
 
   const setActiveNav = (name) => {
     $('#nav-pages').classList.toggle('nav-active', name === 'pages');
@@ -330,7 +372,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     return current;
   }
 
-  function renderEditor() {
+  function renderEditor({ focusWorkspaceTab = false } = {}) {
     selected = Math.max(0, Math.min(selected, current.steps.length - 1));
     const screen = current.steps[selected];
     current.headerElements ||= [createStep('logo', 'logo'), createStep('progress', 'progresso')];
@@ -346,15 +388,17 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       editingHeader,
     });
     const treeItems = treeNodes.map((node) => `<button type="button" class="dynamic-tree-item dynamic-tree-item-${node.kind}" data-tree-node="${node.id}" role="treeitem" aria-level="${node.level}" aria-selected="${node.selected}" style="--dynamic-tree-level:${node.level}"><b class="material-symbols-outlined">${escape(node.icon)}</b><span><strong>${escape(node.label)}</strong><small>${escape(node.detail)}</small></span></button>`).join('');
+    const workspace = workspaceState(activeWorkspacePanel);
     $('#dynamic-editor').innerHTML = `
-      <aside class="dynamic-steps-panel">
+      <div class="editor-workspace-tabs" role="tablist" aria-label="Regiões do editor">${workspace.panels.map((panel) => `<button type="button" role="tab" data-workspace-tab="${panel.id}" id="${workspaceId}-tab-${panel.id}" aria-controls="${workspaceId}-panel-${panel.id}" aria-selected="${panel.selected}" tabindex="${panel.selected ? '0' : '-1'}">${panel.label}</button>`).join('')}</div>
+      <aside class="dynamic-steps-panel" data-editor-panel="structure" id="${workspaceId}-panel-structure" role="tabpanel" aria-labelledby="${workspaceId}-tab-structure">
         <div class="dynamic-panel-title"><span>CONSTRUA A EXPERIÊNCIA</span><h2>Estrutura</h2><p>O topo acompanha a pessoa. As telas mudam durante a conversa.</p></div>
         <div class="dynamic-structure-tree" role="tree" aria-label="Estrutura do formulário">${treeItems}</div>
         <details class="dynamic-screen-catalog"><summary><span class="material-symbols-outlined">add</span> Nova tela</summary><div class="dynamic-add"><span>Comece com uma composição pronta</span>${presets.map(([preset,label,icon]) => `<button data-add-screen="${preset}"><b class="material-symbols-outlined">${icon}</b>${label}</button>`).join('')}</div></details>
         <details class="dynamic-element-catalog"><summary><span class="material-symbols-outlined">add</span> ${editingHeader ? 'Adicionar ao topo' : 'Adicionar conteúdo'}</summary><div class="dynamic-add">${Object.entries(TYPES).filter(([type]) => editingHeader ? HEADER_TYPES.has(type) : !['logo', 'progress'].includes(type)).map(([type, meta]) => `<button data-add-type="${type}"><b class="material-symbols-outlined">${meta.icon}</b>${meta.label}</button>`).join('')}</div></details>
       </aside>
-      <div class="dynamic-preview-panel"><div class="dynamic-preview-toolbar"><span>PRÉVIA DA EXPERIÊNCIA</span><strong>Tela ${selected + 1} de ${current.steps.length}</strong></div><div id="dynamic-preview"></div></div>
-      <aside class="dynamic-properties-panel">
+      <div class="dynamic-preview-panel" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas"><div class="dynamic-preview-toolbar"><span>PRÉVIA DA EXPERIÊNCIA</span><strong>Tela ${selected + 1} de ${current.steps.length}</strong></div><div id="dynamic-preview"></div></div>
+      <aside class="dynamic-properties-panel" data-editor-panel="inspector" id="${workspaceId}-panel-inspector" role="tabpanel" aria-labelledby="${workspaceId}-tab-inspector">
         <div class="dynamic-panel-title"><span>${editingHeader ? 'APARECE EM TODAS AS TELAS' : `EDITANDO A TELA ${selected + 1}`}</span><h2>${editingHeader ? 'Topo fixo' : escape(screen.title)}</h2><p>Clique em um bloco da prévia ou da estrutura para editar.</p></div>
         ${editingHeader ? '' : `<details class="dynamic-settings-group"><summary><span><b class="material-symbols-outlined">tune</b>Configurações da tela</span><b class="material-symbols-outlined">expand_more</b></summary><div class="dynamic-settings-content">
           <label>Nome da tela<input data-screen-field="title" maxlength="100" value="${escape(screen.title)}"></label>
@@ -374,6 +418,8 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
         <details class="dynamic-finish-settings"><summary>Finalização e integração</summary><label>Título final<input data-setting="title" maxlength="120" value="${escape(current.completion.title)}"></label><label>Mensagem final<textarea data-setting="message" maxlength="500">${escape(current.completion.message)}</textarea></label><label>Webhook HTTPS<input data-setting="webhook" type="url" placeholder="https://..." value="${escape(current.webhook)}"></label></details>
         </div>
       </aside>`;
+    bindWorkspaceTabs();
+    syncWorkspacePanels({ focusTab: focusWorkspaceTab });
     bindEditor(treeNodes);
     renderPreview();
   }
@@ -381,8 +427,8 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   function renderPreview() {
     const screen = current.steps[selected];
     $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-browser"><div class="dynamic-preview-fixed">${current.headerElements.map((element, index) => previewHeaderElement(element, index, editingHeader && index === selectedElement)).join('')}</div><div class="dynamic-preview-stage"><div class="dynamic-preview-card dynamic-composed" data-motion="${escape(screen.motion || 'fade-up')}"><p>${escape(screen.title).toUpperCase()}</p><div class="dynamic-preview-elements">${screen.elements.map((element,index) => `<button type="button" class="dynamic-preview-element" data-preview-element="${index}" aria-current="${!editingHeader && index === selectedElement}"><span class="dynamic-preview-icon material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><h1>${escape(element.title)}</h1>${element.description ? `<div class="dynamic-preview-description">${escape(element.description)}</div>` : ''}${previewAnswer(element)}<span class="dynamic-edit-hint"><i class="material-symbols-outlined">edit</i> Editar</span></button>`).join('')}</div><button class="dynamic-preview-next">${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} <span class="material-symbols-outlined">arrow_forward</span></button></div></div></div>`;
-    document.querySelectorAll('[data-preview-header]').forEach((button) => { button.onclick = () => { editingHeader = true; selectedElement = Number(button.dataset.previewHeader); renderEditor(); }; });
-    document.querySelectorAll('[data-preview-element]').forEach((button) => { button.onclick = () => { editingHeader = false; selectedElement = Number(button.dataset.previewElement); renderEditor(); }; });
+    document.querySelectorAll('[data-preview-header]').forEach((button) => { button.onclick = () => { editingHeader = true; selectedElement = Number(button.dataset.previewHeader); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
+    document.querySelectorAll('[data-preview-element]').forEach((button) => { button.onclick = () => { editingHeader = false; selectedElement = Number(button.dataset.previewElement); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
   }
 
   function bindEditor(treeNodes) {
@@ -397,7 +443,8 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
         editingHeader = next.editingHeader;
         selected = next.selected;
         selectedElement = next.selectedElement;
-        renderEditor();
+        activeWorkspacePanel = 'inspector';
+        renderEditor({ focusWorkspaceTab: isCompactWorkspace() });
       };
     });
     document.querySelectorAll('[data-add-screen]').forEach((button) => { button.onclick = () => { current.steps.push(createScreen(button.dataset.addScreen)); selected = current.steps.length - 1; selectedElement = 0; markDirty(); renderEditor(); }; });

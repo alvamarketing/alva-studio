@@ -76,7 +76,7 @@ test('opções eliminam linhas vazias e preservam rótulos únicos', () => {
   assert.deepEqual(parseOptions(' Empresa\n\nProfissional\nEmpresa '), ['Empresa', 'Profissional']);
 });
 
-test('editor dinâmico tem árvore única, prévia central, inspetor e controles acessíveis', async () => {
+test('editor dinâmico tem árvore única, prévia central, inspetor, abas móveis e controles acessíveis', async () => {
   const [css, source] = await Promise.all([readFile(cssPath, 'utf8'), readFile(formsPath, 'utf8')]);
   assert.match(css, /\.dynamic-editor-grid/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)/);
@@ -90,10 +90,21 @@ test('editor dinâmico tem árvore única, prévia central, inspetor e controles
   assert.match(source, /aria-selected=/);
   assert.match(source, /dynamic-preview-panel/);
   assert.match(source, /dynamic-properties-panel/);
+  assert.match(source, /workspaceState/);
+  assert.match(source, /workspaceKeyAction/);
+  assert.match(source, /role="tablist"/);
+  assert.match(source, /role="tab"/);
+  assert.match(source, /aria-controls=/);
+  assert.match(source, /role="tabpanel"/);
+  assert.match(source, /aria-labelledby=/);
+  assert.match(source, /panel\.hidden\s*=/);
+  assert.match(source, /panel\.inert\s*=/);
   assert.match(source, /aria-label="Mover tela para cima"/);
   assert.match(source, /aria-label="Duplicar elemento"/);
   assert.match(source, /aria-label="Excluir elemento"/);
   assert.doesNotMatch(source, /dynamic-elements-list/);
+  assert.match(css, /\.editor-workspace-tabs/);
+  assert.match(css, /\[data-editor-panel\]\[hidden\]/);
 });
 
 test('editor cria telas compostas com mais de um elemento', () => {

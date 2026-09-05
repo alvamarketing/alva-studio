@@ -49,3 +49,12 @@ test('navega entre abas somente pelas teclas de navegação', () => {
   assert.equal(workspaceKeyAction({ key: ' ' }, 'canvas'), null);
   assert.equal(workspaceKeyAction({ key: 'Delete' }, 'canvas'), null);
 });
+
+test('uma renderização comum preserva o canvas como painel ativo', () => {
+  const before = workspaceState('canvas');
+  const after = workspaceState(before.activePanel);
+
+  assert.deepEqual(after, before);
+  assert.equal(after.panels.filter((panel) => panel.selected).length, 1);
+  assert.equal(after.activePanel, 'canvas');
+});

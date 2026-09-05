@@ -72,6 +72,9 @@
   background: var(--alva-cloud);
   color: var(--alva-ink);
 }
+.editor-workspace-tabs {
+  display: none;
+}
 .dynamic-steps-panel,
 .dynamic-properties-panel {
   background: var(--alva-white);
@@ -594,6 +597,56 @@
   }
   .dynamic-preview-card {
     min-height: 440px;
+  }
+}
+@media (max-width: 740px) {
+  .dynamic-editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: 0;
+    height: calc(100dvh - 64px);
+  }
+  .editor-workspace-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--alva-line);
+    background: var(--alva-white);
+  }
+  .editor-workspace-tabs [role='tab'] {
+    flex: 1 0 auto;
+    min-height: 44px;
+    padding: 9px 14px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--alva-muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .editor-workspace-tabs [role='tab'][aria-selected='true'] {
+    border-color: var(--alva-blue-light);
+    background: var(--alva-highlight);
+    color: var(--alva-blue);
+  }
+  .dynamic-editor-grid [data-editor-panel] {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+  }
+  .dynamic-editor-grid [data-editor-panel][hidden] {
+    display: none;
+  }
+  .dynamic-steps-panel,
+  .dynamic-properties-panel,
+  .dynamic-preview-panel {
+    padding: 18px 14px;
+    border: 0;
+  }
+  .dynamic-preview-panel {
+    overflow: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
