@@ -32,3 +32,9 @@
 - `node --test packages/studio/test/vsl-reference.test.mjs`: 7 testes, 7 passaram.
 - `node --test packages/studio/test/publication-snapshot.test.mjs packages/studio/test/vsl-reference.test.mjs`: executado após a correção; todos os testes passaram.
 - `git diff --check`: sem erros.
+
+### Round 2 da revisão
+
+- O isolamento agora também é testado com `otherCompany.id` combinado ao `project.id` original que contém a VSL publicada, provando diretamente o filtro de empresa.
+- `node --test packages/studio/test/vsl-reference.test.mjs packages/studio/test/publication-snapshot.test.mjs`: 9 testes, 9 passaram.
+- `git diff --check`: sem erros.

@@ -68,6 +68,7 @@ test('isola a resolução por empresa/projeto e exige versão publicada', async 
     const draft = await repository.createVideo(input);
     await assert.rejects(() => resolvePublishedVsl({ database, companyId: company.id, projectId: project.id, publicId: draft.publicId, publicOrigin: 'https://studio.example.test' }), (error) => error.status === 404);
     await repository.publishVideo({ ...input, videoId: draft.id, lockVersion: 0 });
+    await assert.rejects(() => resolvePublishedVsl({ database, companyId: otherCompany.id, projectId: project.id, publicId: draft.publicId, publicOrigin: 'https://studio.example.test' }), (error) => error.status === 404);
     await assert.rejects(() => resolvePublishedVsl({ database, companyId: otherCompany.id, projectId: otherProject.id, publicId: draft.publicId, publicOrigin: 'https://studio.example.test' }), (error) => error.status === 404);
     await assert.rejects(() => resolvePublishedVsl({ database, companyId: company.id, projectId: otherProject.id, publicId: draft.publicId, publicOrigin: 'https://studio.example.test' }), (error) => error.status === 404);
   } finally {
