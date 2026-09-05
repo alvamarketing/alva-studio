@@ -20,6 +20,8 @@ pnpm --ignore-workspace start
 
 Antes de iniciar, defina `DATABASE_URL` no ambiente ou em `.env`; nunca a registre em logs, documentos versionados ou no navegador. Abra o endereço impresso, normalmente http://127.0.0.1:4178. Para acessar um snapshot JSON apenas durante migração ou rollback, rode `pnpm --ignore-workspace start:legacy`.
 
+Em produção, `/api/setup` só aceita requisições feitas do próprio servidor (sem `PUBLIC_ORIGIN` e a partir de loopback). Para criar a primeira conta remotamente, rode `pnpm --ignore-workspace bootstrap:owner` com `DATABASE_URL`, `OWNER_NAME`, `OWNER_EMAIL` e, opcionalmente, `OWNER_COMPANY_NAME`/`OWNER_COMPANY_SLUG` no ambiente; a senha é lida do stdin e nunca deve ser passada por argumento ou variável de ambiente. O comando é idempotente: se a conta já existir, nada é alterado.
+
 ## Fundação SaaS comprovada
 
 - Empresas, memberships e os papéis proprietário, administrador, editor e analista.
