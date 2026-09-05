@@ -7,7 +7,8 @@ export function resumeStorageKey(publicId, versionNumber) {
 
 export function toggleCaptionTrack(track, enabled) {
   if (!track) return false;
-  track.mode = enabled ? 'showing' : 'disabled';
+  const textTrack = track.track ?? track;
+  textTrack.mode = enabled ? 'showing' : 'disabled';
   return Boolean(enabled);
 }
 

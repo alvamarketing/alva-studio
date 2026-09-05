@@ -50,4 +50,7 @@ test('legenda VTT pode ser ativada por controle acessível', () => {
   assert.equal(track.mode, 'showing');
   assert.equal(toggleCaptionTrack(track, false), false);
   assert.equal(track.mode, 'disabled');
+  const element = { track: { mode: 'disabled' } };
+  toggleCaptionTrack(element, true);
+  assert.equal(element.track.mode, 'showing');
 });
