@@ -1,5 +1,5 @@
 status: feito
-certificacao: DONE_WITH_CONCERNS
+certificacao: DONE
 
 # Leads e integrações
 
@@ -8,13 +8,13 @@ O nó entrega lista paginada de leads por projeto, exportação CSV por formulá
 ## Verificação
 
 - Suíte executada uma única vez: `node --test packages/studio/test/*.test.mjs`.
-- Resultado exato: 278 testes, 277 pass, 1 fail, 0 cancelled, 0 skipped, duração 34865.116209 ms.
+- Resultado exato: 278 testes, 278 pass, 0 fail, 0 cancelled, 0 skipped, duração 35002.255958 ms.
 - Evidência de aceite: `packages/studio/test/project-api.test.mjs` cobre lista/CSV, evento do projeto correto, persistência antes da entrega e lead preservado quando a entrega falha; `packages/studio/test/outbound-webhook.test.mjs` cobre HTTPS controlado, timeout, não-2xx, redirect e destinos privados.
 - Nenhuma rede real ou produção foi usada; os testes injetam `dnsLookup`/`webhookFetch` controlados.
 
-## Preocupação aberta
+## Preocupação resolvida
 
-`packages/studio/test/server.test.mjs` falha porque `/app.js` importa `/leads-ui.js`, mas `packages/studio/server/index.mjs` não o expõe no mapa público; a suíte reporta 404. A certificação funcional de leads está verde nos testes específicos, mas a certificação final permanece `DONE_WITH_CONCERNS` até o mapa ser corrigido e a suíte completa passar.
+`packages/studio/test/server.test.mjs` falhava porque `/app.js` importa `/leads-ui.js`, mas `packages/studio/server/index.mjs` não o expunha no mapa público (404). Corrigido no commit `da427c0` ao registrar `/leads-ui.js` no mapa `files` de `server/index.mjs`, com asserção de regressão em `server.test.mjs`. Suíte completa reexecutada de forma independente após o fix: 278/278 aprovados. Certificação final atualizada de `DONE_WITH_CONCERNS` para `DONE`.
 
 ## Escopo diferido: worker_webhook
 
