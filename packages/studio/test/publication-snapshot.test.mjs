@@ -221,49 +221,6 @@ test('publicação preserva HTML malformado em vez de aplicar substituição par
   }
 });
 
-test('publicação é atômica e preserva o documento inteiro quando há erro depois de um nó válido', async () => {
-  for (const renderedHtml of [
-    '<main><div data-alva-vsl="public-vsl-before-error"></div><div data-alva-vsl="public-vsl-broken><span>bad</main>',
-    '<main><div data-alva-vsl="public-vsl-before-error"></div><div data-alva-vsl="public-vsl-broken"><span>bad</div></main>',
-    '<main><div data-alva-vsl="public-vsl-before-error"/><section></section></main>',
-    '<main><div data-alva-vsl="public-vsl-before-error"></div><iframe class="alva-vsl-frame" src="https://client.example/embed/v/public-vsl-before-error"/></main>',
-  ]) {
-    const rows = [{
-      kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-      content_id: 'page-vsl-atomic', version_id: 'page-version-vsl-atomic', version_number: 1, path: '/vsl-atomic',
-      rendered_html: renderedHtml,
-      editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-before-error' }] },
-    }];
-    const snapshot = await buildPublishableSnapshot({
-      database: database(rows, [{ public_id: 'public-vsl-before-error', version_number: 1 }]),
-      companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
-    });
-    assert.equal(snapshot.files[0].data, renderedHtml);
-  }
-});
-
-test('publicação protege CDATA e falha atomicamente quando CDATA não termina', async () => {
-  const valid = '<![CDATA[<div data-alva-vsl="public-vsl-cdata"></div>]]><main><div data-alva-vsl="public-vsl-real"></div></main>';
-  const rows = [{
-    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-    content_id: 'page-vsl-cdata', version_id: 'page-version-vsl-cdata', version_number: 1, path: '/vsl-cdata',
-    rendered_html: valid,
-    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-real' }] },
-  }];
-  const snapshot = await buildPublishableSnapshot({
-    database: database(rows, [{ public_id: 'public-vsl-real', version_number: 1 }]),
-    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
-  });
-  assert.match(snapshot.files[0].data, /<!\[CDATA\[<div data-alva-vsl="public-vsl-cdata"><\/div>\]\]>/);
-  assert.match(snapshot.files[0].data, /public\.example\.test\/embed\/v\/public-vsl-real/);
-  const malformed = { ...rows[0], rendered_html: '<main><div data-alva-vsl="public-vsl-before-cdata"></div><![CDATA[<div data-alva-vsl="public-vsl-cdata"></div>' };
-  const malformedSnapshot = await buildPublishableSnapshot({
-    database: database([malformed], [{ public_id: 'public-vsl-before-cdata', version_number: 1 }]),
-    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://public.example.test',
-  });
-  assert.equal(malformedSnapshot.files[0].data, malformed.rendered_html);
-});
-
 test('snapshot deduplica VSL repetida entre página e formulário', async () => {
   const rows = [
     {

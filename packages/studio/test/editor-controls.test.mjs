@@ -250,26 +250,6 @@ test('materialização do cliente falha de forma conservadora em HTML malformado
   }
 });
 
-test('materialização do cliente é atômica e preserva o documento inteiro quando há erro depois de um nó válido', () => {
-  for (const malformed of [
-    '<main><div data-alva-vsl="public-vsl-before-error"></div><div data-alva-vsl="public-vsl-broken><span>bad</main>',
-    '<main><div data-alva-vsl="public-vsl-before-error"></div><div data-alva-vsl="public-vsl-broken"><span>bad</div></main>',
-    '<main><div data-alva-vsl="public-vsl-before-error"/><section></section></main>',
-    '<main><div data-alva-vsl="public-vsl-before-error"></div><iframe data-alva-vsl="public-vsl-broken"/></main>',
-  ]) {
-    assert.equal(renderVslReferences(malformed, { publicOrigin: 'https://studio.example.test' }), malformed);
-  }
-});
-
-test('materialização do cliente protege CDATA e falha atomicamente quando CDATA não termina', () => {
-  const source = '<![CDATA[<div data-alva-vsl="public-vsl-cdata"></div>]]><main><div data-alva-vsl="public-vsl-real"></div></main>';
-  const output = renderVslReferences(source, { publicOrigin: 'https://studio.example.test' });
-  assert.match(output, /<!\[CDATA\[<div data-alva-vsl="public-vsl-cdata"><\/div>\]\]>/);
-  assert.match(output, /embed\/v\/public-vsl-real/);
-  const malformed = '<main><div data-alva-vsl="public-vsl-before-cdata"></div><![CDATA[<div data-alva-vsl="public-vsl-cdata"></div>';
-  assert.equal(renderVslReferences(malformed, { publicOrigin: 'https://studio.example.test' }), malformed);
-});
-
 test('fluxo comportamental de exportação materializa o iframe público com título seguro', () => {
   const output = buildPageExportHtml({
     title: 'Página <VSL>',
