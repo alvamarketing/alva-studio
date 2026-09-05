@@ -33,14 +33,20 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const form = () => document.querySelector('#vsl-form');
   const status = () => document.querySelector('#vsl-status');
   const showForm = (video = null) => {
+    if (!video && !currentShell()?.can?.('video.write')) return;
     current = video;
     const target = form();
     if (!target) return;
     target.hidden = false;
+    const editable = currentShell()?.can?.('video.write') ?? false;
     for (const name of ['name', 'sourceUrl', 'sourceType', 'posterUrl', 'captionsUrl', 'accentColor', 'aspectRatio', 'ctaText', 'ctaUrl', 'ctaSeconds']) field(target, name).value = video?.[name] ?? ({ accentColor: '#286eea', aspectRatio: '16:9', sourceType: 'mp4' }[name] ?? '');
     field(target, 'autoplayMuted').checked = video?.autoplayMuted ?? true;
     field(target, 'resumeEnabled').checked = video?.resumeEnabled ?? true;
+    for (const control of target.querySelectorAll('input, select, textarea')) control.disabled = !editable;
+    const submit = target.querySelector('[type="submit"]');
+    if (submit) submit.hidden = !editable;
     field(target, 'publish').hidden = !video || !currentShell()?.can?.('deployment.publish');
+    field(target, 'publish').disabled = !editable;
   };
   const editById = async (videoId) => {
     const video = await fetchVslForEdit({ api, projectId: currentShell().state().currentProject.id, videoId });
@@ -56,13 +62,15 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
       const row = document.createElement('article'); row.className = 'vsl-list-row';
       const heading = document.createElement('strong'); heading.textContent = video.name;
       const meta = document.createElement('span'); meta.textContent = `${video.sourceType.toUpperCase()} · ${video.status}`;
-      const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Editar'; edit.onclick = () => showForm(video);
+      const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = currentShell()?.can?.('video.write') ? 'Editar' : 'Visualizar'; edit.onclick = () => editById(video.id);
       row.append(heading, meta, edit); target.append(row);
     }
   };
   const load = async () => {
     const projectId = currentShell()?.state?.().currentProject?.id;
     if (!projectId) return;
+    const newButton = document.querySelector('#new-vsl');
+    if (newButton) newButton.hidden = !currentShell()?.can?.('video.write');
     status().textContent = 'Carregando VSLs…';
     try { render(await api(`/projects/${projectId}/videos`)); status().textContent = ''; }
     catch (error) { status().textContent = error.message; }

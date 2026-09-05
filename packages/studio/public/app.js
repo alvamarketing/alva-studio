@@ -60,6 +60,9 @@ function action(fn) {
 function setActiveNavigation(view) {
   applyDashboardNavigation({ home: $('#nav-home'), company: $('#nav-company'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl') }, view);
 }
+function updateVslNavigation() {
+  $('#nav-vsl').hidden = !studioShell?.can?.('video.read');
+}
 function setDashboardView(view) {
   const sections = {
     home: '#studio-home',
@@ -72,6 +75,7 @@ function setDashboardView(view) {
   for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
   closeMobileDrawer();
   setActiveNavigation(view);
+  updateVslNavigation();
   if (view === 'home') renderHome();
   if (view === 'company') renderCompany();
   if (view === 'project') renderProject();
@@ -92,6 +96,7 @@ function dashboardState() {
 }
 function renderDashboardState(state) {
   dashboardStateOverride = state;
+  updateVslNavigation();
   if (!$('#studio-home').hidden) renderHome();
   if (!$('#company-view').hidden) renderCompany();
   if (!$('#project-view').hidden) renderProject();
@@ -122,6 +127,7 @@ function relativeDate(value) {
 }
 function renderHome() {
   if (!studioShell) return;
+  updateVslNavigation();
   const state = dashboardState();
   const model = dashboardModel(state);
   $('#home-display-name').textContent = state.session?.user?.displayName || 'seja bem-vindo';
@@ -971,9 +977,10 @@ $('#nav-forms').onclick = action(async () => {
 });
 $('#nav-vsl').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha um projeto antes de acessar suas VSLs.');
+  if (!studioShell.can('video.read')) throw new Error('Você não tem permissão para visualizar VSLs.');
   setDashboardView('vsl');
 });
-$('#new-vsl').onclick = () => vslUI.edit();
+$('#new-vsl').onclick = () => { if (studioShell.can('video.write')) vslUI.edit(); };
 $('#project-content-filter').onclick = (event) => {
   const button = event.target.closest('[data-project-filter]');
   if (!button) return;

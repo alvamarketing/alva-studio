@@ -42,6 +42,7 @@ test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wire
   assert.match(app, /canCreateProject\(studioShell\)/);
   assert.match(app, /await studioShell\.initialize\(\);\s*dashboardContextFlow\.bootstrap\(\);/);
   assert.match(app, /createVslUI\(\{ api, getShell: \(\) => studioShell, toast \}\)/);
+  assert.match(app, /nav-vsl'\)\.hidden = !studioShell\?\.can\?\.\('video\.read'\)/);
   assert.match(app, /futureText\.textContent = 'Em breve'/);
   assert.doesNotMatch(dashboardShell, /Imobiliárias|Diagnóstico comercial|Projeto CMA|Profissional|2 de 5/);
 });
