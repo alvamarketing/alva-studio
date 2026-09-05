@@ -5,6 +5,20 @@ export function resumeStorageKey(publicId, versionNumber) {
   return `alva-vsl-resume:${String(publicId)}:${String(versionNumber)}`;
 }
 
+const TRACKER_EVENT_NAMES = {
+  start: 'vsl_start', milestone: 'vsl_progress', complete: 'vsl_complete', cta_click: 'vsl_cta_click', error: 'vsl_error',
+};
+
+// Traduz o evento do controlador para o nome que o coletor entende, sem nunca incluir a URL da
+// mídia — só identificador público, versão e (para marco) o valor atingido.
+export function mapVslEventToTrackerEvent(event) {
+  const name = TRACKER_EVENT_NAMES[event?.type];
+  if (!name) return null;
+  const data = { publicId: event.publicId, versionNumber: event.versionNumber };
+  if (event.type === 'milestone') data.value = event.value;
+  return { name, data };
+}
+
 export function toggleCaptionTrack(track, enabled) {
   if (!track) return false;
   const textTrack = track.track ?? track;
@@ -120,7 +134,14 @@ export function autoplayWhenReady(video, { onBlocked = () => {} } = {}) {
 
 export function mountVslPlayer(container, config = {}) {
   if (!container || typeof document === 'undefined') throw new Error('Container do player é obrigatório.');
-  const controller = createVslPlayerController(config);
+  const controller = createVslPlayerController({
+    ...config,
+    onEvent: (event) => {
+      config.onEvent?.(event);
+      const mapped = mapVslEventToTrackerEvent(event);
+      if (mapped) container.dispatchEvent(new CustomEvent('alva:track', { bubbles: true, detail: mapped }));
+    },
+  });
   const video = document.createElement('video');
   video.className = 'vsl-video'; video.playsInline = true; video.preload = 'metadata'; video.muted = config.autoplayMuted !== false;
   if (config.posterUrl) video.poster = config.posterUrl;

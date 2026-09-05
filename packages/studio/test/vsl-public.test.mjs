@@ -29,6 +29,37 @@ test('renderizador público escapa HTML, configura CSP por origem e usa player l
   assert.match(policy, /frame-ancestors 'none'/);
 });
 
+test('publica os marcos configurados e versionados da VSL, não o literal fixo', () => {
+  function decode(html) {
+    return JSON.parse(html.match(/data-vsl-config="([^"]*)"/)[1].replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+  }
+  const comMarcos = renderVslPage({ ...video, milestones: [50, 90] }, { publicOrigin: 'https://studio.example.test' });
+  assert.deepEqual(decode(comMarcos).milestones, [50, 90]);
+  const semMarcos = renderVslPage({ ...video, milestones: [] }, { publicOrigin: 'https://studio.example.test' });
+  assert.deepEqual(decode(semMarcos).milestones, [25, 50, 75, 100]);
+});
+
+test('CSP da VSL ganha a origem do Studio em connect-src quando informada, sem abrir script-src', () => {
+  const semOrigemDoStudio = vslContentSecurityPolicy(video.sourceUrl, {});
+  assert.doesNotMatch(semOrigemDoStudio, /https:\/\/studio\.example\.test/);
+  const comOrigemDoStudio = vslContentSecurityPolicy(video.sourceUrl, { studioOrigin: 'https://studio.example.test' });
+  const connectSrc = comOrigemDoStudio.match(/connect-src ([^;]+);/)[1];
+  assert.match(connectSrc, /'self'/);
+  assert.match(connectSrc, /https:\/\/media\.example\.test/);
+  assert.match(connectSrc, /https:\/\/studio\.example\.test/);
+  assert.match(comOrigemDoStudio, /(^|; )script-src 'self'(;|$)/);
+  assert.doesNotMatch(comOrigemDoStudio, /script-src[^;]*studio\.example\.test/);
+});
+
+test('renderVslPage inclui o tracker de primeira parte quando há trackerPublicId, e preserva o HTML de hoje sem ele', () => {
+  const comTracker = renderVslPage(video, { publicOrigin: 'https://studio.example.test', trackerPublicId: 'trk_vsl_123' });
+  assert.match(comTracker, /<script src="\/tracker\.js" data-alva-tracker="trk_vsl_123"><\/script>/);
+  assert.match(comTracker, /<\/script><\/body><\/html>$/, 'o tracker entra depois do script do player, no fim do body');
+
+  const semTracker = renderVslPage(video, { publicOrigin: 'https://studio.example.test' });
+  assert.doesNotMatch(semTracker, /tracker\.js/);
+});
+
 test('embed permite ancestrais HTTPS, mantém proporção e inclui allow autoplay', () => {
   const html = renderVslPage({ ...video, aspectRatio: '9:16' }, { embed: true });
   assert.match(html, /allow="autoplay"/);

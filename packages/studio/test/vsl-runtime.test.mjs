@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayWhenReady, createVslPlayerController, resumeStorageKey, toggleCaptionTrack } from '../public/vsl-player.js';
+import { autoplayWhenReady, createVslPlayerController, mapVslEventToTrackerEvent, resumeStorageKey, toggleCaptionTrack } from '../public/vsl-player.js';
 
 test('controlador de VSL calcula progresso real, CTA e marcos uma vez', () => {
   const events = [];
@@ -42,6 +42,24 @@ test('autoplay espera mídia anexada e pronta e executa somente uma vez', async 
   listeners.loadedmetadata(); await pending;
   listeners.loadedmetadata();
   assert.equal(video.plays, 1);
+});
+
+test('mapeia cada evento do controlador para o nome de coleta correspondente, sem URL de mídia', () => {
+  const base = { publicId: 'public-vsl-123456', versionNumber: 3 };
+  assert.deepEqual(mapVslEventToTrackerEvent({ type: 'start', ...base }), { name: 'vsl_start', data: { publicId: base.publicId, versionNumber: 3 } });
+  assert.deepEqual(mapVslEventToTrackerEvent({ type: 'milestone', value: 75, ...base }), { name: 'vsl_progress', data: { publicId: base.publicId, versionNumber: 3, value: 75 } });
+  assert.deepEqual(mapVslEventToTrackerEvent({ type: 'complete', ...base }), { name: 'vsl_complete', data: { publicId: base.publicId, versionNumber: 3 } });
+  assert.deepEqual(mapVslEventToTrackerEvent({ type: 'cta_click', ...base }), { name: 'vsl_cta_click', data: { publicId: base.publicId, versionNumber: 3 } });
+  assert.deepEqual(mapVslEventToTrackerEvent({ type: 'error', ...base }), { name: 'vsl_error', data: { publicId: base.publicId, versionNumber: 3 } });
+  assert.equal(mapVslEventToTrackerEvent({ type: 'unknown', ...base }), null);
+  const events = [];
+  const controller = createVslPlayerController({ ...base, duration: 100, onEvent: (event) => events.push(mapVslEventToTrackerEvent(event)) });
+  controller.play();
+  controller.timeUpdate(100);
+  controller.ctaClick();
+  const serialized = JSON.stringify(events);
+  assert.equal(serialized.includes('http'), false, 'nenhum evento mapeado pode carregar a URL da mídia');
+  assert.deepEqual(events.filter(Boolean).map((event) => event.name), ['vsl_start', 'vsl_progress', 'vsl_progress', 'vsl_progress', 'vsl_progress', 'vsl_cta_click']);
 });
 
 test('legenda VTT pode ser ativada por controle acessível', () => {
