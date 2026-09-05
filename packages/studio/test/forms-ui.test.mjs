@@ -1,10 +1,19 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createFormsUI, createStep, createScreen, moveStep, parseOptions } from '../public/forms.js';
+import {
+  createFormsUI,
+  createStep,
+  createScreen,
+  formTreeNodes,
+  formTreeSelection,
+  moveStep,
+  parseOptions,
+} from '../public/forms.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const cssPath = new URL('../public/forms.css', import.meta.url);
+const formsPath = new URL('../public/forms.js', import.meta.url);
 
 test('dashboard oferece páginas e formulários dinâmicos como destinos principais', async () => {
   const html = await readFile(htmlPath, 'utf8');
@@ -27,6 +36,31 @@ test('editor cria e reordena etapas sem alterar o array original', () => {
   assert.deepEqual(moveStep(rows, 0, -1), rows);
 });
 
+test('árvore do formulário preserva topo, telas, elementos e a seleção compartilhada', () => {
+  const nodes = formTreeNodes({
+    headerElements: [{ id: 'logo', type: 'logo', title: 'Marca' }],
+    steps: [
+      { id: 'tela-inicial', title: 'Início', elements: [{ id: 'nome', type: 'short_text', title: 'Seu nome' }] },
+      { id: 'tela-final', title: 'Confirmação', elements: [{ id: 'aviso', type: 'statement', title: 'Tudo certo' }] },
+    ],
+    selected: 1,
+    selectedElement: 0,
+    editingHeader: false,
+  });
+
+  assert.deepEqual(nodes.map(({ id, parentId, kind, label, level, selected }) => ({ id, parentId, kind, label, level, selected })), [
+    { id: 'header', parentId: null, kind: 'header', label: 'Topo fixo', level: 1, selected: false },
+    { id: 'header:0', parentId: 'header', kind: 'element', label: 'Marca', level: 2, selected: false },
+    { id: 'screen:0', parentId: null, kind: 'screen', label: 'Início', level: 1, selected: false },
+    { id: 'screen:0:element:0', parentId: 'screen:0', kind: 'element', label: 'Seu nome', level: 2, selected: false },
+    { id: 'screen:1', parentId: null, kind: 'screen', label: 'Confirmação', level: 1, selected: false },
+    { id: 'screen:1:element:0', parentId: 'screen:1', kind: 'element', label: 'Tudo certo', level: 2, selected: true },
+  ]);
+  assert.deepEqual(formTreeSelection(nodes[1]), { editingHeader: true, selected: 1, selectedElement: 0 });
+  assert.deepEqual(formTreeSelection(nodes[5]), { editingHeader: false, selected: 1, selectedElement: 0 });
+  assert.equal(formTreeSelection({}), null);
+});
+
 test('catálogo dinâmico oferece perguntas, mídia, conversão e gráficos com ícone e movimento', () => {
   for (const type of ['long_text', 'multiple_choice', 'image', 'video', 'date', 'number', 'scale', 'address', 'file', 'cta', 'statement', 'chart']) {
     const step = createStep(type, `etapa-${type}`);
@@ -42,13 +76,24 @@ test('opções eliminam linhas vazias e preservam rótulos únicos', () => {
   assert.deepEqual(parseOptions(' Empresa\n\nProfissional\nEmpresa '), ['Empresa', 'Profissional']);
 });
 
-test('editor dinâmico tem layout responsivo e controles acessíveis', async () => {
-  const css = await readFile(cssPath, 'utf8');
+test('editor dinâmico tem árvore única, prévia central, inspetor e controles acessíveis', async () => {
+  const [css, source] = await Promise.all([readFile(cssPath, 'utf8'), readFile(formsPath, 'utf8')]);
   assert.match(css, /\.dynamic-editor-grid/);
   assert.match(css, /@media\s*\(max-width:\s*900px\)/);
-  assert.match(css, /\.dynamic-step-button\[aria-current=['"]true['"]\]/);
+  assert.match(css, /\.dynamic-structure-tree/);
+  assert.match(css, /\.dynamic-tree-item\[aria-selected=['"]true['"]\]/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /\.material-symbols-outlined/);
+  assert.match(source, /role="tree"/);
+  assert.match(source, /role="treeitem"/);
+  assert.match(source, /aria-level=/);
+  assert.match(source, /aria-selected=/);
+  assert.match(source, /dynamic-preview-panel/);
+  assert.match(source, /dynamic-properties-panel/);
+  assert.match(source, /aria-label="Mover tela para cima"/);
+  assert.match(source, /aria-label="Duplicar elemento"/);
+  assert.match(source, /aria-label="Excluir elemento"/);
+  assert.doesNotMatch(source, /dynamic-elements-list/);
 });
 
 test('editor cria telas compostas com mais de um elemento', () => {

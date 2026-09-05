@@ -86,6 +86,81 @@ function ensureScreens(steps) {
   return steps.map((step, index) => Array.isArray(step.elements) ? step : { id: `tela-${step.id}`, title: `Tela ${index + 1}`, motion: step.motion || 'fade-up', autoAdvance: step.type === 'single_choice', timer: 0, elements: [{ ...step }] });
 }
 
+function boundedIndex(value, length) {
+  return length ? Math.max(0, Math.min(Number(value) || 0, length - 1)) : 0;
+}
+
+function treeSelection(editingHeader, selected, selectedElement) {
+  return { editingHeader, selected, selectedElement };
+}
+
+export function formTreeNodes({ headerElements = [], steps = [], selected = 0, selectedElement = 0, editingHeader = false } = {}) {
+  const activeScreen = boundedIndex(selected, steps.length);
+  const activeHeaderElement = boundedIndex(selectedElement, headerElements.length);
+  const activeScreenElements = steps[activeScreen]?.elements || [];
+  const activeScreenElement = boundedIndex(selectedElement, activeScreenElements.length);
+  const nodes = [{
+    id: 'header',
+    parentId: null,
+    kind: 'header',
+    icon: 'keep',
+    label: 'Topo fixo',
+    detail: `${headerElements.length} ${headerElements.length === 1 ? 'elemento' : 'elementos'} em todas as telas`,
+    level: 1,
+    selected: false,
+    selection: treeSelection(true, activeScreen, 0),
+  }];
+
+  headerElements.forEach((element, index) => {
+    nodes.push({
+      id: `header:${index}`,
+      parentId: 'header',
+      kind: 'element',
+      icon: element.icon || TYPES[element.type]?.icon || 'widgets',
+      label: element.title || TYPES[element.type]?.label || element.type || 'Elemento',
+      detail: TYPES[element.type]?.label || element.type || 'Elemento',
+      level: 2,
+      selected: editingHeader && index === activeHeaderElement,
+      selection: treeSelection(true, activeScreen, index),
+    });
+  });
+
+  steps.forEach((screen, screenIndex) => {
+    const elements = screen.elements || [];
+    nodes.push({
+      id: `screen:${screenIndex}`,
+      parentId: null,
+      kind: 'screen',
+      icon: 'web',
+      label: screen.title || `Tela ${screenIndex + 1}`,
+      detail: `${elements.length} ${elements.length === 1 ? 'elemento' : 'elementos'}`,
+      level: 1,
+      selected: false,
+      selection: treeSelection(false, screenIndex, 0),
+    });
+    elements.forEach((element, elementIndex) => {
+      nodes.push({
+        id: `screen:${screenIndex}:element:${elementIndex}`,
+        parentId: `screen:${screenIndex}`,
+        kind: 'element',
+        icon: element.icon || TYPES[element.type]?.icon || 'widgets',
+        label: element.title || TYPES[element.type]?.label || element.type || 'Elemento',
+        detail: TYPES[element.type]?.label || element.type || 'Elemento',
+        level: 2,
+        selected: !editingHeader && screenIndex === activeScreen && elementIndex === activeScreenElement,
+        selection: treeSelection(false, screenIndex, elementIndex),
+      });
+    });
+  });
+  return nodes;
+}
+
+export function formTreeSelection(node) {
+  const selection = node?.selection;
+  if (!selection || typeof selection.editingHeader !== 'boolean' || !Number.isInteger(selection.selected) || !Number.isInteger(selection.selectedElement)) return null;
+  return treeSelection(selection.editingHeader, selection.selected, selection.selectedElement);
+}
+
 function optionsEditor(step) {
   if (step.type === 'logo') return `<label>Endereço da imagem<input data-field="mediaUrl" type="url" placeholder="https://..." value="${escape(step.mediaUrl)}"></label><label>Descrição da logo<input data-field="altText" maxlength="160" value="${escape(step.altText)}"></label><label>Largura da logo (px)<input data-field-number="width" type="number" min="24" max="600" value="${step.width || 120}"></label>`;
   if (step.type === 'progress') return `<label class="dynamic-check"><input data-field="showValue" type="checkbox"${step.showValue ? ' checked' : ''}> Mostrar porcentagem</label>`;
@@ -263,33 +338,33 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     selectedElement = Math.max(0, Math.min(selectedElement, activeElements.length - 1));
     const element = activeElements[selectedElement];
     const presets = [['capture','Boas-vindas e captura','person_add'],['question','Pergunta com escolhas','quiz'],['content','Conteúdo e mídia','article'],['processing','Análise animada','progress_activity'],['results','Resultado visual','monitoring'],['offer','Oferta e ação','sell']];
+    const treeNodes = formTreeNodes({
+      headerElements: current.headerElements,
+      steps: current.steps,
+      selected,
+      selectedElement,
+      editingHeader,
+    });
+    const treeItems = treeNodes.map((node) => `<button type="button" class="dynamic-tree-item dynamic-tree-item-${node.kind}" data-tree-node="${node.id}" role="treeitem" aria-level="${node.level}" aria-selected="${node.selected}" style="--dynamic-tree-level:${node.level}"><b class="material-symbols-outlined">${escape(node.icon)}</b><span><strong>${escape(node.label)}</strong><small>${escape(node.detail)}</small></span></button>`).join('');
     $('#dynamic-editor').innerHTML = `
       <aside class="dynamic-steps-panel">
         <div class="dynamic-panel-title"><span>CONSTRUA A EXPERIÊNCIA</span><h2>Estrutura</h2><p>O topo acompanha a pessoa. As telas mudam durante a conversa.</p></div>
-        <button type="button" class="dynamic-fixed-top" aria-label="Editar topo fixo" aria-current="${editingHeader}">
-          <span class="material-symbols-outlined">keep</span>
-          <div><strong>Topo fixo</strong><small>${current.headerElements.length} ${current.headerElements.length === 1 ? 'elemento' : 'elementos'} em todas as telas</small></div>
-          <span class="dynamic-fixed-badge">FIXO</span>
-        </button>
-        <div class="dynamic-list-heading"><div><span>MICROLANDING PAGES</span><strong>Telas da jornada</strong></div><small>${current.steps.length}</small></div>
-        <div class="dynamic-step-list">${current.steps.map((item, index) => `<button class="dynamic-step-button" data-index="${index}" aria-current="${index === selected}"><span>${index + 1}</span><span><strong>${escape(item.title)}</strong><small>${item.elements.length} ${item.elements.length === 1 ? 'elemento' : 'elementos'}</small></span></button>`).join('')}</div>
+        <div class="dynamic-structure-tree" role="tree" aria-label="Estrutura do formulário">${treeItems}</div>
         <details class="dynamic-screen-catalog"><summary><span class="material-symbols-outlined">add</span> Nova tela</summary><div class="dynamic-add"><span>Comece com uma composição pronta</span>${presets.map(([preset,label,icon]) => `<button data-add-screen="${preset}"><b class="material-symbols-outlined">${icon}</b>${label}</button>`).join('')}</div></details>
+        <details class="dynamic-element-catalog"><summary><span class="material-symbols-outlined">add</span> ${editingHeader ? 'Adicionar ao topo' : 'Adicionar conteúdo'}</summary><div class="dynamic-add">${Object.entries(TYPES).filter(([type]) => editingHeader ? HEADER_TYPES.has(type) : !['logo', 'progress'].includes(type)).map(([type, meta]) => `<button data-add-type="${type}"><b class="material-symbols-outlined">${meta.icon}</b>${meta.label}</button>`).join('')}</div></details>
       </aside>
       <div class="dynamic-preview-panel"><div class="dynamic-preview-toolbar"><span>PRÉVIA DA EXPERIÊNCIA</span><strong>Tela ${selected + 1} de ${current.steps.length}</strong></div><div id="dynamic-preview"></div></div>
       <aside class="dynamic-properties-panel">
-        <div class="dynamic-panel-title"><span>${editingHeader ? 'APARECE EM TODAS AS TELAS' : `EDITANDO A TELA ${selected + 1}`}</span><h2>${editingHeader ? 'Topo fixo' : escape(screen.title)}</h2><p>Clique em um bloco da prévia ou da lista para editar.</p></div>
+        <div class="dynamic-panel-title"><span>${editingHeader ? 'APARECE EM TODAS AS TELAS' : `EDITANDO A TELA ${selected + 1}`}</span><h2>${editingHeader ? 'Topo fixo' : escape(screen.title)}</h2><p>Clique em um bloco da prévia ou da estrutura para editar.</p></div>
         ${editingHeader ? '' : `<details class="dynamic-settings-group"><summary><span><b class="material-symbols-outlined">tune</b>Configurações da tela</span><b class="material-symbols-outlined">expand_more</b></summary><div class="dynamic-settings-content">
           <label>Nome da tela<input data-screen-field="title" maxlength="100" value="${escape(screen.title)}"></label>
           <div class="dynamic-inline"><label>Animação de entrada<select data-screen-field="motion">${MOTIONS.map(([value,label]) => `<option value="${value}"${screen.motion === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label>Avançar após<input data-screen-field="timer" type="number" min="0" max="15" value="${screen.timer || 0}"><small>0 desativa</small></label></div>
           <label class="dynamic-check"><input data-screen-field="autoAdvance" type="checkbox"${screen.autoAdvance ? ' checked' : ''}> Avançar ao marcar uma escolha</label>
-          <div class="dynamic-step-actions"><button data-screen-move="-1" aria-label="Mover tela para cima" title="Mover tela para cima"><span class="material-symbols-outlined">arrow_upward</span></button><button data-screen-move="1" aria-label="Mover tela para baixo" title="Mover tela para baixo"><span class="material-symbols-outlined">arrow_downward</span></button><button data-screen-duplicate aria-label="Duplicar tela" title="Duplicar tela"><span class="material-symbols-outlined">content_copy</span></button><button data-screen-delete aria-label="Excluir tela" title="Excluir tela" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
+          <div class="dynamic-step-actions"><button data-screen-move="-1" aria-label="Mover tela para cima" title="Mover tela para cima"${selected === 0 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span></button><button data-screen-move="1" aria-label="Mover tela para baixo" title="Mover tela para baixo"${selected === current.steps.length - 1 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span></button><button data-screen-duplicate aria-label="Duplicar tela" title="Duplicar tela"><span class="material-symbols-outlined">content_copy</span></button><button data-screen-delete aria-label="Excluir tela" title="Excluir tela" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
         </div></details>`}
-        <div class="dynamic-list-heading dynamic-elements-heading"><div><span>${editingHeader ? 'CONTEÚDO FIXO' : 'CONTEÚDO DESTA TELA'}</span><strong>${activeElements.length} ${activeElements.length === 1 ? 'elemento' : 'elementos'}</strong></div></div>
-        <div class="dynamic-elements-list">${activeElements.map((item,index) => `<button data-select-element="${index}" aria-current="${index === selectedElement}"><b class="material-symbols-outlined">${TYPES[item.type]?.icon || 'widgets'}</b><span><strong>${escape(item.title)}</strong><small>${TYPES[item.type]?.label || item.type}</small></span><i class="material-symbols-outlined">drag_indicator</i></button>`).join('')}</div>
-        <details class="dynamic-element-catalog"><summary><span class="material-symbols-outlined">add</span> ${editingHeader ? 'Adicionar ao topo' : 'Adicionar conteúdo'}</summary><div class="dynamic-add">${Object.entries(TYPES).filter(([type]) => editingHeader ? HEADER_TYPES.has(type) : !['logo', 'progress'].includes(type)).map(([type, meta]) => `<button data-add-type="${type}"><b class="material-symbols-outlined">${meta.icon}</b>${meta.label}</button>`).join('')}</div></details>
         <div class="dynamic-element-editor">
         <div class="dynamic-panel-title"><span>ELEMENTO ${selectedElement + 1}</span><h2>${TYPES[element.type].label}</h2></div>
-        <div class="dynamic-step-actions"><button data-element-move="-1" aria-label="Mover elemento para cima" title="Mover elemento para cima"><span class="material-symbols-outlined">arrow_upward</span></button><button data-element-move="1" aria-label="Mover elemento para baixo" title="Mover elemento para baixo"><span class="material-symbols-outlined">arrow_downward</span></button><button data-element-duplicate aria-label="Duplicar elemento" title="Duplicar elemento"><span class="material-symbols-outlined">content_copy</span></button><button data-element-delete aria-label="Excluir elemento" title="Excluir elemento" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
+        <div class="dynamic-step-actions"><button data-element-move="-1" aria-label="Mover elemento para cima" title="Mover elemento para cima"${selectedElement === 0 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span></button><button data-element-move="1" aria-label="Mover elemento para baixo" title="Mover elemento para baixo"${selectedElement === activeElements.length - 1 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span></button><button data-element-duplicate aria-label="Duplicar elemento" title="Duplicar elemento"><span class="material-symbols-outlined">content_copy</span></button><button data-element-delete aria-label="Excluir elemento" title="Excluir elemento" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
         <label>Tipo<select data-field="type">${Object.entries(TYPES).filter(([type]) => !editingHeader || HEADER_TYPES.has(type)).map(([type, meta]) => `<option value="${type}"${element.type === type ? ' selected' : ''}>${meta.label}</option>`).join('')}</select></label>
         <label>Título ou pergunta<input data-field="title" maxlength="180" value="${escape(element.title)}"></label>
         <label>Texto de apoio<textarea data-field="description" maxlength="1200" placeholder="Opcional">${escape(element.description)}</textarea></label>
@@ -299,7 +374,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
         <details class="dynamic-finish-settings"><summary>Finalização e integração</summary><label>Título final<input data-setting="title" maxlength="120" value="${escape(current.completion.title)}"></label><label>Mensagem final<textarea data-setting="message" maxlength="500">${escape(current.completion.message)}</textarea></label><label>Webhook HTTPS<input data-setting="webhook" type="url" placeholder="https://..." value="${escape(current.webhook)}"></label></details>
         </div>
       </aside>`;
-    bindEditor();
+    bindEditor(treeNodes);
     renderPreview();
   }
 
@@ -310,15 +385,23 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     document.querySelectorAll('[data-preview-element]').forEach((button) => { button.onclick = () => { editingHeader = false; selectedElement = Number(button.dataset.previewElement); renderEditor(); }; });
   }
 
-  function bindEditor() {
+  function bindEditor(treeNodes) {
     const screen = () => current.steps[selected];
     const elements = () => editingHeader ? current.headerElements : screen().elements;
     const element = () => elements()[selectedElement];
-    $('.dynamic-fixed-top').onclick = () => { editingHeader = true; selectedElement = 0; renderEditor(); };
-    document.querySelectorAll('.dynamic-step-button').forEach((button) => { button.onclick = () => { editingHeader = false; selected = Number(button.dataset.index); selectedElement = 0; renderEditor(); }; });
+    const nodesById = new Map(treeNodes.map((node) => [node.id, node]));
+    document.querySelectorAll('[data-tree-node]').forEach((button) => {
+      button.onclick = () => {
+        const next = formTreeSelection(nodesById.get(button.dataset.treeNode));
+        if (!next) return;
+        editingHeader = next.editingHeader;
+        selected = next.selected;
+        selectedElement = next.selectedElement;
+        renderEditor();
+      };
+    });
     document.querySelectorAll('[data-add-screen]').forEach((button) => { button.onclick = () => { current.steps.push(createScreen(button.dataset.addScreen)); selected = current.steps.length - 1; selectedElement = 0; markDirty(); renderEditor(); }; });
     document.querySelectorAll('[data-add-type]').forEach((button) => { button.onclick = () => { elements().push(createStep(button.dataset.addType)); selectedElement = elements().length - 1; markDirty(); renderEditor(); }; });
-    document.querySelectorAll('[data-select-element]').forEach((button) => { button.onclick = () => { selectedElement = Number(button.dataset.selectElement); renderEditor(); }; });
     document.querySelectorAll('[data-screen-move]').forEach((button) => { button.onclick = () => { const direction = Number(button.dataset.screenMove), target = selected + direction; if (target < 0 || target >= current.steps.length) return; current.steps = moveStep(current.steps, selected, direction); selected = target; markDirty(); renderEditor(); }; });
     $('[data-screen-duplicate]').onclick = () => { const copy = structuredClone(screen()); copy.id = `tela-${Date.now()}`; copy.elements.forEach((item,index) => { item.id = `elemento-${Date.now()}-${index}`; }); current.steps.splice(selected + 1, 0, copy); selected++; selectedElement = 0; markDirty(); renderEditor(); };
     $('[data-screen-delete]').onclick = () => { if (current.steps.length === 1) return toast('O formulário precisa ter pelo menos uma tela.'); current.steps.splice(selected, 1); selected = Math.min(selected, current.steps.length - 1); selectedElement = 0; markDirty(); renderEditor(); };
