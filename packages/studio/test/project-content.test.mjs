@@ -58,6 +58,15 @@ function assertStatus(statusCode) {
   return (error) => error?.statusCode === statusCode;
 }
 
+function formSchema(id, title) {
+  return {
+    headerElements: [],
+    steps: [{ id, type: 'short_text', title, required: true }],
+    completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' },
+    webhook: '',
+  };
+}
+
 test('rotas de páginas e formulários são únicas sem distinguir caixa e aceitam a raiz uma única vez', async (t) => {
   await withHarness(t, async ({ database, companies, projects, content }) => {
     const owner = await createUser(database, { email: 'owner@rotas.test', name: 'Owner' });
@@ -81,7 +90,7 @@ test('rotas de páginas e formulários são únicas sem distinguir caixa e aceit
         actorId: owner.id,
         name: 'Raiz',
         route: '/',
-        draftSchema: { fields: [] },
+        draftSchema: formSchema('raiz', 'Raiz'),
       }),
       assertStatus(409),
     );
@@ -92,7 +101,7 @@ test('rotas de páginas e formulários são únicas sem distinguir caixa e aceit
       actorId: owner.id,
       name: 'Contato',
       route: '/Contato',
-      draftSchema: { fields: ['email'] },
+      draftSchema: formSchema('email', 'E-mail'),
     });
     await assert.rejects(
       () => content.createPage({
@@ -190,7 +199,7 @@ test('rascunho de formulário não altera a versão pública publicada', async (
       actorId: owner.id,
       name: 'Diagnóstico',
       route: '/diagnostico',
-      draftSchema: { fields: [{ id: 'nome', label: 'Nome' }] },
+      draftSchema: formSchema('nome', 'Nome'),
     });
     const firstVersion = await content.publishForm({
       companyId: company.id,
@@ -207,7 +216,7 @@ test('rascunho de formulário não altera a versão pública publicada', async (
       formId: form.id,
       lockVersion: form.lockVersion,
       route: '/novo-diagnostico',
-      draftSchema: { fields: [{ id: 'empresa', label: 'Empresa' }] },
+      draftSchema: formSchema('empresa', 'Empresa'),
     });
     assert.equal(updated.lockVersion, 1);
 
@@ -217,7 +226,8 @@ test('rascunho de formulário não altera a versão pública publicada', async (
       route: '/diagnostico',
     });
     assert.equal(publicForm.type, 'form');
-    assert.deepEqual(publicForm.schema, { fields: [{ id: 'nome', label: 'Nome' }] });
+    assert.equal(publicForm.schema.steps[0].id, 'nome');
+    assert.equal(publicForm.schema.steps[0].title, 'Nome');
     await assert.rejects(
       () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/novo-diagnostico' }),
       assertStatus(404),
@@ -229,7 +239,8 @@ test('rascunho de formulário não altera a versão pública publicada', async (
       projectId: project.id,
       route: '/novo-diagnostico',
     });
-    assert.deepEqual(republished.schema, { fields: [{ id: 'empresa', label: 'Empresa' }] });
+    assert.equal(republished.schema.steps[0].id, 'empresa');
+    assert.equal(republished.schema.steps[0].title, 'Empresa');
     await assert.rejects(
       () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/diagnostico' }),
       assertStatus(404),

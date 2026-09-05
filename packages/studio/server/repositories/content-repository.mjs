@@ -2,6 +2,7 @@ import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability, normalizeProjectSlug, normalizeRoute } from '../domain/access.mjs';
 import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from '../form-answer-validation.mjs';
+import { normalizeFormInput } from '../form-store.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -85,7 +86,7 @@ function formRecord(row) {
     companySlug: row.company_slug,
     projectSlug: row.project_slug,
     publicPath: row.company_slug && row.project_slug && (row.published_route ?? row.route)
-      ? `/f/${row.company_slug}/${row.project_slug}${row.published_route ?? row.route}`
+      ? publicFormPath(row.company_slug, row.project_slug, row.published_route ?? row.route)
       : null,
     name: row.name,
     route: row.route,
@@ -99,9 +100,17 @@ function formRecord(row) {
   };
 }
 
-function publicSlug(value) {
-  if (!/^[a-z0-9-]{3,119}$/.test(String(value))) throw fail('Formulário não encontrado.', 404);
-  return route(`/${value}`);
+function publicRoute(value) {
+  try {
+    return normalizeRoute(value);
+  } catch {
+    throw fail('Formulário publicado não encontrado.', 404);
+  }
+}
+
+function publicFormPath(companySlug, projectSlug, path) {
+  const encodedRoute = path === '/' ? '' : path.slice(1).split('/').map(encodeURIComponent).join('/');
+  return `/f/${encodeURIComponent(companySlug)}/${encodeURIComponent(projectSlug)}/${encodedRoute}`;
 }
 
 function domain(value) {
@@ -304,7 +313,7 @@ export class ContentRepository {
   async createForm({ companyId, projectId, actorId, name, route: routeValue, draftSchema = {} }) {
     const formName = requiredName(name, 'Nome do formulário');
     const formRoute = route(routeValue);
-    const schema = json(draftSchema, 'Rascunho do formulário');
+    const schema = normalizeFormInput(draftSchema);
     try {
       return await withTransaction(this.database, async (client) => {
         await authorizedProject(client, { companyId, projectId, actorId, capability: 'form.write' });
@@ -417,7 +426,7 @@ export class ContentRepository {
         const next = {
           name: patch.name === undefined ? current.name : requiredName(patch.name, 'Nome do formulário'),
           route: patch.route === undefined ? current.route : route(patch.route),
-          draftSchema: patch.draftSchema === undefined ? current.draft_schema : json(patch.draftSchema, 'Rascunho do formulário'),
+          draftSchema: normalizeFormInput(patch.draftSchema === undefined ? current.draft_schema : patch.draftSchema),
         };
         const { rows } = await client.query(
           `UPDATE forms
@@ -648,8 +657,8 @@ export class ContentRepository {
     }
   }
 
-  async publishedFormForProject(client, { companySlug, projectSlug, slug }) {
-    const publishedPath = publicSlug(slug);
+  async publishedFormForProject(client, { companySlug, projectSlug, route: routeValue, slug }) {
+    const publishedPath = publicRoute(routeValue ?? slug);
     const normalizedCompany = normalizeProjectSlug(companySlug);
     const normalizedProject = normalizeProjectSlug(projectSlug);
     const { rows } = await client.query(
@@ -659,15 +668,20 @@ export class ContentRepository {
        JOIN companies company ON company.id = form.company_id
        JOIN projects project ON project.id = form.project_id AND project.company_id = form.company_id
        JOIN form_versions version ON version.id = form.published_version_id
-       WHERE company.slug = $1 AND project.slug = $2 AND version.published_path = $3 AND form.deleted_at IS NULL`,
+       WHERE company.slug = $1
+         AND company.status = 'active'
+         AND project.slug = $2
+         AND project.status = 'active'
+         AND version.published_path = $3
+         AND form.deleted_at IS NULL`,
       [normalizedCompany, normalizedProject, publishedPath],
     );
     if (rows.length !== 1) throw fail('Formulário publicado não encontrado.', 404);
     return rows[0];
   }
 
-  async publishedFormForDomain(client, { host, slug }) {
-    const publishedPath = publicSlug(slug);
+  async publishedFormForDomain(client, { host, route: routeValue, slug }) {
+    const publishedPath = publicRoute(routeValue ?? slug);
     const normalizedHost = domain(String(host).replace(/^\[/, '').replace(/\]$/, '').split(':')[0]);
     if (!normalizedHost) throw fail('Formulário publicado não encontrado.', 404);
     const { rows } = await client.query(
@@ -678,44 +692,62 @@ export class ContentRepository {
        JOIN projects project ON project.id = project_domain.project_id AND project.company_id = project_domain.company_id
        JOIN forms form ON form.project_id = project.id AND form.company_id = project.company_id AND form.deleted_at IS NULL
        JOIN form_versions version ON version.id = form.published_version_id
-       WHERE lower(project_domain.domain) = lower($1) AND version.published_path = $2`, [normalizedHost, publishedPath],
+       WHERE lower(project_domain.domain) = lower($1)
+         AND project_domain.environment = 'production'
+         AND project_domain.is_canonical
+         AND project_domain.verification_status = 'verified'
+         AND company.status = 'active'
+         AND project.status = 'active'
+         AND version.published_path = $2`, [normalizedHost, publishedPath],
     );
     if (rows.length !== 1) throw fail('Formulário publicado não encontrado.', 404);
     return rows[0];
   }
 
-  publicFormRecord(form, slug) {
+  publicFormRecord(form, routeValue) {
     return {
       id: form.id,
       companyId: form.company_id,
       projectId: form.project_id,
       companySlug: form.company_slug,
       projectSlug: form.project_slug,
-      publicPath: `/f/${form.company_slug}/${form.project_slug}${form.published_path}`,
+      publicPath: publicFormPath(form.company_slug, form.project_slug, form.published_path),
       versionId: form.version_id,
       name: form.name,
-      slug,
+      slug: routeValue === '/' ? '' : routeValue.replace(/^\//, ''),
       ...form.schema,
     };
   }
 
-  async publicFormForProject({ companySlug, projectSlug, slug }) {
-    return this.publicFormRecord(await this.publishedFormForProject(this.database, { companySlug, projectSlug, slug }), slug);
+  async publicFormForProject({ companySlug, projectSlug, route: routeValue, slug }) {
+    const path = publicRoute(routeValue ?? slug);
+    return this.publicFormRecord(await this.publishedFormForProject(this.database, { companySlug, projectSlug, route: path }), path);
   }
 
-  async publicFormForDomain({ host, slug }) {
-    return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, slug }), slug);
+  async publicFormForDomain({ host, route: routeValue, slug }) {
+    const path = publicRoute(routeValue ?? slug);
+    return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, route: path }), path);
   }
 
-  async submitPublicFormForProject({ companySlug, projectSlug, slug, input }) {
-    return this.submitPublishedForm({ resolve: (client) => this.publishedFormForProject(client, { companySlug, projectSlug, slug }), slug, input });
+  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input }) {
+    const path = publicRoute(routeValue ?? slug);
+    return this.submitPublishedForm({
+      resolve: (client) => this.publishedFormForProject(client, { companySlug, projectSlug, route: path }),
+      route: path,
+      input,
+    });
   }
 
-  async submitPublicFormForDomain({ host, slug, input }) {
-    return this.submitPublishedForm({ resolve: (client) => this.publishedFormForDomain(client, { host, slug }), slug, input });
+  async submitPublicFormForDomain({ host, route: routeValue, slug, input }) {
+    const path = publicRoute(routeValue ?? slug);
+    return this.submitPublishedForm({
+      resolve: (client) => this.publishedFormForDomain(client, { host, route: path }),
+      route: path,
+      input,
+    });
   }
 
-  async submitPublishedForm({ resolve, slug, input }) {
+  async submitPublishedForm({ resolve, route: routeValue, input }) {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
       const answers = validateFormAnswers(form.schema, input);
@@ -726,7 +758,13 @@ export class ContentRepository {
       );
       return {
         id: rows[0].id,
-        form: { id: form.id, name: form.name, slug, companySlug: form.company_slug, projectSlug: form.project_slug },
+        form: {
+          id: form.id,
+          name: form.name,
+          slug: routeValue === '/' ? '' : routeValue.replace(/^\//, ''),
+          companySlug: form.company_slug,
+          projectSlug: form.project_slug,
+        },
         schema: form.schema,
         answers,
         submittedAt: rows[0].submitted_at,
@@ -768,6 +806,7 @@ export class ContentRepository {
       const form = await scopedForm(client, { companyId, projectId, formId, lock: true });
       if (expectedLockVersion !== undefined && form.lock_version !== lockVersion(expectedLockVersion))
         throw fail('O formulário mudou em outra aba. Reabra antes de publicar.', 409);
+      const schema = normalizeFormInput(form.draft_schema);
       await assertPublishedPathAvailable(client, {
         companyId, projectId, path: form.route, contentId: formId, contentType: 'form',
       });
@@ -779,7 +818,7 @@ export class ContentRepository {
         `INSERT INTO form_versions (company_id, project_id, form_id, version_number, published_path, schema, created_by)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
          RETURNING *`,
-        [companyId, projectId, formId, number.rows[0].version_number, form.route, JSON.stringify(form.draft_schema), actorId],
+        [companyId, projectId, formId, number.rows[0].version_number, form.route, JSON.stringify(schema), actorId],
       );
       await client.query(
         `UPDATE forms

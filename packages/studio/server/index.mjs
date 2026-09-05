@@ -13,8 +13,61 @@ import { CompanyRepository } from './repositories/company-repository.mjs';
 import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
+import { normalizeRoute } from './domain/access.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
+
+function decodedSegment(value) {
+  const decoded = decodeURIComponent(value);
+  if (!decoded || decoded.includes('/') || decoded.includes('\\')) throw new Error('segmento inválido');
+  return decoded;
+}
+
+function encodedRoute(route) {
+  return route === '/' ? '' : route.slice(1).split('/').map(encodeURIComponent).join('/');
+}
+
+function parsePublicFormRequest(path, method, domainScope) {
+  let encoded;
+  if (method === 'GET') {
+    if (path === '/f') encoded = '';
+    else if (path.startsWith('/f/')) encoded = path.slice(3);
+    else return null;
+    if (encoded.endsWith('/')) encoded = encoded.slice(0, -1);
+  } else if (method === 'POST') {
+    const prefix = '/api/public/forms';
+    const suffix = '/submissions';
+    if (!path.startsWith(prefix) || !path.endsWith(suffix)) return null;
+    encoded = path.slice(prefix.length, -suffix.length);
+    if (encoded.startsWith('/')) encoded = encoded.slice(1);
+    if (encoded.endsWith('/')) encoded = encoded.slice(0, -1);
+  } else return null;
+
+  try {
+    const segments = encoded === '' ? [] : encoded.split('/').map(decodedSegment);
+    let companySlug;
+    let projectSlug;
+    let routeSegments = segments;
+    if (!domainScope) {
+      if (segments.length < 2 || !segments.slice(0, 2).every((segment) => /^[a-z0-9-]{1,80}$/.test(segment))) return null;
+      [companySlug, projectSlug] = segments;
+      routeSegments = segments.slice(2);
+    }
+    const route = normalizeRoute(routeSegments.length ? `/${routeSegments.join('/')}` : '/');
+    const routePath = encodedRoute(route);
+    const namespace = domainScope
+      ? ''
+      : `/${encodeURIComponent(companySlug)}/${encodeURIComponent(projectSlug)}`;
+    return {
+      companySlug,
+      projectSlug,
+      route,
+      action: `/api/public/forms${namespace}${routePath ? `/${routePath}` : ''}/submissions`,
+    };
+  } catch {
+    return null;
+  }
+}
 async function body(req) {
   if (!req.headers['content-type']?.startsWith('application/json')) throw error('Envie JSON.', 415);
   let size = 0;
@@ -112,11 +165,13 @@ export function createApp({
       const localHost = req.headers.host === expected || req.headers.host === 'localhost:' + res.socket.localPort;
       const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
       const path = new URL(req.url, 'http://' + expected).pathname;
-      const publicSubmission = req.method === 'POST' && /^\/api\/public\/forms\/(?:[a-z0-9-]+\/){0,2}[a-z0-9-]+\/(?:submit|submissions)$/.test(path);
-      const publicDomainRead = Boolean(content && publicOrigin && req.method === 'GET' && /^\/f\/[a-z0-9-]+$/.test(path));
-      const publicDomainSubmission = Boolean(content && publicOrigin && req.method === 'POST' && /^\/api\/public\/forms\/[a-z0-9-]+\/submissions$/.test(path));
-      const publicDomainRequest = publicDomainRead || publicDomainSubmission;
       const studioHost = publicOrigin && req.headers.host === new URL(publicOrigin).host;
+      const domainScope = Boolean(publicOrigin && !studioHost);
+      const publicFormRequest = content ? parsePublicFormRequest(path, req.method, domainScope) : null;
+      const legacyPublicSubmission = !content && req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/submit$/.test(path);
+      const publicSubmission = legacyPublicSubmission || Boolean(publicFormRequest && req.method === 'POST');
+      const publicDomainRead = Boolean(publicFormRequest && domainScope && req.method === 'GET');
+      const publicDomainRequest = Boolean(publicFormRequest && domainScope);
       if (publicOrigin ? (!studioHost && !publicDomainRequest) : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
@@ -144,19 +199,18 @@ export function createApp({
         auth.issue(res, secure);
         return json({ setupRequired: false, authenticated: true, owner }, path === '/api/setup' ? 201 : 200);
       }
-      const localPublicForm = (!publicOrigin || studioHost) && path.match(/^\/f\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)$/);
-      const domainPublicForm = publicOrigin ? path.match(/^\/f\/([a-z0-9-]+)$/) : null;
-      if (req.method === 'GET' && content && (localPublicForm || domainPublicForm)) {
-        const form = localPublicForm
-          ? await content.publicFormForProject({ companySlug: localPublicForm[1], projectSlug: localPublicForm[2], slug: localPublicForm[3] })
-          : await content.publicFormForDomain({ host: req.headers.host, slug: domainPublicForm[1] });
-        const action = localPublicForm
-          ? `/api/public/forms/${localPublicForm[1]}/${localPublicForm[2]}/${localPublicForm[3]}/submissions`
-          : `/api/public/forms/${domainPublicForm[1]}/submissions`;
+      if (req.method === 'GET' && content && publicFormRequest) {
+        const form = domainScope
+          ? await content.publicFormForDomain({ host: req.headers.host, route: publicFormRequest.route })
+          : await content.publicFormForProject({
+            companySlug: publicFormRequest.companySlug,
+            projectSlug: publicFormRequest.projectSlug,
+            route: publicFormRequest.route,
+          });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        return res.end(renderDynamicForm(form, action));
+        return res.end(renderDynamicForm(form, publicFormRequest.action));
       }
       const localForm = !content && path.match(/^\/f\/([a-z0-9-]+)$/);
       if (req.method === 'GET' && localForm) {
@@ -167,12 +221,16 @@ export function createApp({
         return res.end(renderDynamicForm(form, `/api/public/forms/${form.id}/submit`));
       }
       const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
-      const localSaasSubmission = (!publicOrigin || studioHost) && path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\/submissions$/);
-      const domainSaasSubmission = publicOrigin ? path.match(/^\/api\/public\/forms\/([a-z0-9-]+)\/submissions$/) : null;
-      if (req.method === 'POST' && content && (localSaasSubmission || domainSaasSubmission)) {
-        const saved = localSaasSubmission
-          ? await content.submitPublicFormForProject({ companySlug: localSaasSubmission[1], projectSlug: localSaasSubmission[2], slug: localSaasSubmission[3], input: await publicAnswers(req) })
-          : await content.submitPublicFormForDomain({ host: req.headers.host, slug: domainSaasSubmission[1], input: await publicAnswers(req) });
+      if (req.method === 'POST' && content && publicFormRequest) {
+        const input = await publicAnswers(req);
+        const saved = domainScope
+          ? await content.submitPublicFormForDomain({ host: req.headers.host, route: publicFormRequest.route, input })
+          : await content.submitPublicFormForProject({
+            companySlug: publicFormRequest.companySlug,
+            projectSlug: publicFormRequest.projectSlug,
+            route: publicFormRequest.route,
+            input,
+          });
         const form = { ...saved.schema, id: saved.form.id, name: saved.form.name, slug: saved.form.slug };
         if (form.webhook) res.setHeader('X-Webhook-Delivery', saved.webhookDelivery.status);
         const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };

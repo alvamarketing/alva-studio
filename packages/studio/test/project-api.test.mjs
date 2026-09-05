@@ -218,7 +218,12 @@ test('a borda SaaS ignora identificadores de escopo enviados no corpo', async (t
   assert.equal(projectUpdate.status, 200);
   assert.equal((await database.query('SELECT company_id FROM projects WHERE id = $1', [records.projectA.id])).rows[0].company_id, records.companyA.id);
   const formCreated = await alice.request(`/api/projects/${records.projectA.id}/forms`, 'POST', {
-    name: 'Formulário protegido', route: '/formulario-protegido', draftSchema: { steps: [] },
+    name: 'Formulário protegido', route: '/formulario-protegido', draftSchema: {
+      headerElements: [],
+      steps: [{ id: 'nome', type: 'short_text', title: 'Nome', required: true }],
+      completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' },
+      webhook: '',
+    },
     companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.bob.id,
   });
   assert.equal(formCreated.status, 201);
@@ -415,6 +420,117 @@ test('formulário SaaS mantém rascunho, publica explicitamente em rota pública
   await database.close();
 });
 
+test('formulários SaaS validam o schema antes de criar, atualizar e publicar', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  for (const draftSchema of [{}, { headerElements: [], completion: {}, webhook: '' }, { steps: 'inválidas' }]) {
+    const rejected = await alice.request(`/api/projects/${records.projectA.id}/forms`, 'POST', {
+      name: 'Schema inválido', route: '/schema-invalido', draftSchema,
+    });
+    assert.equal(rejected.status, 400, await rejected.text());
+  }
+  assert.equal((await database.query('SELECT count(*)::int AS count FROM forms')).rows[0].count, 0);
+  assert.equal((await database.query("SELECT count(*)::int AS count FROM project_routes WHERE content_type = 'form'")).rows[0].count, 0);
+
+  const richSchema = {
+    headerElements: [
+      { id: 'marca', type: 'logo', title: 'Alva', mediaUrl: 'https://example.test/logo.svg', altText: 'Alva', width: 144 },
+      { id: 'progresso', type: 'progress', title: 'Progresso', showValue: true },
+    ],
+    steps: [{
+      id: 'inicio', title: 'Comece', motion: 'zoom-in', autoAdvance: false, timer: 0,
+      elements: [
+        { id: 'contexto', type: 'statement', title: 'Conte sobre você', description: 'Leva menos de um minuto.' },
+        { id: 'email', type: 'email', title: 'Seu e-mail', required: true, placeholder: 'voce@empresa.com' },
+        { id: 'perfil', type: 'image_choice', title: 'Seu perfil', required: true, options: [
+          { label: 'Empresa', imageUrl: 'https://example.test/empresa.jpg', icon: 'business' },
+          { label: 'Profissional', imageUrl: '', icon: 'person' },
+        ] },
+      ],
+    }],
+    completion: { title: 'Recebemos', message: 'Entraremos em contato.' },
+    webhook: '',
+  };
+  const createdResponse = await alice.request(`/api/projects/${records.projectA.id}/forms`, 'POST', {
+    name: 'Schema rico', route: '/schema-rico', draftSchema: richSchema,
+  });
+  assert.equal(createdResponse.status, 201);
+  const created = await createdResponse.json();
+  assert.equal(created.draftSchema.steps[0].elements[2].options[0].label, 'Empresa');
+
+  const invalidUpdate = await alice.request(`/api/forms/${created.id}`, 'PUT', {
+    revision: created.lockVersion,
+    draftSchema: { steps: 'não-é-lista' },
+  });
+  assert.equal(invalidUpdate.status, 400, await invalidUpdate.text());
+  const afterInvalidUpdate = (await database.query(
+    'SELECT draft_schema, lock_version FROM forms WHERE id = $1', [created.id],
+  )).rows[0];
+  assert.deepEqual(afterInvalidUpdate.draft_schema, created.draftSchema);
+  assert.equal(afterInvalidUpdate.lock_version, created.lockVersion);
+
+  await database.query("UPDATE forms SET draft_schema = '{}'::jsonb WHERE id = $1", [created.id]);
+  const invalidPublish = await alice.request(`/api/forms/${created.id}/publish`, 'POST', { revision: created.lockVersion });
+  assert.equal(invalidPublish.status, 400, await invalidPublish.text());
+  assert.equal((await database.query('SELECT count(*)::int AS count FROM form_versions WHERE form_id = $1', [created.id])).rows[0].count, 0);
+  assert.equal((await database.query('SELECT published_version_id FROM forms WHERE id = $1', [created.id])).rows[0].published_version_id, null);
+
+  await database.query('UPDATE forms SET draft_schema = $2::jsonb WHERE id = $1', [created.id, JSON.stringify(richSchema)]);
+  const published = await alice.request(`/api/forms/${created.id}/publish`, 'POST', { revision: created.lockVersion });
+  assert.equal(published.status, 201);
+  const publicPage = await fetch(`${app.base}${(await published.json()).publicPath}`);
+  const publicHtml = await publicPage.text();
+  assert.equal(publicPage.status, 200, publicHtml);
+  assert.match(publicHtml, /Conte sobre você/);
+  await database.close();
+});
+
+test('rotas públicas de formulário aceitam raiz, um caractere e múltiplos segmentos em GET e POST', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+
+  const cases = [
+    { route: '/', publicPath: '/f/alva-a/projeto-a/', submissionPath: '/api/public/forms/alva-a/projeto-a/submissions' },
+    { route: '/a', publicPath: '/f/alva-a/projeto-a/a', submissionPath: '/api/public/forms/alva-a/projeto-a/a/submissions' },
+    { route: '/x/y', publicPath: '/f/alva-a/projeto-a/x/y', submissionPath: '/api/public/forms/alva-a/projeto-a/x/y/submissions' },
+  ];
+  for (const [index, item] of cases.entries()) {
+    const created = await (await alice.request('/api/forms', 'POST', {
+      name: `Rota ${index}`, route: item.route,
+    })).json();
+    const draft = await (await alice.request(`/api/forms/${created.id}`, 'PUT', {
+      revision: created.revision,
+      steps: [{ id: `email-${index}`, type: 'email', title: 'E-mail', required: true }],
+    })).json();
+    const response = await alice.request(`/api/forms/${created.id}/publish`, 'POST', { revision: draft.revision });
+    assert.equal(response.status, 201);
+    const published = await response.json();
+    assert.equal(published.publicPath, item.publicPath);
+    const page = await fetch(app.base + item.publicPath);
+    const pageHtml = await page.text();
+    assert.equal(page.status, 200, pageHtml);
+    assert.match(pageHtml, new RegExp(item.submissionPath.replaceAll('/', '\\/')));
+    const submitted = await fetch(app.base + item.submissionPath, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers: { [`email-${index}`]: `lead-${index}@alva.test` } }),
+    });
+    assert.equal(submitted.status, 200, await submitted.text());
+  }
+  assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions')).rows[0].count, 3);
+  await database.close();
+});
+
 test('expiração e remoção revogam sessões; atualização preserva contexto e troca de senha recria sessão', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
@@ -495,12 +611,28 @@ test('rotas públicas não colidem entre projetos e domínio resolve o projeto c
   assert.match(await bPage.text(), /Contato B/);
   assert.equal((await fetch(`${app.base}/f/contato`)).status, 404);
 
+  const domainApp = await start(t, database, { publicOrigin: 'https://studio.local' });
+  const rejectedDomains = [
+    { domain: 'nao-canonico.local.test', environment: 'production', canonical: false, verification: 'verified' },
+    { domain: 'pendente.local.test', environment: 'production', canonical: true, verification: 'pending' },
+    { domain: 'preview.local.test', environment: 'preview', canonical: true, verification: 'verified' },
+  ];
+  for (const candidate of rejectedDomains) {
+    await database.query(
+      `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [records.companyA.id, records.projectA.id, candidate.environment, candidate.domain, candidate.canonical, candidate.verification],
+    );
+    assert.equal((await publicRequest(domainApp.base, '/f/contato', candidate.domain)).status, 404);
+    await database.query('DELETE FROM project_domains WHERE domain = $1', [candidate.domain]);
+  }
+
   await database.query(
-    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical)
-     VALUES ($1, $2, 'production', 'a.local.test', true), ($3, $4, 'production', 'b.local.test', true)`,
+    `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status)
+     VALUES ($1, $2, 'production', 'a.local.test', true, 'verified'),
+            ($3, $4, 'production', 'b.local.test', true, 'verified')`,
     [records.companyA.id, records.projectA.id, records.companyB.id, records.projectB.id],
   );
-  const domainApp = await start(t, database, { publicOrigin: 'https://studio.local' });
   const domainPage = await publicRequest(domainApp.base, '/f/contato', 'a.local.test');
   assert.equal(domainPage.status, 200);
   assert.match(domainPage.text, /Contato A/);
@@ -518,6 +650,17 @@ test('rotas públicas não colidem entre projetos e domínio resolve o projeto c
   assert.equal((await publicRequest(domainApp.base, '/api/config', 'a.local.test')).status, 403);
   assert.equal((await publicRequest(domainApp.base, '/api/setup', 'a.local.test', { method: 'POST', body: {} })).status, 403);
   assert.equal((await publicRequest(domainApp.base, '/api/login', 'a.local.test', { method: 'POST', body: {} })).status, 403);
+
+  await database.query("UPDATE projects SET status = 'archived' WHERE id = $1", [records.projectB.id]);
+  assert.equal((await fetch(`${app.base}${formB.publicPath}`)).status, 404);
+  assert.equal((await publicRequest(domainApp.base, '/f/contato', 'b.local.test')).status, 404);
+  assert.equal((await publicRequest(domainApp.base, '/api/public/forms/contato/submissions', 'b.local.test', {
+    method: 'POST', body: { answers: { email: 'lead@arquivado.test' } },
+  })).status, 404);
+
+  await database.query("UPDATE companies SET status = 'archived' WHERE id = $1", [records.companyA.id]);
+  assert.equal((await fetch(`${app.base}${formA.publicPath}`)).status, 404);
+  assert.equal((await publicRequest(domainApp.base, '/f/contato', 'a.local.test')).status, 404);
   await database.close();
 });
 

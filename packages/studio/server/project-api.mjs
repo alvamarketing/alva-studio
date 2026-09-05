@@ -73,7 +73,7 @@ function legacyForm(form) {
 }
 
 function legacyFormPatch(input, form) {
-  const schema = { ...(form.draftSchema ?? initialLegacyForm()) };
+  const schema = { ...(form.draftSchema ?? initialLegacyForm()), ...(input.draftSchema ?? {}) };
   for (const key of ['headerElements', 'steps', 'completion', 'webhook']) {
     if (Object.hasOwn(input, key)) schema[key] = input[key];
   }

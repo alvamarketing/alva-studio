@@ -46,6 +46,19 @@ function normalizeCompletion(value = {}) {
   };
 }
 
+function normalizeWebhook(value) {
+  const result = text(value, 2000, 'Webhook');
+  if (!result) return '';
+  let url;
+  try {
+    url = new URL(result);
+  } catch {
+    throw fail('Informe um webhook HTTPS válido.');
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) throw fail('Informe um webhook HTTPS válido.');
+  return result;
+}
+
 function normalizeElement(input, ids) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw fail('Elemento inválido.');
   const id = text(input.id || randomUUID(), 80, 'Identificador do elemento', true);
@@ -168,6 +181,16 @@ export function normalizeSteps(value) {
   });
 }
 
+export function normalizeFormInput(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('Formulário inválido.');
+  return {
+    headerElements: normalizeHeaderElements(value.headerElements),
+    steps: normalizeSteps(value.steps),
+    completion: normalizeCompletion(value.completion),
+    webhook: normalizeWebhook(value.webhook),
+  };
+}
+
 export class FormStore {
   constructor(dir) {
     this.dir = dir;
@@ -233,17 +256,14 @@ export class FormStore {
         id,
         name: cleanName,
         slug: `${slugify(cleanName)}-${id.slice(0, 8)}`,
-        headerElements: normalizeHeaderElements(),
-        steps: normalizeSteps([{ id: 'inicio', title: 'Boas-vindas', motion: 'fade-up', elements: [
+        ...normalizeFormInput({ steps: [{ id: 'inicio', title: 'Boas-vindas', motion: 'fade-up', elements: [
           { id: 'apresentacao', type: 'statement', title: 'Vamos conhecer você?', description: 'Responda os campos abaixo para começar.', icon: 'waving_hand' },
           { id: 'nome', type: 'short_text', title: 'Seu nome', required: true, placeholder: 'Como podemos chamar você?' },
           { id: 'telefone', type: 'phone', title: 'WhatsApp', required: true, placeholder: 'DDD + número' },
           { id: 'canal', type: 'image_choice', title: 'Como prefere conversar?', required: true, options: [
             { label: 'WhatsApp', icon: 'chat', imageUrl: '' }, { label: 'Ligação', icon: 'call', imageUrl: '' },
           ] },
-        ] }]),
-        completion: normalizeCompletion(),
-        webhook: '',
+        ] }] }),
         revision: 0,
         createdAt: now,
         updatedAt: now,
@@ -260,24 +280,13 @@ export class FormStore {
       const form = rows.find((row) => row.id === id);
       if (!form) throw fail('Formulário não encontrado.', 404);
       if (patch.revision !== form.revision) throw fail('O formulário mudou em outra aba. Reabra antes de salvar.', 409);
-      form.headerElements = normalizeHeaderElements(
-        patch.headerElements === undefined ? form.headerElements : patch.headerElements,
-      );
       if (patch.name !== undefined) form.name = text(patch.name, 100, 'Nome', true);
-      if (patch.steps !== undefined) form.steps = normalizeSteps(patch.steps);
-      if (patch.completion !== undefined) form.completion = normalizeCompletion(patch.completion);
-      if (patch.webhook !== undefined) {
-        form.webhook = text(patch.webhook, 2000, 'Webhook');
-        if (form.webhook) {
-          let url;
-          try {
-            url = new URL(form.webhook);
-          } catch {
-            throw fail('Informe um webhook HTTPS válido.');
-          }
-          if (url.protocol !== 'https:' || url.username || url.password) throw fail('Informe um webhook HTTPS válido.');
-        }
-      }
+      Object.assign(form, normalizeFormInput({
+        headerElements: patch.headerElements === undefined ? form.headerElements : patch.headerElements,
+        steps: patch.steps === undefined ? form.steps : patch.steps,
+        completion: patch.completion === undefined ? form.completion : patch.completion,
+        webhook: patch.webhook === undefined ? form.webhook : patch.webhook,
+      }));
       form.revision++;
       form.updatedAt = new Date().toISOString();
       await this.write(this.formsFile, rows);
