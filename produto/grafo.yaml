@@ -18,15 +18,6 @@ nos:
       tipo: comando
       comando: node --test --test-concurrency=1 packages/studio/test/*.test.mjs
       espera: exit 0 com 123 testes, incluindo isolamento entre duas empresas em leitura, escrita, exclusão, respostas, publicação e integrações pendentes
-  - id: worker_webhook
-    estado: pendente
-    faz: Entregar webhooks em fila com resolução DNS, bloqueio de destinos privados e defesa contra DNS rebinding
-    depende:
-      - fundacao_saas
-    produz: Egress assíncrono auditável, idempotente e seguro para submissões já persistidas
-    passa_quando:
-      tipo: homologação
-      espera: Worker revalida o destino no momento da entrega, não acessa rede privada e registra cada tentativa sem expor respostas em logs.
   - id: shell_saas
     estado: feito
     faz: Aplicar Home, Empresa e Projeto do wireframe aos dados reais da fundação
@@ -37,7 +28,7 @@ nos:
       tipo: revisão
       espera: O painel mostra apenas dados autorizados da empresa e projeto ativos em desktop e celular.
   - id: editores_saas
-    estado: pendente
+    estado: feito
     faz: Aplicar o shell compartilhado ao editor de landing pages e ao editor de formulários dinâmicos
     depende:
       - shell_saas
@@ -55,25 +46,15 @@ nos:
     passa_quando:
       tipo: homologação
       espera: Vercel confirma READY para snapshot idempotente sem expor token ou misturar rotas.
-  - id: midia_cdn
-    estado: pendente
-    faz: Armazenar vídeos e imagens por empresa e projeto com upload assinado, validação e entrega por CDN
-    depende:
-      - fundacao_saas
-    produz: Biblioteca de mídia com assets isolados, processamento assíncrono e URLs públicas imutáveis por versão
-    passa_quando:
-      tipo: homologação
-      espera: Upload inválido é rejeitado, mídia não cruza projetos e a publicação nunca depende de URL temporária ou blob local.
   - id: vsl_player
     estado: pendente
-    faz: Criar player público de VSL com autoplay compatível, progresso, retomada, CTA temporizado e embed responsivo
+    faz: Criar VSL por URL ou streaming pronto, com autoplay mutado, progresso, retomada, CTA temporizado e embed responsivo
     depende:
-      - midia_cdn
-      - shell_saas
-    produz: Vídeos configuráveis com versões publicadas em /v/<publicId> e /embed/v/<publicId>, sem configurações sensíveis na URL
+      - publicacao_por_projeto
+    produz: Player configurável e publicável sem upload, transcodificação ou CDN próprios
     passa_quando:
       tipo: homologação
-      espera: O player publicado permanece estável durante edições, respeita acessibilidade e registra eventos deduplicados no projeto correto.
+      espera: Uma URL de vídeo válida gera player acessível, CTA no tempo correto, retomada e embed funcional.
   - id: vsl_nos_editores
     estado: pendente
     faz: Reutilizar cada VSL como bloco nas landing pages e nas microlanding pages dos formulários dinâmicos
@@ -84,32 +65,59 @@ nos:
     passa_quando:
       tipo: homologação
       espera: A mesma VSL funciona nos dois editores e referências ausentes ou sem versão publicada impedem uma publicação quebrada.
+  - id: leads_integracoes
+    estado: pendente
+    faz: Consolidar respostas no Studio, exportar CSV e entregar um webhook básico por formulário
+    depende:
+      - editores_saas
+      - publicacao_por_projeto
+    produz: Lista e exportação de leads por projeto, com envio simples para n8n, CRM ou URL configurada
+    passa_quando:
+      tipo: homologação
+      espera: Resposta persistida aparece no Studio e no CSV; webhook HTTPS recebe o evento sem misturar projetos.
   - id: tracking_analytics
     estado: pendente
-    faz: Integrar Aurora, Umami e NVS por projeto e ambiente
+    faz: Integrar primeiro o Umami com UTMs, conversões e eventos essenciais de VSL
     depende:
-      - publicacao_por_projeto
-      - worker_webhook
+      - leads_integracoes
       - vsl_player
-    produz: Pageviews, UTMs, mapa e conversão lead deduplicada após persistir a resposta
+    produz: Visualizações, origem, conversão por conteúdo e marcos 25/50/75/100 da VSL no projeto correto
     passa_quando:
       tipo: homologação
       espera: Eventos não contêm respostas abertas ou dados pessoais e pertencem ao projeto correto.
-  - id: agentes_mcp
-    estado: pendente
-    faz: Expor acesso Agent First por chave, escopo, projeto e auditoria
-    depende:
-      - fundacao_saas
-    produz: MCP de leitura, rascunho e preview com chaves armazenadas apenas como hash
-    passa_quando:
-      tipo: homologação
-      espera: Chave não cruza empresa/projeto e publicação em produção segue revisão e idempotência.
   - id: cobranca_empresa
     estado: pendente
-    faz: Integrar assinatura empresarial ao Asaas e aplicar entitlements
+    faz: Integrar uma assinatura empresarial inicial ao Asaas e aplicar o acesso essencial
     depende:
-      - fundacao_saas
-    produz: Checkout hospedado, webhook idempotente e limites por empresa
+      - tracking_analytics
+    produz: Checkout hospedado, webhook idempotente e um plano comercial por empresa
     passa_quando:
       tipo: homologação
       espera: Sandbox confirma cobrança, reconsulta do pagamento e atualização transacional antes de liberar recursos.
+  - id: agentes_mcp
+    estado: pendente
+    faz: Expor leitura e criação de rascunhos por agentes, mantendo publicação como ação humana
+    depende:
+      - cobranca_empresa
+    produz: MCP por projeto com chaves em hash, leitura e rascunhos auditáveis
+    passa_quando:
+      tipo: homologação
+      espera: Chave não cruza empresa/projeto e nenhum agente publica sem ação humana.
+  - id: worker_webhook
+    estado: pendente
+    faz: Evoluir o webhook básico para fila com tentativas, idempotência, auditoria e defesa contra DNS rebinding
+    depende:
+      - leads_integracoes
+    produz: Entrega assíncrona robusta para volume e falhas temporárias
+    passa_quando:
+      tipo: homologação
+      espera: Worker revalida o destino em cada tentativa, não acessa rede privada e não duplica entregas confirmadas.
+  - id: midia_cdn
+    estado: pendente
+    faz: Adicionar upload próprio, processamento e CDN quando o uso de VSL justificar essa infraestrutura
+    depende:
+      - vsl_nos_editores
+    produz: Biblioteca de mídia com upload assinado, transcodificação e entrega por CDN
+    passa_quando:
+      tipo: homologação
+      espera: Mídia não cruza projetos e publicação nunca depende de URL temporária ou blob local.
