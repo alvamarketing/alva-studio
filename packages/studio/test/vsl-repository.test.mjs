@@ -85,6 +85,8 @@ test('publicação de VSL congela snapshot e leitura pública respeita empresa e
     assert.equal(changed.publishedVersionId, published.id);
     const publicBefore = await repository.getPublicVideo(created.publicId);
     assert.equal(publicBefore.sourceUrl, input(first).sourceUrl);
+    assert.equal('versionId' in publicBefore, false);
+    assert.equal(publicBefore.versionNumber, 1);
     await assert.rejects(() => repository.getVideo({ companyId: second.company.id, projectId: second.project.id, actorId: second.user.id, videoId: created.id }), /não encontrad[oa]/i);
     await assert.rejects(() => repository.getPublicVideo('missing-public-id'), /não encontrad[oa]/i);
   } finally {

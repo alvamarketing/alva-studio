@@ -12,6 +12,7 @@ import {
 
 test('editor escreve conteúdo atribuído mas não publica', () => {
   assert.equal(hasCapability('editor', 'page.write'), true);
+  assert.equal(hasCapability('editor', 'video.write'), true);
   assert.equal(hasCapability('editor', 'deployment.publish'), false);
 });
 
@@ -20,7 +21,7 @@ test('expõe papéis e capacidades imutáveis', () => {
   assert.equal(Object.isFrozen(ROLES), true);
   assert.equal(Object.isFrozen(CAPABILITIES), true);
   assert.equal(Object.isFrozen(CAPABILITIES.owner), true);
-  assert.deepEqual(capabilitiesFor('analyst'), ['submission.read', 'analytics.read']);
+  assert.deepEqual(capabilitiesFor('analyst'), ['submission.read', 'analytics.read', 'video.read']);
   assert.deepEqual(capabilitiesFor('unknown'), []);
 });
 
