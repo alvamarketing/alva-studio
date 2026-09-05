@@ -1,10 +1,15 @@
 const TERMINAL = new Set(['READY', 'ERROR', 'CANCELED', 'BLOCKED']);
+const TRANSIENT = new Set(['QUEUED', 'INITIALIZING', 'BUILDING']);
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
 function transientStatus(status) { return status === 429 || status >= 500; }
 function retryAfter(response, fallback) {
   const value = response.headers.get('retry-after');
-  if (!value) return fallback;
+  if (!value) {
+    const reset = Number(response.headers.get('x-ratelimit-reset'));
+    if (Number.isFinite(reset)) return Math.max(0, Math.min(30_000, reset > 1e12 ? reset - Date.now() : reset > 1e9 ? reset * 1000 - Date.now() : reset * 1000));
+    return fallback;
+  }
   const seconds = Number(value);
   if (Number.isFinite(seconds)) return Math.max(0, Math.min(30_000, seconds * 1000));
   const date = Date.parse(value);
@@ -17,7 +22,7 @@ export class Publisher {
     this.token = token; this.teamId = teamId; this.fetcher = fetcher; this.retryLimit = retryLimit; this.retryDelay = retryDelay; this.timeoutMs = timeoutMs;
   }
   get connected() { return Boolean(this.token); }
-  async request(path, body) {
+  async request(path, body, { safe = !body } = {}) {
     if (!this.token) throw fail('Conecte a Vercel nas configurações para publicar.', 400);
     const url = new URL('https://api.vercel.com' + path);
     if (this.teamId) url.searchParams.set('teamId', this.teamId);
@@ -30,13 +35,13 @@ export class Publisher {
           ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(this.timeoutMs),
         });
       } catch (error) {
-        if (!timeoutError(error) || attempt >= this.retryLimit) throw fail('Não foi possível conectar à Vercel. Tente novamente.', 502);
+        if (!safe || !timeoutError(error) || attempt >= this.retryLimit) throw fail('Não foi possível conectar à Vercel. Tente novamente.', 502);
         lastError = error; await new Promise((resolve) => setTimeout(resolve, this.retryDelay * 2 ** attempt)); continue;
       }
       if (response.ok) {
         try { return await response.json(); } catch { throw fail('A Vercel devolveu uma resposta inválida.', 502); }
       }
-      if (!transientStatus(response.status) || attempt >= this.retryLimit)
+      if (!safe || !transientStatus(response.status) || attempt >= this.retryLimit)
         throw fail(`A Vercel recusou a solicitação (${response.status}). Verifique a conta e as permissões.`, 502);
       lastError = fail(`Vercel ${response.status}`, 502);
       await new Promise((resolve) => setTimeout(resolve, retryAfter(response, this.retryDelay * 2 ** attempt)));
@@ -56,7 +61,7 @@ export class Publisher {
     if (!projectId || !Array.isArray(files) || !files.length) throw fail('Snapshot sem arquivos para publicar.', 400);
     if (legacy && !input.html) throw fail('Salve a página antes de publicar.', 400);
     if (!['preview', 'production'].includes(environment)) throw fail('Ambiente de publicação inválido.', 400);
-    const payload = { name: input.projectName || projectId, project: projectId, ...(environment === 'production' ? { target: 'production' } : {}), projectSettings: { framework: null }, files };
+    const payload = { name: input.projectName || projectId, project: projectId, ...(environment === 'production' ? { target: 'production' } : {}), projectSettings: { framework: null }, files: files.map((file) => ({ ...file, encoding: file.encoding || 'utf-8' })) };
     const result = await this.request('/v13/deployments', payload);
     return { id: result.id, projectId: result.projectId || result.project?.id || projectId, url: result.url, state: result.readyState || result.status || 'QUEUED', ...(input.snapshotHash ? { snapshotHash: input.snapshotHash } : {}), ...(input.revision !== undefined ? { revision: input.revision } : {}), environment, createdAt: new Date().toISOString() };
   }
@@ -64,7 +69,7 @@ export class Publisher {
     if (!/^dpl_[a-zA-Z0-9]+$/.test(id)) throw new Error('Publicação inválida.');
     const result = await this.request('/v13/deployments/' + id);
     const state = result.readyState || result.status;
-    return { id: result.id, url: result.url, state, terminal: TERMINAL.has(String(state || '').toUpperCase()) };
+    return { id: result.id, url: result.url, state, transient: TRANSIENT.has(String(state || '').toUpperCase()), terminal: TERMINAL.has(String(state || '').toUpperCase()) };
   }
   async domain(input) {
     const legacy = input?.deployment || input?.domain;
