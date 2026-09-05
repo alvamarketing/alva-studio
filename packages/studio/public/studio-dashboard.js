@@ -54,6 +54,12 @@ export function createDashboardContextFlow({ shell, renderState, renderSwitcher 
 
   let confirmed = shell.state();
 
+  const confirm = () => {
+    confirmed = shell.state();
+    renderSwitcher(confirmed, { selectedCompanyId: confirmed.currentCompany?.id || '', disabled: false });
+    return confirmed;
+  };
+
   return {
     async selectCompany(companyId) {
       const previous = confirmed;
@@ -67,11 +73,8 @@ export function createDashboardContextFlow({ shell, renderState, renderSwitcher 
         throw error;
       }
     },
-    confirm() {
-      confirmed = shell.state();
-      renderSwitcher(confirmed, { selectedCompanyId: confirmed.currentCompany?.id || '', disabled: false });
-      return confirmed;
-    },
+    confirm,
+    bootstrap: confirm,
   };
 }
 

@@ -821,7 +821,7 @@ ownerUI = createOwnerUI({
   toast,
   onAuthenticated: async () => {
     await studioShell.initialize();
-    renderCompanySwitcher();
+    dashboardContextFlow.bootstrap();
     await refreshConfig();
     if (page) {
       $('#editing').hidden = false;

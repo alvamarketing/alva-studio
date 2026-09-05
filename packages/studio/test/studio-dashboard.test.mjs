@@ -40,6 +40,7 @@ test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wire
   assert.match(app, /api\(`\/companies\/\$\{state\.currentCompany\.id\}\/overview`\)/);
   assert.match(app, /relativeDate\(project\.updatedAt\)/);
   assert.match(app, /canCreateProject\(studioShell\)/);
+  assert.match(app, /await studioShell\.initialize\(\);\s*dashboardContextFlow\.bootstrap\(\);/);
   assert.match(app, /futureText\.textContent = 'Em breve'/);
   assert.doesNotMatch(dashboardShell, /Imobiliárias|Diagnóstico comercial|Projeto CMA|Profissional|2 de 5/);
 });
@@ -68,6 +69,29 @@ test('troca de empresa limpa a superfície imediatamente e restaura o seletor co
   assert.equal(switchers[0].options.disabled, true);
   assert.equal(switchers[1].options.selectedCompanyId, 'company-a');
   assert.equal(switchers[1].options.disabled, false);
+});
+
+test('primeira troca falha restaura o contexto carregado depois que o fluxo foi criado', async () => {
+  let active = { phase: 'empty', session: null, companies: [], projects: [], currentCompany: null, currentProject: null, error: '' };
+  const switchers = [];
+  const shell = {
+    state: () => active,
+    async initialize() {
+      active = {
+        phase: 'ready', session: { user: { displayName: 'Ana' } }, companies: [{ id: 'company-a', name: 'Empresa A' }, { id: 'company-b', name: 'Empresa B' }],
+        projects: [{ id: 'project-a', name: 'Projeto A' }], currentCompany: { id: 'company-a' }, currentProject: { id: 'project-a' }, error: '',
+      };
+    },
+    async selectCompany() { throw new Error('Sessão expirada'); },
+  };
+  const flow = createDashboardContextFlow({ shell, renderState: () => {}, renderSwitcher: (state, options) => switchers.push({ state, options }) });
+
+  await shell.initialize();
+  flow.bootstrap();
+  await assert.rejects(() => flow.selectCompany('company-b'), /Sessão expirada/);
+
+  assert.equal(switchers.at(-1).options.selectedCompanyId, 'company-a');
+  assert.equal(switchers.at(-1).state.currentProject.id, 'project-a');
 });
 
 test('troca de empresa confirma o novo contexto após a API concluir', async () => {
