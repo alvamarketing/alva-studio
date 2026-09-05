@@ -5,6 +5,14 @@
 - `save-cycle.test.mjs`: salvamento durante edição.
 - `publisher.test.mjs`: contrato Vercel com transporte simulado.
 
+- `access.test.mjs`: papéis, capacidades, slugs e rotas públicas permitidas.
+- `database-schema.test.mjs`: migrações PostgreSQL, isolamento estrutural, versões e integridade do schema.
+- `postgres-fixture.mjs`: PostgreSQL efêmero usado pelas integrações automatizadas.
+- `tenancy.test.mjs`: empresas, memberships, convites, concessões e autorização entre tenants.
+- `project-content.test.mjs`: páginas, formulários, versões, rotas e respostas por projeto.
+- `import-local.test.mjs`: inspeção, importação idempotente e rollback transacional do legado local.
+- `project-api.test.mjs`: sessão persistente, API de empresas/projetos e bloqueio de acessos cruzados.
+
 - `templates.test.mjs`: catálogo e consistência dos formulários.
 - `editor*.test.mjs`: controles do editor guiado.
 - `auth*.test.mjs`: conta, sessões e proteção das configurações.

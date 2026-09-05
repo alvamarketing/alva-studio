@@ -1,42 +1,75 @@
-versao: 1
-produto: Alva Studio — construir e publicar landing pages
+versao: 2
+produto: Alva Studio — criar, organizar e publicar landing pages e formulários por projeto
 stack:
   linguagem: JavaScript ESM
   framework: GrapesJS 0.23.6
-  banco: JSON local com escrita atômica
-  hospedagem: Painel local; páginas na Vercel
+  banco: PostgreSQL para a fundação SaaS; JSON local somente para compatibilidade e importação
+  hospedagem: Painel Studio; publicação Vercel por projeto ainda pendente
   testes: node:test
   comando_teste: node --test packages/studio/test/*.test.mjs
-  porque: Aproveitar o editor existente em um painel individual sem dependências
-    de CMS.
+  porque: O Studio preserva o editor sem CMS e passa a separar empresas, projetos e conteúdo de forma transacional.
 nos:
-  - id: paginas
-    faz: Salvar e reabrir páginas com revisão e duplicação independente
+  - id: fundacao_saas
+    estado: em-validacao
+    faz: Isolar empresas, membros, projetos, páginas, formulários, sessões, versões, rotas e importação local no PostgreSQL
     depende: []
-    produz: Store com create/list/get/update/duplicate/remove
+    produz: API SaaS com capacidades, isolamento por tenant, importador idempotente, migrações 001–005 e formulários públicos em /f/<empresa>/<projeto>/<formulario>
     passa_quando:
       tipo: comando
-      comando: node --test packages/studio/test/store.test.mjs
-      espera: exit 0
-  - id: editor
-    faz: Editar visualmente o projeto salvo no GrapesJS
+      comando: node --test packages/studio/test/*.test.mjs
+      espera: exit 0, incluindo isolamento entre duas empresas em leitura, escrita, exclusão, respostas, publicação e integrações pendentes
+  - id: shell_saas
+    estado: pendente
+    faz: Aplicar Home, Empresa e Projeto do wireframe aos dados reais da fundação
     depende:
-      - paginas
-    consome:
-      paginas: Store com create/list/get/update/duplicate/remove
-    produz: Painel em localhost e HTML exportável
+      - fundacao_saas
+    produz: Navegação por empresa e projeto, contexto ativo e indicadores sem dados fictícios
     passa_quando:
-      tipo: comando
-      comando: node --test packages/studio/test/server.test.mjs
-      espera: exit 0
-  - id: publicar
-    faz: Enviar página exportada para projeto independente na Vercel
+      tipo: revisão
+      espera: O painel mostra apenas dados autorizados da empresa e projeto ativos em desktop e celular.
+  - id: editores_saas
+    estado: pendente
+    faz: Aplicar o shell compartilhado ao editor de landing pages e ao editor de formulários dinâmicos
     depende:
-      - editor
-    consome:
-      editor: Painel em localhost e HTML exportável
-    produz: Integração Vercel com consulta de estado da publicação
+      - shell_saas
+    produz: Árvore única de elementos, canvas e inspetor contextual com acessibilidade por teclado
     passa_quando:
       tipo: comando
-      comando: node --test packages/studio/test/publisher.test.mjs
-      espera: exit 0
+      comando: node --test packages/studio/test/*.test.mjs
+      espera: exit 0, com rotas e edições isoladas por projeto.
+  - id: publicacao_por_projeto
+    estado: pendente
+    faz: Publicar snapshots atômicos de várias rotas em um projeto Vercel por projeto Studio
+    depende:
+      - editores_saas
+    produz: Preview e produção separados, domínio por projeto, cofre de segredos e auditoria
+    passa_quando:
+      tipo: homologação
+      espera: Vercel confirma READY para snapshot idempotente sem expor token ou misturar rotas.
+  - id: tracking_analytics
+    estado: pendente
+    faz: Integrar Aurora, Umami e NVS por projeto e ambiente
+    depende:
+      - publicacao_por_projeto
+    produz: Pageviews, UTMs, mapa e conversão lead deduplicada após persistir a resposta
+    passa_quando:
+      tipo: homologação
+      espera: Eventos não contêm respostas abertas ou dados pessoais e pertencem ao projeto correto.
+  - id: agentes_mcp
+    estado: pendente
+    faz: Expor acesso Agent First por chave, escopo, projeto e auditoria
+    depende:
+      - fundacao_saas
+    produz: MCP de leitura, rascunho e preview com chaves armazenadas apenas como hash
+    passa_quando:
+      tipo: homologação
+      espera: Chave não cruza empresa/projeto e publicação em produção segue revisão e idempotência.
+  - id: cobranca_empresa
+    estado: pendente
+    faz: Integrar assinatura empresarial ao Asaas e aplicar entitlements
+    depende:
+      - fundacao_saas
+    produz: Checkout hospedado, webhook idempotente e limites por empresa
+    passa_quando:
+      tipo: homologação
+      espera: Sandbox confirma cobrança, reconsulta do pagamento e atualização transacional antes de liberar recursos.

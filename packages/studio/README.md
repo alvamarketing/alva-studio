@@ -1,8 +1,14 @@
 # Alva Studio
 
-Construtor visual de landing pages da Alva Marketing, criado sobre o GrapesJS 0.23.6 sem alterar o núcleo do fork.
+Construtor visual de landing pages e formulários dinâmicos da Alva Marketing, criado sobre o GrapesJS 0.23.6. A fundação SaaS usa PostgreSQL para separar empresas, membros, projetos, páginas, formulários, respostas e sessões. O logo e a identidade visual atuais do Studio são preservados.
 
-## Executar
+## Dois modos durante a transição
+
+O modo local existente continua disponível para preservar o editor atual e os dados em disco. Ele é iniciado sem conexão de banco e mantém a conta única local.
+
+Quando `createApp` recebe uma conexão PostgreSQL já migrada, o Studio ativa a API SaaS: usuários podem participar de empresas, escolher um projeto atual e acessar somente o conteúdo autorizado daquele projeto. A inicialização padrão ainda não lê uma variável de banco por conta própria; a ligação do processo de produção ao PostgreSQL é o próximo passo do shell SaaS. Não exponha o modo local como serviço público.
+
+## Executar localmente
 
 Requer Node.js 22 ou superior e pnpm 9.
 
@@ -12,49 +18,74 @@ pnpm --ignore-workspace install --frozen-lockfile
 pnpm --ignore-workspace start
 ```
 
-Abra o endereço impresso, normalmente http://127.0.0.1:4178. No primeiro acesso local, crie a conta do dono com nome, e-mail e uma senha de pelo menos 12 caracteres. Páginas existentes são preservadas.
+Abra o endereço impresso, normalmente http://127.0.0.1:4178. No primeiro acesso local, crie a conta do dono com nome, e-mail e uma senha de pelo menos 12 caracteres.
 
-## O que funciona
+## Fundação SaaS comprovada
 
-- Criar, buscar, renomear, duplicar e excluir páginas.
-- Seis pontos de partida: página em branco, serviços, apresentação, oferta, evento e confirmação.
-- Editor visual com blocos ilustrados, instruções em português e controles contextuais para texto, imagem, botão, formulário, aparência e espaçamento.
-- Formulários com aparência consistente em qualquer seção e destino HTTPS configurável.
-- Salvamento automático do projeto completo, prévia isolada e download do HTML.
-- Área do dono para atualizar a conta e conectar a Vercel sem editar arquivos do servidor.
-- Publicação em um projeto Vercel estável por página, consulta do estado e conexão de domínio próprio.
-- Área **Formulários Dinâmicos** para criar jornadas com uma pergunta por vez.
-- Etapas de texto, e-mail, telefone e escolha única, com prévia durante a edição.
-- Link público por formulário, armazenamento local das respostas e encaminhamento opcional por webhook HTTPS.
+- Empresas, memberships e os papéis proprietário, administrador, editor e analista.
+- Projetos por empresa, com concessão específica para editor e analista.
+- Sessões persistentes e revogáveis; cada sessão mantém a empresa e o projeto atual.
+- Páginas e formulários ligados a empresa e projeto, com rotas únicas e validação de caminhos reservados.
+- Controle de revisão concorrente, exclusão lógica e snapshots imutáveis de páginas e formulários publicados.
+- Respostas de formulários vinculadas à versão que as recebeu.
+- API que devolve `404` para recursos de outra empresa e exige capacidade para escrita, respostas e administração.
+- Importação local transacional, com checksum e repetição segura.
 
-## Formulários Dinâmicos
+O documento do GrapesJS agora é chamado `editorState` na API SaaS e `editor_state` no banco. Ele não deve ser confundido com um **Projeto do Studio** nem com um **Projeto da Vercel**.
 
-Abra **Formulários Dinâmicos** na barra lateral e crie um formulário. Há perguntas de texto, e-mail, telefone, escolhas, data, número, escala, endereço e arquivo, além de imagem, vídeo, tela informativa, CTA e gráficos. Cada etapa pode receber um ícone do Google Material Symbols e um movimento próprio. O bloco **Finalização e integração** configura a mensagem exibida depois do envio e um webhook HTTPS opcional.
+## Editor e formulários existentes
 
-No editor de landing pages, os blocos **Ícone**, **Gráfico de barras** e **Gráfico circular** ficam na biblioteca. Ao selecionar qualquer elemento, a seção **Movimento** permite escolher o efeito, a duração e o atraso.
+O Studio mantém páginas criáveis, duplicáveis, renomeáveis e removíveis, modelos, editor visual em português, prévia, download de HTML, blocos de formulário e seção de aparência. Os formulários dinâmicos continuam oferecendo texto, e-mail, telefone, escolhas, data, número, escala, endereço, arquivo, imagem, vídeo, tela informativa, CTA e gráficos; elementos podem usar Material Symbols e movimento.
 
-O botão de link abre a experiência pública em `/f/<slug>`. O botão de respostas mostra os contatos recebidos e todas as respostas na ordem das etapas. A resposta é salva no Studio antes da tentativa de webhook; se a integração estiver indisponível, o registro local permanece preservado.
+No modo SaaS, salvar o formulário mantém um rascunho; publicar é uma ação explícita de quem tem permissão de publicação. A rota pública local usa empresa, projeto e formulário, como `/f/<empresa>/<projeto>/<formulario>`. Em um domínio conectado, o servidor aceita publicamente somente o `GET` dessa experiência e o `POST` da submissão; o painel e as demais rotas continuam fechados.
 
-## Vercel
+A submissão é persistida antes do webhook. O destino HTTPS configurado é validado para não alcançar endereços privados, porém a entrega assíncrona ainda permanece com estado `pending` e não faz saída de rede nesta fundação. O webhook não recebe credenciais do Studio. Nome, e-mail, telefone e respostas abertas não devem ser enviados a Analytics ou logs.
 
-Abra **Configurações do app → Publicação · Vercel**, informe um token de acesso e, se necessário, o identificador da equipe. O token é cifrado no servidor, nunca volta para o navegador e não entra no HTML das páginas. Como alternativa de migração, o servidor ainda reconhece `VERCEL_TOKEN` e `VERCEL_TEAM_ID` do ambiente enquanto não houver configuração salva.
+## Preparar o PostgreSQL
 
-Salvar mantém um rascunho. Publicar exige uma ação explícita. Só o estado `READY` confirma que a Vercel concluiu a publicação. Cada página mantém seu próprio projeto e pode receber um domínio independente. O domínio precisa pertencer à conta; eventuais registros e verificações DNS continuam sendo feitos no provedor e na Vercel.
+Crie um banco PostgreSQL dedicado e uma credencial de aplicação com acesso somente a esse banco. Instale as dependências do Studio e use `createDatabase({ connectionString })` seguido de `migrate(database)` de `server/db/postgres.mjs`. O migrador bloqueia execuções concorrentes, registra a versão e o SHA-256 de cada arquivo em `schema_migrations` e falha se uma migração aplicada for alterada.
 
-Excluir uma página local não remove o projeto ou o domínio remoto. Duplicar limpa o vínculo de publicação e de domínio, mas mantém o destino do formulário.
+As migrações atuais são aplicadas em ordem e nunca devem ser editadas depois de usadas em um banco compartilhado:
 
-## Dados e operação
+1. `001_saas_foundation.sql`: empresas, usuários, memberships, sessões, projetos, rotas, conteúdo, versões, respostas, domínios, integrações, segredos, execução de publicação e auditoria.
+2. `002_invitations.sql`: convites de membros.
+3. `003_published_content_routes.sql`: caminho preservado no snapshot publicado.
+4. `004_local_imports.sql`: registro de checksum e relatório da importação local.
+5. `005_session_project_context.sql`: projeto atual da sessão.
 
-Por padrão, conta, páginas, formulários, respostas e configurações ficam em `packages/studio/.data/`, ignorado pelo Git. Defina `DATA_DIR` para usar outro volume persistente e faça backup desse diretório completo, inclusive `secret.key`. Use apenas um processo por diretório de dados.
+Para uma mudança futura, crie uma nova migração numerada. Não altere uma migração já registrada: o checksum foi criado para interromper exatamente esse caso.
 
-O servidor escuta somente em `127.0.0.1` por padrão. Para operar atrás de um proxy HTTPS próprio, configure `HOST` e `PUBLIC_ORIGIN` com a origem pública exata. A criação da primeira conta deve ser feita localmente antes de expor o serviço. Sessões duram até 12 horas e são encerradas quando o processo reinicia. Esta versão tem uma única conta de dono e ainda não oferece recuperação de senha por e-mail.
+## Inspecionar, importar e voltar atrás
 
-Assets enviados pelo editor podem ser incorporados como base64; o salvamento aceita até 8 MiB. Para páginas maiores, prefira URLs de mídia.
+Os arquivos locais tratados pela transição são `owner.json`, `pages.json`, `forms.json` e `form-submissions.json`, no diretório configurado por `DATA_DIR` ou em `packages/studio/.data/`.
+
+1. Pare as gravações locais e copie o diretório inteiro para um local imutável. Preserve também `secret.key`, mesmo que ele não seja importado para o banco.
+2. Rode `inspectLocalData(dir)` de `server/import-local.mjs`. A inspeção retorna validade, problemas, tamanho e SHA-256 por arquivo, além de um checksum consolidado; ela não abre transação nem escreve no banco.
+3. Em uma cópia do banco de destino, rode `importLocalData({ dir, database, ownerPassword })`. A senha local é conferida antes da transação. A importação preserva UUIDs, revisões e datas, cria a empresa Alva Marketing e o projeto inicial e registra o checksum em `local_imports`.
+4. Compare as contagens de páginas, formulários e respostas com o relatório retornado. Repetir a importação do mesmo conjunto retorna o relatório armazenado e não duplica registros.
+5. Só então direcione o processo SaaS ao banco migrado. O JSON original fica guardado como snapshot de rollback e não deve receber novas gravações depois do corte.
+
+O rollback seguro do corte é restaurar a cópia do banco anterior ou apontar novamente para o snapshot local preservado. Não existe rollback SQL automático para migrações de produção: toda migração nova precisa de plano de restauração do backup antes de ser aplicada.
+
+Depois do corte, todas as sessões devem ser encerradas e os usuários entram novamente. Credenciais Vercel antigas não são importadas: o proprietário ou administrador deverá reconectar a Vercel quando a integração por projeto estiver disponível.
+
+## Vercel e integrações
+
+O conector Vercel atual pertence ao modo local e cifra o token em disco. A integração Vercel SaaS, por empresa e projeto, com cofre de segredos, domínio compartilhado por rotas e publicação atômica ainda está pendente. O painel SaaS responde que essa configuração está em preparação para evitar sugerir que existe uma conexão real.
+
+Aurora, Umami, NVS, rastreamento de conversão, MCP/agentes e Asaas também são próximas etapas. A fundação já reserva o isolamento necessário, mas não provisiona contas, não envia eventos, não cria chaves de agente e não processa pagamentos. Planos, preços e créditos serão definidos em uma etapa comercial própria.
+
+## Dados e segurança
+
+O servidor escuta somente em `127.0.0.1` por padrão. Para operar atrás de um proxy HTTPS próprio, configure `HOST` e `PUBLIC_ORIGIN` com a origem pública exata. Segredos, tokens e senhas nunca devem entrar no navegador, HTML publicado, logs, fixtures ou Git.
+
+Assets enviados pelo editor podem ser incorporados como base64; o salvamento local aceita até 8 MiB. Para páginas maiores, prefira URLs de mídia. A migração futura para armazenamento de objetos compatível com S3 é parte do shell SaaS.
 
 ## Verificar
 
 ```sh
+cd packages/studio
 node --test test/*.test.mjs
 ```
 
-Os testes de publicação usam transporte simulado e não alteram uma conta Vercel real.
+Os testes incluem duas empresas tentando ler, editar, excluir, publicar e consultar respostas uma da outra. A publicação Vercel usa transporte simulado e não altera uma conta real.

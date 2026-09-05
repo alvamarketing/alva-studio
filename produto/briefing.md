@@ -1,20 +1,23 @@
 # Alva Studio — 2026-09-04
 
-Original. Escopo derivado da conversa com Tai: construir landing pages rapidamente com GrapesJS, modelos, formulário e publicação independente por projeto/domínio na Vercel.
+Original. Alva Studio é um construtor visual de landing pages e formulários dinâmicos da Alva Marketing, baseado em GrapesJS e sem WordPress. O produto evolui do painel individual local para um SaaS em que cada empresa organiza seus projetos publicáveis.
 
-## Primeira versão
-Painel local de uso individual com páginas criáveis, duplicáveis, renomeáveis e removíveis; editor GrapesJS em português; modelos de serviços e página vazia; visualização de celular; salvar/reabrir projeto JSON; exportar HTML; configurar formulário com destino HTTPS; preparar/publicar versões via API Vercel.
+## Contrato atual
 
-O fork contém TypeScript, GrapesJS 0.23.6 e testes Jest confirmados nos manifests. O aplicativo adicional utiliza Node.js >=22 e JavaScript ESM, com testes node:test, sem alterar o núcleo original. Armazenamento local em disco, com escrita atômica e revisão para evitar sobreposição. O núcleo instalado é a release 0.23.6 correspondente ao fork; alterações futuras no núcleo exigirão vinculá-lo ao build local.
+Uma empresa contém membros, papéis, assinatura futura, limites futuros e projetos. Um usuário pode participar de mais de uma empresa. Um projeto reúne landing pages, formulários dinâmicos, rotas, domínio, publicação, Analytics, rastreamento e agentes quando essas integrações forem ativadas.
 
-O painel escuta apenas 127.0.0.1; não deve ser publicado como SaaS nesta etapa. Multiusuário, autenticação pública e armazenamento remoto são uma etapa separada. Páginas exportadas são estáticas. Formulários enviam diretamente ao endpoint HTTPS configurado; esse endpoint precisa aceitar POST de formulário e responder ao visitante. Não existe inbox de leads nesta etapa.
+Páginas e formulários carregam sempre `companyId` e `projectId`. O documento do GrapesJS passa a ser `editorState` na API e `editor_state` no PostgreSQL. Esse estado não é um projeto. O projeto externo da Vercel será nomeado explicitamente quando a integração por projeto for construída.
 
-Vercel: token somente no ambiente do servidor, projeto estável por landing page, publicação explícita e estado real consultado; configurar DNS no provedor continua necessário. Não realizar publicação externa nesta implementação sem confirmação do dono.
+A fundação já usa PostgreSQL com migrações verificadas por checksum, empresas, memberships, concessões de projeto, sessões persistentes, páginas, formulários, rotas, versões imutáveis, respostas e importação idempotente do material JSON local. A rota local de formulário publicado é `/f/<empresa>/<projeto>/<formulario>`; um domínio conectado expõe somente o GET público e o POST de submissão. O acesso entre empresas responde como inexistente. O usuário deve receber uma nova sessão depois da migração.
 
-Critério: criar, salvar, reabrir, duplicar e excluir preserva isolamento; revisões antigas são rejeitadas; exportação não contém editor nem credenciais; integração Vercel testada com transporte simulado, sem representar isso como deploy real.
+O editor visual, modelos, formulários dinâmicos, respostas locais, exportação e publicação Vercel legada continuam como compatibilidade de desenvolvimento. O modo local é uma fonte de importação e rollback; ele não é a operação SaaS pública.
 
-## Evolução autorizada em 2026-09-04
+## Limites da fundação
 
-Tai aprovou executar com múltiplos subagentes: (1) editor para iniciantes, (2) variações de templates e seções prontas, (3) conta do dono e administração, (4) configuração Vercel pelo painel, (5) validar o fluxo. Formulários precisam manter aparência fora da seção de contato. Controles CSS técnicos ficam em Avançado.
+O servidor padrão não liga automaticamente ao PostgreSQL: a composição de produção e o shell visual SaaS são próximos passos. Webhooks podem ser configurados, mas a entrega assíncrona fica `pending` e não faz egress nesta fundação. Vercel por empresa e projeto, domínio de múltiplas rotas, cofre de segredos, Aurora/Umami/NVS, tracking, MCP/agentes, armazenamento S3 e Asaas não estão prontos. Eles não podem ser exibidos como conectados, publicados ou cobrados.
 
-Conta única com instalação inicial local, senha protegida, sessão via cookie, acesso às páginas condicionado a login e integração configurada pelo dono. Dados em diretório permanente selecionável, sem converter o painel em função efêmera. Conta e credenciais reais serão cadastradas pelo dono; nenhuma conta de teste deve permanecer nos dados reais. Publicação comercial e DNS reais exigem conexão e domínio do dono; validar contrato com simulação não equivale a publicar.
+As referências de IZI, Aurora e Asaas informam contratos e segurança, mas preços, créditos, nomes comerciais, limites e fluxos daquele produto não foram copiados. Nenhuma publicação, DNS, evento de tracking ou cobrança real é executada sem uma homologação e confirmação próprias.
+
+## Critério da próxima entrega
+
+O shell SaaS deve aplicar o wireframe aprovado usando dados reais: Home, Empresa, Projeto, Landing page e Formulário. Antes de abertura pública, a matriz automatizada precisa provar que duas empresas não leem, escrevem, excluem, publicam nem veem respostas umas das outras; backups precisam restaurar; e nenhum segredo pode aparecer no navegador, HTML, logs ou Analytics.

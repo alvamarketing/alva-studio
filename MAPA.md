@@ -3,9 +3,13 @@
 - `packages/core/`: núcleo original do GrapesJS.
 - `packages/cli/`: ferramentas originais de compilação.
 - `packages/studio/`: aplicação Alva Studio, editor e publicação.
-- `docs/`: documentação original do GrapesJS.
+- `docs/`: documentação original do GrapesJS e referências de projeto do Alva Studio.
+  - `wireframes/`: protótipos navegáveis usados como referência visual.
+  - `superpowers/specs/`: decisões de arquitetura aprovadas.
+  - `superpowers/plans/`: planos executáveis derivados das especificações.
 - `scripts/`: scripts originais do monorepo.
 - `produto/`: especificação e sequência de desenvolvimento do Alva Studio.
+- `.estado/`: registros curtos dos gates de validação das fundações do produto.
 
 Documentos novos são originais; dependências e arquivos compilados são derivados.
 

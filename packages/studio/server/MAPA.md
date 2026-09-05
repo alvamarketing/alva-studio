@@ -1,11 +1,20 @@
 # server
 
-- `index.mjs`: servidor HTTP local e rotas.
-- `store.mjs`: persistência e revisões das páginas.
-- `form-store.mjs`: persistência, validação, arquivos e respostas dos formulários dinâmicos.
+- `index.mjs`: servidor HTTP, modo local legado e composição da API SaaS quando recebe uma conexão PostgreSQL.
+- `db/`: adaptador PostgreSQL e migrações ordenadas do schema SaaS.
+  - `postgres.mjs`: pool, transações e executor idempotente de migrações com checksum.
+  - `migrations/001_saas_foundation.sql`: empresas, memberships, projetos, conteúdo, versões, integrações e auditoria.
+  - `migrations/002_invitations.sql`: convites de membros.
+  - `migrations/003_published_content_routes.sql`: rota preservada nos snapshots publicados.
+  - `migrations/004_local_imports.sql`: registro idempotente de importações locais.
+  - `migrations/005_session_project_context.sql`: projeto atual persistido na sessão.
+- `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
+- `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
+- `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
+- `project-api.mjs`: API multiempresa e compatibilidade das rotas atuais do editor.
+- `outbound-webhook.mjs`: valida destino HTTPS público contra SSRF; a entrega assíncrona ainda fica pendente e não faz egress nesta fundação.
+- `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
+- `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.
 - `dynamic-form.mjs`: documento público sequencial com mídia, gráficos, movimento e confirmação de envio.
-- `publisher.mjs`: chamadas à Vercel.
-
-Autenticação do dono, sessões e configurações protegidas de integração são mantidas pelos módulos de conta nesta pasta.
-
-- `auth.mjs`: conta do dono, sessões e credencial Vercel cifrada em disco.
+- `publisher.mjs`: chamadas Vercel do modo local; publicação Vercel por projeto SaaS permanece pendente.
+- `auth.mjs`: conta única, sessões e credencial Vercel cifrada em disco do modo local legado.
