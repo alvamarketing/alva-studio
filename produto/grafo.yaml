@@ -47,7 +47,7 @@ nos:
       tipo: homologação
       espera: Vercel confirma READY para snapshot idempotente sem expor token ou misturar rotas.
   - id: vsl_player
-    estado: pendente
+    estado: feito
     faz: Criar VSL por URL ou streaming pronto, com autoplay mutado, progresso, retomada, CTA temporizado e embed responsivo
     depende:
       - publicacao_por_projeto
