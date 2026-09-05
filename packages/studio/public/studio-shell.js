@@ -11,6 +11,7 @@ export const CLIENT_ROLE_CAPABILITIES = Object.freeze({
     'submission.read',
     'integration.manage',
     'deployment.publish',
+    'analytics.read',
   ]),
   admin: Object.freeze([
     'member.manage',
@@ -22,8 +23,9 @@ export const CLIENT_ROLE_CAPABILITIES = Object.freeze({
     'submission.read',
     'integration.manage',
     'deployment.publish',
+    'analytics.read',
   ]),
-  editor: Object.freeze(['page.write', 'form.write', 'video.read', 'video.write', 'submission.read']),
+  editor: Object.freeze(['page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'analytics.read']),
   analyst: Object.freeze(['submission.read', 'analytics.read', 'video.read']),
   viewer: Object.freeze([]),
 });

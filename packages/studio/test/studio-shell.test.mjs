@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStudioShell } from '../public/studio-shell.js';
+import { createStudioShell, CLIENT_ROLE_CAPABILITIES } from '../public/studio-shell.js';
 
 const companies = [
   { id: 'company-a', name: 'Alva A', role: 'owner' },
@@ -264,9 +264,9 @@ test('shell mantém capacidades de VSL alinhadas por papel', async () => {
 
 test('deriva capacidades dos papéis conhecidos e bloqueia viewer', async () => {
   const expected = {
-    owner: ['company.manage', 'billing.manage', 'member.manage', 'project.manage', 'page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'integration.manage', 'deployment.publish'],
-    admin: ['member.manage', 'project.manage', 'page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'integration.manage', 'deployment.publish'],
-    editor: ['page.write', 'form.write', 'video.read', 'video.write', 'submission.read'],
+    owner: ['company.manage', 'billing.manage', 'member.manage', 'project.manage', 'page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'integration.manage', 'deployment.publish', 'analytics.read'],
+    admin: ['member.manage', 'project.manage', 'page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'integration.manage', 'deployment.publish', 'analytics.read'],
+    editor: ['page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'analytics.read'],
     analyst: ['submission.read', 'analytics.read', 'video.read'],
     viewer: [],
   };
@@ -284,5 +284,16 @@ test('deriva capacidades dos papéis conhecidos e bloqueia viewer', async () => 
       await roleShell.initialize();
       assert.equal(roleShell.can(capability), capabilities.includes(capability), `${role} ${capability}`);
     }
+  }
+});
+
+test('espelho de capacidades do cliente casa com o servidor para os quatro papéis', async () => {
+  const { CAPABILITIES } = await import('../server/domain/access.mjs');
+  for (const role of ['owner', 'admin', 'editor', 'analyst']) {
+    assert.deepEqual(
+      [...CLIENT_ROLE_CAPABILITIES[role]].sort(),
+      [...CAPABILITIES[role]].sort(),
+      `capacidades de ${role} divergem entre cliente e servidor`,
+    );
   }
 });

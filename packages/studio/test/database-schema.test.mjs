@@ -29,6 +29,11 @@ const expectedTables = [
   'project_routes',
   'videos',
   'video_versions',
+  'analytics_websites',
+  'analytics_sessions',
+  'analytics_events',
+  'analytics_event_data',
+  'analytics_daily_rollup',
 ];
 
 const violates = (error) => error?.code === '23503' || error?.code === '23505' || error?.code === '23514';
@@ -391,6 +396,75 @@ test('falha de migração reverte schema e registro da versão', async (t) => {
     const migration = await database.query("SELECT 1 FROM schema_migrations WHERE version = '001'");
     assert.equal(table.rowCount, 0);
     assert.equal(migration.rowCount, 0);
+  } finally {
+    await database.close();
+  }
+});
+
+test('coletor de analytics isola por empresa e projeto e valida event_type', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedProject(database, { email: 'analytics-a@alva.test', companyName: 'Analytics A', slug: 'analytics-a' });
+    const other = await seedProject(database, { email: 'analytics-b@alva.test', companyName: 'Analytics B', slug: 'analytics-b' });
+
+    const website = await row(
+      database,
+      "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, 'tracker-analytics-a', 'production') RETURNING id",
+      [seed.company.id, seed.project.id],
+    );
+    assert.ok(website.id);
+
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, 'tracker-analytics-a-2', 'production')",
+        [seed.company.id, seed.project.id],
+      ),
+      violates,
+      'não deve permitir dois sites para o mesmo projeto e ambiente',
+    );
+
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, 'tracker-analytics-a', 'staging')",
+        [seed.company.id, seed.project.id],
+      ),
+      violates,
+      'tracker_public_id deve ser único globalmente',
+    );
+
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, 'tracker-analytics-cross', 'production')",
+        [seed.company.id, other.project.id],
+      ),
+      violates,
+      'FK composta deve recusar par (company_id, project_id) inconsistente',
+    );
+
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO analytics_events (company_id, project_id, website_id, event_at, event_type, url_path) VALUES ($1, $2, $3, now(), 'invalido', '/')",
+        [seed.company.id, seed.project.id, website.id],
+      ),
+      violates,
+      'event_type deve recusar valor fora do CHECK',
+    );
+
+    const event = await row(
+      database,
+      "INSERT INTO analytics_events (company_id, project_id, website_id, event_at, event_type, url_path, tracking_event_id) VALUES ($1, $2, $3, now(), 'pageview', '/', gen_random_uuid()) RETURNING id",
+      [seed.company.id, seed.project.id, website.id],
+    );
+    assert.ok(event.id);
+
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO analytics_events (company_id, project_id, website_id, event_at, event_type, url_path) VALUES ($1, $2, $3, now(), 'pageview', '/')",
+        [seed.company.id, other.project.id, website.id],
+      ),
+      violates,
+      'evento não pode referenciar site de outro projeto',
+    );
   } finally {
     await database.close();
   }

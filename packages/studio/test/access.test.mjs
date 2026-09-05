@@ -26,6 +26,18 @@ test('analyst lê VSL e viewer não acessa a superfície', () => {
   assert.equal(hasCapability('viewer', 'video.write'), false);
 });
 
+test('analytics.read chega a proprietário, administrador e editor sem tirar capacidade existente', () => {
+  assert.equal(hasCapability('owner', 'analytics.read'), true);
+  assert.equal(hasCapability('admin', 'analytics.read'), true);
+  assert.equal(hasCapability('editor', 'analytics.read'), true);
+  assert.equal(hasCapability('analyst', 'analytics.read'), true);
+  assert.equal(hasCapability('owner', 'billing.manage'), true);
+  assert.equal(hasCapability('admin', 'member.manage'), true);
+  assert.equal(hasCapability('editor', 'video.write'), true);
+  assert.equal(hasCapability('editor', 'deployment.publish'), false);
+  assert.equal(hasCapability('analyst', 'video.write'), false);
+});
+
 test('expõe papéis e capacidades imutáveis', () => {
   assert.deepEqual(ROLES, ['owner', 'admin', 'editor', 'analyst']);
   assert.equal(Object.isFrozen(ROLES), true);

@@ -11,6 +11,7 @@ const ROLE_CAPABILITIES = {
     'submission.read',
     'integration.manage',
     'deployment.publish',
+    'analytics.read',
   ],
   admin: [
     'member.manage',
@@ -22,8 +23,9 @@ const ROLE_CAPABILITIES = {
     'submission.read',
     'integration.manage',
     'deployment.publish',
+    'analytics.read',
   ],
-  editor: ['page.write', 'form.write', 'video.read', 'video.write', 'submission.read'],
+  editor: ['page.write', 'form.write', 'video.read', 'video.write', 'submission.read', 'analytics.read'],
   analyst: ['submission.read', 'analytics.read', 'video.read'],
 };
 
