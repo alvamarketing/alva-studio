@@ -7,6 +7,7 @@ import {
   normalizeVslReference,
   resolvePublishedVsl,
   resolvePublishedVslReferences,
+  resolvePublishedVslReferencesForRender,
 } from '../server/vsl-reference.mjs';
 
 test('normaliza somente uma referência pública mínima de VSL', () => {
@@ -50,6 +51,23 @@ test('retorna 404 para VSL ausente e deduplica referências no mapa', async () =
   ] });
   assert.equal(queries, 1);
   assert.deepEqual([...result.keys()], ['public-vsl-123456']);
+});
+
+test('modo de render tolera VSL ausente, preserva mapa parcial e modo estrito continua bloqueando', async () => {
+  const database = { query: async (_text, values) => ({
+    rows: values[2] === 'public-vsl-ok' ? [{ public_id: values[2], version_number: 2 }] : [],
+  }) };
+  const references = [
+    { type: 'vsl', publicId: 'public-vsl-ok' },
+    { type: 'vsl', publicId: 'public-vsl-missing' },
+  ];
+  await assert.rejects(
+    () => resolvePublishedVslReferences({ database, companyId: 'c', projectId: 'p', publicOrigin: 'https://studio.example.test', references }),
+    (error) => error.status === 404,
+  );
+  const partial = await resolvePublishedVslReferencesForRender({ database, companyId: 'c', projectId: 'p', publicOrigin: 'https://studio.example.test', references });
+  assert.deepEqual([...partial.keys()], ['public-vsl-ok']);
+  assert.equal(partial.get('public-vsl-ok').embedUrl, 'https://studio.example.test/embed/v/public-vsl-ok');
 });
 
 test('isola a resolução por empresa/projeto e exige versão publicada', async (t) => {

@@ -17,7 +17,7 @@ import { validateWebhookUrl } from './outbound-webhook.mjs';
 import { normalizeRoute } from './domain/access.mjs';
 import { createDatabase, migrate } from './db/postgres.mjs';
 import { PublicationSnapshotBuilder, extractVslReferences } from './publication-snapshot.mjs';
-import { resolvePublishedVslReferences } from './vsl-reference.mjs';
+import { resolvePublishedVslReferencesForRender } from './vsl-reference.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
@@ -270,7 +270,7 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        const resolved = await resolvePublishedVslReferences({
+        const resolved = await resolvePublishedVslReferencesForRender({
           database, companyId: form.companyId, projectId: form.projectId, publicOrigin: publicOrigin || expectedOrigin,
           references: extractVslReferences(form),
         });

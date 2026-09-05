@@ -182,6 +182,11 @@ test('renderiza VSL com embed absoluto resolvido e fallback acessível sem expor
   assert.match(html, /<iframe[^>]+src="https:\/\/studio\.example\.test\/embed\/v\/public-vsl-123"/);
   assert.match(html, /title="Conheça a oferta"/);
   assert.match(html, /data-motion="fade-up"/);
+  assert.match(html, /\.screen-element\[data-motion=fade-up\]/);
+  assert.match(html, /\.screen-element\[data-motion=slide-left\]/);
+  assert.match(html, /\.screen-element\[data-motion=zoom-in\]/);
+  assert.match(html, /\.screen-element\[data-motion=float\]/);
+  assert.match(html, /prefers-reduced-motion:reduce\).*\.screen-element\[data-motion\]/);
   assert.doesNotMatch(html, /sourceUrl|posterUrl|ctaText|ctaUrl|video\.mp4/);
 
   const missing = renderDynamicForm({ ...form, steps: [{ id: 'sem-vsl', type: 'vsl', publicId: 'missing-vsl', title: 'Oferta' }] }, '/submit', { vslEmbedUrls: new Map() });

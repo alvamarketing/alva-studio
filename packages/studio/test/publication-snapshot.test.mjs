@@ -66,6 +66,18 @@ test('snapshot extrai a referência canônica do componente GrapesJS e aceita so
   assert.equal(snapshot.manifest[0].path, '/vsl');
 });
 
+test('snapshot mantém publicação estrita quando uma VSL referenciada não está publicada', async () => {
+  const rows = [{
+    kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'form-vsl-missing', version_id: 'form-version-vsl-missing', version_number: 1, path: '/captura',
+    schema: { steps: [{ id: 'vsl-screen', elements: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl-missing', title: 'Oferta' }] }] },
+  }];
+  await assert.rejects(
+    () => buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
+    (error) => error.status === 404,
+  );
+});
+
 test('snapshot rejeita conflito entre publicId do componente e data-alva-vsl', async () => {
   const rows = [{
     kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',

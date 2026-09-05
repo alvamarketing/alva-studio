@@ -76,6 +76,21 @@ test('valida schema e mantém apenas respostas previstas', async (t) => {
   );
 });
 
+test('VSL é informativa e não persiste em answers', async (t) => {
+  const store = await setup(t);
+  const form = await store.create({ name: 'VSL informativa' });
+  const updated = await store.update(form.id, {
+    revision: 0,
+    steps: [
+      { id: 'vsl', type: 'vsl', title: 'Assista', publicId: 'public-vsl-123456' },
+      { id: 'nome', type: 'short_text', title: 'Seu nome' },
+    ],
+  });
+  const submission = await store.submit(updated.id, { answers: { vsl: 'tentativa', nome: 'Pessoa' } });
+  assert.deepEqual(submission.answers, { nome: 'Pessoa' });
+  assert.equal(Object.hasOwn(submission.answers, 'vsl'), false);
+});
+
 test('normaliza os novos elementos, movimentos, ícones e dados de gráfico', async (t) => {
   const store = await setup(t);
   const form = await store.create({ name: 'Diagnóstico vivo' });

@@ -170,6 +170,10 @@ test('editor de formulários lista VSLs publicadas do projeto e mantém somente 
   assert.match(source, /video\.read/);
   assert.match(source, /form\.write/);
   assert.match(source, /publicId/);
+  assert.match(source, /data-field="motion"/);
+  assert.match(source, /MOTIONS\.map/);
+  assert.match(source, /INFORMATIONAL = new Set\(\[[^\]]*['"]vsl['"]/);
+  assert.match(source, /filter\(\(element\) => !INFORMATIONAL\.has\(element\.type\)\)/);
   assert.doesNotMatch(source, /data-field="sourceUrl"|data-field="posterUrl"|data-field="ctaUrl"/);
   assert.match(source, /vslEmbedUrl|embed\/v/);
   assert.match(css, /dynamic-vsl/);

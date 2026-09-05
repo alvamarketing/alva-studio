@@ -1,4 +1,4 @@
-const INFORMATIONAL = new Set(['image', 'video', 'cta', 'statement', 'chart', 'loader', 'logo', 'progress', 'countdown', 'timer']);
+const INFORMATIONAL = new Set(['image', 'video', 'vsl', 'cta', 'statement', 'chart', 'loader', 'logo', 'progress', 'countdown', 'timer']);
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -19,7 +19,10 @@ export function validateFormAnswers(schema, input) {
   if (!fields.length) throw fail('Formulário publicado inválido.', 409);
   for (const step of fields) {
     if (!step || typeof step !== 'object' || typeof step.id !== 'string') throw fail('Formulário publicado inválido.', 409);
-    if (INFORMATIONAL.has(step.type)) { answers[step.id] = ''; continue; }
+    if (INFORMATIONAL.has(step.type)) {
+      if (step.type !== 'vsl') answers[step.id] = '';
+      continue;
+    }
     if (step.type === 'multiple_choice') {
       const values = Array.isArray(provided[step.id]) ? provided[step.id] : provided[step.id] ? [provided[step.id]] : [];
       const clean = [...new Set(values.map((value) => text(value, 120, 'Resposta', true)))];

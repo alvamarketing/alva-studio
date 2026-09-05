@@ -54,3 +54,25 @@ export async function resolvePublishedVslReferences({ database, companyId, proje
   }
   return resolved;
 }
+
+// Public form rendering may keep a partial map so the renderer can show its
+// accessible fallback while publication validation remains strict above.
+export async function resolvePublishedVslReferencesForRender({ database, companyId, projectId, publicOrigin, references = [] }) {
+  const unique = new Map();
+  for (const value of references) {
+    const reference = normalizeVslReference(value);
+    unique.set(reference.publicId, reference);
+  }
+  const resolved = new Map();
+  for (const reference of unique.values()) {
+    try {
+      resolved.set(reference.publicId, await resolvePublishedVsl({
+        database, companyId, projectId, publicId: reference.publicId, publicOrigin,
+      }));
+    } catch (error) {
+      if (error?.status === 404) continue;
+      throw error;
+    }
+  }
+  return resolved;
+}
