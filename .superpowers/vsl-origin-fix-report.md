@@ -51,3 +51,20 @@ Os testes de regressão para comentários, `script`, `style`, `template`, `texta
 - Focais cliente, snapshot/publicação e servidor: **51 passando, 0 falhas**.
 - Suíte serial após a correção: **261 testes passando, 0 falhas**.
 - Grafo HTTP inclui `/vsl-html.js`; `node --check` e `git diff --check` passaram.
+
+## Round 2 — validação fail-atomic
+
+### Evidência RED
+
+Antes da validação global, os novos testes reproduziram as falhas no cliente e no servidor: um marcador real anterior ao erro era materializado parcialmente, e marcadores dentro de CDATA eram alterados. Os casos cobriram atributo sem fechamento, tags aninhadas/mismatched, fechamento ausente e `/>` em `div` e `iframe` não-void. Cliente e snapshot falharam em **2 casos cada** antes da correção.
+
+### Correção
+
+O tokenizador agora valida o documento inteiro antes de chamar qualquer substituição. Ele mantém uma pilha de elementos, rejeita atributos quebrados, tags mismatched/aninhadas, fechamento ausente e `/>` em elementos não-void, e trata comentários, CDATA e raw-text como zonas protegidas. Qualquer estrutura fora do subconjunto emitido pelo Studio retorna o texto original byte a byte, evitando substituição parcial. A mesma validação é usada no renderer do cliente e na publicação do servidor.
+
+### Validação da rodada
+
+- Focais cliente + publicação + servidor: **55 passando, 0 falhas**.
+- Suíte serial: `node --test --test-concurrency=1 packages/studio/test/*.test.mjs` — **265 testes passando, 0 falhas**.
+- Sintaxe: `node --check` — passou.
+- Integridade do patch: `git diff --check` — passou.
