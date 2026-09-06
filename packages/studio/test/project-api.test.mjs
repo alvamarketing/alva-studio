@@ -18,13 +18,16 @@ async function legacyPassword(password) {
 }
 
 async function start(t, database, options = {}) {
-  const { publicOrigin, authOptions, sessionOptions = {}, dnsLookup, webhookFetch } = options;
+  const { publicOrigin, authOptions, sessionOptions = {}, dnsLookup, webhookFetch, billingEnforcement, billingRuntimeConfig, asaasClientFactory } = options;
   const server = createApp({
     database,
     publicOrigin,
     authOptions,
     dnsLookup,
     webhookFetch,
+    billingEnforcement,
+    billingRuntimeConfig,
+    asaasClientFactory,
     sessionOptions: { sessionTTL: 60_000, ...sessionOptions },
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -32,6 +35,34 @@ async function start(t, database, options = {}) {
   const base = `http://127.0.0.1:${server.address().port}`;
   return { server, base };
 }
+
+test('billing entra pelas rotas da empresa, mantém enforcement desligado e recebe webhook autenticado na inbox', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  let transportCalls = 0;
+  const app = await start(t, database, {
+    billingEnforcement: 'off',
+    billingRuntimeConfig: (environment) => ({ environment, webhookToken: 'sandbox-webhook-token', apiKey: 'test-key', siteOrigin: 'https://studio.alva.test' }),
+    asaasClientFactory: () => { transportCalls += 1; return {}; },
+  });
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  const overview = await alice.request('/api/billing');
+  assert.equal(overview.status, 200);
+  assert.equal((await overview.json()).access.accessState, 'active');
+  assert.equal((await alice.request('/api/billing/checkout', 'POST', {})).status, 409);
+  assert.equal(transportCalls, 0);
+  const webhook = await fetch(`${app.base}/api/billing/webhooks/asaas/sandbox`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'asaas-access-token': 'sandbox-webhook-token' },
+    body: JSON.stringify({ id: 'event-http-1', event: 'PAYMENT_RECEIVED', payment: { id: 'payment-http-1' } }),
+  });
+  assert.equal(webhook.status, 200);
+  assert.equal((await database.query("SELECT * FROM billing_webhook_inbox WHERE provider_event_id = 'event-http-1' AND environment = 'sandbox'")).rowCount, 1);
+  assert.equal((await fetch(`${app.base}/api/billing/webhooks/asaas/sandbox`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'asaas-access-token': 'wrong-token' }, body: '{}' })).status, 401);
+  await database.close();
+});
 
 async function publicRequest(base, path, host, { method = 'GET', body, headers = {} } = {}) {
   return new Promise((resolve, reject) => {

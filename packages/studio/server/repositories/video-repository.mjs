@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability } from '../domain/access.mjs';
+import { parseMediaSource } from '../media-source.mjs';
 
 function fail(message, statusCode = 400) {
   const error = new Error(message);
@@ -28,12 +29,6 @@ function safeUrl(value, { required = false, label = 'URL da mídia', relative = 
   try { url = new URL(text); } catch { throw fail(`${label} precisa ser HTTPS e absoluta.`); }
   if (!/^https:\/\//i.test(text) || url.protocol !== 'https:' || !url.hostname || url.username || url.password) throw fail(`${label} precisa ser HTTPS sem credenciais.`);
   return text;
-}
-
-function sourceType(value, sourceUrl) {
-  const type = value || (/\.m3u8(?:$|[?#])/i.test(sourceUrl) ? 'hls' : 'mp4');
-  if (!['mp4', 'hls'].includes(type)) throw fail('Tipo de mídia inválido.');
-  return type;
 }
 
 function color(value) {
@@ -73,9 +68,11 @@ function milestones(value) {
   return [...new Set(value)].sort((left, right) => left - right);
 }
 
-function normalizedInput(input = {}, current = {}) {
-  const sourceUrl = safeUrl(input.sourceUrl === undefined ? current.source_url : input.sourceUrl, { required: true, label: 'URL da mídia' });
-  const type = sourceType(input.sourceType === undefined ? current.source_type : input.sourceType, sourceUrl);
+function normalizedInput(input = {}, current = {}, mediaConfig = {}) {
+  const source = parseMediaSource({
+    sourceUrl: input.sourceUrl === undefined ? current.source_url : input.sourceUrl,
+    sourceType: input.sourceType === undefined ? current.source_type : input.sourceType,
+  }, mediaConfig);
   const posterUrl = safeUrl(input.posterUrl === undefined ? current.poster_url : input.posterUrl, { label: 'URL do poster' });
   const captionsUrl = safeUrl(input.captionsUrl === undefined ? current.captions_url : input.captionsUrl, { label: 'URL da legenda' });
   const text = ctaText(input.ctaText === undefined ? current.cta_text : input.ctaText);
@@ -89,8 +86,10 @@ function normalizedInput(input = {}, current = {}) {
     throw fail('CTA precisa de texto, destino e tempo.');
   return {
     name: input.name === undefined ? current.name : requiredName(input.name),
-    sourceUrl,
-    sourceType: type,
+    sourceUrl: source.sourceUrl,
+    sourceType: source.sourceType,
+    providerVideoId: source.providerVideoId,
+    providerConfig: source.providerConfig,
     posterUrl,
     captionsUrl,
     accentColor: color(input.accentColor === undefined ? current.accent_color : input.accentColor),
@@ -109,6 +108,10 @@ function publicId() {
 }
 
 function record(row) {
+  const provider = row.provider_video_id ? {
+    providerVideoId: row.provider_video_id,
+    providerConfig: row.provider_config ?? {},
+  } : {};
   return {
     id: row.id,
     companyId: row.company_id,
@@ -117,6 +120,7 @@ function record(row) {
     name: row.name,
     sourceUrl: row.source_url,
     sourceType: row.source_type,
+    ...provider,
     posterUrl: row.poster_url,
     captionsUrl: row.captions_url,
     accentColor: row.accent_color,
@@ -175,19 +179,22 @@ async function scoped(client, { companyId, projectId, videoId, lock = false }) {
 }
 
 export class VideoRepository {
-  constructor(database) { this.database = database; }
+  constructor(database, { studioOrigin } = {}) {
+    this.database = database;
+    this.mediaConfig = { studioOrigin };
+  }
 
   async createVideo(input) {
-    const next = normalizedInput(input);
+    const next = normalizedInput(input, {}, this.mediaConfig);
     const id = publicId();
     await authorizedProject(this.database, { ...input, capability: 'video.write' });
     const { rows } = await this.database.query(
       `INSERT INTO videos
-        (company_id, project_id, public_id, name, source_url, source_type, poster_url, captions_url,
+        (company_id, project_id, public_id, name, source_url, source_type, provider_video_id, provider_config, poster_url, captions_url,
          accent_color, aspect_ratio, autoplay_muted, resume_enabled, cta_text, cta_url, cta_seconds, milestones, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19)
        RETURNING *`,
-      [input.companyId, input.projectId, id, next.name, next.sourceUrl, next.sourceType, next.posterUrl, next.captionsUrl,
+      [input.companyId, input.projectId, id, next.name, next.sourceUrl, next.sourceType, next.providerVideoId, JSON.stringify(next.providerConfig), next.posterUrl, next.captionsUrl,
         next.accentColor, next.aspectRatio, next.autoplayMuted, next.resumeEnabled, next.ctaText, next.ctaUrl, next.ctaSeconds,
         JSON.stringify(next.milestones), input.actorId],
     );
@@ -217,13 +224,13 @@ export class VideoRepository {
     return withTransaction(this.database, async (client) => {
       const current = await scoped(client, { companyId, projectId, videoId, lock: true });
       if (current.lock_version !== lockVersion) throw fail('A VSL mudou em outra aba. Reabra antes de salvar.', 409);
-      const next = normalizedInput(input, current);
+      const next = normalizedInput(input, current, this.mediaConfig);
       const { rows } = await client.query(
-        `UPDATE videos SET name=$4, source_url=$5, source_type=$6, poster_url=$7, captions_url=$8,
-         accent_color=$9, aspect_ratio=$10, autoplay_muted=$11, resume_enabled=$12, cta_text=$13, cta_url=$14,
-         cta_seconds=$15, milestones=$16::jsonb, lock_version=lock_version+1, updated_at=now()
-         WHERE company_id=$1 AND project_id=$2 AND id=$3 AND lock_version=$17 AND deleted_at IS NULL RETURNING *`,
-        [companyId, projectId, videoId, next.name, next.sourceUrl, next.sourceType, next.posterUrl, next.captionsUrl,
+        `UPDATE videos SET name=$4, source_url=$5, source_type=$6, provider_video_id=$7, provider_config=$8::jsonb, poster_url=$9, captions_url=$10,
+         accent_color=$11, aspect_ratio=$12, autoplay_muted=$13, resume_enabled=$14, cta_text=$15, cta_url=$16,
+         cta_seconds=$17, milestones=$18::jsonb, lock_version=lock_version+1, updated_at=now()
+         WHERE company_id=$1 AND project_id=$2 AND id=$3 AND lock_version=$19 AND deleted_at IS NULL RETURNING *`,
+        [companyId, projectId, videoId, next.name, next.sourceUrl, next.sourceType, next.providerVideoId, JSON.stringify(next.providerConfig), next.posterUrl, next.captionsUrl,
           next.accentColor, next.aspectRatio, next.autoplayMuted, next.resumeEnabled, next.ctaText, next.ctaUrl, next.ctaSeconds,
           JSON.stringify(next.milestones), lockVersion],
       );
@@ -241,11 +248,11 @@ export class VideoRepository {
       const versionNumber = Number((await client.query('SELECT COALESCE(MAX(version_number), 0) + 1 AS next FROM video_versions WHERE video_id = $1', [videoId])).rows[0].next);
       const { rows } = await client.query(
         `INSERT INTO video_versions
-         (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type, poster_url, captions_url,
+         (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type, provider_video_id, provider_config, poster_url, captions_url,
           accent_color, aspect_ratio, autoplay_muted, resume_enabled, cta_text, cta_url, cta_seconds, milestones, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19) RETURNING *`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21) RETURNING *`,
         [companyId, projectId, videoId, versionNumber, current.public_id, current.name, current.source_url, current.source_type,
-          current.poster_url, current.captions_url, current.accent_color, current.aspect_ratio, current.autoplay_muted,
+          current.provider_video_id, JSON.stringify(current.provider_config ?? {}), current.poster_url, current.captions_url, current.accent_color, current.aspect_ratio, current.autoplay_muted,
           current.resume_enabled, current.cta_text, current.cta_url, current.cta_seconds, JSON.stringify(current.milestones), actorId],
       );
       await client.query(
@@ -262,6 +269,7 @@ export class VideoRepository {
     const input = {
       companyId, projectId, actorId,
       name: `${source.name} — cópia`.slice(0, 100), sourceUrl: source.source_url, sourceType: source.source_type,
+      providerConfig: source.provider_config,
       posterUrl: source.poster_url, captionsUrl: source.captions_url, accentColor: source.accent_color,
       aspectRatio: source.aspect_ratio, autoplayMuted: source.autoplay_muted, resumeEnabled: source.resume_enabled,
       ctaText: source.cta_text, ctaUrl: source.cta_url, ctaSeconds: source.cta_seconds, milestones: source.milestones,

@@ -34,9 +34,15 @@ const expectedTables = [
   'analytics_events',
   'analytics_event_data',
   'analytics_daily_rollup',
+  'project_tracking_policies',
+  'analytics_consents',
+  'tracking_proxy_secrets',
+  'tracking_proxy_requests',
+  'publication_build_reservations',
+  'publication_tracking_artifacts',
 ];
 
-const violates = (error) => error?.code === '23503' || error?.code === '23505' || error?.code === '23514';
+const violates = (error) => ['23502', '23503', '23505', '23514'].includes(error?.code);
 
 async function migratedDatabase(t) {
   const { connectionString } = await postgresFixture(t);
@@ -497,6 +503,292 @@ test('migração do coletor cria tracker público para projetos já existentes',
     const provisioned = await database.query('SELECT tracker_public_id FROM analytics_websites WHERE company_id = $1 AND project_id = $2', [seed.company.id, createdAfterMigration.rows[0].id]);
     assert.equal(provisioned.rowCount, 1, 'projeto criado após a migração recebe tracker automaticamente');
     assert.match(provisioned.rows[0].tracker_public_id, /^[a-f0-9]{32}$/);
+  } finally {
+    await database.close();
+  }
+});
+
+test('migração de mídia aceita provedores e rejeita estados de armazenamento incoerentes', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedProject(database, { email: 'media-schema@alva.test', companyName: 'Mídia Schema', slug: 'midia-schema' });
+    const video = await row(
+      database,
+      `INSERT INTO videos (company_id, project_id, public_id, name, source_url, source_type, provider_video_id, created_by)
+       VALUES ($1, $2, 'youtube-schema-video', 'YouTube', 'https://www.youtube.com/embed/dQw4w9WgXcQ', 'youtube', 'dQw4w9WgXcQ', $3)
+       RETURNING id`,
+      [seed.company.id, seed.project.id, seed.user.id],
+    );
+    assert.ok(video.id, 'VSL de provedor deve persistir quando tiver identidade canônica');
+    const version = await row(
+      database,
+      `INSERT INTO video_versions (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type,
+        provider_video_id, accent_color, aspect_ratio, autoplay_muted, resume_enabled, created_by)
+       VALUES ($1, $2, $3, 1, 'youtube-schema-video', 'YouTube', 'https://www.youtube.com/embed/dQw4w9WgXcQ', 'youtube',
+        'dQw4w9WgXcQ', '#286eea', '16:9', true, true, $4) RETURNING id`,
+      [seed.company.id, seed.project.id, video.id, seed.user.id],
+    );
+    assert.ok(version.id, 'snapshot de provedor deve guardar a identidade canônica');
+
+    await assert.rejects(
+      () => database.query(
+        `INSERT INTO videos (company_id, project_id, public_id, name, source_url, source_type, created_by)
+         VALUES ($1, $2, 'youtube-without-id', 'Inválido', 'https://www.youtube.com/embed/dQw4w9WgXcQ', 'youtube', $3)`,
+        [seed.company.id, seed.project.id, seed.user.id],
+      ),
+      violates,
+      'provedores não podem existir sem provider_video_id',
+    );
+    await database.query(
+      `INSERT INTO videos (company_id, project_id, public_id, name, source_url, source_type, provider_video_id, created_by)
+       VALUES ($1, $2, 'smartplayer-schema', 'SmartPlayer', 'https://example.test/embed', 'smartplayer', 'player-123', $3)`,
+      [seed.company.id, seed.project.id, seed.user.id],
+    );
+    await assert.rejects(
+      () => database.query(
+        `INSERT INTO videos (company_id, project_id, public_id, name, source_url, source_type, created_by)
+         VALUES ($1, $2, 'bad-media-type', 'Inválido', 'https://example.test/video', 'arquivo', $3)`,
+        [seed.company.id, seed.project.id, seed.user.id],
+      ),
+      violates,
+      'domínio de source_type deve continuar fechado',
+    );
+    await assert.rejects(
+      () => database.query(
+        `INSERT INTO videos (company_id, project_id, public_id, name, source_url, source_type, storage_key, storage_status, created_by)
+         VALUES ($1, $2, 'bad-storage-status', 'Inválido', 'https://cdn.example.test/video.mp4', 'r2', 'company/project/video.mp4', 'queued', $3)`,
+        [seed.company.id, seed.project.id, seed.user.id],
+      ),
+      violates,
+      'storage_status só aceita estados conhecidos',
+    );
+    await assert.rejects(
+      () => database.query(
+        `INSERT INTO videos (company_id, project_id, public_id, name, source_url, source_type, storage_status, created_by)
+         VALUES ($1, $2, 'r2-without-key', 'Inválido', 'https://cdn.example.test/video.mp4', 'r2', 'ready', $3)`,
+        [seed.company.id, seed.project.id, seed.user.id],
+      ),
+      violates,
+      'R2 exige storage_key em videos',
+    );
+    await assert.rejects(
+      () => database.query(
+        `INSERT INTO video_versions (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type,
+          accent_color, aspect_ratio, autoplay_muted, resume_enabled, storage_status, created_by)
+         VALUES ($1, $2, $3, 2, 'youtube-schema-video', 'Inválido', 'https://cdn.example.test/video.m3u8', 'r2-hls',
+          '#286eea', '16:9', true, true, 'ready', $4)`,
+        [seed.company.id, seed.project.id, video.id, seed.user.id],
+      ),
+      violates,
+      'R2 exige storage_key em video_versions',
+    );
+    await assert.rejects(
+      () => database.query(
+        `INSERT INTO video_versions (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type,
+          accent_color, aspect_ratio, autoplay_muted, resume_enabled, storage_key, storage_status, created_by)
+         VALUES ($1, $2, $3, 3, 'youtube-schema-video', 'Inválido', 'https://cdn.example.test/video.mp4', 'r2',
+          '#286eea', '16:9', true, true, 'company/project/video.mp4', 'queued', $4)`,
+        [seed.company.id, seed.project.id, video.id, seed.user.id],
+      ),
+      violates,
+      'storage_status só aceita estados conhecidos em video_versions',
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('migração de mídia preenche published_lock_version em VSLs publicadas antigas', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const { createDatabase, migrate } = await import('../server/db/postgres.mjs');
+  const database = createDatabase({ connectionString });
+  const migrationsPath = await mkdtemp(join(tmpdir(), 'alva-media-backfill-'));
+  t.after(() => rm(migrationsPath, { recursive: true, force: true }));
+  try {
+    const migrations = await (await import('node:fs/promises')).readdir(sourceMigrations);
+    for (const name of migrations.filter((name) => name < '013_media_providers.sql'))
+      await writeFile(join(migrationsPath, name), await readFile(join(sourceMigrations, name)));
+    await migrate(database, { migrationsPath });
+    const seed = await seedProject(database, { email: 'media-backfill@alva.test', companyName: 'Mídia Backfill', slug: 'midia-backfill' });
+    const video = await row(
+      database,
+      `INSERT INTO videos (company_id, project_id, public_id, name, source_url, source_type, lock_version, created_by)
+       VALUES ($1, $2, 'legacy-published-video', 'Legada', 'https://cdn.example.test/legacy.mp4', 'mp4', 7, $3) RETURNING id`,
+      [seed.company.id, seed.project.id, seed.user.id],
+    );
+    const version = await row(
+      database,
+      `INSERT INTO video_versions (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type,
+        accent_color, aspect_ratio, autoplay_muted, resume_enabled, created_by)
+       VALUES ($1, $2, $3, 1, 'legacy-published-video', 'Legada', 'https://cdn.example.test/legacy.mp4', 'mp4',
+        '#286eea', '16:9', true, true, $4) RETURNING id`,
+      [seed.company.id, seed.project.id, video.id, seed.user.id],
+    );
+    await database.query('UPDATE videos SET published_version_id = $1 WHERE id = $2', [version.id, video.id]);
+    await writeFile(join(migrationsPath, '013_media_providers.sql'), await readFile(join(sourceMigrations, '013_media_providers.sql')));
+    await migrate(database, { migrationsPath });
+    const upgraded = await row(database, 'SELECT published_lock_version FROM videos WHERE id = $1', [video.id]);
+    assert.equal(upgraded.published_lock_version, 7, 'o backfill deve usar a revisão que estava publicada');
+  } finally {
+    await database.close();
+  }
+});
+
+test('migração de pixels fecha escopo, consentimento e vínculo de publicação', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const first = await seedProject(database, { email: 'pixels-a@alva.test', companyName: 'Pixels A', slug: 'pixels-a' });
+    const second = await seedProject(database, { email: 'pixels-b@alva.test', companyName: 'Pixels B', slug: 'pixels-b' });
+    await database.query('DELETE FROM analytics_websites WHERE company_id = $1 AND project_id = $2', [first.company.id, first.project.id]);
+    const website = await row(
+      database,
+      "INSERT INTO analytics_websites (company_id, project_id, tracker_public_id, environment) VALUES ($1, $2, 'tracker-pixels-a', 'production') RETURNING id",
+      [first.company.id, first.project.id],
+    );
+    await database.query(
+      "INSERT INTO project_tracking_policies (company_id, project_id, environment, privacy_policy_url, policy_version) VALUES ($1, $2, 'production', 'https://pixels.example.test/privacy', '2026-09')",
+      [first.company.id, first.project.id],
+    );
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO project_tracking_policies (company_id, project_id, environment, privacy_policy_url, policy_version) VALUES ($1, $2, 'production', 'https://pixels.example.test/privacy', '2026-09')",
+        [first.company.id, second.project.id],
+      ),
+      violates,
+      'a política precisa manter o par empresa/projeto',
+    );
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO analytics_consents (company_id, project_id, website_id, purpose, consent_token_hash, policy_version, expires_at, evidence) VALUES ($1, $2, $3, 'analytics', repeat('a', 64), '2026-09', now() + interval '1 year', '{\"source\":\"banner\",\"publicationId\":\"pub\"}'::jsonb)",
+        [first.company.id, first.project.id, website.id],
+      ),
+      violates,
+      'consentimento só pode ter finalidade publicitária',
+    );
+    for (const evidence of ['{}', '[]', '{"source":"form","publicationId":"pub"}', '{"source":"banner","publicationId":7}', '{"source":"banner","publicationId":"not valid"}']) {
+      await assert.rejects(
+        () => database.query(
+          "INSERT INTO analytics_consents (company_id, project_id, website_id, purpose, consent_token_hash, policy_version, expires_at, evidence) VALUES ($1, $2, $3, 'advertising', repeat('c', 64), '2026-09', now() + interval '1 year', $4::jsonb)",
+          [first.company.id, first.project.id, website.id, evidence],
+        ),
+        violates,
+        'evidência exige banner e publicationId público válido',
+      );
+    }
+    await database.query(
+      "INSERT INTO analytics_consents (company_id, project_id, website_id, purpose, consent_token_hash, policy_version, expires_at, evidence) VALUES ($1, $2, $3, 'advertising', repeat('a', 64), '2026-09', now() + interval '1 year', '{\"source\":\"banner\",\"publicationId\":\"pub\"}'::jsonb)",
+      [first.company.id, first.project.id, website.id],
+    );
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO analytics_consents (company_id, project_id, website_id, purpose, consent_token_hash, policy_version, expires_at, evidence) VALUES ($1, $2, $3, 'advertising', repeat('a', 64), '2026-09', now() + interval '1 year', '{\"source\":\"banner\",\"publicationId\":\"pub\"}'::jsonb)",
+        [first.company.id, first.project.id, website.id],
+      ),
+      violates,
+      'índice parcial impede dois consentimentos ativos para o mesmo token',
+    );
+    const reservation = await row(
+      database,
+      "INSERT INTO publication_build_reservations (public_id, company_id, project_id, environment, state, expires_at) VALUES ('published-pixels-a', $1, $2, 'production', 'reserved', now() + interval '1 hour') RETURNING id, public_id",
+      [first.company.id, first.project.id],
+    );
+    assert.notEqual(reservation.id, reservation.public_id, 'a reservation possui PK interna distinta do identificador público');
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO publication_build_reservations (public_id, company_id, project_id, environment, state, expires_at) VALUES ('published-pixels-a', $1, $2, 'production', 'invalid', now() - interval '1 hour')",
+        [first.company.id, first.project.id],
+      ),
+      violates,
+      'estado inválido ou expiração inválida devem ser recusados',
+    );
+    await database.query("UPDATE publication_build_reservations SET state = 'expired' WHERE id = $1", [reservation.id]);
+    await database.query('DELETE FROM publication_build_reservations WHERE id = $1', [reservation.id]);
+    const activeReservation = await row(
+      database,
+      "INSERT INTO publication_build_reservations (public_id, company_id, project_id, environment, state, expires_at) VALUES ('published-pixels-active', $1, $2, 'production', 'claimed', now() + interval '1 hour') RETURNING id",
+      [first.company.id, first.project.id],
+    );
+    const run = await row(
+      database,
+      "INSERT INTO deployment_runs (company_id, project_id, environment, snapshot_hash, idempotency_key, expected_revision) VALUES ($1, $2, 'production', repeat('a', 64), 'pixel-run', 0) RETURNING id",
+      [first.company.id, first.project.id],
+    );
+    const previewRun = await row(
+      database,
+      "INSERT INTO deployment_runs (company_id, project_id, environment, snapshot_hash, idempotency_key, expected_revision) VALUES ($1, $2, 'preview', repeat('b', 64), 'pixel-preview-run', 0) RETURNING id",
+      [first.company.id, first.project.id],
+    );
+    await assert.rejects(
+      () => database.query('UPDATE publication_build_reservations SET deployment_run_id = $2 WHERE id = $1', [activeReservation.id, previewRun.id]),
+      violates,
+      'reservation só pode vincular run do mesmo ambiente',
+    );
+    await database.query(
+      "INSERT INTO tracking_proxy_requests (publication_id, request_id, request_hash, response_status, response_body, expires_at) VALUES ($1, 'same-request', repeat('b', 64), 204, '{}'::jsonb, now() + interval '5 minutes')",
+      [activeReservation.id],
+    );
+    await database.query(
+      "INSERT INTO publication_build_reservations (public_id, company_id, project_id, environment, state, expires_at) VALUES ('published-pixels-second', $1, $2, 'production', 'claimed', now() + interval '1 hour')",
+      [first.company.id, first.project.id],
+    );
+    const secondReservation = await row(database, "SELECT id FROM publication_build_reservations WHERE public_id = 'published-pixels-second'");
+    await database.query(
+      "INSERT INTO tracking_proxy_requests (publication_id, request_id, request_hash, response_status, response_body, expires_at) VALUES ($1, 'same-request', repeat('b', 64), 204, '{}'::jsonb, now() + interval '5 minutes')",
+      [secondReservation.id],
+    );
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO publication_tracking_artifacts (reservation_id, deployment_run_id, snapshot_hash, manifest, tracking_public, asset_versions, status) VALUES ($1, $2, repeat('a', 64), '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 'ready')",
+        [activeReservation.id, run.id],
+      ),
+      /foreign key|violates/i,
+      'artifact só pode referenciar reservation e run coerentes',
+    );
+    await database.query('UPDATE publication_build_reservations SET deployment_run_id = $2 WHERE id = $1', [activeReservation.id, run.id]);
+    const hashRun = await row(
+      database,
+      "INSERT INTO deployment_runs (company_id, project_id, environment, snapshot_hash, idempotency_key, expected_revision) VALUES ($1, $2, 'production', repeat('b', 64), 'pixel-hash-run', 0) RETURNING id",
+      [first.company.id, first.project.id],
+    );
+    const hashReservation = await row(
+      database,
+      "INSERT INTO publication_build_reservations (public_id, company_id, project_id, environment, deployment_run_id, state, expires_at) VALUES ('published-pixels-hash', $1, $2, 'production', $3, 'claimed', now() + interval '1 hour') RETURNING id",
+      [first.company.id, first.project.id, hashRun.id],
+    );
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO publication_tracking_artifacts (reservation_id, deployment_run_id, snapshot_hash, manifest, tracking_public, asset_versions, status) VALUES ($1, $2, repeat('c', 64), '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 'ready')",
+        [hashReservation.id, hashRun.id],
+      ),
+      violates,
+      'artifact precisa preservar o snapshot_hash do deployment_run vinculado',
+    );
+    await database.query(
+      "INSERT INTO publication_tracking_artifacts (reservation_id, deployment_run_id, snapshot_hash, manifest, tracking_public, asset_versions, status) VALUES ($1, $2, repeat('a', 64), '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, 'ready')",
+      [activeReservation.id, run.id],
+    );
+    await assert.rejects(
+      () => database.query(
+        "UPDATE publication_tracking_artifacts SET tracking_public = '{\"pixelsEnabled\":true}'::jsonb WHERE reservation_id = $1",
+        [activeReservation.id],
+      ),
+      /imutável/i,
+      'o artefato persistido não pode ser alterado depois de criado',
+    );
+    await database.query("UPDATE publication_tracking_artifacts SET status = 'safe', safe_at = now() WHERE reservation_id = $1", [activeReservation.id]);
+    await assert.rejects(
+      () => database.query("UPDATE publication_tracking_artifacts SET status = 'ready', safe_at = NULL WHERE reservation_id = $1", [activeReservation.id]),
+      /imutável/i,
+      'um artefato homologado não pode voltar a um estado mutável',
+    );
+    await assert.rejects(
+      () => database.query(
+        "INSERT INTO deployment_runs (company_id, project_id, environment, snapshot_hash, idempotency_key, expected_revision) VALUES ($1, $2, 'production', NULL, 'pixel-run-without-hash', 0)",
+        [first.company.id, first.project.id],
+      ),
+      violates,
+      'snapshot_hash de deployment_runs continua obrigatório',
+    );
   } finally {
     await database.close();
   }

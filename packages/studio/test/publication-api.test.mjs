@@ -58,3 +58,40 @@ test('rotas legadas passam revisão ao publishPage e usam publication.status no 
   assert.equal(result.value.status, 'READY');
   assert.deepEqual(calls.at(-1), ['status', { companyId: 'company-a', projectId: 'project-a', runId: 'run-preview' }]);
 });
+
+test('API de pixels exige integration.manage e mantém o escopo do projeto na configuração', async () => {
+  const calls = [];
+  const sessionService = {
+    async require() { return { user: { id: 'user-a' }, companyId: 'company-a', currentProjectId: 'project-a' }; },
+    async authorize(_context, capability, projectId) { calls.push([capability, projectId]); },
+  };
+  const pixels = {
+    async list(input) { calls.push(['list', input]); return [{ provider: 'meta_pixel', enabled: false, identifier: null }]; },
+    async saveProvider(input) { calls.push(['provider', input]); return { provider: input.provider, enabled: input.enabled, identifier: input.identifier }; },
+    async savePolicy(input) { calls.push(['policy', input]); return { privacyPolicyUrl: input.privacyPolicyUrl, policyVersion: input.policyVersion, consentExpiryDays: 365 }; },
+    async policy(input) { calls.push(['get-policy', input]); return null; },
+  };
+  const api = createProjectApi({ sessionService, pixels, body: async (req) => req.bodyValue });
+  const json = (value, status = 200) => ({ value, status });
+  const req = (bodyValue = {}) => ({ socket: { remoteAddress: '127.0.0.1' }, bodyValue });
+
+  const listed = await api({ req: req(), res: {}, path: '/api/projects/project-b/tracking/pixels', method: 'GET', json });
+  assert.deepEqual(listed.value, [{ provider: 'meta_pixel', enabled: false, identifier: null }]);
+  const savedProvider = await api({
+    req: req({ enabled: true, identifier: '123456789012345' }), res: {},
+    path: '/api/projects/project-b/tracking/pixels/meta_pixel', method: 'PUT', json,
+  });
+  assert.deepEqual(savedProvider.value, { provider: 'meta_pixel', enabled: true, identifier: '123456789012345' });
+  const savedPolicy = await api({
+    req: req({ privacyPolicyUrl: 'https://example.test/privacy', policyVersion: '2026-09' }), res: {},
+    path: '/api/projects/project-b/tracking/policy', method: 'PUT', json,
+  });
+  assert.deepEqual(savedPolicy.value, { privacyPolicyUrl: 'https://example.test/privacy', policyVersion: '2026-09', consentExpiryDays: 365 });
+  assert.ok(calls.filter(([capability]) => capability === 'integration.manage').every(([, projectId]) => projectId === 'project-b'));
+  assert.deepEqual(calls.find(([name]) => name === 'provider')[1], {
+    companyId: 'company-a', projectId: 'project-b', provider: 'meta_pixel', enabled: true, identifier: '123456789012345',
+  });
+  assert.deepEqual(calls.find(([name]) => name === 'policy')[1], {
+    companyId: 'company-a', projectId: 'project-b', privacyPolicyUrl: 'https://example.test/privacy', policyVersion: '2026-09',
+  });
+});

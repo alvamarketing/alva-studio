@@ -160,6 +160,9 @@ a:focus-visible {
 .vsl-preview-screen { --vsl-preview-accent: #286eea; position: relative; display: grid; min-height: 0; aspect-ratio: 16 / 9; margin-top: 12px; padding: 24px; align-content: end; gap: 7px; overflow: hidden; color: var(--alva-white); background: linear-gradient(145deg, #16294c, var(--vsl-preview-accent)); border-radius: var(--radius-field); }
 .vsl-preview-screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .65; }
 .vsl-preview-screen > :not(img) { position: relative; }
+.vsl-preview-media { width: 100%; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--radius-field); background: #000; }
+.vsl-preview-media .vsl-player, .vsl-preview-media .vsl-frame, .vsl-preview-media .vsl-media, .vsl-preview-media .vsl-provider-frame, .vsl-preview-media iframe, .vsl-preview-media .vsl-video { width: 100%; height: 100%; border: 0; }
+.vsl-preview-media .vsl-controls, .vsl-preview-media .vsl-status { display: none; }
 .vsl-preview-screen .material-symbols-outlined { font-size: 34px; }
 .vsl-preview-screen strong { font-size: 17px; }
 .vsl-preview-screen small { opacity: .8; }

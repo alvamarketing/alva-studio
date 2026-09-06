@@ -10,14 +10,14 @@ Esta spec não contém código de produção. Ela fixa contratos, fronteiras e c
 
 Hoje `source_type` é `varchar(10) CHECK (source_type IN ('mp4','hls'))` em `008_vsl_player.sql:8` (videos) e `:41` (video_versions).
 
-Migração `012_media_providers.sql` precisa:
+Migração `013_media_providers.sql` precisa:
 
-> **Numeração:** `010_webhook_deliveries.sql` e `011_analytics_collector.sql` já existem (nós `worker_webhook` e `tracking_analytics`, em andamento por outros agentes). Confira o diretório antes de criar o arquivo: `postgres.mjs:45` deriva a versão do prefixo numérico, então **dois arquivos com o mesmo prefixo colapsam na mesma versão** e o segundo derruba o boot com erro de checksum em toda inicialização.
+> **Numeração:** `010_webhook_deliveries.sql`, `011_analytics_collector.sql` e `012_analytics_websites.sql` já existem (nós `worker_webhook` e `tracking_analytics`, em andamento por outros agentes). Confira o diretório antes de criar o arquivo: `postgres.mjs:45` deriva a versão do prefixo numérico, então **dois arquivos com o mesmo prefixo colapsam na mesma versão** e o segundo derruba o boot com erro de checksum em toda inicialização.
 
 - **Alargar a coluna antes do CHECK.** `smartplayer` tem 11 caracteres e não cabe em `varchar(10)`. Sem isso a migração passa e o primeiro insert falha. Novo domínio: `mp4 | hls | youtube | vimeo | panda | smartplayer | r2 | r2-hls`. Trocar o CHECK em `video_versions` é seguro: o trigger `video_versions_immutable` (`008:72-74`) é `FOR EACH ROW` e não dispara em DDL.
 - **Separar identidade de endereço.** Para provedor, o que identifica o vídeo é o ID, não a URL. Colunas novas em **ambas** as tabelas: `provider_video_id varchar(120)`, `provider_config jsonb NOT NULL DEFAULT '{}'` (host `vz-XXXX` do Panda, `playerKey` do SmartPlayer). `source_url` continua `NOT NULL` e passa a guardar a **URL canônica reconstruída** pelo servidor — nunca a string colada pelo dono.
 - **Colunas de armazenamento** (só usadas quando `source_type` começa com `r2`): `storage_key varchar(400)`, `storage_bytes bigint`, `storage_content_type varchar(100)`, `storage_status varchar(20) CHECK (storage_status IN ('uploading','ready','failed'))`.
-- **Backfill do débito de 009.** `009_vsl_published_lock.sql:1` adicionou `published_lock_version` sem backfill: toda VSL publicada antes dele está NULL e, como `vsl-ui.js:3` guarda por `!== null`, aparece como "em dia" mesmo depois de editada. A 012 fecha isso com `UPDATE videos SET published_lock_version = lock_version WHERE published_version_id IS NOT NULL AND published_lock_version IS NULL`. O critério de aceite da fase 0 cobra exatamente isso.
+- **Backfill do débito de 009.** `009_vsl_published_lock.sql:1` adicionou `published_lock_version` sem backfill: toda VSL publicada antes dele está NULL e, como `vsl-ui.js:3` guarda por `!== null`, aparece como "em dia" mesmo depois de editada. A 013 fecha isso com `UPDATE videos SET published_lock_version = lock_version WHERE published_version_id IS NOT NULL AND published_lock_version IS NULL`. O critério de aceite da fase 0 cobra exatamente isso.
 - **CHECK de coerência**, para o banco recusar estado impossível: `provider_video_id IS NOT NULL` quando o tipo é de provedor; `storage_key IS NOT NULL` quando o tipo é `r2*`.
 
 ### Snapshots publicados continuam imutáveis
@@ -110,7 +110,7 @@ Migração `013_secrets_por_projeto.sql` (ver a nota de numeração na §1):
 ### Retenção, limites e custo
 
 - Cotas **aprovadas pelo dono (05/09/2026) e configuráveis**, não constantes de código: **2 GB por arquivo** e **50 GB por empresa**. Ficam em configuração do servidor com esses valores como padrão, para subir um cliente sem migração nem deploy.
-- **Medição de consumo por empresa entra no dia 1** (decisão do dono, 05/09/2026), não depois. `storage_bytes` já é coluna de `videos` na migração 012, então o agregado por empresa é uma soma — não exige tabela nova. O superadmin lê esse agregado na sua tela de gestão de empresas; a cota o usa como freio. Medir depois seria descobrir o custo pela fatura.
+- **Medição de consumo por empresa entra no dia 1** (decisão do dono, 05/09/2026), não depois. `storage_bytes` já é coluna de `videos` na migração 013, então o agregado por empresa é uma soma — não exige tabela nova. O superadmin lê esse agregado na sua tela de gestão de empresas; a cota o usa como freio. Medir depois seria descobrir o custo pela fatura.
 - Objeto de VSL excluída fica **30 dias** e depois é varrido — **exceto** se estiver referenciado por alguma `video_versions` publicada. Apagar objeto de versão publicada transformaria a imutabilidade da versão em mentira.
 - Custo (levantamento de 05/09/2026, egress não cobrado): 50 GB + 500 GB ≈ **US$ 0,60/mês**; 200 GB + 2 TB ≈ **US$ 2,85**; 1 TB + 10 TB ≈ **US$ 15,21**. O armazenamento não é o risco desta frente — o risco é operacional: worker, retenção e cota.
 
@@ -203,7 +203,7 @@ Os quatro nós abaixo passaram na validação de forma do `vibe conferir` (nenhu
     faz: Migrar o schema de VSL para aceitar provedores externos e objetos hospedados
     depende:
       - vsl_nos_editores
-    produz: Migracao 012 com source_type ampliado, colunas de provedor e de armazenamento, e backfill de published_lock_version
+    produz: Migracao 013 com source_type ampliado, colunas de provedor e de armazenamento, e backfill de published_lock_version
     passa_quando:
       tipo: comando
       comando: node --test packages/studio/test/database-schema.test.mjs packages/studio/test/vsl-repository.test.mjs

@@ -1,5 +1,6 @@
+import { ADAPTERS } from './vsl-adapters.js';
+
 const DEFAULT_MILESTONES = [25, 50, 75, 100];
-let hlsScriptPromise;
 
 export function resumeStorageKey(publicId, versionNumber) {
   return `alva-vsl-resume:${String(publicId)}:${String(versionNumber)}`;
@@ -15,6 +16,7 @@ export function mapVslEventToTrackerEvent(event) {
   const name = TRACKER_EVENT_NAMES[event?.type];
   if (!name) return null;
   const data = { publicId: event.publicId, versionNumber: event.versionNumber };
+  if (typeof event.adapter === 'string') data.adapter = event.adapter;
   if (event.type === 'milestone') data.value = event.value;
   return { name, data };
 }
@@ -96,27 +98,6 @@ function button(label, className, type = 'button') {
   return element;
 }
 
-async function loadHls(video, sourceUrl) {
-  if (!globalThis.Hls?.isSupported?.()) {
-    if (typeof document === 'undefined') throw new Error('Este navegador não suporta streaming HLS.');
-    if (!hlsScriptPromise) {
-      const existing = document.querySelector('script[data-alva-hls]');
-      hlsScriptPromise = existing
-        ? new Promise((resolve, reject) => { existing.addEventListener('load', resolve, { once: true }); existing.addEventListener('error', reject, { once: true }); })
-        : new Promise((resolve, reject) => {
-          const script = document.createElement('script'); script.src = '/vendor/hls.min.js'; script.dataset.alvaHls = 'true';
-          script.onload = resolve; script.onerror = reject; document.head.append(script);
-        });
-    }
-    await hlsScriptPromise;
-  }
-  if (!globalThis.Hls?.isSupported?.()) throw new Error('Este navegador não suporta streaming HLS.');
-  const hls = new globalThis.Hls();
-  hls.loadSource(sourceUrl); hls.attachMedia(video);
-  if (video.dataset) video.dataset.alvaMediaAttached = 'true';
-  return hls;
-}
-
 export function autoplayWhenReady(video, { onBlocked = () => {} } = {}) {
   return new Promise((resolve) => {
     let attempted = false;
@@ -134,25 +115,23 @@ export function autoplayWhenReady(video, { onBlocked = () => {} } = {}) {
 
 export function mountVslPlayer(container, config = {}) {
   if (!container || typeof document === 'undefined') throw new Error('Container do player é obrigatório.');
+  let resumeApplied = false;
   const controller = createVslPlayerController({
     ...config,
     onEvent: (event) => {
-      config.onEvent?.(event);
-      const mapped = mapVslEventToTrackerEvent(event);
+      config.onEvent?.({ ...event, adapter: config.sourceType });
+      const mapped = mapVslEventToTrackerEvent({ ...event, adapter: config.sourceType });
       if (mapped) container.dispatchEvent(new CustomEvent('alva:track', { bubbles: true, detail: mapped }));
     },
   });
-  const video = document.createElement('video');
-  video.className = 'vsl-video'; video.playsInline = true; video.preload = 'metadata'; video.muted = config.autoplayMuted !== false;
-  if (config.posterUrl) video.poster = config.posterUrl;
-  video.controls = false;
-  let captionTrack = null;
-  if (config.captionsUrl) { captionTrack = document.createElement('track'); captionTrack.kind = 'subtitles'; captionTrack.src = config.captionsUrl; captionTrack.srclang = 'pt-BR'; captionTrack.label = 'Português'; captionTrack.mode = 'disabled'; video.append(captionTrack); }
-  const frame = document.createElement('div'); frame.className = 'vsl-frame'; frame.append(video);
+  const frame = document.createElement('div'); frame.className = 'vsl-frame';
+  const media = document.createElement('div'); media.className = 'vsl-media'; frame.append(media);
   const controls = document.createElement('div'); controls.className = 'vsl-controls';
   const playButton = button('Reproduzir', 'vsl-play');
   const muteButton = button('Ativar som', 'vsl-mute');
-  const captionsButton = config.captionsUrl ? button('Legendas', 'vsl-captions') : null;
+  const Adapter = ADAPTERS[config.sourceType];
+  let adapter = null;
+  const captionsButton = config.captionsUrl && Adapter === ADAPTERS.mp4 ? button('Legendas', 'vsl-captions') : null;
   captionsButton?.setAttribute('aria-pressed', 'false');
   const seek = document.createElement('input'); seek.type = 'range'; seek.min = '0'; seek.max = '100'; seek.step = '0.1'; seek.value = '0'; seek.className = 'vsl-seek'; seek.setAttribute('aria-label', 'Progresso do vídeo');
   const time = document.createElement('span'); time.className = 'vsl-time'; time.textContent = '0:00 / 0:00';
@@ -170,26 +149,66 @@ export function mountVslPlayer(container, config = {}) {
     if (current.error) status.textContent = current.error;
     time.textContent = `${formatTime(current.currentTime)} / ${formatTime(current.duration)}`;
   };
-  video.addEventListener('loadedmetadata', () => { controller.loadedMetadata(video.duration); const resume = controller.resumeTime(); if (resume > 0) video.currentTime = resume; render(); });
-  video.addEventListener('timeupdate', () => { controller.timeUpdate(video.currentTime); render(); });
-  video.addEventListener('play', () => { controller.play(); render(); });
-  video.addEventListener('pause', () => { controller.pause(); render(); });
-  video.addEventListener('ended', () => { controller.ended(); render(); });
-  video.addEventListener('error', () => { controller.setError('Não foi possível reproduzir este vídeo. Verifique o endereço da mídia.'); render(); });
-  playButton.addEventListener('click', () => { if (video.paused) video.play().catch(() => { status.textContent = 'Clique em reproduzir para iniciar o vídeo.'; }); else video.pause(); });
-  muteButton.addEventListener('click', () => { video.muted = !video.muted; controller.setMuted(video.muted); render(); });
-  captionsButton?.addEventListener('click', () => { const enabled = captionsButton.getAttribute('aria-pressed') !== 'true'; captionsButton.setAttribute('aria-pressed', String(toggleCaptionTrack(captionTrack, enabled))); });
-  seek.addEventListener('input', () => { if (Number.isFinite(video.duration)) video.currentTime = (Number(seek.value) / 100) * video.duration; });
+  if (Adapter) {
+    adapter = Adapter({
+      container: media,
+      config,
+      on: {
+        metadata: (duration) => {
+          controller.loadedMetadata(duration);
+          const resume = resumeApplied ? 0 : controller.resumeTime();
+          if (resume > 0) adapter.seekTo(resume);
+          resumeApplied = true;
+          render();
+        },
+        time: (currentTime) => { controller.timeUpdate(currentTime); render(); },
+        play: () => { controller.play(); render(); },
+        pause: () => { controller.pause(); render(); },
+        ended: () => { controller.ended(); render(); },
+        error: (message) => { controller.setError(message); render(); },
+        status: (message) => { status.textContent = String(message || ''); },
+      },
+    });
+    controller.setMuted(config.autoplayMuted !== false);
+  } else {
+    status.textContent = 'Não foi possível carregar este tipo de vídeo.';
+  }
+  playButton.addEventListener('click', () => {
+    const action = controller.state().playing ? adapter?.pause() : adapter?.play();
+    Promise.resolve(action).catch(() => { status.textContent = 'Clique em reproduzir para iniciar o vídeo.'; });
+  });
+  muteButton.addEventListener('click', () => {
+    const muted = !controller.state().muted;
+    adapter?.setMuted(muted);
+    controller.setMuted(muted);
+    render();
+  });
+  captionsButton?.addEventListener('click', () => {
+    const enabled = captionsButton.getAttribute('aria-pressed') !== 'true';
+    const captionTrack = adapter?.captionTrack?.();
+    captionsButton.setAttribute('aria-pressed', String(toggleCaptionTrack(captionTrack, enabled)));
+  });
+  seek.addEventListener('input', () => {
+    const duration = controller.state().duration;
+    if (Number.isFinite(duration)) adapter?.seekTo((Number(seek.value) / 100) * duration);
+  });
   cta?.addEventListener('click', () => controller.ctaClick());
-  const autoplay = config.autoplayMuted !== false
-    ? autoplayWhenReady(video, { onBlocked: () => { status.textContent = 'Clique em reproduzir para iniciar o vídeo.'; } })
-    : Promise.resolve();
-  if (config.sourceType === 'hls' && !video.canPlayType('application/vnd.apple.mpegurl')) {
-    loadHls(video, config.sourceUrl).catch((error) => { controller.setError(error.message); render(); });
-  } else { video.src = config.sourceUrl; video.load(); }
-  autoplay.catch(() => {});
+  const ready = adapter
+    ? Promise.resolve(adapter.mount()).catch((error) => {
+      controller.setError(error?.message || 'Não foi possível carregar o vídeo.');
+      render();
+      return null;
+    })
+    : Promise.resolve(null);
   render();
-  return { controller, video, destroy: () => { video.pause(); video.removeAttribute('src'); video.load(); container.replaceChildren(); } };
+  const video = adapter?.element?.() ?? null;
+  return {
+    adapter,
+    controller,
+    ready,
+    video,
+    destroy: () => { adapter?.destroy(); container.replaceChildren(); },
+  };
 }
 
 export function bootVslPlayers(root = document) {

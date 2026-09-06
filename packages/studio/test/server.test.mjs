@@ -177,6 +177,26 @@ test('servidor entrega todo o grafo de módulos importado pelo app', async (t) =
   assert.ok(seen.has('/leads-ui.js'));
 });
 
+test('servidor entrega todo o grafo de módulos do player de VSL', async (t) => {
+  const { base } = await setup(t);
+  const seen = new Set();
+  const visit = async (path) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const response = await fetch(base + path);
+    assert.equal(response.status, 200, `${path} precisa ser servido`);
+    assert.match(response.headers.get('content-type'), /text\/javascript/);
+    const source = await response.text();
+    const imports = [...source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)].map((match) => match[1]);
+    await Promise.all(imports.map((specifier) => visit(new URL(specifier, base + path).pathname)));
+  };
+
+  await visit('/vsl-player.js');
+  assert.ok(seen.has('/vsl-adapters.js'));
+  assert.ok(seen.has('/youtube-adapter.js'));
+  assert.ok(seen.has('/vimeo-adapter.js'));
+});
+
 test('inicialização SaaS exige DATABASE_URL e só inicia o app depois de migrar o banco', async () => {
   await assert.rejects(() => startSaaS({ connectionString: '' }), /DATABASE_URL/);
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createVslUI, fetchVslForEdit, parseVslFormValues, vslListModel, vslStatusLabel, vslUiAccessPolicy } from '../public/vsl-ui.js';
+import { createVslUI, fetchVslForEdit, mountVslPreview, parseVslFormValues, previewVslSource, sourceInputModel, vslListModel, vslStatusLabel, vslUiAccessPolicy } from '../public/vsl-ui.js';
 
 test('configuração de VSL apresenta quatro etapas, avançado e prévia responsiva', async () => {
   const [html, css, ui] = await Promise.all([
@@ -44,6 +44,32 @@ test('formulário preserva CTA no segundo zero', () => {
 
 test('destino de CTA digitado como domínio simples fica pronto para salvar', () => {
   assert.equal(parseVslFormValues({ ctaUrl: 'google.com' }).ctaUrl, 'https://google.com');
+});
+
+test('campo de mídia aceita URL nos formatos nativos e URL ou ID nos provedores', () => {
+  assert.deepEqual(sourceInputModel('mp4'), { label: 'URL da mídia', placeholder: 'https://…', inputMode: 'url' });
+  assert.deepEqual(sourceInputModel('hls'), { label: 'URL da mídia', placeholder: 'https://…/video.m3u8', inputMode: 'url' });
+  assert.deepEqual(sourceInputModel('youtube'), { label: 'URL ou ID do YouTube', placeholder: 'https://youtu.be/… ou ID', inputMode: 'text' });
+  assert.deepEqual(sourceInputModel('vimeo'), { label: 'URL ou ID do Vimeo', placeholder: 'https://vimeo.com/… ou ID', inputMode: 'text' });
+});
+
+test('prévia transforma apenas IDs de provedores em URLs oficiais de embed', () => {
+  assert.equal(previewVslSource('youtube', 'dQw4w9WgXcQ'), 'https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1');
+  assert.equal(previewVslSource('vimeo', '123456'), 'https://player.vimeo.com/video/123456');
+  assert.equal(previewVslSource('mp4', 'https://media.example.test/video.mp4'), 'https://media.example.test/video.mp4');
+  assert.equal(previewVslSource('youtube', '<script>'), '');
+});
+
+test('prévia monta o adapter real com uma origem de provedor normalizada', () => {
+  const calls = [];
+  const result = mountVslPreview({
+    container: {}, sourceType: 'youtube', sourceUrl: 'dQw4w9WgXcQ', config: { aspectRatio: '16:9' },
+    mountPlayer: (container, config) => { calls.push([container, config]); return { destroy() {} }; },
+  });
+  assert.equal(typeof result.destroy, 'function');
+  assert.deepEqual(calls, [[{}, {
+    aspectRatio: '16:9', sourceType: 'youtube', sourceUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1', autoplayMuted: false, resumeEnabled: false,
+  }]]);
 });
 
 test('abrir VSL resolve o shell depois do bootstrap', async () => {

@@ -4,6 +4,34 @@ export function createNonce() {
   return randomBytes(16).toString('base64');
 }
 
+function values(value) {
+  return (Array.isArray(value) ? value : [value]).filter((item) => typeof item === 'string' && item);
+}
+
+export function buildContentSecurityPolicy({
+  nonce, scriptSrc, styleSrc, fontSrc, imgSrc, mediaSrc, connectSrc, frameSrc, formAction, frameAncestors, baseUri,
+} = {}) {
+  if (!frameAncestors) throw new Error('frame-ancestors deve ser explícito.');
+  const scripts = values(scriptSrc);
+  if (nonce) scripts.splice(Math.min(1, scripts.length), 0, `'nonce-${nonce}'`);
+  const directives = ["default-src 'none'"];
+  const append = (name, value) => {
+    const list = values(value);
+    if (list.length) directives.push(`${name} ${list.join(' ')}`);
+  };
+  append('script-src', scripts);
+  append('style-src', styleSrc);
+  append('font-src', fontSrc);
+  append('img-src', imgSrc);
+  append('media-src', mediaSrc);
+  append('connect-src', connectSrc);
+  append('frame-src', frameSrc);
+  append('form-action', formAction);
+  directives.push(`frame-ancestors ${frameAncestors}`);
+  append('base-uri', baseUri);
+  return directives.join('; ');
+}
+
 export function formContentSecurityPolicy({
   nonce,
   studioOrigin,
@@ -13,20 +41,17 @@ export function formContentSecurityPolicy({
   reportOnly,
 } = {}) {
   void reportOnly;
-  const scriptSrc = ["'self'", `'nonce-${nonce}'`, ...pixelDomains].join(' ');
-  const connectSrc = ["'self'", studioOrigin, ...pixelDomains].filter(Boolean).join(' ');
-  const directives = [
-    `default-src 'none'`,
-    `script-src ${scriptSrc}`,
-    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
-    `font-src https://fonts.gstatic.com`,
-    `img-src 'self' data: https:`,
-    `media-src https:`,
-    `connect-src ${connectSrc}`,
-  ];
-  if (frameOrigins.length) directives.push(`frame-src ${frameOrigins.join(' ')}`);
-  directives.push(`form-action ${actionOrigin}`);
-  directives.push(`frame-ancestors 'self'`);
-  directives.push(`base-uri 'none'`);
-  return directives.join('; ');
+  return buildContentSecurityPolicy({
+    nonce,
+    scriptSrc: ["'self'", ...pixelDomains],
+    styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+    fontSrc: ['https://fonts.gstatic.com'],
+    imgSrc: ["'self'", 'data:', 'https:'],
+    mediaSrc: ['https:'],
+    connectSrc: ["'self'", studioOrigin, ...pixelDomains],
+    frameSrc: frameOrigins,
+    formAction: actionOrigin,
+    frameAncestors: "'self'",
+    baseUri: "'none'",
+  });
 }

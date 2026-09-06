@@ -1,3 +1,51 @@
+import { mountVslPlayer } from './vsl-player.js';
+
+const SOURCE_INPUTS = Object.freeze({
+  mp4: Object.freeze({ label: 'URL da mídia', placeholder: 'https://…', inputMode: 'url' }),
+  hls: Object.freeze({ label: 'URL da mídia', placeholder: 'https://…/video.m3u8', inputMode: 'url' }),
+  youtube: Object.freeze({ label: 'URL ou ID do YouTube', placeholder: 'https://youtu.be/… ou ID', inputMode: 'text' }),
+  vimeo: Object.freeze({ label: 'URL ou ID do Vimeo', placeholder: 'https://vimeo.com/… ou ID', inputMode: 'text' }),
+});
+
+export function sourceInputModel(sourceType) {
+  return SOURCE_INPUTS[sourceType] ?? SOURCE_INPUTS.mp4;
+}
+
+function providerId(sourceType, value) {
+  const text = String(value ?? '').trim();
+  if (sourceType === 'youtube' && /^[A-Za-z0-9_-]{11}$/.test(text)) return text;
+  if (sourceType === 'vimeo' && /^\d{6,12}$/.test(text)) return text;
+  try {
+    const url = new URL(text);
+    const host = url.hostname.toLowerCase();
+    if (sourceType === 'youtube') {
+      if (host === 'youtu.be' || host === 'www.youtu.be') return url.pathname.slice(1);
+      if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(host)) return url.pathname === '/watch' ? url.searchParams.get('v') || '' : url.pathname.replace(/^\/embed\//, '');
+    }
+    if (sourceType === 'vimeo' && ['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'].includes(host)) return url.pathname.replace(/^\/video\//, '').replace(/^\//, '');
+  } catch { /* the server will report invalid URLs on save */ }
+  return '';
+}
+
+export function previewVslSource(sourceType, sourceUrl) {
+  const source = String(sourceUrl ?? '').trim();
+  if (sourceType === 'youtube') {
+    const id = providerId(sourceType, source);
+    return /^[A-Za-z0-9_-]{11}$/.test(id) ? `https://www.youtube.com/embed/${id}?enablejsapi=1` : '';
+  }
+  if (sourceType === 'vimeo') {
+    const id = providerId(sourceType, source);
+    return /^\d{6,12}$/.test(id) ? `https://player.vimeo.com/video/${id}` : '';
+  }
+  try { return new URL(source).protocol === 'https:' ? source : ''; } catch { return ''; }
+}
+
+export function mountVslPreview({ container, sourceType, sourceUrl, config = {}, mountPlayer = mountVslPlayer } = {}) {
+  const resolvedSource = previewVslSource(sourceType, sourceUrl);
+  if (!container || !resolvedSource) return null;
+  return mountPlayer(container, { ...config, sourceType, sourceUrl: resolvedSource, autoplayMuted: false, resumeEnabled: false });
+}
+
 export function vslStatusLabel(video = {}) {
   if (!video.publishedVersionId) return 'Rascunho';
   if (video.publishedLockVersion !== undefined && video.publishedLockVersion !== null && video.lockVersion !== video.publishedLockVersion)
@@ -38,6 +86,7 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const resolveShell = typeof getShell === 'function' ? getShell : () => shell;
   const currentShell = () => resolveShell();
   let current = null;
+  let preview = null;
   const root = () => document.querySelector('#vsl-view');
   const list = () => document.querySelector('#vsl-list');
   const form = () => document.querySelector('#vsl-form');
@@ -49,11 +98,19 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     const playback = document.querySelector('#vsl-preview-playback');
     const cta = document.querySelector('#vsl-preview-cta');
     const poster = document.querySelector('#vsl-preview-poster');
+    const previewMedia = document.querySelector('#vsl-preview-media');
     const screen = document.querySelector('.vsl-preview-screen');
     if (!target || !title || !meta || !playback || !cta || !poster || !screen) return;
     title.textContent = field(target, 'name').value.trim() || 'Sua VSL';
+    const sourceType = field(target, 'sourceType').value;
+    const sourceField = field(target, 'sourceUrl');
+    const sourceModel = sourceInputModel(sourceType);
+    const sourceLabel = document.querySelector('#vsl-source-label');
+    if (sourceLabel) sourceLabel.firstChild.textContent = sourceModel.label;
+    sourceField.placeholder = sourceModel.placeholder;
+    sourceField.inputMode = sourceModel.inputMode;
     const aspectRatio = field(target, 'aspectRatio').value || '16:9';
-    meta.textContent = `${field(target, 'sourceType').value.toUpperCase()} · ${aspectRatio}`;
+    meta.textContent = `${sourceType.toUpperCase()} · ${aspectRatio}`;
     screen.style.aspectRatio = aspectRatio.replace(':', ' / ');
     const color = field(target, 'accentColor').value.trim();
     if (/^#[0-9a-f]{6}$/i.test(color)) screen.style.setProperty('--vsl-preview-accent', color);
@@ -64,6 +121,13 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     const url = field(target, 'posterUrl').value.trim();
     poster.hidden = !url;
     if (url) poster.src = url;
+    preview?.destroy?.();
+    preview = mountVslPreview({
+      container: previewMedia,
+      sourceType,
+      sourceUrl: sourceField.value,
+      config: { aspectRatio, posterUrl: url, captionsUrl: field(target, 'captionsUrl').value.trim() },
+    });
   };
   const showForm = (video = null) => {
     if (!video && !currentShell()?.can?.('video.write')) return;

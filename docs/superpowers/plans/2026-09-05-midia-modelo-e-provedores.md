@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - **Este plano parte do estado que existirá depois do commit de `tracking_coletor`.** No momento da escrita o working tree tem esse nó em andamento, com `server/index.mjs`, `server/project-api.mjs`, `server/dynamic-form.mjs`, `public/vsl-player.js` e `server/publication-snapshot.mjs` modificados e não commitados. **Não comece nenhuma task antes de `tracking_coletor` estar commitado e verde.** Depois do commit, releia `public/vsl-player.js` e `server/vsl-public.mjs` antes de usar qualquer número de linha citado aqui — eles já se moveram uma vez durante a escrita desta spec.
-- **Confira `packages/studio/server/db/migrations/` antes de criar o arquivo da migração.** No momento da escrita o maior número aplicado é `011_analytics_collector.sql`, então o próximo livre é **012**. `postgres.mjs:45` deriva a versão do prefixo numérico: dois arquivos com o mesmo prefixo colapsam na mesma versão e derrubam o boot com erro de checksum em toda inicialização. Se 012 tiver sido tomado, use o próximo livre e ajuste as referências deste plano.
+- **Confira `packages/studio/server/db/migrations/` antes de criar o arquivo da migração.** No momento da escrita o maior número aplicado é `012_analytics_websites.sql`, então o próximo livre é **013**. `postgres.mjs:45` deriva a versão do prefixo numérico: dois arquivos com o mesmo prefixo colapsam na mesma versão e derrubam o boot com erro de checksum em toda inicialização. Se 013 tiver sido tomado, use o próximo livre e ajuste as referências deste plano.
 - **Nunca edite uma migração já aplicada.** O checksum de `postgres.mjs:66-69` existe para parar exatamente isso.
 - Nenhuma VSL existente pode quebrar. `mp4` e `hls` continuam funcionando com o mesmo comportamento, byte a byte, e os testes atuais de `vsl-*.test.mjs` continuam verdes sem edição.
 - **Nenhuma URL colada pelo usuário é armazenada como endereço.** Para provedor, extrai-se o ID com regex ancorada e reconstrói-se a URL canônica no servidor. O que vai para o banco é o ID.
@@ -26,10 +26,10 @@
 
 ---
 
-### Task 1: Migração 012 — provedores, armazenamento e o backfill pendente de 009
+### Task 1: Migração 013 — provedores, armazenamento e o backfill pendente de 009
 
 **Files:**
-- Create: `packages/studio/server/db/migrations/012_media_providers.sql`
+- Create: `packages/studio/server/db/migrations/013_media_providers.sql`
 - Test: `packages/studio/test/database-schema.test.mjs`
 
 **Interfaces:**
@@ -41,7 +41,7 @@
 
 - [ ] **Step 1: Escrever os testes que falham**
 
-  Em `database-schema.test.mjs`: inserir `source_type = 'youtube'` com `provider_video_id` funciona nas duas tabelas; inserir `'youtube'` **sem** `provider_video_id` é recusado pelo CHECK; inserir `'smartplayer'` não estoura o tamanho da coluna; `source_type` fora da lista continua recusado; `storage_status` fora da lista é recusado; e — o teste do backfill — subir um banco só com as migrações até 011, inserir um `videos` publicado com `published_lock_version` nulo, rodar `migrate()` até a 012 e provar que **nenhuma linha com `published_version_id` sobrou com `published_lock_version` nulo**.
+  Em `database-schema.test.mjs`: inserir `source_type = 'youtube'` com `provider_video_id` funciona nas duas tabelas; inserir `'youtube'` **sem** `provider_video_id` é recusado pelo CHECK; inserir `'smartplayer'` não estoura o tamanho da coluna; `source_type` fora da lista continua recusado; `storage_status` fora da lista é recusado; e — o teste do backfill — subir um banco só com as migrações até 012, inserir um `videos` publicado com `published_lock_version` nulo, rodar `migrate()` até a 013 e provar que **nenhuma linha com `published_version_id` sobrou com `published_lock_version` nulo**.
 
 - [ ] **Step 2: Rodar focado e confirmar RED**
 
@@ -57,7 +57,7 @@
 
 - [ ] **Step 5: Commit** — `feat(studio): schema de provedores de mídia e armazenamento`
 
-**Pronto quando:** a suite passa, `migrate()` roda duas vezes seguidas sem erro de checksum, e um banco que só tinha até a 011 sobe até a 012 sem perder dado.
+**Pronto quando:** a suite passa, `migrate()` roda duas vezes seguidas sem erro de checksum, e um banco que só tinha até a 012 sobe até a 013 sem perder dado.
 
 ---
 

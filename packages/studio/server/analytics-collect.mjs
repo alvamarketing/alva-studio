@@ -52,7 +52,7 @@ function eventData(eventName, value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('event_data inválido.', 400);
   const isVsl = eventName.startsWith('vsl_');
   const allowed = isVsl
-    ? new Set(['publicId', 'versionNumber', 'value'])
+    ? new Set(['publicId', 'versionNumber', 'value', 'adapter'])
     : new Set(['formId', 'screenId', 'stepIndex']);
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw fail(`Campo de evento não permitido: ${key}.`, 400);
   const data = {};
@@ -65,6 +65,10 @@ function eventData(eventName, value) {
     if (value.value !== undefined) {
       if (eventName !== 'vsl_progress' || !Number.isInteger(value.value) || value.value < 1 || value.value > 100) throw fail('Marco da VSL inválido.', 400);
       data.value = value.value;
+    }
+    if (value.adapter !== undefined) {
+      if (!['mp4', 'hls', 'youtube', 'vimeo'].includes(value.adapter)) throw fail('adapter inválido.', 400);
+      data.adapter = value.adapter;
     }
   } else {
     if (value.formId !== undefined) data.formId = safeIdentifier(value.formId, 'formId');

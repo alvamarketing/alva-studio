@@ -14,6 +14,7 @@ import { ProjectRepository } from './repositories/project-repository.mjs';
 import { ContentRepository } from './repositories/content-repository.mjs';
 import { VideoRepository } from './repositories/video-repository.mjs';
 import { AnalyticsRepository } from './repositories/analytics-repository.mjs';
+import { PixelRepository } from './repositories/pixel-repository.mjs';
 import { parseCollectPayload, createCollectLimiter } from './analytics-collect.mjs';
 import { createNonce, formContentSecurityPolicy } from './content-security-policy.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
@@ -27,6 +28,9 @@ import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
+import { BillingRepository } from './repositories/billing-repository.mjs';
+import { billingRuntimeConfig as runtimeConfigForEnvironment, createAsaasClient } from './asaas-billing.mjs';
+import { BillingService, startBillingReconciliationWorker } from './billing-service.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 
@@ -123,6 +127,18 @@ async function collectBody(req) {
   }
   return Buffer.concat(chunks);
 }
+async function billingWebhookBody(req) {
+  if (!req.headers['content-type']?.startsWith('application/json')) throw error('Envie JSON.', 415);
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 128 * 1024) throw error('Evento de cobrança muito grande.', 413);
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks).toString();
+  try { return { raw, payload: JSON.parse(raw || '{}') }; } catch { throw error('JSON inválido.', 400); }
+}
 
 // getPublicVideo() propositalmente não devolve companyId/projectId (dado interno, não público);
 // resolvemos o tracker do projeto direto pelo public_id do vídeo, sem tocar em video-repository.mjs.
@@ -177,6 +193,11 @@ export function createApp({
   webhookIntervalMs,
   analyticsRetentionIntervalMs,
   collectLimiterOptions,
+  billingEnforcement = process.env.BILLING_ENFORCEMENT || 'off',
+  billingRuntimeConfig = (environment) => runtimeConfigForEnvironment(process.env, environment),
+  asaasClientFactory,
+  asaasFetch,
+  billingIntervalMs,
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -188,12 +209,29 @@ export function createApp({
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
   const content = database ? new ContentRepository(database, { publicOrigin }) : null;
-  const videos = database ? new VideoRepository(database) : null;
+  const videos = database ? new VideoRepository(database, { studioOrigin: publicOrigin }) : null;
   const analytics = database ? new AnalyticsRepository(database) : null;
+  const billing = database
+    ? new BillingService({
+      repository: new BillingRepository(database), enforcement: billingEnforcement, runtimeConfig: billingRuntimeConfig,
+      clientFactory: asaasClientFactory || (typeof asaasFetch === 'function'
+        ? (config) => createAsaasClient({ ...config, fetchImpl: asaasFetch })
+        : undefined),
+    })
+    : null;
+  const billingWorker = billing
+    ? startBillingReconciliationWorker({
+      repository: billing.repository,
+      clientForEnvironment: (environment) => billing.client(environment),
+      ...(billingIntervalMs === undefined ? {} : { intervalMs: billingIntervalMs }),
+    })
+    : null;
+  const pixels = database ? new PixelRepository(database) : null;
   const collectLimiter = createCollectLimiter(collectLimiterOptions);
   const analyticsRetention = analytics
     ? startAnalyticsRetentionWorker({
       analytics,
+      billing,
       ...(analyticsRetentionIntervalMs === undefined ? {} : { intervalMs: analyticsRetentionIntervalMs }),
     })
     : null;
@@ -226,6 +264,8 @@ export function createApp({
       content,
       videos,
       analytics,
+      billing,
+      pixels,
       body,
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),
@@ -262,6 +302,9 @@ export function createApp({
     '/vendor/grapes.min.css': ['node_modules/grapesjs/dist/css/grapes.min.css', 'text/css'],
     '/vendor/pt.js': ['node_modules/grapesjs/locale/pt.js', 'text/javascript'],
     '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
+    '/vsl-adapters.js': ['public/vsl-adapters.js', 'text/javascript'],
+    '/youtube-adapter.js': ['public/youtube-adapter.js', 'text/javascript'],
+    '/vimeo-adapter.js': ['public/vimeo-adapter.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
@@ -291,6 +334,14 @@ export function createApp({
       const publicDomainRequest = Boolean(publicFormRequest && domainScope);
       const publicProjectSubmission = Boolean(publicFormRequest && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
       const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
+      const billingWebhook = billing && req.method === 'POST' && path.match(/^\/api\/billing\/webhooks\/asaas\/(sandbox|production)$/);
+      if (billingWebhook) {
+        const environment = billingWebhook[1];
+        if (!billing.verifyWebhookToken(environment, req.headers['asaas-access-token'])) throw error('Webhook não autorizado.', 401);
+        const { raw, payload } = await billingWebhookBody(req);
+        await billing.receiveWebhook({ environment, payload, raw });
+        return json({ ok: true });
+      }
       if (publicOrigin ? (!studioHost && !publicDomainRequest) : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
@@ -388,7 +439,7 @@ export function createApp({
         const embed = Boolean(publicVsl[1]);
         const video = await videos.getPublicVideo(publicVsl[2]);
         res.removeHeader('X-Frame-Options');
-        res.setHeader('Content-Security-Policy', vslContentSecurityPolicy(video.sourceUrl, { embed, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl, studioOrigin: publicOrigin || expectedOrigin }));
+        res.setHeader('Content-Security-Policy', vslContentSecurityPolicy(video.sourceUrl, { embed, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl, studioOrigin: publicOrigin || expectedOrigin, sourceType: video.sourceType }));
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const trackerPublicId = analytics ? await trackerPublicIdForVideo(database, publicVsl[2]) : null;
@@ -590,6 +641,10 @@ export function createApp({
   if (analyticsRetention) {
     server.analyticsRetention = analyticsRetention;
     server.once('close', () => analyticsRetention.stop());
+  }
+  if (billingWorker) {
+    server.billingWorker = billingWorker;
+    server.once('close', () => billingWorker.stop());
   }
   return server;
 }

@@ -67,12 +67,59 @@ test('embed permite ancestrais HTTPS, mantém proporção e inclui allow autopla
   assert.match(vslContentSecurityPolicy(video.sourceUrl, { embed: true, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl }), /frame-ancestors https:/);
 });
 
+test('CSP da VSL adiciona apenas as origens estáticas do provedor', () => {
+  const youtube = vslContentSecurityPolicy('https://www.youtube.com/embed/dQw4w9WgXcQ?bad=;inject', { sourceType: 'youtube' });
+  assert.match(youtube, /frame-src https:\/\/www\.youtube\.com/);
+  assert.match(youtube, /script-src 'self' https:\/\/www\.youtube\.com/);
+  assert.doesNotMatch(youtube.match(/script-src [^;]+/)[0], /unsafe-inline|nonce-/);
+  assert.doesNotMatch(youtube, /inject/);
+  const vimeo = vslContentSecurityPolicy('https://player.vimeo.com/video/123456', { sourceType: 'vimeo' });
+  assert.match(vimeo, /frame-src https:\/\/player\.vimeo\.com/);
+  assert.match(vimeo, /script-src 'self' https:\/\/player\.vimeo\.com/);
+});
+
+test('CSP de provedor não aceita a origem dinâmica da URL de mídia', () => {
+  for (const sourceType of ['youtube', 'vimeo']) {
+    const policy = vslContentSecurityPolicy('https://evil.tld/video.m3u8', { sourceType, studioOrigin: 'https://studio.example.test' });
+    assert.doesNotMatch(policy, /evil\.tld/, `${sourceType} não pode liberar a origem colada em nenhuma diretiva`);
+    assert.doesNotMatch(policy, /studio\.example\.test/, `${sourceType} usa somente as origens estáticas do provedor`);
+  }
+  const native = vslContentSecurityPolicy('https://media.example.test/video.mp4', { sourceType: 'mp4' });
+  assert.match(native, /media\.example\.test/, 'MP4 continua usando sua origem dinâmica já validada');
+});
+
+test('CSP de MP4 preserva exatamente a saída atual', () => {
+  const policy = vslContentSecurityPolicy('https://media.example.test/video.mp4', {
+    posterUrl: 'https://images.example.test/poster.jpg',
+    captionsUrl: 'https://captions.example.test/captions.vtt',
+    studioOrigin: 'https://studio.example.test',
+  });
+  assert.equal(
+    policy,
+    [
+      "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://images.example.test data:; ",
+      "media-src 'self' https://media.example.test https://captions.example.test; ",
+      "connect-src 'self' https://media.example.test https://captions.example.test https://studio.example.test; frame-ancestors 'none'",
+    ].join(''),
+  );
+});
+
 test('player público reorganiza controles e quebra mensagens em telas estreitas', () => {
   const html = renderVslPage(video);
+  assert.match(html, /\.vsl-media\{[^}]*height:100%/);
   assert.match(html, /\.vsl-controls\{[^}]*flex-wrap:wrap/);
   assert.match(html, /\.vsl-seek\{[^}]*min-width:0/);
   assert.match(html, /\.vsl-status\{[^}]*overflow-wrap:anywhere/);
   assert.match(html, /@media\(max-width:520px\)/);
+});
+
+test('iframe injetado pela API do YouTube ocupa o player responsivo', () => {
+  const html = renderVslPage({
+    ...video,
+    sourceType: 'youtube',
+    sourceUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1',
+  });
+  assert.match(html, /\.vsl-provider-frame,\.vsl-provider-frame iframe\{width:100%;height:100%;border:0\}/);
 });
 
 test('rotas HTTP servem somente versão publicada e o hls.js local', async (t) => {

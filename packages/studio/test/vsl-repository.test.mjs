@@ -47,7 +47,7 @@ test('repositório de VSL valida URL HTTPS, cria e atualiza com lock otimista', 
   const database = createDatabase({ connectionString });
   await migrate(database);
   const seeded = await seed(database, 'repo');
-  const repository = new VideoRepository(database);
+  const repository = new VideoRepository(database, { studioOrigin: 'https://studio.example.test' });
   try {
     await assert.rejects(() => repository.createVideo(input(seeded, { sourceUrl: 'http://media.example.test/a.mp4' })), /HTTPS/i);
     for (const field of ['sourceUrl', 'posterUrl', 'captionsUrl']) {
@@ -113,6 +113,79 @@ test('repositório exige video.read para listar e detalhar VSL', async (t) => {
     const listed = await repository.listVideos({ companyId: seeded.company.id, projectId: seeded.project.id, actorId: analyst.id });
     assert.equal(listed.some((video) => video.id === created.id), true);
     assert.equal((await repository.getVideo({ companyId: seeded.company.id, projectId: seeded.project.id, actorId: analyst.id, videoId: created.id })).id, created.id);
+  } finally {
+    await database.close();
+  }
+});
+
+test('repositório persiste a identidade canônica do provedor e congela a versão publicada', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const seeded = await seed(database, 'youtube-provider');
+  const repository = new VideoRepository(database, { studioOrigin: 'https://studio.example.test' });
+  try {
+    const created = await repository.createVideo(input(seeded, {
+      sourceType: 'youtube',
+      sourceUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&utm_source=colado',
+    }));
+    assert.equal(created.providerVideoId, 'dQw4w9WgXcQ');
+    assert.deepEqual(created.providerConfig, {});
+    assert.equal(created.sourceUrl, 'https://www.youtube.com/embed/dQw4w9WgXcQ?enablejsapi=1&origin=https%3A%2F%2Fstudio.example.test&autoplay=1&mute=1');
+    const stored = await row(database, 'SELECT provider_video_id, provider_config FROM videos WHERE id = $1', [created.id]);
+    assert.equal(stored.provider_video_id, 'dQw4w9WgXcQ');
+    assert.deepEqual(stored.provider_config, {});
+
+    const published = await repository.publishVideo({ ...input(seeded), videoId: created.id, lockVersion: 0 });
+    const frozen = await row(database, 'SELECT provider_video_id, provider_config FROM video_versions WHERE id = $1', [published.id]);
+    assert.equal(frozen.provider_video_id, 'dQw4w9WgXcQ');
+    assert.deepEqual(frozen.provider_config, {});
+
+    await repository.updateVideo({
+      ...input(seeded), videoId: created.id, lockVersion: 0,
+      sourceType: 'youtube', sourceUrl: 'https://youtu.be/9bZkp7q19f0',
+    });
+    const publicVideo = await repository.getPublicVideo(created.publicId);
+    assert.equal(publicVideo.sourceType, 'youtube');
+    assert.equal(publicVideo.providerVideoId, 'dQw4w9WgXcQ', 'a leitura pública precisa usar o snapshot, não o rascunho alterado');
+    assert.deepEqual(publicVideo.providerConfig, {});
+    for (const field of ['companyId', 'projectId', 'storageKey', 'storageBytes', 'storageContentType', 'storageStatus'])
+      assert.equal(field in publicVideo, false, `DTO público não expõe ${field}`);
+
+    const duplicate = await repository.duplicateVideo({ companyId: seeded.company.id, projectId: seeded.project.id, actorId: seeded.user.id, videoId: created.id });
+    assert.equal(duplicate.providerVideoId, '9bZkp7q19f0');
+    assert.notEqual(duplicate.publicId, created.publicId);
+  } finally {
+    await database.close();
+  }
+});
+
+test('leitura pública de VSL MP4 mantém exatamente o DTO histórico', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const seeded = await seed(database, 'legacy-public-dto');
+  const repository = new VideoRepository(database);
+  try {
+    const created = await repository.createVideo(input(seeded));
+    await repository.publishVideo({ ...input(seeded), videoId: created.id, lockVersion: 0 });
+    assert.deepEqual(await repository.getPublicVideo(created.publicId), {
+      publicId: created.publicId,
+      versionNumber: 1,
+      name: 'VSL principal',
+      sourceUrl: 'https://media.example.test/sales.mp4',
+      sourceType: 'mp4',
+      posterUrl: 'https://media.example.test/poster.jpg',
+      captionsUrl: 'https://media.example.test/captions.vtt',
+      accentColor: '#286eea',
+      aspectRatio: '16:9',
+      autoplayMuted: true,
+      resumeEnabled: true,
+      ctaText: 'Quero participar',
+      ctaUrl: '/checkout',
+      ctaSeconds: 42,
+      milestones: [],
+    });
   } finally {
     await database.close();
   }

@@ -61,6 +61,19 @@ test('aceita todo evento da lista fechada de event_name', () => {
   }
 });
 
+test('aceita somente adapters de VSL conhecidos como dimensão do evento', () => {
+  const result = parseCollectPayload(JSON.stringify(basePayload({
+    event_name: 'vsl_start', event_data: { publicId: 'vsl_1', versionNumber: 1, adapter: 'vimeo' },
+  })), 'application/json');
+  assert.equal(result.event.event_data.adapter, 'vimeo');
+  assert.throws(
+    () => parseCollectPayload(JSON.stringify(basePayload({
+      event_name: 'vsl_start', event_data: { publicId: 'vsl_1', versionNumber: 1, adapter: 'https://attacker.example' },
+    })), 'application/json'),
+    (error) => error.status === 400,
+  );
+});
+
 test('recusa form_submit: a conversão confirmada é lead emitido pelo servidor', () => {
   assert.throws(
     () => parseCollectPayload(JSON.stringify(basePayload({ event_name: 'form_submit' })), 'application/json'),

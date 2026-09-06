@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNonce, formContentSecurityPolicy } from '../server/content-security-policy.mjs';
+import { buildContentSecurityPolicy, createNonce, formContentSecurityPolicy } from '../server/content-security-policy.mjs';
 
 function basePolicy(overrides = {}) {
   return formContentSecurityPolicy({
@@ -52,4 +52,22 @@ test('modo reportOnly muda apenas o nome do cabeçalho, não a política', () =>
     reportOnly: true,
   });
   assert.equal(enforced, reportOnly);
+});
+
+test('base de CSP omite diretivas vazias e exige frame-ancestors explícito', () => {
+  assert.equal(
+    buildContentSecurityPolicy({ scriptSrc: ["'self'"], frameSrc: [], frameAncestors: "'none'" }),
+    "default-src 'none'; script-src 'self'; frame-ancestors 'none'",
+  );
+  assert.throws(() => buildContentSecurityPolicy({ scriptSrc: ["'self'"] }), /frame-ancestors/i);
+});
+
+test('invólucro do formulário preserva a política atual byte a byte', () => {
+  assert.equal(
+    formContentSecurityPolicy({
+      nonce: 'nonce-fixo', studioOrigin: 'https://studio.example.test',
+      actionOrigin: 'https://studio.example.test/api/public/forms/x/submissions', frameOrigins: ['https://studio.example.test'],
+    }),
+    "default-src 'none'; script-src 'self' 'nonce-nonce-fixo'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; media-src https:; connect-src 'self' https://studio.example.test; frame-src https://studio.example.test; form-action https://studio.example.test/api/public/forms/x/submissions; frame-ancestors 'self'; base-uri 'none'",
+  );
 });

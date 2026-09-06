@@ -152,6 +152,8 @@ export function createProjectApi({
   publication,
   videos,
   analytics,
+  pixels,
+  billing,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -178,6 +180,18 @@ export function createProjectApi({
     if (method === 'PUT' && path === '/api/account') return json(await sessionService.account(req, await body(req), res, secure));
 
     const context = await sessionService.require(req);
+    if (billing && method === 'GET' && path === '/api/billing') return json(await billing.overview({ companyId: context.companyId }));
+    if (billing && method === 'POST' && path === '/api/billing/checkout') {
+      await sessionService.authorize(context, 'billing.manage');
+      await body(req);
+      return json(await billing.checkout({ companyId: context.companyId, userId: context.user.id }), 201);
+    }
+    if (billing && method === 'POST' && path === '/api/billing/cancel') {
+      await sessionService.authorize(context, 'billing.manage');
+      await body(req);
+      return json(await billing.cancel({ companyId: context.companyId }));
+    }
+    if (billing && !['GET', 'HEAD', 'OPTIONS'].includes(method)) await billing.mutationAccess({ companyId: context.companyId, method, path });
     const requireIntegration = async () => {
       if (!context.currentProjectId) throw fail('Escolha um projeto ativo.', 409);
       await sessionService.authorize(context, 'integration.manage', context.currentProjectId);
@@ -276,6 +290,34 @@ export function createProjectApi({
       const search = new URL(req.url, 'http://localhost').searchParams;
       const { from, to } = analyticsRange(search.get('from'), search.get('to'));
       return json(await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to }));
+    }
+
+    const trackingPixels = path.match(/^\/api\/projects\/([^/]+)\/tracking\/pixels(?:\/([^/]+))?$/);
+    if (trackingPixels) {
+      const [, projectId, provider] = trackingPixels;
+      await sessionService.authorize(context, null, projectId);
+      await sessionService.authorize(context, 'integration.manage', projectId);
+      if (!pixels) throw fail('O rastreamento de pixels ainda está indisponível.', 409);
+      if (!provider && method === 'GET') return json(await pixels.list({ companyId: context.companyId, projectId }));
+      if (provider && method === 'PUT') {
+        const input = await body(req);
+        return json(await pixels.saveProvider({ companyId: context.companyId, projectId, provider, enabled: input.enabled, identifier: input.identifier }));
+      }
+      throw fail('Não encontrado.', 404);
+    }
+
+    const trackingPolicy = path.match(/^\/api\/projects\/([^/]+)\/tracking\/policy$/);
+    if (trackingPolicy) {
+      const [, projectId] = trackingPolicy;
+      await sessionService.authorize(context, null, projectId);
+      await sessionService.authorize(context, 'integration.manage', projectId);
+      if (!pixels) throw fail('O rastreamento de pixels ainda está indisponível.', 409);
+      if (method === 'GET') return json(await pixels.policy({ companyId: context.companyId, projectId }));
+      if (method === 'PUT') {
+        const input = await body(req);
+        return json(await pixels.savePolicy({ companyId: context.companyId, projectId, privacyPolicyUrl: input.privacyPolicyUrl, policyVersion: input.policyVersion }));
+      }
+      throw fail('Não encontrado.', 404);
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);
