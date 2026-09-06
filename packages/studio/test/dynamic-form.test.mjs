@@ -245,6 +245,7 @@ test('trackFormEvent do runner instrumentado gera payload aceito com metadados e
 
   const sentBodies = [];
   const context = {
+    window: {},
     location: { pathname: '/f/alva/campanha/captura' },
     navigator: { sendBeacon: (url, body) => { sentBodies.push(body); return true; } },
     fetch: () => Promise.resolve(),

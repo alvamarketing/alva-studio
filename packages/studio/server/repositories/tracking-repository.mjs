@@ -53,6 +53,46 @@ export class TrackingRepository {
     this.vault = vault || new SecretVault({ masterKey: masterKey || process.env.TRACKING_MASTER_KEY });
   }
 
+  async resolveUmamiPublicToken({ publicToken }) {
+    const { rows } = await this.database.query(
+      `SELECT website.company_id, website.project_id, website.environment, binding.id AS binding_id, binding.encrypted_remote_reference, website.cutover_at
+         FROM analytics_websites website
+         JOIN tracking_bindings binding ON binding.company_id = website.company_id AND binding.project_id = website.project_id
+          AND binding.environment = website.environment AND binding.engine = 'umami' AND binding.status = 'ready'
+        WHERE website.tracker_public_id = $1`,
+      [publicToken],
+    );
+    if (!rows.length) return null;
+    const row = rows[0];
+    const remoteWebsiteId = row.encrypted_remote_reference && this.vault.decrypt(row.encrypted_remote_reference, bindingScope({ companyId: row.company_id, projectId: row.project_id, environment: row.environment, engine: 'umami' }));
+    if (!remoteWebsiteId) return null;
+    return { companyId: row.company_id, projectId: row.project_id, environment: row.environment, remoteWebsiteId, cutoverAt: row.cutover_at };
+  }
+
+  async remoteWebsiteFor({ companyId, projectId, environment: targetEnvironment = 'production' }) {
+    const target = environment(targetEnvironment);
+    const { rows } = await this.database.query(
+      `SELECT binding.encrypted_remote_reference
+         FROM tracking_bindings binding
+        WHERE binding.company_id = $1 AND binding.project_id = $2
+          AND binding.environment = $3 AND binding.engine = 'umami' AND binding.status = 'ready'`,
+      [companyId, projectId, target],
+    );
+    if (!rows[0]?.encrypted_remote_reference) return null;
+    const value = this.vault.decrypt(rows[0].encrypted_remote_reference, bindingScope({ companyId, projectId, environment: target, engine: 'umami' }));
+    return /^[0-9a-f-]{36}$/i.test(String(value)) ? value : null;
+  }
+
+  async confirmUmamiCutover({ companyId, projectId, environment: targetEnvironment }) {
+    const { rows } = await this.database.query(
+      `UPDATE analytics_websites SET cutover_at = now()
+        WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND cutover_at IS NULL
+        RETURNING cutover_at`,
+      [companyId, projectId, environment(targetEnvironment)],
+    );
+    return rows[0]?.cutover_at || null;
+  }
+
   async status({ companyId, projectId }) {
     const { rows } = await this.database.query(
       `SELECT id, environment, engine, status, provision_attempt_count, last_error, updated_at

@@ -13,6 +13,9 @@ services:
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify}
       WEBHOOK_WORKER_ENABLED: "false"
       UMAMI_RUNTIME_ENABLED: ${UMAMI_RUNTIME_ENABLED:-false}
+      UMAMI_INTERNAL_URL: http://umami:3000
+      UMAMI_USERNAME: ${UMAMI_USERNAME:?Defina UMAMI_USERNAME no ambiente do Coolify}
+      UMAMI_PASSWORD: ${UMAMI_PASSWORD:?Defina UMAMI_PASSWORD no ambiente do Coolify}
       NVS_RUNTIME_ENABLED: ${NVS_RUNTIME_ENABLED:-false}
       TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
       PIXELS_ENABLED: "false"

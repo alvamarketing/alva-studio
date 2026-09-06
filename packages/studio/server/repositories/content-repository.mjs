@@ -797,18 +797,18 @@ export class ContentRepository {
     return this.publicFormRecord(await this.publishedFormForProject(this.database, { companySlug, projectSlug, route: path }), path);
   }
 
-  async publicationOrigins({ companySlug, projectSlug }) {
+  async publicationOrigins({ companySlug, projectSlug, environment }) {
     const { rows } = await this.database.query(
       `SELECT domain AS origin FROM project_domains domain
         JOIN companies company ON company.id = domain.company_id AND company.slug = $1
         JOIN projects project ON project.id = domain.project_id AND project.company_id = domain.company_id AND project.slug = $2
-       WHERE domain.environment IN ('preview', 'production') AND domain.verification_status = 'verified'
+       WHERE domain.environment = COALESCE($3, domain.environment) AND domain.verification_status = 'verified'
        UNION ALL
        SELECT run.external_url AS origin FROM deployment_runs run
         JOIN companies company ON company.id = run.company_id AND company.slug = $1
         JOIN projects project ON project.id = run.project_id AND project.company_id = run.company_id AND project.slug = $2
-       WHERE run.status = 'READY' AND run.external_url IS NOT NULL`,
-      [companySlug, projectSlug],
+       WHERE run.status = 'READY' AND run.external_url IS NOT NULL AND run.environment = COALESCE($3, run.environment)`,
+      [companySlug, projectSlug, environment || null],
     );
     return rows.map((row) => String(row.origin).startsWith('http') ? row.origin : `https://${row.origin}`);
   }

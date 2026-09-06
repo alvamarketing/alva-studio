@@ -13,7 +13,7 @@ export function formContentSecurityPolicy({
   reportOnly,
 } = {}) {
   void reportOnly;
-  const scriptSrc = ["'self'", `'nonce-${nonce}'`, ...pixelDomains].join(' ');
+  const scriptSrc = ["'self'", `'nonce-${nonce}'`, studioOrigin, ...pixelDomains].filter(Boolean).join(' ');
   const connectSrc = ["'self'", studioOrigin, ...pixelDomains].filter(Boolean).join(' ');
   const directives = [
     `default-src 'none'`,

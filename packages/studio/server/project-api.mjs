@@ -166,7 +166,8 @@ export function createProjectApi({
   integrations,
   publication,
   videos,
-  analytics,
+    analytics,
+  umamiAnalytics,
   tracking,
   runtimeFlags,
 }) {
@@ -295,11 +296,26 @@ export function createProjectApi({
       await sessionService.authorize(context, 'analytics.read', projectId);
       const search = new URL(req.url, 'http://localhost').searchParams;
       const { from, to } = analyticsRange(search.get('from'), search.get('to'));
+      const environment = search.get('environment') || 'production';
+      const result = umamiAnalytics && runtimeFlags?.umamiRuntime
+        ? await umamiAnalytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to, environment })
+        : await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to });
       return json({
-        ...await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to }),
-        source: 'legacy',
+        ...result,
+        source: result.source || (umamiAnalytics && runtimeFlags?.umamiRuntime ? 'umami' : 'legacy'),
         readOnly: false,
       });
+    }
+
+    const analyticsCollection = path.match(/^\/api\/projects\/([^/]+)\/analytics\/(journey|events)$/);
+    if (analyticsCollection && method === 'GET') {
+      const projectId = analyticsCollection[1];
+      await sessionService.authorize(context, 'analytics.read', projectId);
+      const search = new URL(req.url, 'http://localhost').searchParams;
+      const { from, to } = analyticsRange(search.get('from'), search.get('to'));
+      if (!umamiAnalytics || !runtimeFlags?.umamiRuntime) return json(analyticsCollection[2] === 'journey' ? [] : []);
+      const input = { companyId: context.companyId, projectId, actorId: context.user.id, from, to, environment: search.get('environment') || 'production' };
+      return json(analyticsCollection[2] === 'journey' ? await umamiAnalytics.journey(input) : await umamiAnalytics.events(input));
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);

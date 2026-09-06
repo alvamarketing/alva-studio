@@ -53,7 +53,7 @@ test('CSP da VSL ganha a origem do Studio em connect-src quando informada, sem a
 
 test('renderVslPage inclui o tracker de primeira parte quando há trackerPublicId, e preserva o HTML de hoje sem ele', () => {
   const comTracker = renderVslPage(video, { publicOrigin: 'https://studio.example.test', trackerPublicId: 'trk_vsl_123' });
-  assert.match(comTracker, /<script src="\/tracker\.js" data-alva-tracker="trk_vsl_123"><\/script>/);
+  assert.match(comTracker, /<script src="\/tracker\.js" data-alva-tracker="trk_vsl_123" data-host-url="https:\/\/studio\.example\.test"><\/script>/);
   assert.match(comTracker, /<\/script><\/body><\/html>$/, 'o tracker entra depois do script do player, no fim do body');
 
   const semTracker = renderVslPage(video, { publicOrigin: 'https://studio.example.test' });

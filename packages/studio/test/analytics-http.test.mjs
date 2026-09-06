@@ -226,7 +226,7 @@ test('página pública da VSL inclui o script do tracker do projeto e a CSP corr
   const response = await fetch(`${app.base}/v/${publicVideo.publicId}`);
   const html = await response.text();
   assert.equal(response.status, 200);
-  assert.match(html, /<script src="\/tracker\.js" data-alva-tracker="trk-vsl-pagina"><\/script>/);
+  assert.match(html, /<script src="\/tracker\.js" data-alva-tracker="trk-vsl-pagina" data-host-url="http:\/\/127\.0\.0\.1:\d+"><\/script>/);
   const csp = response.headers.get('content-security-policy');
   const connectSrc = csp.split('; ').find((directive) => directive.startsWith('connect-src'));
   assert.match(connectSrc, new RegExp(app.base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));

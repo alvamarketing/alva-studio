@@ -119,8 +119,9 @@ export function renderDynamicForm(form, actionUrl, { vslEmbedUrls = new Map(), n
   }).join('');
   const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };
   const scriptOpenTag = nonce ? `<script nonce="${escape(nonce)}">` : '<script>';
+  const trackerOrigin = /^https?:\/\//.test(actionUrl) ? new URL(actionUrl).origin : '';
   const trackerTag = trackerPublicId
-    ? `<script src="/tracker.js" data-alva-tracker="${escape(trackerPublicId)}"${nonce ? ` nonce="${escape(nonce)}"` : ''}></script>`
+    ? `<script src="${escape(`${trackerOrigin}/tracker.js`)}" data-alva-tracker="${escape(trackerPublicId)}"${trackerOrigin ? ` data-host-url="${escape(trackerOrigin)}"` : ''}${nonce ? ` nonce="${escape(nonce)}"` : ''}></script>`
     : '';
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(form.name)}</title>${iconFont}<style>${css}${vslCss}</style></head><body><main class="shell" data-dynamic-form><form method="post" action="${escape(actionUrl)}"><header class="funnel-header">${shared}<div class="progress-row"><div class="progress" role="progressbar" aria-label="Progresso do formulário" aria-valuemin="1" aria-valuemax="${total}" aria-valuenow="1"><span></span></div>${progressElement?.showValue ? `<output class="progress-value">1/${total}</output>` : ''}</div></header><div class="card">${content}</div><input type="hidden" name="_completion_title" value="${escape(completion.title)}"><input type="hidden" name="_completion_message" value="${escape(completion.message)}"></form><p class="hint">Seus dados serão usados para responder ao seu contato.</p></main>${scriptOpenTag}${instrumentedRunner(trackerPublicId, form.id, screens.map((screen) => screen.id))}</script>${trackerTag}</body></html>`;
 }
@@ -138,7 +139,7 @@ function instrumentedRunner(trackerPublicId, formId, screenIds) {
     `form.addEventListener('submit',async event=>{event.preventDefault();trackFormEvent('form_submit_attempt',formEventData());`,
   );
   const trackerId = JSON.stringify(trackerPublicId);
-  return `let started=false;const screenIds=${JSON.stringify(screenIds)};function formEventData(){return{formId:${JSON.stringify(formId)},screenId:screenIds[current],stepIndex:current}}function trackFormEvent(name,eventData){try{const payload={trackerPublicId:${trackerId},event_name:name,url_path:location.pathname,event_data:eventData};const body=JSON.stringify(payload);if(typeof navigator.sendBeacon==='function'&&navigator.sendBeacon('/api/public/collect',body))return;fetch('/api/public/collect',{method:'POST',keepalive:true,headers:{'Content-Type':'text/plain;charset=UTF-8'},body}).catch(()=>{})}catch{}}${withSubmitTracking}`;
+  return `let started=false;const screenIds=${JSON.stringify(screenIds)};function formEventData(){return{formId:${JSON.stringify(formId)},screenId:screenIds[current],stepIndex:current}}function trackFormEvent(name,eventData){try{if(window.umami&&typeof window.umami.track==='function'){window.umami.track(name,eventData);return}const payload={trackerPublicId:${trackerId},event_name:name,url_path:location.pathname,event_data:eventData};const body=JSON.stringify(payload);if(typeof navigator.sendBeacon==='function'&&navigator.sendBeacon('/api/public/collect',body))return;fetch('/api/public/collect',{method:'POST',keepalive:true,headers:{'Content-Type':'text/plain;charset=UTF-8'},body}).catch(()=>{})}catch{}}${withSubmitTracking}`;
 }
 
 export function renderCompletion(title, message, { nonce } = {}) {

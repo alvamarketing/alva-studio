@@ -31,6 +31,20 @@ export class UmamiClient {
     if (!response.ok || payload.id !== bindingId || payload.name !== body.name || payload.domain !== body.domain) throw unavailable('Umami');
     return { remoteId: bindingId };
   }
+  async publicScript() {
+    if (!this.baseUrl) throw unavailable('Umami');
+    const response = await this.fetch(`${this.baseUrl}/script.js`, { signal: AbortSignal.timeout(this.timeoutMs) });
+    const text = await response.text();
+    if (!response.ok || text.length > 64 * 1024) throw unavailable('Umami');
+    return `document.currentScript&&document.currentScript.setAttribute('data-website-id',document.currentScript.getAttribute('data-alva-tracker')||'');\n${text.replace(/\/api\/send/g, '/api/public/umami/send')}`;
+  }
+  async sendPublicEvent(payload) {
+    if (!this.baseUrl) throw unavailable('Umami');
+    // O proxy não encaminha o user-agent do visitante. Umami descarta o user-agent padrão do Node como bot.
+    const response = await this.fetch(`${this.baseUrl}/api/send`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(this.timeoutMs) });
+    const body = await json(response);
+    if (!response.ok || body?.beep === 'boop') throw unavailable('Umami');
+  }
 }
 
 export class NvsClient {

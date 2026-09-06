@@ -17,6 +17,7 @@
   - `migrations/011_analytics_collector.sql`: websites, sessões, eventos, dados estruturados e agregados internos do coletor.
   - `migrations/012_analytics_websites.sql`: backfill e provisionamento automático do tracker público por projeto.
   - `migrations/013_tracking_provisioning.sql`: bindings Umami/NVS por ambiente, destinos cifrados e fila transacional de provisionamento com lease.
+  - `migrations/014_umami_cutover.sql`: token público opaco por ambiente e marco de corte do coletor legado.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.

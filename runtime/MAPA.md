@@ -9,3 +9,4 @@
 - `RUNBOOK.md`: operação, segredos, saúde, backup e limites da homologação.
 - `.env.example`: nomes de variáveis sem valores reais.
 - `umami-contract-test.sh`: teste Docker reproduzível do bootstrap e do contrato de ID estável do Umami 3.3.1.
+- `umami-e2e-test.sh`: homologação Docker descartável do gateway Umami, cutover por ambiente e ausência de escrita legada.

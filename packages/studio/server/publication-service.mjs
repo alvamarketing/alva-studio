@@ -69,7 +69,7 @@ export class PublicationService {
 
   async preview(input) {
     await this.requireTracking(input, 'preview');
-    const snapshot = await this.snapshotBuilder.build(input);
+    const snapshot = await this.snapshotBuilder.build({ ...input, environment: 'preview' });
     await this.audit.record({ companyId: input.companyId, projectId: input.projectId, actorUserId: input.requestedBy, action: 'deployment.preview.request', resourceType: 'project', resourceId: input.projectId, revision: input.expectedRevision, result: 'requested', metadata: { snapshotHash: snapshot.hash } });
     return this.send({ ...input, environment: 'preview', snapshot });
   }
@@ -93,7 +93,7 @@ export class PublicationService {
     if (input.confirmed !== true) throw fail('A confirmação da publicação em produção é obrigatória.', 409);
     if (!input.previewRunId) throw fail('Valide uma prévia antes de publicar em produção.', 409);
     await this.requireTracking(input, 'production');
-    const snapshot = await this.snapshotBuilder.build(input);
+    const snapshot = await this.snapshotBuilder.build({ ...input, environment: 'production' });
     const preview = await this.deployments.find({ companyId: input.companyId, projectId: input.projectId, runId: input.previewRunId });
     const credentials = await this.integrations.credentials({ companyId: input.companyId, projectId: input.projectId });
     if (!preview || preview.environment !== 'preview' || String(preview.status).toUpperCase() !== 'READY' || preview.snapshotHash.toLowerCase() !== snapshot.hash.toLowerCase() || preview.externalProjectId !== credentials?.vercelProjectId) throw fail('A prévia validada não corresponde ao snapshot atual.', 409);

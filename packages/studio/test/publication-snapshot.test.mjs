@@ -205,7 +205,7 @@ test('formulário publicado traz meta CSP e script do tracker com o mesmo nonce 
   assert.ok(metaMatch, 'deve conter a meta de CSP');
   const metaNonce = metaMatch[1].match(/nonce-([a-f0-9]+)/);
   assert.ok(metaNonce, 'a política deve conter um nonce');
-  const trackerMatch = html.match(/<script src="\/tracker\.js" data-alva-tracker="tracker-abc123" nonce="([a-f0-9]+)"><\/script>/);
+  const trackerMatch = html.match(/<script src="https:\/\/studio\.alva\.test\/tracker\.js" data-alva-tracker="tracker-abc123" data-host-url="https:\/\/studio\.alva\.test" nonce="([a-f0-9]+)"><\/script>/);
   assert.ok(trackerMatch, 'deve conter o script do tracker com nonce');
   assert.equal(trackerMatch[1], metaNonce[1]);
 });
@@ -259,10 +259,10 @@ test('página publicada recebe o script do tracker quando o projeto tem website 
     companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
   });
   const page = snapshot.files.find((file) => file.file === 'index.html');
-  const trackerMatch = page.data.match(/<script src="\/tracker\.js" data-alva-tracker="tracker-abc123" nonce="([a-f0-9]+)"><\/script><\/body>/);
+  const trackerMatch = page.data.match(/<script src="https:\/\/studio\.alva\.test\/tracker\.js" data-alva-tracker="tracker-abc123" data-host-url="https:\/\/studio\.alva\.test" nonce="([a-f0-9]+)"><\/script><\/body>/);
   assert.ok(trackerMatch, 'a página deve trazer o script do tracker antes de </body>');
   const form = snapshot.files.find((file) => file.file !== 'index.html');
-  const formTrackerMatch = form.data.match(/<script src="\/tracker\.js" data-alva-tracker="tracker-abc123" nonce="([a-f0-9]+)"><\/script>/);
+  const formTrackerMatch = form.data.match(/<script src="https:\/\/studio\.alva\.test\/tracker\.js" data-alva-tracker="tracker-abc123" data-host-url="https:\/\/studio\.alva\.test" nonce="([a-f0-9]+)"><\/script>/);
   assert.equal(trackerMatch[1], formTrackerMatch[1], 'página e formulário devem compartilhar o mesmo nonce do snapshot');
 });
 

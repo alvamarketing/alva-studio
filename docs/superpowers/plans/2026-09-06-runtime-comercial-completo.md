@@ -70,10 +70,10 @@
 
 **Interfaces:** manter `GET /api/projects/:id/analytics/summary`; adicionar `/journey` e `/events`; o DTO nunca expõe IDs remotos.
 
-- [ ] Publicar o script Umami real pelo gateway interno e enviar eventos seguros de formulário/VSL.
-- [ ] Fazer o painel ler agregados reais do Umami e desativar novas escritas no coletor legado.
-- [ ] Preservar o histórico legado por 90 dias sem dupla contagem.
-- [ ] Provar pageview, UTMs, jornada, retenção e isolamento; revisar visualmente e commitar.
+- [x] Publicar o script Umami real pelo gateway interno e enviar eventos seguros de formulário/VSL.
+- [x] Fazer o painel ler agregados reais do Umami e desativar novas escritas no coletor legado.
+- [x] Preservar o histórico legado por 90 dias sem dupla contagem.
+- [x] Provar pageview, UTMs, jornada, retenção e isolamento; revisar visualmente e commitar.
 
 ### Task 6: Conectar eventos comerciais ao NVS
 

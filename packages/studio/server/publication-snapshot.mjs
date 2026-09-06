@@ -31,9 +31,11 @@ function withoutFrameAncestors(policy) {
 
 // A página estática ainda não emite CSP (fica para a fase 2, via cabeçalho em vercel.json);
 // aqui só entra o script do tracker, no mesmo padrão do formulário.
-function injectPageTracker(html, { nonce, trackerPublicId }) {
+function injectPageTracker(html, { nonce, trackerPublicId, trackerHostUrl }) {
   if (!trackerPublicId) return html;
-  const script = `<script src="/tracker.js" data-alva-tracker="${escapeAttribute(trackerPublicId)}" nonce="${escapeAttribute(nonce)}"></script>`;
+  const host = trackerHostUrl ? new URL(trackerHostUrl).origin : '';
+  if (!host) throw fail('A origem do tracker é obrigatória.', 500);
+  const script = `<script src="${escapeAttribute(`${host}/tracker.js`)}" data-alva-tracker="${escapeAttribute(trackerPublicId)}" data-host-url="${escapeAttribute(host)}" nonce="${escapeAttribute(nonce)}"></script>`;
   return html.includes('</body>') ? html.replace('</body>', `${script}</body>`) : `${html}${script}`;
 }
 
@@ -41,10 +43,10 @@ function injectPublicationCsp(html, policy) {
   return html.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}">`);
 }
 
-async function resolveAnalyticsTrackerPublicId(database, companyId, projectId) {
+async function resolveAnalyticsTrackerPublicId(database, companyId, projectId, environment = 'production') {
   const { rows } = await database.query(
-    `SELECT tracker_public_id FROM analytics_websites WHERE company_id = $1 AND project_id = $2 AND environment = 'production' LIMIT 1`,
-    [companyId, projectId],
+    `SELECT tracker_public_id FROM analytics_websites WHERE company_id = $1 AND project_id = $2 AND environment = $3 LIMIT 1`,
+    [companyId, projectId, environment],
   );
   return rows[0]?.tracker_public_id || null;
 }
@@ -125,7 +127,7 @@ function recordForRow(row, publicOrigin, vslEmbedUrls = new Map(), { nonce, trac
       versionId: row.version_id,
       versionNumber: row.version_number,
       file: pathFile(path),
-      data: injectPageTracker(pageHtml, { nonce, trackerPublicId }),
+      data: injectPageTracker(pageHtml, { nonce, trackerPublicId, trackerHostUrl: publicOrigin }),
     };
   }
   if (!row.company_slug || !row.project_slug) throw fail('A publicação não encontrou o projeto público.', 409);
@@ -151,7 +153,7 @@ function recordForRow(row, publicOrigin, vslEmbedUrls = new Map(), { nonce, trac
   };
 }
 
-export async function buildPublishableSnapshot({ database, companyId, projectId, publicOrigin = process.env.PUBLIC_ORIGIN }) {
+export async function buildPublishableSnapshot({ database, companyId, projectId, environment = 'production', publicOrigin = process.env.PUBLIC_ORIGIN }) {
   if (!database || typeof database.query !== 'function') throw new Error('Banco inválido para snapshot.');
   if (!companyId || !projectId) throw fail('Empresa e projeto são obrigatórios.', 400);
   const origin = validateOrigin(publicOrigin);
@@ -191,13 +193,15 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     throw error;
   }
   const vslEmbedUrls = new Map([...resolvedVsl].map(([publicId, value]) => [publicId, value.embedUrl]));
-  const trackerPublicId = await resolveAnalyticsTrackerPublicId(database, companyId, projectId);
+  if (!['preview', 'production'].includes(environment)) throw fail('Ambiente de publicação inválido.', 400);
+  const trackerPublicId = await resolveAnalyticsTrackerPublicId(database, companyId, projectId, environment);
   const fingerprint = createHash('sha256').update(JSON.stringify(canonical({
     rows: rows
       .map((row) => ({ path: row.path, rendered_html: row.rendered_html, schema: row.schema, editor_state: row.editor_state, version_id: row.version_id }))
       .sort((left, right) => left.version_id.localeCompare(right.version_id)),
     vslEmbedUrls: [...vslEmbedUrls],
     trackerPublicId,
+    environment,
   }))).digest('hex');
   const nonce = fingerprint.slice(0, 24);
   const records = rows.map((row) => {
