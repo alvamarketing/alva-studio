@@ -22,6 +22,7 @@
 - `runtime-flags.test.mjs`: opt-in restritivo das flags comerciais e estado inicial seguro dos motores internos.
 - `runtime-health.test.mjs`: endpoints de saúde e contrato estático da composição Docker, backup e restauração.
 - `tracking-provision.test.mjs`: bindings por ambiente, leases, tentativas, criptografia com escopo, destinos NVS e gate de publicação.
+- `nvs-commercial-outbox.test.mjs`: outbox comercial, hash de contato, deduplicação por propriedade/evento/destino, HMAC e retry sanitizado.
 
 - `templates.test.mjs`: catálogo e consistência dos formulários.
 - `editor*.test.mjs`: controles do editor guiado.

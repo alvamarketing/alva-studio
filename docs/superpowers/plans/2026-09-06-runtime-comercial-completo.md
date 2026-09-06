@@ -81,10 +81,10 @@
 
 **Interfaces:** `tracking_event_id` opaco e persistente; NVS recebe `lead`, `initiate_checkout`, `purchase` e eventos VSL configurados.
 
-- [ ] Emitir lead somente após persistência da submissão e reutilizar o ID em retries.
-- [ ] Normalizar/hash de contato apenas no servidor; proibir PII, IP e user-agent em Analytics e logs.
-- [ ] Deduplicar por propriedade, evento e destino; mostrar tentativas e erros sanitizados no Studio.
-- [ ] Testar ingestão/fan-out real NVS, revisão e commit.
+- [x] Emitir lead somente após persistência da submissão e reutilizar o ID em retries.
+- [x] Normalizar/hash de contato apenas no servidor; proibir PII, IP e user-agent em Analytics e logs.
+- [x] Deduplicar por propriedade, evento e destino; mostrar tentativas e erros sanitizados no Studio.
+- [x] Testar ingestão/fan-out real NVS, revisão e commit.
 
 ### Task 7: Finalizar consentimento, pixels e publicação
 

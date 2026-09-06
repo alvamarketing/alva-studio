@@ -50,6 +50,15 @@ $script = (string) file_get_contents('http://127.0.0.1/lib/nvs.js'); foreach (['
     'params' => ['value' => 19.9, 'currency' => 'brl', 'transaction_id' => 'tx-alpha-1', 'gclid' => 'GCLID.alpha-1', 'linkedin_tracking_uuid' => 'li-track_1', 'taboola_click_id' => 'USER.CLICK_ID_EXAMPLE', 'wbraid' => 'https://forbidden.example/', 'email' => 'forbidden@example.test'],
     'context' => ['ip_address' => '203.0.113.9', 'user_agent' => 'forbidden-agent'],
 ]); same(202, $status, 'allowlisted commercial event must queue');
+[$status] = request('/internal/v1/events', [
+    'property_id' => 'alpha', 'tracking_event_id' => 'evt-alpha-vsl', 'event_name' => 'vsl_progress',
+    'user' => ['email_sha256' => hash('sha256', 'pessoa@example.test')],
+    'params' => ['content_id' => 'vsl-123', 'value' => 75],
+]); same(202, $status, 'internal VSL event with pre-hashed contact must queue');
+foreach (['initiate_checkout', 'purchase'] as $financialEvent) {
+    [$status] = request('/internal/v1/events', ['property_id' => 'alpha', 'tracking_event_id' => 'evt-alpha-' . $financialEvent, 'event_name' => $financialEvent, 'params' => ['transaction_id' => 'order-1', 'value' => 19.9, 'currency' => 'BRL']]);
+    same(202, $status, 'internal financial event must queue');
+}
 [$status] = request('/internal/v1/events', ['property_id' => 'alpha', 'tracking_event_id' => 'evt-alpha-1', 'event_name' => 'lead']); same(202, $status, 'duplicate event may retry safely');
 [$status] = request('/internal/v1/events', ['property_id' => 'bravo', 'tracking_event_id' => 'evt-alpha-1', 'event_name' => 'lead']); same(202, $status, 'same event id in another property is independent');
 [$status] = request('/internal/v1/events', ['property_id' => 'alpha', 'tracking_event_id' => 'evt-bad', 'event_name' => 'page_view']); same(422, $status, 'public browsing events are not accepted as commercial events');
@@ -61,6 +70,8 @@ $event = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
 same('GCLID.alpha-1', $event['click_ids']['gclid'] ?? null, 'sanitizer must preserve valid gclid');
 yes(!isset($event['click_ids']['wbraid']), 'sanitizer must reject URL-shaped click identifiers');
 same(5, (int) $pdo->query("SELECT COUNT(*) FROM nvs_outbox WHERE property_id='alpha' AND tracking_event_id='evt-alpha-1'")->fetchColumn(), 'outbox deduplication must include property event and destination');
+$vslPayload = json_decode((string) $pdo->query("SELECT payload_json FROM nvs_outbox WHERE property_id='alpha' AND tracking_event_id='evt-alpha-vsl' LIMIT 1")->fetchColumn(), true, 512, JSON_THROW_ON_ERROR);
+same(hash('sha256', 'pessoa@example.test'), $vslPayload['user']['email_sha256'] ?? null, 'NVS must preserve the server-supplied contact hash');
 
 require_once '/app/alva/bootstrap.php'; require_once '/app/alva/destinations/Registry.php';
 putenv('NVS_OUTBOX_TEST_TRANSPORT=capture');

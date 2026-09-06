@@ -383,6 +383,40 @@ function updateLeadsFilter() {
   leadsFilter.hidden = !studioShell?.can?.('submission.read');
   if (leadsFilter.hidden && projectContentFilter === 'leads') projectContentFilter = 'all';
 }
+function updateConversionsFilter() {
+  const conversionsFilter = $('[data-project-filter="conversions"]');
+  if (!conversionsFilter) return;
+  conversionsFilter.hidden = !studioShell?.can?.('analytics.read');
+  if (conversionsFilter.hidden && projectContentFilter === 'conversions') projectContentFilter = 'all';
+}
+async function renderProjectConversions(state) {
+  const list = clear($('#project-content-list'));
+  $('#project-leads-controls').hidden = true;
+  if (!state.currentProject || !studioShell?.can?.('analytics.read')) return;
+  list.append(projectEmpty('Carregando conversões…', 'Aguarde enquanto buscamos o status das entregas.'));
+  try {
+    const rows = await api(`/projects/${state.currentProject.id}/conversions`);
+    if (projectContentFilter !== 'conversions' || state.currentProject.id !== dashboardState().currentProject?.id) return;
+    clear(list);
+    if (!rows.length) return list.append(projectEmpty('Nenhuma conversão enviada.', 'As conversões confirmadas aparecerão aqui.'));
+    for (const row of rows) {
+      const status = String(row.status || '').toLowerCase();
+      const statusLabel = { delivered: 'Entregue', retry: 'Nova tentativa', dead: 'Encerrada' }[status] || 'Processando';
+      const item = document.createElement('article'); item.className = `project-content-row conversion-row conversion-status-${status || 'pending'}`;
+      item.setAttribute('aria-label', `Conversão ${row.eventName || 'evento'} · ${row.environment || 'ambiente'} · ${statusLabel}`);
+      const icon = document.createElement('span'); icon.className = 'project-content-icon'; icon.setAttribute('aria-hidden', 'true');
+      const glyph = document.createElement('i'); glyph.className = 'material-symbols-outlined'; glyph.textContent = 'conversion_path'; icon.append(glyph);
+      const content = document.createElement('div'); content.className = 'conversion-content';
+      const title = document.createElement('strong'); title.textContent = row.eventName || 'Evento';
+      const detail = document.createElement('span'); detail.textContent = row.environment === 'production' ? 'Produção' : 'Prévia';
+      content.append(title, detail);
+      const state = document.createElement('span'); state.className = 'conversion-state'; state.textContent = `${statusLabel} · tentativa ${row.attemptCount ?? 0}`;
+      item.append(icon, content, state);
+      if (row.lastError) { const error = document.createElement('small'); error.className = 'conversion-error'; error.textContent = row.lastError; item.append(error); }
+      list.append(item);
+    }
+  } catch (error) { clear(list); list.append(projectEmpty('Não foi possível carregar conversões.', error.message)); }
+}
 function renderLeadsControls(projectId) {
   const controls = $('#project-leads-controls');
   const form = $('#project-leads-form');
@@ -657,9 +691,11 @@ async function renderProject() {
   if (!studioShell) return;
   leadsRequest += 1;
   updateLeadsFilter();
+  updateConversionsFilter();
   const state = dashboardState();
   $('#analytics-panel').hidden = true;
   if (projectContentFilter === 'leads') return renderProjectLeads(state);
+  if (projectContentFilter === 'conversions') return renderProjectConversions(state);
   const status = $('#project-status');
   $('#project-leads-controls').hidden = true;
   const list = clear($('#project-content-list'));
@@ -1253,6 +1289,7 @@ $('#project-content-filter').onclick = (event) => {
   const button = event.target.closest('[data-project-filter]');
   if (!button) return;
   if (button.dataset.projectFilter === 'leads' && !studioShell?.can?.('submission.read')) return;
+  if (button.dataset.projectFilter === 'conversions' && !studioShell?.can?.('analytics.read')) return;
   projectContentFilter = button.dataset.projectFilter;
   if (projectContentFilter === 'leads') {
     leadsFormId = '';

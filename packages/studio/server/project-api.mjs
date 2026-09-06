@@ -169,6 +169,7 @@ export function createProjectApi({
     analytics,
   umamiAnalytics,
   tracking,
+  commercialOutbox,
   runtimeFlags,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
@@ -288,6 +289,13 @@ export function createProjectApi({
         cursor = page.nextCursor;
       } while (cursor);
       return sendCsv(res, renderLeadsCsv({ formName: form.name, fields: formFields(form.draftSchema), submissions }));
+    }
+
+    const conversions = path.match(/^\/api\/projects\/([^/]+)\/conversions$/);
+    if (conversions && method === 'GET') {
+      const projectId = conversions[1];
+      await sessionService.authorize(context, 'analytics.read', projectId);
+      return json(commercialOutbox ? await commercialOutbox.status({ companyId: context.companyId, projectId }) : []);
     }
 
     const analyticsSummary = path.match(/^\/api\/projects\/([^/]+)\/analytics\/summary$/);

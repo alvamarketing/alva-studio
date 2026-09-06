@@ -813,6 +813,30 @@ main {
   padding: 8px 10px;
   font-size: 11px;
 }
+.conversion-row {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+}
+.conversion-content { min-width: 0; }
+.conversion-content strong { text-transform: capitalize; }
+.conversion-state {
+  margin-top: 0;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--alva-highlight);
+  color: var(--alva-blue-strong);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.conversion-status-retry .conversion-state { background: #fff4d6; color: #8a5a00; }
+.conversion-status-dead .conversion-state { background: #ffe4e4; color: #a12626; }
+.conversion-error {
+  grid-column: 2 / -1;
+  margin-top: 2px;
+  color: #a12626;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
 .project-modules > div {
   display: flex;
   align-items: center;
@@ -1414,10 +1438,26 @@ dialog label select {
   }
   .project-filter {
     width: 100%;
+    flex-wrap: nowrap;
+    gap: 3px;
+    overflow-x: auto;
+    scrollbar-width: thin;
   }
   .project-filter button {
-    min-height: 44px;
-    flex: 1 1 100px;
+    min-height: 40px;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .conversion-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .conversion-state {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 6px;
+  }
+  .conversion-error {
+    grid-column: 1 / -1;
   }
   .sidebar-footer,
   .nav-item {

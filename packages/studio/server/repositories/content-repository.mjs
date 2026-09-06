@@ -308,10 +308,11 @@ async function assertPublishedPathAvailable(client, { companyId, projectId, path
 }
 
 export class ContentRepository {
-  constructor(database, { publicOrigin = process.env.PUBLIC_ORIGIN } = {}) {
+  constructor(database, { publicOrigin = process.env.PUBLIC_ORIGIN, commercialOutbox = null } = {}) {
     this.database = database;
     this.publicOrigin = publicOrigin;
     this.webhookDeliveries = new WebhookDeliveryRepository(database);
+    this.commercialOutbox = commercialOutbox;
   }
 
   async assertPublishedVslReferences(client, { companyId, projectId, editorState, schema }) {
@@ -803,7 +804,7 @@ export class ContentRepository {
         JOIN companies company ON company.id = domain.company_id AND company.slug = $1
         JOIN projects project ON project.id = domain.project_id AND project.company_id = domain.company_id AND project.slug = $2
        WHERE domain.environment = COALESCE($3, domain.environment) AND domain.verification_status = 'verified'
-       UNION ALL
+       UNION
        SELECT run.external_url AS origin FROM deployment_runs run
         JOIN companies company ON company.id = run.company_id AND company.slug = $1
         JOIN projects project ON project.id = run.project_id AND project.company_id = run.company_id AND project.slug = $2
@@ -822,25 +823,25 @@ export class ContentRepository {
     return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, route: path }), path);
   }
 
-  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input }) {
+  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input, origin }) {
     const path = publicRoute(routeValue ?? slug);
     return this.submitPublishedForm({
       resolve: (client) => this.publishedFormForProject(client, { companySlug, projectSlug, route: path }),
       route: path,
-      input,
+      input, origin,
     });
   }
 
-  async submitPublicFormForDomain({ host, route: routeValue, slug, input }) {
+  async submitPublicFormForDomain({ host, route: routeValue, slug, input, origin }) {
     const path = publicRoute(routeValue ?? slug);
     return this.submitPublishedForm({
       resolve: (client) => this.publishedFormForDomain(client, { host, route: path }),
       route: path,
-      input,
+      input, origin,
     });
   }
 
-  async submitPublishedForm({ resolve, route: routeValue, input }) {
+  async submitPublishedForm({ resolve, route: routeValue, input, origin }) {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
       const answers = validateFormAnswers(form.schema, input);
@@ -851,6 +852,14 @@ export class ContentRepository {
       );
       const submissionId = rows[0].id;
       const eventId = rows[0].tracking_event_id;
+      if (this.commercialOutbox) {
+        const environment = await this.publicationEnvironment(client, { companyId: form.company_id, projectId: form.project_id, origin });
+        if (!environment) throw fail('Origem publicada obrigatória para conversões.', 403);
+        await this.commercialOutbox.enqueue(client, {
+          companyId: form.company_id, projectId: form.project_id, environment,
+          trackingEventId: eventId, eventName: 'lead', answers, at: rows[0].submitted_at,
+        });
+      }
       let webhookDelivery = null;
       if (form.schema.webhook) {
         // Enfileira na mesma transação da submissão: a entrega nunca fica órfã (submissão sem
@@ -891,6 +900,20 @@ export class ContentRepository {
         webhookDelivery,
       };
     });
+  }
+
+  async publicationEnvironment(client, { companyId, projectId, origin }) {
+    let normalized;
+    try { normalized = new URL(String(origin)).origin; } catch { return null; }
+    const { rows } = await client.query(
+      `SELECT environment FROM project_domains WHERE company_id = $1 AND project_id = $2
+         AND verification_status = 'verified' AND lower('https://' || domain) = lower($3)
+       UNION
+       SELECT environment FROM deployment_runs WHERE company_id = $1 AND project_id = $2
+         AND status = 'READY' AND external_url IS NOT NULL AND lower(external_url) = lower($3)`,
+      [companyId, projectId, normalized],
+    );
+    return rows.length === 1 && ['preview', 'production'].includes(rows[0].environment) ? rows[0].environment : null;
   }
 
   async publishPage({ companyId, projectId, actorId, pageId, lockVersion: expectedLockVersion }) {

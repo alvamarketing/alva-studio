@@ -33,13 +33,14 @@ function eventData(value) {
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('data inválido.');
   const keys = Object.keys(value);
-  if (keys.length > 4 || keys.some((key) => !['formId', 'screenId', 'stepIndex', 'publicId', 'versionNumber', 'value'].includes(key))) throw fail('data inválido.');
+  if (keys.length > 4 || keys.some((key) => !['formId', 'screenId', 'stepIndex', 'publicId', 'versionNumber', 'value', 'trackingEventId'].includes(key))) throw fail('data inválido.');
   const opaque = (item) => typeof item === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(item) && !containsPii(item);
   if (value.formId !== undefined && !opaque(value.formId)) throw fail('data inválido.');
   if (value.screenId !== undefined && !opaque(value.screenId)) throw fail('data inválido.');
   if (value.publicId !== undefined && !opaque(value.publicId)) throw fail('data inválido.');
+  if (value.trackingEventId !== undefined && (typeof value.trackingEventId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trackingEventId))) throw fail('data inválido.');
   for (const key of ['stepIndex', 'versionNumber', 'value']) if (value[key] !== undefined && (!Number.isInteger(value[key]) || value[key] < 0 || value[key] > 1000000)) throw fail('data inválido.');
-  return Object.fromEntries(Object.entries(value));
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'trackingEventId'));
 }
 
 // O tracker oficial do Umami recebe um token público local como website. Este adaptador

@@ -6,6 +6,8 @@ import { startWebhookWorker } from './webhook-worker.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
 import { NvsClient, UmamiClient } from './tracking-clients.mjs';
 import { startTrackingProvisionWorker } from './tracking-provision-worker.mjs';
+import { NvsCommercialOutboxRepository } from './repositories/nvs-commercial-outbox-repository.mjs';
+import { startCommercialEventsWorker } from './commercial-events-worker.mjs';
 
 export async function startRuntimeWorker({
   role,
@@ -20,7 +22,10 @@ export async function startRuntimeWorker({
   trackingRepositoryFactory = (database) => new TrackingRepository(database),
   trackingClientsFactory = () => ({ umami: new UmamiClient(), nvs: new NvsClient() }),
   startTrackingWorkerFn = startTrackingProvisionWorker,
+  commercialRepositoryFactory = (database) => new NvsCommercialOutboxRepository(database),
+  startCommercialWorkerFn = startCommercialEventsWorker,
   trackingProvisionEnabled = process.env.TRACKING_PROVISION_ENABLED === 'true',
+  nvsRuntimeEnabled = process.env.NVS_RUNTIME_ENABLED === 'true',
   log = console.log,
 } = {}) {
   if (!['webhook', 'tracking', 'media'].includes(role)) throw new Error('Papel de worker inválido.');
@@ -32,6 +37,7 @@ export async function startRuntimeWorker({
   let timer;
   let webhookWorker;
   let trackingWorker;
+  let commercialWorker;
   let closed = false;
   try {
     await migrateFn(database);
@@ -47,6 +53,9 @@ export async function startRuntimeWorker({
         clients: trackingClientsFactory(),
       });
     }
+    if (role === 'tracking' && nvsRuntimeEnabled) {
+      commercialWorker = startCommercialWorkerFn({ repository: commercialRepositoryFactory(database), client: new NvsClient() });
+    }
     const heartbeat = async () => {
       await database.query('SELECT 1');
       await writeFile(heartbeatFile, JSON.stringify({ role, at: new Date().toISOString() }), { mode: 0o600 });
@@ -60,6 +69,7 @@ export async function startRuntimeWorker({
         clearInterval(timer);
         webhookWorker?.stop?.();
         trackingWorker?.stop?.();
+        commercialWorker?.stop?.();
         await database.close().catch(() => {});
         return exitCode;
       },
@@ -70,6 +80,7 @@ export async function startRuntimeWorker({
     clearInterval(timer);
     webhookWorker?.stop?.();
     trackingWorker?.stop?.();
+    commercialWorker?.stop?.();
     await database.close().catch(() => {});
     throw error;
   }

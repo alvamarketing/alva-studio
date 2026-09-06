@@ -80,6 +80,7 @@ services:
     environment:
       DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
       TRACKING_PROVISION_ENABLED: ${TRACKING_PROVISION_ENABLED:-false}
+      NVS_RUNTIME_ENABLED: ${NVS_RUNTIME_ENABLED:-false}
       TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
       UMAMI_INTERNAL_URL: http://umami:3000
       UMAMI_USERNAME: ${UMAMI_USERNAME:?Defina UMAMI_USERNAME no ambiente do Coolify}

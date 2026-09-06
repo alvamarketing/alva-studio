@@ -26,6 +26,7 @@ import { resolvePublishedVslReferencesForRender } from './vsl-reference.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
+import { NvsCommercialOutboxRepository } from './repositories/nvs-commercial-outbox-repository.mjs';
 import { UmamiClient } from './tracking-clients.mjs';
 import { UmamiAnalyticsClient } from './umami-analytics.mjs';
 import { UmamiAnalyticsReader } from './umami-analytics-reader.mjs';
@@ -35,6 +36,23 @@ import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
 import { readRuntimeFlags, requiredTrackingEngines } from './runtime-flags.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
+const NVS_VSL_EVENTS = new Set(['vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
+
+export function nvsVslEvent(normalized, input) {
+  const payload = normalized?.payload;
+  if (!payload || !NVS_VSL_EVENTS.has(payload.name)) return null;
+  const trackingEventId = input?.payload?.data?.trackingEventId;
+  if (typeof trackingEventId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trackingEventId)) return null;
+  const data = payload.data || {};
+  return {
+    trackingEventId,
+    eventName: payload.name,
+    params: {
+      ...(data.publicId ? { content_id: data.publicId } : {}),
+      ...(Number.isInteger(data.value) ? { value: data.value } : {}),
+    },
+  };
+}
 
 function decodedSegment(value) {
   const decoded = decodeURIComponent(value);
@@ -196,7 +214,7 @@ export function createApp({
   const getPublisher = async () => injectedPublisher || new Publisher(await auth.credentials());
   const store = new Store(dataDir);
   const formStore = new FormStore(dataDir);
-  const content = database ? new ContentRepository(database, { publicOrigin }) : null;
+  let content = null;
   const videos = database ? new VideoRepository(database) : null;
   const analytics = database ? new AnalyticsRepository(database) : null;
   const collectLimiter = createCollectLimiter(collectLimiterOptions);
@@ -217,6 +235,9 @@ export function createApp({
     : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
   const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
+  const commercialOutbox = runtimeFlags.nvsRuntime && database && process.env.TRACKING_MASTER_KEY
+    ? new NvsCommercialOutboxRepository(database) : null;
+  content = database ? new ContentRepository(database, { publicOrigin, commercialOutbox }) : null;
   const umami = runtimeFlags.umamiRuntime && database ? (umamiClient || new UmamiClient()) : null;
   const umamiAnalytics = runtimeFlags.umamiRuntime && database && tracking
     ? new UmamiAnalyticsReader({ database, legacy: analytics, tracking, client: new UmamiAnalyticsClient() })
@@ -244,6 +265,7 @@ export function createApp({
       analytics,
       umamiAnalytics,
       tracking,
+      commercialOutbox,
       body,
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),
@@ -424,7 +446,13 @@ export function createApp({
         const website = await analytics.resolveWebsite({ trackerPublicId: token });
         const allowedOrigins = website && origin ? await content.publicationOrigins({ companySlug: website.companySlug, projectSlug: website.projectSlug, environment: binding.environment }) : [];
         if (!origin || !/^https:\/\//.test(origin) || !website || website.companyId !== binding.companyId || website.projectId !== binding.projectId || !allowedOrigins.includes(origin)) throw error('Não foi possível registrar o evento.', 403);
-        await umami.sendPublicEvent(normalizeUmamiGatewayPayload(input, { publicToken: token, remoteWebsiteId: binding.remoteWebsiteId }));
+        const normalized = normalizeUmamiGatewayPayload(input, { publicToken: token, remoteWebsiteId: binding.remoteWebsiteId });
+        await umami.sendPublicEvent(normalized);
+        const nvsEvent = commercialOutbox && nvsVslEvent(normalized, input);
+        if (nvsEvent) await database.transaction((client) => commercialOutbox.enqueue(client, {
+          companyId: binding.companyId, projectId: binding.projectId, environment: binding.environment,
+          trackingEventId: nvsEvent.trackingEventId, eventName: nvsEvent.eventName, params: nvsEvent.params,
+        }));
         await tracking.confirmUmamiCutover({ companyId: binding.companyId, projectId: binding.projectId, environment: binding.environment });
         res.writeHead(204); return res.end();
       }
@@ -487,14 +515,15 @@ export function createApp({
       }
       const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
       if (req.method === 'POST' && content && publicFormRequest) {
+        if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);
         const saved = domainScope
-          ? await content.submitPublicFormForDomain({ host: req.headers.host, route: publicFormRequest.route, input })
+          ? await content.submitPublicFormForDomain({ host: req.headers.host, route: publicFormRequest.route, input, origin })
           : await content.submitPublicFormForProject({
             companySlug: publicFormRequest.companySlug,
             projectSlug: publicFormRequest.projectSlug,
             route: publicFormRequest.route,
-            input,
+            input, origin,
           });
         await analytics?.recordLead({
           companyId: saved.form.companyId,
@@ -617,7 +646,7 @@ export function createApp({
         const script = await umami.publicScript();
         res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
-        return res.end(`${script}\ndocument.addEventListener('alva:track',function(event){var detail=event&&event.detail;if(detail&&detail.name&&window.umami){window.umami.track(detail.name,detail.data)}});`);
+        return res.end(`${script}\ndocument.addEventListener('alva:track',function(event){var detail=event&&event.detail;if(detail&&detail.name&&window.umami){var data=Object.assign({},detail.data);data.trackingEventId=crypto.randomUUID();window.umami.track(detail.name,data)}});`);
       }
       if (req.method === 'GET' && files[path]) {
         const [file, type] = files[path];

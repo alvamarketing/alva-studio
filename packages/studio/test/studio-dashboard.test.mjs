@@ -314,6 +314,18 @@ test('Projeto possui destinos, filtros, estado assíncrono e controles responsiv
   assert.match(css, /min-height:\s*44px/);
 });
 
+test('Conversões usam linha acessível com estado legível e filtros móveis compactos', async () => {
+  const [app, css] = await Promise.all([readFile(appPath, 'utf8'), readFile(new URL('../public/styles.css', import.meta.url), 'utf8')]);
+  assert.match(app, /conversion-row/);
+  assert.match(app, /conversion-status-\$\{status/);
+  assert.match(app, /setAttribute\('aria-label', `Conversão/);
+  assert.match(app, /conversion-error/);
+  assert.match(css, /\.conversion-status-retry \.conversion-state/);
+  assert.match(css, /\.conversion-status-dead \.conversion-state/);
+  assert.match(css, /\.project-filter\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(css, /\.conversion-row\s*\{[^}]*grid-template-columns:/s);
+});
+
 test('analista pode ler e exportar leads, enquanto quem não tem submission.read não vê o filtro', async () => {
   const [html, app, shell] = await Promise.all([
     readFile(htmlPath, 'utf8'),

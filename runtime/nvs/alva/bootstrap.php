@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class AlvaNvs
 {
     public const DESTINATIONS = ['meta', 'tiktok', 'google', 'linkedin', 'taboola'];
-    public const COMMERCIAL_EVENTS = ['lead', 'initiate_checkout', 'purchase'];
+    public const COMMERCIAL_EVENTS = ['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click'];
 
     public static function pdo(): PDO
     {
@@ -78,6 +78,7 @@ final class AlvaSanitizer
 {
     public static function hashEmail($email): ?string { $email = strtolower(trim((string) $email)); return filter_var($email, FILTER_VALIDATE_EMAIL) ? hash('sha256', $email) : null; }
     public static function hashPhone($phone): ?string { $phone = preg_replace('/\D+/', '', (string) $phone); return strlen($phone) >= 8 && strlen($phone) <= 15 ? hash('sha256', $phone) : null; }
+    private static function suppliedHash($value): ?string { $value = strtolower(trim((string) $value)); return preg_match('/^[a-f0-9]{64}$/', $value) ? $value : null; }
     private static function clickIds(array $params): array
     {
         $safe = [];
@@ -97,7 +98,7 @@ final class AlvaSanitizer
         if (isset($params['value']) && is_numeric($params['value']) && is_finite((float) $params['value'])) $safeParams['value'] = (float) $params['value'];
         if (isset($params['currency']) && preg_match('/^[A-Za-z]{3}$/', (string) $params['currency'])) $safeParams['currency'] = strtoupper((string) $params['currency']);
         foreach (['transaction_id', 'content_id'] as $key) if (isset($params[$key]) && is_string($params[$key]) && preg_match('/^[A-Za-z0-9_.:-]{1,190}$/', $params[$key])) $safeParams[$key] = $params[$key];
-        return ['property_id' => $propertyId, 'tracking_event_id' => $id, 'event_name' => $name, 'event_time' => isset($body['event_time']) ? (int) $body['event_time'] : time(), 'user' => array_filter(['email_sha256' => self::hashEmail($user['email'] ?? null), 'phone_sha256' => self::hashPhone($user['phone'] ?? null)]), 'click_ids' => self::clickIds($params), 'params' => $safeParams];
+        return ['property_id' => $propertyId, 'tracking_event_id' => $id, 'event_name' => $name, 'event_time' => isset($body['event_time']) ? (int) $body['event_time'] : time(), 'user' => array_filter(['email_sha256' => self::suppliedHash($user['email_sha256'] ?? null) ?? self::hashEmail($user['email'] ?? null), 'phone_sha256' => self::suppliedHash($user['phone_sha256'] ?? null) ?? self::hashPhone($user['phone'] ?? null)]), 'click_ids' => self::clickIds($params), 'params' => $safeParams];
     }
     public static function publicEvent(array $body, string $propertyId): array
     {

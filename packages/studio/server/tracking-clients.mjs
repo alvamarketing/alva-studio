@@ -59,4 +59,13 @@ export class NvsClient {
     if (!response.ok || payload?.property?.property_id !== propertyId) throw unavailable('NVS');
     return { remoteId: propertyId };
   }
+  async sendEvent(payload) {
+    if (!this.baseUrl || !this.secret) throw unavailable('NVS');
+    const body = JSON.stringify(payload);
+    const timestamp = String(Math.floor(this.now() / 1000)); const nonce = randomBytes(16).toString('hex');
+    const signature = createHmac('sha256', this.secret).update(`${timestamp}\n${nonce}\n${body}`).digest('hex');
+    const response = await this.fetch(`${this.baseUrl}/internal/v1/events`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-NVS-Timestamp': timestamp, 'X-NVS-Nonce': nonce, 'X-NVS-Signature': signature }, body, signal: AbortSignal.timeout(this.timeoutMs) });
+    const result = await json(response);
+    if (!response.ok || result?.status !== 'queued') throw unavailable('NVS');
+  }
 }

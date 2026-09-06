@@ -129,6 +129,21 @@ test('worker de tracking permanece em heartbeat sem consumir fila enquanto a fla
   await runtime.close();
 });
 
+test('worker de tracking inicia a outbox comercial somente com a flag NVS literal', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'alva-runtime-commercial-worker-'));
+  const heartbeatFile = join(directory, 'heartbeat.json'); let started = false;
+  const runtime = await startRuntimeWorker({
+    role: 'tracking', connectionString: 'postgres://nao-registre-esta-url', heartbeatFile,
+    createDatabaseFn: () => ({ query: async () => {}, close: async () => {} }), migrateFn: async () => {},
+    commercialRepositoryFactory: () => ({ queue: true }),
+    startCommercialWorkerFn: ({ repository }) => { assert.equal(repository.queue, true); started = true; return { stop: () => {} }; },
+    nvsRuntimeEnabled: true, log: () => {},
+  });
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  assert.equal(started, true);
+  await runtime.close();
+});
+
 test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens fixadas', async () => {
   const compose = await readFile(join(root, 'runtime/compose.yaml'), 'utf8');
   for (const service of ['studio-web', 'studio-worker', 'studio-media-worker', 'studio-tracking-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])

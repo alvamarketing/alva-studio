@@ -10,3 +10,4 @@
 - `.env.example`: nomes de variáveis sem valores reais.
 - `umami-contract-test.sh`: teste Docker reproduzível do bootstrap e do contrato de ID estável do Umami 3.3.1.
 - `umami-e2e-test.sh`: homologação Docker descartável do gateway Umami, cutover por ambiente e ausência de escrita legada.
+- A flag `NVS_RUNTIME_ENABLED` também chega ao worker de tracking, mantendo a outbox comercial desligada até opt-in literal.
