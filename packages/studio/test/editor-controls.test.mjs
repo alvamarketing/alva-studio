@@ -5,6 +5,7 @@ import grapesjs from 'grapesjs';
 import {
   safeDestination,
   componentLabel,
+  editorialLabel,
   panelMode,
   editorActionMeta,
   isCanvasBackgroundElement,
@@ -288,6 +289,20 @@ test('nomes visíveis dos componentes usam linguagem de edição', () => {
   assert.equal(componentLabel(component('div')), 'Grupo de elementos');
   assert.equal(componentLabel({ get: (key) => key === 'type' ? 'vsl' : 'div', is: () => false }), 'VSL');
   assert.equal(componentLabel({ is: () => true, get: () => 'body' }), 'Página');
+});
+
+test('rótulos editoriais nunca expõem tags técnicas na seleção ou no inspetor', () => {
+  const component = (tag, children = []) => ({
+    get: (key) => key === 'tagName' ? tag : undefined,
+    is: () => false,
+    components: () => ({ models: children }),
+    parent: () => null,
+  });
+
+  assert.equal(editorialLabel(component('div')), 'Elemento');
+  assert.equal(editorialLabel(component('span')), 'Elemento');
+  assert.equal(editorialLabel(component('section')), 'Elemento');
+  assert.equal(editorialLabel(component('div', [component('h1')])), 'Título principal');
 });
 
 test('a seleção distingue catálogo contextual de edição de elemento', () => {

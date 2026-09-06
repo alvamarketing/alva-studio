@@ -28,11 +28,11 @@ test('tema do Studio declara os tokens canônicos da Alva', async () => {
   const css = await readFile(cssPath, 'utf8');
 
   assert.match(css, /--alva-blue:\s*#286eea/i);
-  assert.match(css, /--alva-cloud:\s*#f7f9fc/i);
+  assert.match(css, /--alva-cloud:\s*#f6f8fb/i);
   assert.match(css, /--alva-ink:\s*#101828/i);
-  assert.match(css, /--alva-line:\s*#e7ecf3/i);
-  assert.match(css, /--font-sans:\s*['"]Instrument Sans['"]/i);
-  assert.match(css, /--alva-positive:\s*#198044/i);
+  assert.match(css, /--alva-line:\s*#e1e7ef/i);
+  assert.match(css, /--font-sans:\s*['"]Inter['"]/i);
+  assert.match(css, /--alva-positive:\s*#20a464/i);
   assert.match(css, /--alva-positive-bg:\s*#e4f8e8/i);
   assert.match(css, /--alva-warning:\s*#9d5900/i);
   assert.match(css, /--alva-warning-bg:\s*#ffefdd/i);
@@ -103,11 +103,15 @@ test('rodapé do menu concentra configurações, aparência e recolhimento', asy
 });
 
 test('quizzes permanecem como destino principal do menu', async () => {
-  const html = await readFile(htmlPath, 'utf8');
+  const [html, app] = await Promise.all([
+    readFile(htmlPath, 'utf8'),
+    readFile(new URL('../public/app.js', import.meta.url), 'utf8'),
+  ]);
   const sidebar = html.match(/<section id="dashboard"[\s\S]*?<\/aside>/)?.[0] || '';
-  assert.match(sidebar, /id="nav-pages"/);
-  assert.match(sidebar, /id="nav-forms"/);
-  assert.match(sidebar, /Quizzes/);
-  assert.match(sidebar, /Páginas/);
-  assert.match(sidebar, /Histórico/);
+  assert.match(html, /data-sidebar-context="studio"/);
+  assert.match(html, /data-sidebar-context="project"[^>]*hidden/);
+  assert.match(sidebar, /id="nav-pages"[^>]*title="Páginas"/);
+  assert.match(sidebar, /id="nav-forms"[^>]*title="Quizzes"/);
+  assert.match(app, /mediaPipelineEnabled = false/);
+  assert.match(app, /videosFilter\.hidden = !mediaPipelineEnabled/);
 });

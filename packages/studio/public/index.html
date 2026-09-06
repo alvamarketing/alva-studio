@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block" rel="stylesheet" />
@@ -41,40 +41,65 @@
           <span class="workspace-label">PROJETO ATUAL</span>
           <select id="project-switcher" aria-label="Selecionar projeto"></select>
         </label>
-        <div class="workspace-label">SEU STUDIO</div>
-        <button class="nav-item nav-active" id="nav-home" aria-current="page" title="Início">
-          <span class="material-symbols-outlined" aria-hidden="true">home</span>
-          <span class="sidebar-label">Início</span>
-        </button>
-        <button class="nav-item" id="nav-project" title="Visão geral do projeto">
-          <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
-          <span class="sidebar-label">Projeto</span>
-        </button>
-        <button class="nav-item" id="nav-pages" title="Páginas">
+        <nav class="sidebar-navigation" data-sidebar-context="studio" aria-label="Navegação do Studio">
+          <div class="workspace-label">SEU STUDIO</div>
+          <button class="nav-item nav-active" id="nav-home" aria-current="page" title="Início">
+            <span class="material-symbols-outlined" aria-hidden="true">home</span>
+            <span class="sidebar-label">Início</span>
+          </button>
+          <button class="nav-item" id="nav-projects" title="Projetos">
+            <span class="material-symbols-outlined" aria-hidden="true">grid_view</span>
+            <span class="sidebar-label">Projetos</span>
+          </button>
+          <button class="nav-item" id="nav-company" title="Empresa e equipe">
+            <span class="material-symbols-outlined" aria-hidden="true">business</span>
+            <span class="sidebar-label">Empresa e equipe</span>
+          </button>
+          <button class="nav-item" id="nav-billing" title="Plano e cobrança">
+            <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>
+            <span class="sidebar-label">Plano e cobrança</span>
+          </button>
+        </nav>
+        <nav class="sidebar-navigation" data-sidebar-context="project" aria-label="Navegação do projeto" hidden>
+          <div class="workspace-label">PROJETO</div>
+          <button class="nav-item" id="nav-project" title="Visão geral">
+            <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+            <span class="sidebar-label">Visão geral</span>
+          </button>
+          <button class="nav-item" id="nav-pages" title="Páginas">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <rect x="3" y="3" width="7" height="7" rx="1" />
             <rect x="14" y="3" width="7" height="7" rx="1" />
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          <span class="sidebar-label">Páginas</span>
-        </button>
-        <button class="nav-item" id="nav-forms" title="Quizzes">
+          <span class="sidebar-label">Landing pages</span>
+          </button>
+          <button class="nav-item" id="nav-forms" title="Quizzes">
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M5 4h14v16H5zM8 8h8M8 12h5M8 16h7" />
           </svg>
-          <span class="sidebar-label">Quizzes</span>
-        </button>
-        <button class="nav-item" id="nav-vsl" title="VSLs">
-          <span class="material-symbols-outlined" aria-hidden="true">play_circle</span>
-          <span class="sidebar-label">VSLs</span>
-        </button>
-        <button class="nav-item" id="nav-history" title="Histórico">
-          <span class="material-symbols-outlined" aria-hidden="true">history</span>
-          <span class="sidebar-label">Histórico</span>
-        </button>
+          <span class="sidebar-label">Formulários / Quizzes</span>
+          </button>
+          <button class="nav-item" id="nav-project-analytics" title="Analytics">
+            <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+            <span class="sidebar-label">Analytics</span>
+          </button>
+          <button class="nav-item" id="nav-project-tracking" title="Rastreamento">
+            <span class="material-symbols-outlined" aria-hidden="true">conversion_path</span>
+            <span class="sidebar-label">Rastreamento</span>
+          </button>
+          <button class="nav-item" id="nav-project-publication" title="Publicação">
+            <span class="material-symbols-outlined" aria-hidden="true">cloud_upload</span>
+            <span class="sidebar-label">Publicação</span>
+          </button>
+          <button class="nav-item" id="nav-project-agents" title="Agentes">
+            <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
+            <span class="sidebar-label">Agentes</span>
+          </button>
+        </nav>
         <div class="sidebar-footer">
-          <button class="sidebar-settings" id="app-settings" title="Configurações do app">
+          <button class="sidebar-settings" id="app-settings" title="Configurações do app" aria-label="Configurações do app">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="3" />
               <path
@@ -86,7 +111,7 @@
           <button class="sidebar-theme" id="appearance-theme" type="button" aria-label="Aparência: Sistema" title="Aparência: Sistema">
             <span class="material-symbols-outlined" aria-hidden="true">computer</span>
           </button>
-          <button class="sidebar-toggle" id="sidebar-toggle" aria-expanded="true" title="Recolher menu">
+          <button class="sidebar-toggle" id="sidebar-toggle" aria-expanded="true" title="Recolher menu" aria-label="Recolher menu">
             <span class="sidebar-toggle-icon material-symbols-outlined" aria-hidden="true">left_panel_close</span>
             <span class="sidebar-label">Recolher menu</span>
           </button>
@@ -100,19 +125,19 @@
         <section id="studio-home" aria-labelledby="studio-home-title">
           <header class="dashboard-header studio-home-header">
             <div>
-              <div class="eyebrow">SEU STUDIO</div>
-              <h1 id="studio-home-title">Olá, <span id="home-display-name">…</span><span class="accent">.</span></h1>
-              <p>Organize os projetos da sua empresa e avance no que importa agora.</p>
+              <div class="eyebrow">DA IDEIA AO AR</div>
+              <h1 id="studio-home-title">Seus projetos.</h1>
+              <p>Escolha um projeto para criar páginas, quizzes e acompanhar seus leads.</p>
             </div>
             <button class="primary" id="new-project" hidden>＋ Novo projeto</button>
           </header>
           <p id="studio-dashboard-status" class="dashboard-status" role="status" aria-live="polite"></p>
           <section class="dashboard-section" aria-labelledby="home-projects-title">
-            <div class="section-heading"><h2 id="home-projects-title">Projetos</h2></div>
+            <div class="section-heading"><h2 id="home-projects-title">Seus projetos</h2></div>
             <div id="home-projects" class="project-grid"></div>
           </section>
           <section class="dashboard-section" aria-labelledby="home-activity-title">
-            <div class="section-heading"><h2 id="home-activity-title">Histórico</h2></div>
+            <div class="section-heading"><h2 id="home-activity-title">Histórico</h2><button id="home-history-all" class="button ghost" type="button">Ver tudo</button></div>
             <div id="home-activity" class="activity-list"></div>
           </section>
           <footer>Feito para tirar suas campanhas do papel. <span>ALVA STUDIO</span></footer>
@@ -149,15 +174,17 @@
               <h1 id="project-view-title">Projeto<span class="accent">.</span></h1>
               <p id="project-slug">Carregando projeto…</p>
             </div>
-            <span id="project-domain" class="project-domain" data-state="pending">Domínio ainda não verificado</span>
+            <div class="project-heading-actions"><button type="button" id="project-settings-action">Configurar projeto</button><button type="button" class="primary" id="project-create-action">+ Criar</button></div>
           </header>
+          <span id="project-domain" class="project-domain" data-state="pending">Domínio ainda não verificado</span>
           <p id="project-status" class="dashboard-status" role="status" aria-live="polite"></p>
           <div id="project-metrics" class="project-metrics"></div>
           <div class="project-columns">
             <section class="project-surface" aria-labelledby="project-content-title">
               <div class="section-heading">
-                <h2 id="project-content-title">Conteúdos</h2>
-                <nav id="project-content-filter" class="project-filter" aria-label="Filtrar conteúdos">
+                <h2 id="project-content-title">Conteúdos do projeto</h2>
+                <button id="project-content-all" type="button" class="button ghost project-content-all" data-project-filter="all">Ver todos</button>
+                <nav id="project-content-filter" class="project-filter" aria-label="Filtrar conteúdos" hidden>
                   <button type="button" data-project-filter="all" aria-current="page">Visão geral</button>
                   <button type="button" data-project-filter="pages">Páginas</button>
                   <button type="button" data-project-filter="forms">Quizzes</button>
@@ -175,17 +202,17 @@
             </section>
             <section id="analytics-panel" class="surface analytics-card" aria-labelledby="analytics-panel-title" hidden>
               <div class="surface-head">
-                <div><h2 id="analytics-panel-title">Visitas nos últimos 7 dias</h2><span id="analytics-updated" style="font-size:8px;color:var(--alva-muted)">Coletor legado · migração pendente</span></div>
-                <button type="button" class="button ghost">Abrir Analytics</button>
+                <div><h2 id="analytics-panel-title">Visitas nos últimos 7 dias</h2><span id="analytics-updated" style="font-size:8px;color:var(--alva-muted)">Coletor legado · migração pendente</span></div><button type="button" id="open-analytics" class="button ghost">Abrir Analytics</button>
               </div>
               <p id="analytics-status" class="dashboard-status" role="status" aria-live="polite"></p>
               <div id="analytics-chart" class="chart" role="img" aria-label="Visitas dos últimos 7 dias por dia"></div>
               <div id="analytics-journey" class="journey"></div>
             </section>
-            <section class="project-surface" aria-labelledby="project-modules-title">
-              <h2 id="project-modules-title">Próximos módulos</h2>
+            <section class="project-surface project-structure" aria-labelledby="project-modules-title">
+              <div class="surface-head"><h2 id="project-modules-title">Estrutura do projeto</h2><span id="project-structure-status" class="status-pill">0/4</span></div>
               <div id="project-modules" class="project-modules"></div>
             </section>
+            <aside class="project-rule"><strong>Uma configuração, todos os conteúdos.</strong><p>Novas páginas e formulários herdam domínio, publicação, UTMs, pixels e eventos deste projeto.</p></aside>
             <section id="project-agent-keys" class="project-surface" aria-labelledby="project-agent-keys-title" hidden>
               <div class="section-heading"><div><span class="eyebrow">AGENTES</span><h2 id="project-agent-keys-title">Conectar agentes</h2></div></div>
               <p>Crie uma chave limitada a este projeto. O segredo aparece uma única vez.</p>
@@ -211,8 +238,8 @@
         <section id="pages-view" hidden>
           <header class="dashboard-header">
             <div>
-              <div class="eyebrow">DA IDEIA AO AR</div>
-              <h1>Minhas páginas<span class="accent">.</span></h1>
+              <div class="eyebrow">BIBLIOTECA VISUAL</div>
+              <h1>Landing pages<span class="accent">.</span></h1>
               <p>Monte, edite e publique. Um espaço para cada campanha.</p>
             </div>
             <button class="primary" id="new-page">＋ Nova landing page</button>
@@ -247,8 +274,8 @@
         <section id="forms-view" hidden>
           <header class="dashboard-header">
             <div>
-              <div class="eyebrow">CONVERSE E QUALIFIQUE</div>
-              <h1>Quizzes<span class="accent">.</span></h1>
+              <div class="eyebrow">BIBLIOTECA VISUAL</div>
+              <h1>Formulários e quizzes<span class="accent">.</span></h1>
               <p>Crie uma jornada de microlanding pages, do primeiro clique até o contato.</p>
             </div>
             <button class="primary" id="new-form">＋ Novo formulário</button>

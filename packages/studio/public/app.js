@@ -67,10 +67,46 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
-  applyDashboardNavigation({ home: $('#nav-home'), history: $('#nav-history'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl'), settings: $('#app-settings') }, view);
+  const navigation = {
+    home: $('#nav-home'),
+    projects: $('#nav-projects'),
+    company: $('#nav-company'),
+    billing: $('#nav-billing'),
+    project: $('#nav-project'),
+    pages: $('#nav-pages'),
+    forms: $('#nav-forms'),
+    analytics: $('#nav-project-analytics'),
+    tracking: $('#nav-project-tracking'),
+    publication: $('#nav-project-publication'),
+    projectAgents: $('#nav-project-agents'),
+    settings: $('#app-settings'),
+  };
+  applyDashboardNavigation(Object.fromEntries(Object.entries(navigation).filter(([, element]) => element)), view);
+}
+function sidebarContextFor(view) {
+  return ['project', 'pages', 'forms', 'vsl'].includes(view) ? 'project' : 'studio';
+}
+function syncSidebarContext(view) {
+  const sidebar = $('#studio-sidebar');
+  if (!sidebar) return;
+  const context = sidebarContextFor(view);
+  sidebar.dataset.context = context;
+  for (const group of sidebar.querySelectorAll('[data-sidebar-context]')) {
+    group.hidden = group.dataset.sidebarContext !== context;
+  }
+  const hasProject = Boolean(studioShell?.state?.().currentProject);
+  const canReadAnalytics = Boolean(studioShell?.can?.('analytics.read'));
+  const canManageProject = Boolean(studioShell?.can?.('project.manage'));
+  const analytics = $('#nav-project-analytics');
+  const tracking = $('#nav-project-tracking');
+  const publication = $('#nav-project-publication');
+  const agents = $('#nav-project-agents');
+  if (analytics) analytics.hidden = !hasProject || !canReadAnalytics;
+  if (tracking) tracking.hidden = !hasProject || !canReadAnalytics;
+  if (publication) publication.hidden = !hasProject;
+  if (agents) agents.hidden = !hasProject || !canManageProject;
 }
 function updateVslNavigation() {
-  $('#nav-vsl').hidden = !mediaPipelineEnabled || !studioShell?.can?.('video.read');
   const videosFilter = $('[data-project-filter="videos"]');
   if (videosFilter) {
     videosFilter.hidden = !mediaPipelineEnabled;
@@ -92,13 +128,14 @@ function setDashboardView(view, { settingsTab = 'account' } = {}) {
   if (view !== 'settings') ownerUI?.closeSettings({ notify: false });
   for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
   closeMobileDrawer();
+  syncSidebarContext(view);
   setActiveNavigation(view);
   updateVslNavigation();
   if (view === 'home') renderHome();
   if (view === 'history') renderHistory();
   if (view === 'settings') return ownerUI?.openSettings(settingsTab);
   if (view === 'company') renderCompany();
-  if (view === 'project') renderProject();
+  if (view === 'project') return renderProject();
   if (view === 'vsl') vslUI.show();
 }
 function mobileDrawerActive() {
@@ -116,6 +153,8 @@ function dashboardState() {
 }
 function renderDashboardState(state) {
   dashboardStateOverride = state;
+  const activeView = Object.entries({ home: '#studio-home', company: '#company-view', history: '#history-view', settings: '#settings-view', project: '#project-view', pages: '#pages-view', forms: '#forms-view', vsl: '#vsl-view' }).find(([, selector]) => !$(selector).hidden)?.[0] || 'home';
+  syncSidebarContext(activeView);
   updateVslNavigation();
   if (!$('#studio-home').hidden) renderHome();
   if (!$('#history-view').hidden) renderHistory();
@@ -153,7 +192,8 @@ function renderHome() {
   const request = homeOverviewGuard.next();
   const context = state.currentCompany?.id || '';
   const model = dashboardModel(state);
-  $('#home-display-name').textContent = state.session?.user?.displayName || 'seja bem-vindo';
+  const displayName = $('#home-display-name');
+  if (displayName) displayName.textContent = state.session?.user?.displayName || 'seja bem-vindo';
   const status = $('#studio-dashboard-status');
   status.textContent = model.message;
   status.dataset.state = model.status;
@@ -162,8 +202,9 @@ function renderHome() {
   const activity = clear($('#home-activity'));
   if (model.status === 'loading') return;
   if (model.status === 'error') return;
-  if (!model.projects.length) projects.append(emptyCard('Nenhum projeto disponível.', 'Crie um projeto ou peça acesso a um projeto da empresa atual.'));
+  if (!model.projects.length && !canCreateProject(studioShell)) projects.append(emptyCard('Nenhum projeto disponível.', 'Peça acesso a um projeto da empresa atual.'));
   for (const project of model.projects) projects.append(projectCard(project));
+  if (canCreateProject(studioShell)) projects.append(projectCreateCard());
   void Promise.all(model.projects.map(async (project) => {
     try {
       const overview = await api(`/projects/${project.id}/overview`);
@@ -172,6 +213,7 @@ function renderHome() {
       updateVslNavigation();
       project.counts = projectCardCounts(overview);
       const card = projects.querySelector(`[data-project-id="${project.id}"]`);
+      updateProjectCardFromOverview(card, overview);
       if (card) for (const [key] of [['pages'], ['forms'], ['videos'], ['submissions'], ['published']]) {
         const amount = card.querySelector(`[data-count-key="${key}"]`);
         if (amount) amount.textContent = project.counts[key] === undefined ? '—' : String(project.counts[key]);
@@ -189,18 +231,7 @@ function renderHome() {
     }
   }));
   if (!model.activity.length) activity.append(emptyCard('Ainda não há atividade.', 'As atualizações dos seus projetos aparecerão aqui.'));
-  for (const project of model.activity) {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'activity-item';
-    const name = document.createElement('strong');
-    name.textContent = project.name;
-    const date = document.createElement('span');
-    date.textContent = relativeDate(project.updatedAt);
-    item.append(name, date);
-    item.onclick = action(() => selectProject(project.id));
-    activity.append(item);
-  }
+  for (const project of model.activity) activity.append(activityItem(project));
 }
 async function renderHistory() {
   if (!studioShell) return;
@@ -216,16 +247,7 @@ async function renderHistory() {
     return;
   }
   for (const project of projects) {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'activity-item';
-    const name = document.createElement('strong');
-    name.textContent = project.name;
-    const date = document.createElement('span');
-    date.textContent = relativeDate(project.updatedAt);
-    item.append(name, date);
-    item.onclick = action(() => selectProject(project.id));
-    list.append(item);
+    list.append(activityItem(project));
   }
 }
 function projectCard(project) {
@@ -233,10 +255,20 @@ function projectCard(project) {
   button.type = 'button';
   button.className = 'studio-project-card';
   button.dataset.projectId = project.id;
+  const identity = document.createElement('div');
+  identity.className = 'project-card-identity';
+  const icon = document.createElement('span');
+  icon.className = 'project-icon material-symbols-outlined';
+  icon.textContent = 'folder_special';
   const name = document.createElement('strong');
   name.textContent = project.name;
-  const meta = document.createElement('span');
-  meta.textContent = relativeDate(project.updatedAt);
+  const domain = document.createElement('span');
+  domain.className = 'project-card-domain';
+  domain.textContent = project.domain || 'Domínio pendente';
+  const state = document.createElement('span');
+  state.className = 'project-card-state';
+  state.textContent = 'Carregando estado';
+  identity.append(icon, name, domain, state);
   const counts = document.createElement('div');
   counts.className = 'project-card-counts';
   for (const [key, label] of [['pages', 'Páginas'], ['forms', 'Quizzes'], ['videos', 'VSLs'], ['submissions', 'Leads'], ['published', 'Publicados']]) {
@@ -253,14 +285,61 @@ function projectCard(project) {
   unavailable.hidden = true;
   unavailable.setAttribute('role', 'status');
   counts.append(unavailable);
-  button.append(name, meta, counts);
+  button.append(identity, counts);
   button.onclick = action(() => selectProject(project.id));
   return button;
+}
+function projectCreateCard() {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'studio-project-card project-create-card';
+  const icon = document.createElement('span');
+  icon.className = 'material-symbols-outlined project-icon';
+  icon.textContent = 'add';
+  const title = document.createElement('strong');
+  title.textContent = 'Criar projeto';
+  const detail = document.createElement('span');
+  detail.textContent = 'Comece uma nova experiência';
+  button.append(icon, title, detail);
+  button.onclick = () => $('#new-project').click();
+  return button;
+}
+function updateProjectCardFromOverview(card, overview) {
+  if (!card) return;
+  const domain = card.querySelector('.project-card-domain');
+  const state = card.querySelector('.project-card-state');
+  if (domain) domain.textContent = overview.domain?.domain || 'Domínio pendente';
+  const published = projectCardCounts(overview).published;
+  if (state) {
+    state.textContent = published > 0 ? 'No ar' : 'Em rascunho';
+    state.dataset.state = published > 0 ? 'published' : 'draft';
+  }
+}
+function activityItem(project) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'activity-item';
+  const icon = document.createElement('span');
+  icon.className = 'material-symbols-outlined activity-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = 'history';
+  const details = document.createElement('div');
+  const name = document.createElement('strong');
+  name.textContent = project.name;
+  const context = document.createElement('span');
+  context.textContent = 'Atualização do projeto';
+  details.append(name, context);
+  const date = document.createElement('span');
+  date.className = 'activity-date';
+  date.textContent = relativeDate(project.updatedAt);
+  item.append(icon, details, date);
+  item.onclick = action(() => selectProject(project.id));
+  return item;
 }
 async function selectProject(projectId) {
   await studioShell.selectProject(projectId);
   projectContentFilter = 'all';
-  setDashboardView('project');
+  await setDashboardView('project');
 }
 function renderCompanyOverview(overview, { content = $('#company-content'), title = $('#company-view-title'), role = $('#company-role'), billing = null } = {}) {
   clear(content);
@@ -629,11 +708,20 @@ function renderProjectContent(model) {
     const meta = document.createElement('span');
     meta.textContent = `${item.route || '/'} · ${item.status}${item.kind === 'form' ? ` · ${item.responses} ${item.responses === 1 ? 'resposta' : 'respostas'}` : ''}`;
     details.append(name, meta);
-    if (projectContentAction(studioShell, item) === 'edit') {
+    if (item.published) {
+      const live = document.createElement('span');
+      live.className = 'status-pill project-content-live';
+      const liveIcon = document.createElement('span');
+      liveIcon.className = 'material-symbols-outlined';
+      liveIcon.setAttribute('aria-hidden', 'true');
+      liveIcon.textContent = 'check_circle';
+      live.append(liveIcon, 'No ar');
+      row.append(icon, details, live);
+    } else if (projectContentAction(studioShell, item) === 'edit') {
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'project-content-open';
-      edit.textContent = item.kind === 'page' ? 'Editar página' : item.kind === 'video' ? 'Editar VSL' : 'Editar formulário';
+      edit.textContent = 'Continuar';
       edit.onclick = action(() => {
         if (item.kind === 'page') return openPage(item.id);
         if (item.kind === 'video') { setDashboardView('vsl'); return vslUI.editById(item.id); }
@@ -657,29 +745,45 @@ function renderProjectOverview(overview) {
   domain.textContent = model.domain.label;
   domain.dataset.state = model.domain.state;
   const metrics = clear($('#project-metrics'));
-  for (const [label, amount] of model.metrics) {
+  for (const metric of model.metrics) {
     const item = document.createElement('div');
-    const value = document.createElement('strong');
-    value.textContent = String(amount);
     const caption = document.createElement('span');
-    caption.textContent = label;
-    item.append(value, caption);
+    caption.textContent = metric.label;
+    const value = document.createElement('strong');
+    value.textContent = metric.value;
+    const detail = document.createElement('small');
+    detail.textContent = metric.detail;
+    item.append(caption, value, detail);
     metrics.append(item);
   }
   const modules = clear($('#project-modules'));
-  for (const [name, state] of model.modules) {
+  const structureStatus = $('#project-structure-status');
+  structureStatus.textContent = `${model.structureComplete}/${model.structureTotal}`;
+  structureStatus.dataset.state = model.structureComplete === model.structureTotal ? 'complete' : 'pending';
+  for (const structure of model.structure) {
     const item = document.createElement('div');
+    const icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined project-structure-icon';
+    icon.textContent = structure.icon;
+    const details = document.createElement('div');
     const nameNode = document.createElement('strong');
-    nameNode.textContent = name;
+    nameNode.textContent = structure.label;
+    const detailNode = document.createElement('small');
+    detailNode.textContent = structure.detail;
     const stateNode = document.createElement('span');
-    stateNode.textContent = state;
-    item.append(nameNode, stateNode);
+    stateNode.textContent = structure.state;
+    stateNode.className = 'project-structure-state';
+    stateNode.dataset.state = ['Ativo', 'Conectada', 'Conectados'].includes(structure.state) ? 'ready' : 'pending';
+    details.append(nameNode, detailNode);
+    item.append(icon, details, stateNode);
     modules.append(item);
   }
   for (const button of $('#project-content-filter').querySelectorAll('button')) {
     if (button.dataset.projectFilter === projectContentFilter) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
+  if (projectContentFilter === 'all') $('#project-content-all').setAttribute('aria-current', 'page');
+  else $('#project-content-all').removeAttribute('aria-current');
   renderProjectContent(model);
 }
 function formatMcpKeyDate(value) {
@@ -789,6 +893,18 @@ function paintAnalyticsPanel(model) {
     journey.append(span);
   });
 }
+function updateProjectAnalyticsMetrics(summary) {
+  const visitors = Number(summary?.visitors);
+  if (!Object.hasOwn(summary || {}, 'visitors') || !Number.isFinite(visitors)) return;
+  const metrics = $('#project-metrics');
+  const cards = metrics?.children;
+  if (!cards || cards.length < 4) return;
+  const submissions = Number(String(cards[1].querySelector('strong')?.textContent || '').replace(/\D/g, '') || 0);
+  cards[0].querySelector('strong').textContent = new Intl.NumberFormat('pt-BR').format(visitors);
+  cards[0].querySelector('small').textContent = 'Nos últimos 7 dias';
+  cards[2].querySelector('strong').textContent = visitors > 0 ? `${(submissions / visitors * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—';
+  cards[2].querySelector('small').textContent = visitors > 0 ? 'Leads por visitante' : 'Sem visitas para calcular';
+}
 async function renderAnalyticsPanel(projectId) {
   const canRead = Boolean(studioShell?.can?.('analytics.read'));
   if (!canRead) return paintAnalyticsPanel(analyticsPanelModel(null, { canRead }));
@@ -798,6 +914,7 @@ async function renderAnalyticsPanel(projectId) {
     const { from, to } = analyticsRangeParams();
     const summary = await api(`/projects/${projectId}/analytics/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
+    updateProjectAnalyticsMetrics(summary);
     paintAnalyticsPanel(analyticsPanelModel(summary, { canRead }));
   } catch (error) {
     if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
@@ -810,6 +927,8 @@ async function renderProject() {
   updateLeadsFilter();
   updateConversionsFilter();
   const state = dashboardState();
+  $('#project-create-action').hidden = !canCreateProject(studioShell);
+  $('#open-analytics').hidden = !studioShell?.can?.('analytics.read');
   $('#analytics-panel').hidden = true;
   if (projectContentFilter === 'leads') return renderProjectLeads(state);
   if (projectContentFilter === 'conversions') return renderProjectConversions(state);
@@ -1348,12 +1467,33 @@ dashboardContextFlow = createDashboardProjectFlow({
   renderSwitcher: renderProjectSwitcher,
 });
 $('#nav-home').onclick = () => setDashboardView('home');
-$('#nav-history').onclick = () => setDashboardView('history');
+$('#nav-projects').onclick = () => setDashboardView('home');
+$('#nav-company').onclick = () => setDashboardView('company');
+$('#nav-billing').onclick = () => setDashboardView('settings', { settingsTab: 'billing' });
 $('#nav-project').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar sua visão geral.');
   projectContentFilter = 'all';
   setDashboardView('project');
 });
+async function openProjectSection({ navigation, filter = 'all', target, capability } = {}) {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
+  if (capability && !studioShell.can(capability)) throw new Error('Você não tem permissão para acessar esta área.');
+  projectContentFilter = filter;
+  await setDashboardView('project');
+  setActiveNavigation(navigation || 'project');
+  if (target) {
+    const element = $(target);
+    if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+$('#nav-project-analytics').onclick = action(async () => {
+  await openProjectSection({ navigation: 'analytics', target: '#analytics-panel', capability: 'analytics.read' });
+  await renderAnalyticsPanel(studioShell.state().currentProject.id);
+});
+$('#nav-project-tracking').onclick = action(() => openProjectSection({ navigation: 'tracking', filter: 'conversions', capability: 'analytics.read' }));
+$('#nav-project-publication').onclick = action(() => openProjectSection({ navigation: 'publication', target: '#project-publication' }));
+$('#nav-project-agents').onclick = action(() => openProjectSection({ navigation: 'projectAgents', target: '#project-agent-keys', capability: 'project.manage' }));
 $('#publication-preview').onclick = action(async () => {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha um projeto antes de criar a prévia.');
@@ -1416,29 +1556,35 @@ $('#nav-forms').onclick = action(async () => {
   setDashboardView('forms');
   await formsUI.showForms();
 });
-$('#nav-vsl').onclick = action(async () => {
-  if (!studioShell.state().currentProject) throw new Error('Escolha um projeto antes de acessar suas VSLs.');
-  if (!studioShell.can('video.read')) throw new Error('Você não tem permissão para visualizar VSLs.');
-  setDashboardView('vsl');
-});
 $('#new-vsl').onclick = () => { if (studioShell.can('video.write')) vslUI.edit(); };
-$('#project-content-filter').onclick = (event) => {
-  const button = event.target.closest('[data-project-filter]');
-  if (!button) return;
-  if (button.dataset.projectFilter === 'leads' && !studioShell?.can?.('submission.read')) return;
-  if (button.dataset.projectFilter === 'conversions' && !studioShell?.can?.('analytics.read')) return;
-  projectContentFilter = button.dataset.projectFilter;
+function selectProjectContentFilter(filter) {
+  if (filter === 'leads' && !studioShell?.can?.('submission.read')) return;
+  if (filter === 'conversions' && !studioShell?.can?.('analytics.read')) return;
+  projectContentFilter = filter;
   if (projectContentFilter === 'leads') {
     leadsFormId = '';
     leadsRows = [];
     leadsNextCursor = null;
   }
   for (const item of $('#project-content-filter').querySelectorAll('button')) {
-    if (item === button) item.setAttribute('aria-current', 'page');
+    if (item.dataset.projectFilter === projectContentFilter) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');
   }
+  if (projectContentFilter === 'all') $('#project-content-all').setAttribute('aria-current', 'page');
+  else $('#project-content-all').removeAttribute('aria-current');
   renderProject();
+}
+$('#project-content-filter').onclick = (event) => {
+  const button = event.target.closest('[data-project-filter]');
+  if (button) selectProjectContentFilter(button.dataset.projectFilter);
 };
+$('#project-content-all').onclick = action(async () => {
+  if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
+  setDashboardView('pages');
+  $('#new-page').hidden = !studioShell.can('page.write');
+  formsUI.showPages();
+  await loadList();
+});
 $('#project-leads-form').onchange = () => {
   leadsFormId = $('#project-leads-form').value;
   leadsRows = [];
@@ -1499,6 +1645,24 @@ $('#new-project').onclick = () => {
   form.elements.slug.dataset.auto = 'true';
   $('#new-project-dialog').showModal();
 };
+$('#project-create-action').onclick = () => $('#new-project').click();
+$('#project-settings-action').onclick = action(async () => {
+  const projectId = dashboardState().currentProject?.id;
+  if (!projectId) throw new Error('Escolha um projeto para configurar.');
+  if ($('#project-view').hidden) setDashboardView('project');
+  const details = $('#project-publication .publication-details');
+  details.open = true;
+  $('#project-publication').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+$('#home-history-all').onclick = () => setDashboardView('history');
+$('#open-analytics').onclick = action(async () => {
+  const projectId = dashboardState().currentProject?.id;
+  if (!projectId) throw new Error('Escolha um projeto para abrir Analytics.');
+  if (!studioShell?.can?.('analytics.read')) throw new Error('Você não tem permissão para visualizar Analytics.');
+  if ($('#project-view').hidden) setDashboardView('project');
+  await renderAnalyticsPanel(projectId);
+  $('#analytics-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 $('#new-project-form').elements.name.oninput = (event) => {
   const slug = $('#new-project-form').elements.slug;
   if (slug.dataset.auto !== 'true') return;

@@ -122,9 +122,30 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
     status: item.published ? 'Publicado' : 'Rascunho',
     responses: Number(item.submissionCount || 0),
   }));
-  const published = Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0) + (mediaEnabled ? Number(counts.publishedVideos || 0) : 0);
+  const publishedPages = Number(counts.publishedPages || 0);
+  const publishedForms = Number(counts.publishedForms || 0);
+  const publishedVideos = mediaEnabled ? Number(counts.publishedVideos || 0) : 0;
+  const published = publishedPages + publishedForms + publishedVideos;
+  const visitors = Number(overview.analytics?.visitors);
+  const hasVisitors = Object.hasOwn(overview.analytics || {}, 'visitors') && Number.isFinite(visitors);
+  const submissions = Number(counts.submissions || 0);
+  const number = (value) => new Intl.NumberFormat('pt-BR').format(value);
   const configured = (value) => value === 'configured' ? 'Configurado' : 'Ainda não configurado';
   const analyticsConfigured = overview.runtime?.analytics === true && overview.integrations?.analytics === 'configured';
+  const publishedDetail = [
+    `${publishedPages} ${publishedPages === 1 ? 'página' : 'páginas'}`,
+    `${publishedForms} ${publishedForms === 1 ? 'formulário' : 'formulários'}`,
+  ];
+  if (mediaEnabled && (overview.runtime?.media === true || Number(counts.videos || 0) > 0 || Number(counts.publishedVideos || 0) > 0)) {
+    publishedDetail.push(`${publishedVideos} ${publishedVideos === 1 ? 'VSL' : 'VSLs'}`);
+  }
+  const structure = [
+    { icon: 'language', label: 'Domínio', detail: overview.domain?.domain || 'Domínio pendente', state: overview.domain?.verificationStatus === 'verified' ? 'Ativo' : 'Pendente' },
+    { icon: 'cloud', label: 'Vercel', detail: 'Publicação do projeto', state: overview.integrations?.vercel === 'configured' ? 'Conectada' : 'Pendente' },
+    { icon: 'monitoring', label: 'Analytics + Tracking', detail: 'Dados do projeto', state: analyticsConfigured ? 'Ativo' : 'Pendente' },
+    { icon: 'smart_toy', label: 'Agentes', detail: 'Acesso do projeto', state: overview.integrations?.agents === 'configured' ? 'Conectados' : 'Pendente' },
+  ];
+  const structureComplete = structure.filter((item) => ['Ativo', 'Conectada', 'Conectados'].includes(item.state)).length;
   return {
     status: content.length ? 'ready' : 'empty',
     message: content.length ? '' : 'Este projeto ainda não tem conteúdos.',
@@ -132,16 +153,18 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
     slug: overview.project.slug,
     project: overview.project,
     metrics: [
-      ['Páginas', Number(counts.pages || 0)],
-      ['Quizzes', Number(counts.forms || 0)],
-      ...(mediaEnabled ? [['VSLs', Number(counts.videos || 0)]] : []),
-      ['Publicados', published],
-      ['Leads / respostas', Number(counts.submissions || 0)],
+      { label: 'VISITANTES', value: hasVisitors ? number(visitors) : '—', detail: hasVisitors ? 'Nos últimos 7 dias' : 'Dados indisponíveis' },
+      { label: 'LEADS', value: number(submissions), detail: submissions === 1 ? 'Resposta recebida' : 'Respostas recebidas' },
+      { label: 'CONVERSÃO', value: hasVisitors && visitors > 0 ? `${(submissions / visitors * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—', detail: hasVisitors && visitors > 0 ? 'Leads por visitante' : hasVisitors ? 'Sem visitas para calcular' : 'Aguardando visitas' },
+      { label: 'ATIVOS PUBLICADOS', value: number(published), detail: publishedDetail.join(' · ') },
     ],
     content,
     domain: overview.domain?.verificationStatus === 'verified'
       ? { label: overview.domain.domain, state: 'verified' }
       : { label: 'Domínio ainda não verificado', state: 'pending' },
+    structure,
+    structureComplete,
+    structureTotal: structure.length,
     modules: [
       ['Analytics', configured(analyticsConfigured ? 'configured' : 'pending')],
       ['Rastreamento', 'Em breve'],

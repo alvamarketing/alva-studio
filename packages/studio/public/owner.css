@@ -425,3 +425,433 @@
     font-size: 12px;
   }
 }
+
+/* Bloco 4 — Configurações e Empresa e equipe: superfície canônica no shell. */
+#settings-view {
+  max-width: none;
+}
+#settings-view #owner-dialog {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+#settings-view .owner-header {
+  align-items: flex-start;
+  margin: 0 0 28px;
+}
+#settings-view .owner-header h2 {
+  margin: 8px 0 10px;
+  color: var(--alva-ink);
+  font-size: 38px;
+  letter-spacing: -1.9px;
+  line-height: 1.08;
+}
+.owner-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.owner-header-actions .primary {
+  min-height: 42px;
+}
+.owner-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 12px;
+  border: 1px solid var(--alva-line);
+  border-radius: 999px;
+  background: var(--alva-white);
+  color: var(--alva-muted);
+  font-size: 12px;
+}
+.owner-context > span {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--alva-positive);
+  font-size: 12px;
+  font-weight: 700;
+}
+.owner-context strong {
+  color: var(--alva-muted);
+  font-weight: 600;
+}
+#settings-view #panel-account,
+#settings-view #panel-company,
+#settings-view #panel-team,
+#settings-view #panel-billing {
+  max-width: 1080px;
+}
+#settings-view #panel-account > form,
+#settings-view .owner-publication-settings,
+#settings-view #panel-company .settings-company-summary,
+#settings-view #panel-company .company-overview-section {
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-card);
+  background: var(--alva-white);
+  box-shadow: var(--shadow-soft);
+}
+#settings-view #panel-account > form,
+#settings-view .owner-publication-settings {
+  padding: 28px;
+}
+#settings-view .owner-description {
+  margin: 0 0 22px;
+  font-size: 13px;
+}
+#settings-view .owner-two-col {
+  gap: 16px;
+}
+#settings-view .owner-password {
+  border: 1px solid var(--alva-line);
+  background: var(--alva-cloud);
+}
+#settings-view .owner-form-actions {
+  margin-top: 24px;
+}
+#settings-view .owner-form-actions .primary {
+  min-height: 42px;
+}
+#settings-view .owner-session {
+  margin-top: 18px;
+  padding: 20px 0 0;
+}
+#settings-view .vercel-intro {
+  padding: 21px 0;
+}
+#settings-view .vercel-symbol {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-field);
+}
+#settings-view .connection {
+  margin: 0 0 16px;
+  color: var(--alva-muted);
+  font-size: 12px;
+}
+#settings-view .owner-publication-settings {
+  margin-top: 16px;
+}
+#settings-view .owner-publication-settings > .owner-session {
+  padding-top: 20px;
+}
+#settings-view .settings-company-summary {
+  display: none;
+  gap: 5px;
+  margin: 0 0 16px;
+  padding: 20px 24px;
+  background: var(--alva-white);
+}
+#settings-view .settings-company-summary strong {
+  color: var(--alva-blue);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+}
+#settings-view .settings-company-summary span {
+  color: var(--alva-ink);
+  font-size: 18px;
+  letter-spacing: -0.4px;
+}
+#settings-view .settings-company-summary small {
+  font-size: 12px;
+}
+#settings-view #settings-company-status {
+  margin: 0 0 14px;
+}
+#settings-view #settings-company-status:empty {
+  display: none;
+}
+#settings-view .company-overview {
+  display: contents;
+  gap: 16px;
+}
+#settings-view #panel-company {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+.company-details {
+  display: grid;
+  gap: 14px;
+  padding: 26px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-card);
+  background: var(--alva-white);
+  box-shadow: var(--shadow-soft);
+}
+.company-details .surface-head {
+  margin: 0;
+}
+.company-details label {
+  display: grid;
+  gap: 7px;
+  color: var(--alva-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.company-details input {
+  width: 100%;
+  cursor: default;
+  color: var(--alva-ink);
+  background: var(--alva-cloud);
+}
+.company-details p {
+  margin: 2px 0 0;
+  color: var(--alva-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+#settings-view .company-overview-section {
+  padding: 26px;
+}
+#settings-view .company-overview-section h2 {
+  font-size: 18px;
+}
+#settings-view .company-overview-section:nth-child(2),
+#settings-view .company-overview-section:nth-child(3) {
+  grid-column: 1 / -1;
+}
+#settings-view .company-counts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+#settings-view .company-counts > div {
+  padding: 14px;
+}
+#settings-view .member-list {
+  margin-top: 8px;
+}
+#settings-view .member-item {
+  min-height: 68px;
+  padding: 14px 0;
+}
+#settings-view #panel-company .company-overview-section:first-child,
+#settings-view #panel-company .company-overview > :nth-child(2),
+#settings-view #panel-company .company-overview > .company-future,
+#settings-view #panel-team .company-overview > :not(:has(.member-list)),
+#settings-view #panel-billing .company-overview > :not(.company-future) {
+  display: none;
+}
+#settings-view #panel-company .company-overview-section:has(.member-list) {
+  grid-column: 2;
+  margin: 0;
+}
+
+#studio-sidebar.settings-shell {
+  gap: 0;
+}
+#studio-sidebar.settings-shell .settings-sidebar-brand {
+  margin-left: 4px;
+}
+#studio-sidebar.settings-shell .workspace-label {
+  margin: 54px 10px 12px;
+}
+.settings-sidebar-nav {
+  display: grid;
+  gap: 2px;
+}
+#studio-sidebar.settings-shell .settings-sidebar-nav .nav-item {
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  text-align: left;
+}
+#studio-sidebar.settings-shell .settings-sidebar-nav .nav-item[aria-selected='true'] {
+  color: #174ea6;
+  background: var(--alva-highlight);
+}
+#studio-sidebar.settings-shell .settings-sidebar-footer {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+#studio-sidebar.settings-shell .settings-sidebar-footer button {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  #settings-view .owner-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  #settings-view .owner-header h2 {
+    font-size: 31px;
+  }
+  .owner-header-actions {
+    width: 100%;
+  }
+  .owner-header-actions button {
+    flex: 1 1 auto;
+  }
+  #settings-view #panel-company {
+    grid-template-columns: 1fr;
+  }
+  #settings-view #panel-company .company-overview-section:has(.member-list) {
+    grid-column: auto;
+  }
+  #settings-view .company-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  #settings-view #panel-account > form,
+  #settings-view .owner-publication-settings,
+  #settings-view .company-overview-section,
+  .company-details {
+    padding: 20px;
+  }
+  #settings-view .owner-header h2 {
+    font-size: 28px;
+  }
+  .owner-context {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #settings-view .owner-session {
+    padding: 18px 20px;
+  }
+}
+
+/* Configurações usa a navegação e as superfícies da referência. */
+#settings-view .owner-publication {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+  padding: 20px 0;
+  border-top: 1px solid var(--alva-line);
+}
+#settings-view .owner-publication strong { font-size: 13px; }
+#settings-view .owner-publication p {
+  margin: 5px 0 0;
+  color: var(--alva-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+#settings-view .owner-publication button { flex: 0 0 auto; }
+#settings-view .company-details .surface-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#settings-view .company-details .surface-head h2 { margin: 0; }
+#settings-view .company-details input:placeholder-shown { color: var(--alva-muted); }
+
+#studio-sidebar.settings-shell {
+  padding: 37px 24px;
+}
+#studio-sidebar.settings-shell .settings-sidebar-brand {
+  margin: 0 0 31px 4px;
+}
+#studio-sidebar.settings-shell .settings-account-switcher {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  padding: 11px;
+  text-align: left;
+  color: var(--alva-ink);
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-button);
+  background: var(--alva-white);
+}
+#studio-sidebar.settings-shell .settings-account-switcher:hover {
+  transform: none;
+  border-color: var(--alva-blue-light);
+  box-shadow: none;
+}
+#studio-sidebar.settings-shell .settings-account-switcher > span:last-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+#studio-sidebar.settings-shell .settings-account-switcher strong,
+#studio-sidebar.settings-shell .settings-account-switcher small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#studio-sidebar.settings-shell .settings-account-switcher strong { font-size: 12px; }
+#studio-sidebar.settings-shell .settings-account-switcher small {
+  color: var(--alva-muted);
+  font-size: 10px;
+}
+#studio-sidebar.settings-shell .settings-account-avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--alva-on-blue);
+  background: var(--alva-blue);
+  font-size: 17px;
+  font-weight: 700;
+}
+#studio-sidebar.settings-shell .workspace-label {
+  margin: 48px 10px 14px;
+}
+#studio-sidebar.settings-shell .settings-sidebar-nav .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px 10px;
+}
+#studio-sidebar.settings-shell .settings-sidebar-nav .nav-item .material-symbols-outlined {
+  width: 21px;
+  color: currentColor;
+  font-size: 21px;
+}
+#studio-sidebar.settings-shell .settings-sidebar-footer {
+  grid-template-columns: auto;
+  justify-content: start;
+  gap: 0;
+  padding-top: 14px;
+}
+#studio-sidebar.settings-shell .settings-sidebar-footer .settings-sidebar-back {
+  display: grid;
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  place-items: center;
+  text-align: center;
+}
+#studio-sidebar.settings-shell .settings-sidebar-footer .settings-sidebar-back .material-symbols-outlined {
+  font-size: 20px;
+}
+
+@media (max-width: 760px) {
+  #settings-view .owner-publication {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  #settings-view .owner-publication button { width: 100%; }
+}
+
+#settings-view .member-invite-note {
+  margin: 4px 0 14px;
+  color: var(--alva-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}

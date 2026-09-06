@@ -377,6 +377,123 @@ export function bindTreeItemActivation(item, onActivate, activeElement = () => d
   item.onclick = (event) => onActivate(event?.type === 'click' && activeElement() === item ? item : null);
 }
 
+function editorTreeIcon(component) {
+  const tag = tagOf(component);
+  if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'play_circle';
+  if (/^h[1-6]$/.test(tag)) return 'title';
+  return ({
+    main: 'web', section: 'web', nav: 'menu', footer: 'contact_mail', div: 'dashboard', article: 'view_agenda',
+    p: 'format_align_left', span: 'format_align_left', small: 'format_align_left', a: 'arrow_forward', button: 'smart_button',
+    img: 'image', form: 'contact_page', input: 'short_text', textarea: 'subject', select: 'list_alt', label: 'label',
+  })[tag] || 'widgets';
+}
+
+function componentAttributes(component) {
+  return component?.getAttributes?.() || component?.get?.('attributes') || {};
+}
+
+function componentHas(component, target) {
+  if (!component || !target) return false;
+  if (component === target) return true;
+  return componentChildren(component).some((child) => componentHas(child, target));
+}
+
+function editorialSectionLabel(component, index) {
+  const tag = tagOf(component);
+  const attrs = componentAttributes(component);
+  const token = `${attrs.id || ''} ${attrs.class || ''}`.toLowerCase();
+  if (tag === 'nav') return 'Topo';
+  if (tag === 'footer' || /contact|contato/.test(token)) return 'Contato';
+  if (/hero|offer-top|event-hero|thanks/.test(token)) return 'Abertura';
+  if (/benefit/.test(token)) return 'Benefícios';
+  if (/testimonial/.test(token)) return 'Depoimentos';
+  if (/faq/.test(token)) return 'Perguntas frequentes';
+  return index ? `Seção ${index + 1}` : 'Abertura';
+}
+
+function editorialElementLabel(component, { inNav = false } = {}) {
+  const tag = tagOf(component);
+  if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'VSL';
+  if (/^h1$/.test(tag)) return 'Título principal';
+  if (/^h[2-6]$/.test(tag)) return 'Título';
+  if (tag === 'strong' && inNav) return 'Logo';
+  if (tag === 'a' && inNav) return 'Menu';
+  return ({ p: 'Texto', a: 'Botão', button: 'Botão', img: 'Imagem', form: 'Formulário', input: 'Campo', textarea: 'Mensagem', select: 'Lista de opções', label: 'Campo', })[tag] || '';
+}
+
+export function editorialLabel(component) {
+  const firstMeaningfulChild = (model) => {
+    for (const child of componentChildren(model)) {
+      const label = editorialElementLabel(child);
+      if (label) return label;
+      const nested = firstMeaningfulChild(child);
+      if (nested) return nested;
+    }
+    return '';
+  };
+  let current = component;
+  while (current && !current.is?.('wrapper')) {
+    const own = editorialElementLabel(current);
+    if (own) return own;
+    const nested = firstMeaningfulChild(current);
+    if (nested) return nested;
+    current = current.parent?.();
+  }
+  // Bare layout tags do not convey an editorial role. They must never leak
+  // their implementation name into the canvas label or property inspector.
+  if (['div', 'span', 'section', 'main'].includes(tagOf(component))) return 'Elemento';
+  const fallback = componentLabel(component);
+  const editorialFallbacks = new Set([
+    'Página', 'VSL', 'Imagem', 'Botão / link', 'Botão', 'Campo',
+    'Campo de mensagem', 'Lista de opções', 'Rótulo do campo', 'Formulário',
+    'Texto', 'Cartão', 'Menu', 'Rodapé',
+  ]);
+  return editorialFallbacks.has(fallback) ? fallback : 'Elemento';
+}
+
+function editorialTreeEntries(wrapper, selected) {
+  const sections = [];
+  const addSection = (component) => {
+    if (sections.some((section) => section.component === component)) return;
+    sections.push({ component, label: editorialSectionLabel(component, sections.length), elements: [] });
+  };
+  const scanSections = (component) => {
+    for (const child of componentChildren(component)) {
+      const tag = tagOf(child);
+      if (['section', 'nav', 'footer'].includes(tag)) {
+        addSection(child);
+        if (tag === 'section') scanSections(child);
+      } else scanSections(child);
+    }
+  };
+  scanSections(wrapper);
+  if (!sections.length) sections.push({ component: wrapper, label: 'Abertura', elements: [] });
+  sections.sort((left, right) => (tagOf(left.component) === 'nav' ? -1 : 0) - (tagOf(right.component) === 'nav' ? -1 : 0));
+  const addElements = (section) => {
+    const visit = (component, inNav = false) => {
+      for (const child of componentChildren(component)) {
+        const tag = tagOf(child);
+        if (['section', 'footer'].includes(tag) || (tag === 'nav' && child !== section.component)) continue;
+        const label = editorialElementLabel(child, { inNav: inNav || tagOf(section.component) === 'nav' });
+        if (label) {
+          section.elements.push({ component: child, label });
+          continue;
+        }
+        visit(child, inNav || tag === 'nav');
+      }
+    };
+    visit(section.component);
+  };
+  sections.forEach(addElements);
+  return sections.map((section) => ({
+    ...section,
+    selected: componentHas(section.component, selected),
+    // The editor tree is a map, not a DOM inspector. A concise list keeps each
+    // section actionable while the canvas still gives access to every child.
+    elements: section.elements.slice(0, 8).map((element) => ({ ...element, selected: componentHas(element.component, selected) })),
+  }));
+}
+
 export function createFriendlyEditor({
   container,
   project,
@@ -400,20 +517,22 @@ export function createFriendlyEditor({
     <div class="editor-workspace-tabs" role="tablist" aria-label="Regiões do editor">${workspace.panels.map((panel) => `<button type="button" role="tab" data-workspace-tab="${panel.id}" id="${workspaceId}-tab-${panel.id}" aria-controls="${workspaceId}-panel-${panel.id}" aria-selected="${panel.selected}" tabindex="${panel.selected ? '0' : '-1'}">${panel.label}</button>`).join('')}</div>
     <aside class="fe-sidebar" data-editor-panel="structure" id="${workspaceId}-panel-structure" role="tabpanel" aria-labelledby="${workspaceId}-tab-structure">
       <div class="fe-panel-heading">
-        <span class="fe-eyebrow">CONSTRUA SUA PÁGINA</span>
+        <span class="fe-eyebrow">PÁGINA</span>
         <h2>Estrutura</h2>
-        <p>Selecione um elemento para editar ou mude sua ordem pelos controles de edição.</p>
+        <p>Organize seções e elementos em uma única árvore.</p>
       </div>
       <div class="fe-tree" role="tree" aria-label="Estrutura da página"></div>
-      <details class="fe-library" open>
+      <details class="fe-library">
         <summary>Adicionar elementos</summary>
         <div class="fe-blocks"></div>
         <div class="fe-library-tip"><strong>Comece pelo essencial</strong><p>Um título claro, uma imagem e um convite para conversar.</p></div>
       </details>
     </aside>
     <div class="fe-workspace" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas">
-      <div class="fe-canvas-bar" aria-label="Histórico de edição"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></div>
-      <div class="fe-canvas"></div>
+      <div class="fe-canvas-shell">
+        <div class="fe-canvas-bar" aria-label="Controles do canvas"><span class="fe-canvas-meta">CANVAS · <span data-canvas-device>COMPUTADOR</span></span><span class="fe-canvas-history"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></span><span class="fe-canvas-zoom">100%</span></div>
+        <div class="fe-canvas-frame"><div class="fe-canvas"></div></div>
+      </div>
       <div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div>
     </div>
     <aside class="fe-inspector" data-editor-panel="inspector" id="${workspaceId}-panel-inspector" role="tabpanel" aria-labelledby="${workspaceId}-tab-inspector" aria-label="Editar elemento"><div class="fe-properties"></div></aside>`;
@@ -421,18 +540,68 @@ export function createFriendlyEditor({
   const props = $('.fe-properties');
   const status = $('.fe-status');
   const tree = $('.fe-tree');
+  const cleanup = [];
+  const pageHeader = document.querySelector('#editing .editor-header');
+  if (pageHeader) {
+    pageHeader.classList.add('landing-editor-header');
+    if (!pageHeader.querySelector('.fe-editor-context')) {
+      const context = document.createElement('span');
+      context.className = 'fe-editor-context';
+      context.textContent = 'Landing ·';
+      pageHeader.querySelector('#page-name')?.before(context);
+    }
+    if (!pageHeader.querySelector('.fe-saved-mark')) {
+      const mark = document.createElement('span');
+      mark.className = 'fe-saved-mark material-symbols-outlined';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = 'check_circle';
+      pageHeader.querySelector('#save-state')?.before(mark);
+    }
+    const saveState = pageHeader.querySelector('#save-state');
+    const normalizeSaveState = () => {
+      if (saveState?.textContent?.trim() === 'Salvo neste computador') saveState.textContent = 'Salvo';
+    };
+    normalizeSaveState();
+    if (saveState && typeof MutationObserver !== 'undefined') {
+      const observer = new MutationObserver(normalizeSaveState);
+      observer.observe(saveState, { childList: true, characterData: true, subtree: true });
+      cleanup.push(() => observer.disconnect());
+    }
+    const actions = pageHeader.querySelector('.editor-actions');
+    if (actions && !pageHeader.querySelector('.fe-header-more')) {
+      const more = document.createElement('details');
+      more.className = 'fe-header-more';
+      more.innerHTML = '<summary aria-label="Mais ações" title="Mais ações"><span class="material-symbols-outlined" aria-hidden="true">more_horiz</span></summary><div class="fe-header-more-menu" role="group" aria-label="Mais ações"></div>';
+      const menu = more.querySelector('.fe-header-more-menu');
+      // Move the original controls so their established IDs and handlers remain
+      // the source of truth; the menu merely gives them a compact home.
+      ['.device-control', '#settings', '#download'].forEach((selector) => {
+        const control = actions.querySelector(selector);
+        if (control) menu.append(control);
+      });
+      [['preview', 'Prévia'], ['publish', 'Publicar']].forEach(([id, label]) => {
+        const shortcut = document.createElement('button');
+        shortcut.type = 'button';
+        shortcut.className = 'fe-header-menu-action';
+        shortcut.setAttribute('aria-label', label);
+        shortcut.textContent = label;
+        shortcut.onclick = () => pageHeader.querySelector(`#${id}`)?.click();
+        menu.append(shortcut);
+      });
+      actions.before(more);
+    }
+  }
   let loading = true;
   let repaint;
   let activeModel;
   let treeComponents = new Map();
-  const cleanup = [];
   let readOnlyMutationGuard = null;
   let pendingVslOptionFocusId = null;
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
   const interactionPolicy = applyEditorInteractionPolicy(host, can);
   const canInsertVsl = () => interactionPolicy.canAdd && mediaEnabled();
   const canReadVsl = () => mediaEnabled() && Boolean(can('video.read'));
-  const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 740px)').matches;
+  const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches;
   function syncWorkspacePanels({ focusTab = false } = {}) {
     const state = workspaceState(activeWorkspacePanel);
     const compact = isCompactWorkspace();
@@ -441,8 +610,8 @@ export function createFriendlyEditor({
       const panel = $(`[data-editor-panel="${statePanel.id}"]`);
       tab.setAttribute('aria-selected', String(statePanel.selected));
       tab.tabIndex = statePanel.selected ? 0 : -1;
-      panel.hidden = compact && !statePanel.selected;
-      panel.inert = compact && !statePanel.selected;
+      panel.hidden = compact && statePanel.id === 'structure';
+      panel.inert = compact && statePanel.id === 'structure';
       if (focusTab && statePanel.selected) tab.focus();
     });
   }
@@ -468,6 +637,17 @@ export function createFriendlyEditor({
   }
   bindWorkspaceTabs();
   syncWorkspacePanels();
+  const syncCanvasDevice = () => {
+    const device = document.querySelector('#device');
+    const label = device?.selectedOptions?.[0]?.textContent || 'Computador';
+    host.querySelectorAll('[data-canvas-device]').forEach((node) => { node.textContent = label.toUpperCase(); });
+  };
+  const deviceControl = document.querySelector('#device');
+  syncCanvasDevice();
+  if (deviceControl) {
+    deviceControl.addEventListener('change', syncCanvasDevice);
+    cleanup.push(() => deviceControl.removeEventListener('change', syncCanvasDevice));
+  }
   if (!interactionPolicy.canEdit) status.textContent = 'Modo de visualização: edição, ordem e exclusão estão desativadas.';
   if (typeof window !== 'undefined') {
     const syncOnResize = () => syncWorkspacePanels();
@@ -535,6 +715,12 @@ export function createFriendlyEditor({
     icons.rel = 'stylesheet';
     icons.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block';
     doc.head.append(icons);
+    const editorSelection = doc.createElement('style');
+    editorSelection.textContent = `
+      .alva-editor-selected { outline: 2px solid #286eea !important; outline-offset: 7px !important; }
+      .alva-editor-selected[data-alva-editor-label]::before { content: attr(data-alva-editor-label); position: absolute; z-index: 2147483647; right: -7px; top: -28px; padding: 5px 8px; border-radius: 6px 6px 0 0; background: #286eea; color: #fff; font: 700 9px/1 Inter, system-ui, sans-serif; letter-spacing: 0; white-space: nowrap; }
+    `;
+    doc.head.append(editorSelection);
     const handleCanvasKey = (event) => { if (interactionPolicy.canEdit) handleEditorKey(event, true); };
     const preventInlineEditing = (event) => {
       if (!interactionPolicy.canInlineEdit) {
@@ -589,6 +775,20 @@ export function createFriendlyEditor({
   function announce(message) {
     status.textContent = message;
   }
+  function syncCanvasSelection(model) {
+    const frame = editor.Canvas?.getFrameEl?.();
+    const doc = frame?.contentDocument;
+    if (!doc) return;
+    doc.querySelectorAll('.alva-editor-selected').forEach((element) => {
+      element.classList.remove('alva-editor-selected');
+      element.removeAttribute('data-alva-editor-label');
+    });
+    if (!model || model.is?.('wrapper')) return;
+    const element = model.getEl?.();
+    if (!element) return;
+    element.classList.add('alva-editor-selected');
+    element.dataset.alvaEditorLabel = editorialLabel(model);
+  }
   function focusTreeItem(id, activeItem) {
     return restoreTreeFocus(tree.querySelectorAll('[data-tree-id]'), id, activeItem);
   }
@@ -602,6 +802,13 @@ export function createFriendlyEditor({
     render();
     if (!compact) focusTreeItem(id, activeItem);
   }
+  function openLibraryFor(component) {
+    if (!interactionPolicy.canAdd) return;
+    if (component) editor.select(component, { scroll: false });
+    const library = $('.fe-library');
+    library.open = true;
+    library.scrollIntoView({ block: 'nearest' });
+  }
   function renderTree() {
     const wrapper = editor.getWrapper();
     treeComponents = new Map();
@@ -613,38 +820,59 @@ export function createFriendlyEditor({
       componentChildren(component).forEach(collect);
     };
     componentChildren(wrapper).forEach(collect);
-    const nodes = componentTreeNodes(wrapper, editor.getSelected()).filter((node) => {
-      const component = treeComponents.get(node.id);
-      return mediaEnabled() || !(component?.is?.('vsl') || component?.get?.('type') === 'vsl');
-    });
+    const sections = editorialTreeEntries(wrapper, editor.getSelected()).map((section) => ({
+      ...section,
+      elements: section.elements.filter(({ component }) => mediaEnabled() || !(component?.is?.('vsl') || component?.get?.('type') === 'vsl')),
+    }));
     tree.replaceChildren();
-    if (!nodes.length) {
+    if (!sections.length) {
       const empty = document.createElement('p');
       empty.className = 'fe-tree-empty';
       empty.textContent = 'Adicione um elemento para começar a montar sua página.';
       tree.append(empty);
       return;
     }
-    const visibleIds = nodes.map((node) => node.id);
-    for (const node of nodes) {
+    const visibleIds = sections.flatMap((section) => [componentTreeId(section.component), ...section.elements.map(({ component }) => componentTreeId(component))]);
+    const appendItem = ({ component, label, level, selected, section = false, count = 0 }) => {
+      const id = componentTreeId(component);
+      if (!id) return;
       const item = document.createElement('button');
       item.type = 'button';
-      item.className = 'fe-tree-item';
-      item.dataset.treeId = node.id;
+      item.className = `fe-tree-item${section ? ' fe-tree-section' : ''}`;
+      item.dataset.treeId = id;
       item.setAttribute('role', 'treeitem');
-      item.setAttribute('aria-level', String(node.level));
-      item.setAttribute('aria-selected', String(node.selected));
-      item.style.setProperty('--fe-tree-level', String(node.level));
-      item.textContent = node.label;
-      bindTreeItemActivation(item, (activeItem) => selectTreeItem(node.id, activeItem));
+      item.setAttribute('aria-level', String(level));
+      item.setAttribute('aria-selected', String(selected));
+      item.style.setProperty('--fe-tree-level', String(level));
+      item.innerHTML = `<span class="fe-tree-drag material-symbols-outlined" aria-hidden="true">drag_indicator</span><span class="fe-tree-icon material-symbols-outlined" aria-hidden="true">${editorTreeIcon(component)}</span><span class="fe-tree-label"></span>${section ? `<small>${count}</small>` : ''}`;
+      item.querySelector('.fe-tree-label').textContent = label;
+      bindTreeItemActivation(item, (activeItem) => selectTreeItem(id, activeItem));
       item.onkeydown = (event) => {
-        const next = treeKeyAction(event, visibleIds, node.id);
+        const next = treeKeyAction(event, visibleIds, id);
         if (!next) return;
         event.preventDefault();
         selectTreeItem(next, item);
       };
       tree.append(item);
+    };
+    for (const section of sections) {
+      appendItem({ component: section.component, label: section.label, level: 1, selected: section.selected, section: true, count: section.elements.length });
+      section.elements.forEach((element) => appendItem({ ...element, level: 2 }));
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'fe-tree-add';
+      add.textContent = '+ Elemento';
+      add.disabled = !interactionPolicy.canAdd;
+      add.onclick = () => openLibraryFor(section.component);
+      tree.append(add);
     }
+    const addSection = document.createElement('button');
+    addSection.type = 'button';
+    addSection.className = 'fe-tree-add fe-tree-add-section';
+    addSection.textContent = '+ Nova seção';
+    addSection.disabled = !interactionPolicy.canAdd;
+    addSection.onclick = () => openLibraryFor(wrapper);
+    tree.append(addSection);
   }
   function formStyles() {
     normalizeForms(editor);
@@ -852,6 +1080,7 @@ export function createFriendlyEditor({
     activeModel = model;
     const mode = panelMode(model);
     renderTree();
+    syncCanvasSelection(model);
     $('.fe-canvas-bar [data-undo]').disabled = !interactionPolicy.canEdit || !editor.UndoManager.hasUndo();
     $('.fe-canvas-bar [data-redo]').disabled = !interactionPolicy.canEdit || !editor.UndoManager.hasRedo();
     props.replaceChildren();
@@ -865,12 +1094,18 @@ export function createFriendlyEditor({
     const tag = tagOf(model);
     const attrs = model.getAttributes();
     const isVsl = model.is?.('vsl') || model.get?.('type') === 'vsl';
-    const head = section('Editar ' + componentLabel(model).toLocaleLowerCase('pt-BR'));
+    const inspectorTitle = document.createElement('div');
+    inspectorTitle.className = 'fe-inspector-title';
+    inspectorTitle.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">${editorTreeIcon(model)}</span><div><small>CONTEÚDO</small><h2></h2></div>`;
+    inspectorTitle.querySelector('h2').textContent = editorialLabel(model);
+    props.append(inspectorTitle);
+    const head = section('');
+    head.classList.add('fe-element-control');
     const backToLibrary = button(head, '← Adicionar elementos', () => {
       activateWorkspacePanel('structure', { focusTab: isCompactWorkspace() });
       editor.select(editor.getWrapper());
     }, {
-      className: 'fe-back-library',
+      className: 'fe-back-library fe-visually-hidden',
     });
     head.prepend(backToLibrary);
     const actions = document.createElement('div');

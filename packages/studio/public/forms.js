@@ -145,7 +145,7 @@ export function formTreeNodes({ headerElements = [], steps = [], selected = 0, s
       id: `screen:${screenIndex}`,
       parentId: null,
       kind: 'screen',
-      icon: 'web',
+      icon: 'draft',
       label: screen.title || `Tela ${screenIndex + 1}`,
       detail: `${elements.length} ${elements.length === 1 ? 'elemento' : 'elementos'}`,
       level: 1,
@@ -167,6 +167,37 @@ export function formTreeNodes({ headerElements = [], steps = [], selected = 0, s
     });
   });
   return nodes;
+}
+
+function treeMarkup(nodes, selectedScreen) {
+  return nodes.map((node) => {
+    const count = node.kind === 'header' || node.kind === 'screen' ? Number(String(node.detail).match(/^\d+/)?.[0] || 0) : '';
+    const label = node.kind === 'screen' ? `Tela ${Number(node.id.split(':')[1]) + 1} · ${node.label}` : node.label;
+    const parentActive = node.kind === 'screen' && Number(node.id.split(':')[1]) === selectedScreen;
+    return `<button type="button" class="dynamic-tree-item dynamic-tree-item-${node.kind}${parentActive ? ' is-active-screen' : ''}" data-tree-id="${node.id}" data-tree-node="${node.id}" role="treeitem" aria-level="${node.level}" aria-selected="${node.selected}" style="--dynamic-tree-level:${node.level}"><span class="drag material-symbols-outlined" aria-hidden="true">drag_indicator</span><span class="type-icon material-symbols-outlined" aria-hidden="true">${escape(node.icon)}</span><span class="dynamic-tree-copy"><strong>${escape(label)}</strong>${node.kind === 'element' ? `<small>${escape(node.detail)}</small>` : ''}</span>${count !== '' ? `<small class="dynamic-tree-count">${count}</small>` : ''}</button>`;
+  }).join('');
+}
+
+function imageChoiceInspector(element) {
+  const options = element.options || [];
+  return `<div class="dynamic-image-choice-fields">
+    <label>Pergunta<input data-field="title" maxlength="180" value="${escape(element.title)}"></label>
+    <label class="dynamic-switch"><span>Obrigatória</span><input data-field="required" type="checkbox"${element.required ? ' checked' : ''}><i></i></label>
+    <div class="dynamic-section-title">OPÇÕES</div>
+    <div class="dynamic-option-list">${options.map((option, index) => `<div class="dynamic-option-edit"><span class="material-symbols-outlined">${escape(option.icon || 'image')}</span><div><input data-visual-label="${index}" aria-label="Nome da opção ${index + 1}" value="${escape(option.label)}"><input data-visual-description="${index}" aria-label="Apoio da opção ${index + 1}" value="${escape(option.description || '')}" placeholder="Resposta rápida"><input data-visual-image="${index}" aria-label="URL da imagem da opção ${index + 1}" value="${escape(option.imageUrl || '')}" placeholder="URL da imagem"><select data-visual-icon="${index}" aria-label="Ícone da opção ${index + 1}">${ICONS.map(([name, label]) => `<option value="${name}"${name === (option.icon || 'image') ? ' selected' : ''}>${label}</option>`).join('')}</select></div><button type="button" data-visual-delete="${index}" aria-label="Excluir opção ${index + 1}"><span class="material-symbols-outlined">delete</span></button></div>`).join('')}</div>
+    <button type="button" class="dynamic-dashed-action" data-visual-add>+ Adicionar opção</button>
+    <div class="dynamic-section-title">APARÊNCIA E MOVIMENTO</div>
+    <label>Movimento<select data-field="motion">${MOTIONS.map(([value, label]) => `<option value="${value}"${value === (element.motion || 'fade-up') ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+  </div>`;
+}
+
+function previewElementMarkup(element, index, selected, options) {
+  const selectedClass = selected ? ' selected-block' : '';
+  const action = `data-preview-element="${index}" aria-current="${selected}"`;
+  if (element.type === 'image_choice') return `<button type="button" class="dynamic-canvas-choice${selectedClass}" ${action}>${selected ? '<span class="selection-label">Escolha visual</span>' : ''}<h3>${escape(element.title)}</h3><div class="dynamic-canvas-option-grid">${(element.options || []).map((option) => `<span>${option.imageUrl ? `<img src="${escape(option.imageUrl)}" alt="">` : `<i class="material-symbols-outlined">${escape(option.icon || 'image')}</i>`}<strong>${escape(option.label)}</strong>${option.description ? `<small>${escape(option.description)}</small>` : ''}</span>`).join('')}</div>${selected ? '<i class="inline-plus material-symbols-outlined">add</i>' : ''}</button>`;
+  if (['short_text', 'email', 'phone', 'number', 'date'].includes(element.type)) return `<button type="button" class="dynamic-canvas-input${selectedClass}" ${action}>${selected ? `<span class="selection-label">${escape(TYPES[element.type].label)}</span>` : ''}<strong>${escape(element.title)}</strong><span>${escape(element.placeholder || 'Digite sua resposta')}</span></button>`;
+  if (element.type === 'statement') return `<button type="button" class="dynamic-canvas-intro${selectedClass}" ${action}>${selected ? '<span class="selection-label">Título</span>' : ''}<h1>${escape(element.title)}</h1>${element.description ? `<p>${escape(element.description)}</p>` : ''}</button>`;
+  return `<button type="button" class="dynamic-canvas-block${selectedClass}" ${action}>${selected ? `<span class="selection-label">${escape(TYPES[element.type].label)}</span>` : ''}<span class="material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><strong>${escape(element.title)}</strong>${previewAnswer(element, options)}</button>`;
 }
 
 export function formTreeSelection(node) {
@@ -297,12 +328,29 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   const vslEmbedUrls = new Map();
   let pendingVslOptionFocusId = null;
   const workspaceId = `forms-workspace-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+  function ensurePreviewControl() {
+    const publish = $('#form-public-link');
+    if (!publish || $('#form-preview') || !document.createElement || !publish.parentElement) return;
+    const preview = document.createElement('button');
+    preview.type = 'button';
+    preview.id = 'form-preview';
+    preview.className = 'form-preview-control';
+    preview.textContent = 'Prévia';
+    preview.setAttribute('aria-label', 'Abrir prévia do formulário');
+    preview.onclick = () => {
+      if (!current?.publicPath) return toast('Publique o formulário para abrir a prévia pública.');
+      const opened = window.open(current.publicPath, '_blank');
+      if (opened) opened.opener = null;
+    };
+    publish.parentElement.insertBefore(preview, publish);
+  }
   function syncFormPublicationControl() {
     const button = $('#form-public-link');
     if (!button) return;
     const allowed = Boolean(can('deployment.publish'));
     button.disabled = !allowed;
-    button.title = allowed ? 'Abrir formulário público' : 'Você não tem permissão para publicar. Peça acesso a um administrador.';
+    if (button.setAttribute) button.setAttribute('aria-label', 'Publicar formulário');
+    button.title = allowed ? 'Publicar formulário' : 'Você não tem permissão para publicar. Peça acesso a um administrador.';
     const help = $('#form-public-link-help');
     if (help) help.textContent = allowed ? '' : 'Você não tem permissão para publicar. Peça acesso a um administrador.';
     const editable = Boolean(can('form.write'));
@@ -319,7 +367,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     },
   });
 
-  const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 740px)').matches;
+  const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 760px)').matches;
   function syncWorkspacePanels({ focusTab = false } = {}) {
     const root = $('#dynamic-editor');
     if (!root) return;
@@ -356,7 +404,10 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       };
     });
   }
-  if (typeof window !== 'undefined') window.addEventListener('resize', () => syncWorkspacePanels());
+  if (typeof window !== 'undefined') window.addEventListener('resize', () => {
+    if (isCompactWorkspace() && activeWorkspacePanel === 'structure') activeWorkspacePanel = 'canvas';
+    syncWorkspacePanels();
+  });
 
   const setActiveNav = (name) => {
     $('#nav-pages').classList.toggle('nav-active', name === 'pages');
@@ -455,6 +506,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     $('#form-editing').hidden = false;
     $('#dynamic-form-name').value = current.name;
     $('#form-save-state').textContent = 'Salvo neste computador';
+    ensurePreviewControl();
     syncFormPublicationControl();
     await loadVslCatalog();
     renderEditor();
@@ -499,18 +551,18 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       selectedElement,
       editingHeader,
     });
-    const treeItems = treeNodes.map((node) => `<button type="button" class="dynamic-tree-item dynamic-tree-item-${node.kind}" data-tree-id="${node.id}" data-tree-node="${node.id}" role="treeitem" aria-level="${node.level}" aria-selected="${node.selected}" style="--dynamic-tree-level:${node.level}"><b class="material-symbols-outlined">${escape(node.icon)}</b><span><strong>${escape(node.label)}</strong><small>${escape(node.detail)}</small></span></button>`).join('');
+    const treeItems = treeMarkup(treeNodes, selected);
     const workspace = workspaceState(activeWorkspacePanel);
     $('#dynamic-editor').innerHTML = `
       <div class="editor-workspace-tabs" role="tablist" aria-label="Regiões do editor">${workspace.panels.map((panel) => `<button type="button" role="tab" data-workspace-tab="${panel.id}" id="${workspaceId}-tab-${panel.id}" aria-controls="${workspaceId}-panel-${panel.id}" aria-selected="${panel.selected}" tabindex="${panel.selected ? '0' : '-1'}">${panel.label}</button>`).join('')}</div>
       <aside class="dynamic-steps-panel" data-editor-panel="structure" id="${workspaceId}-panel-structure" role="tabpanel" aria-labelledby="${workspaceId}-tab-structure">
-        <div class="dynamic-panel-title"><span>CONSTRUA A EXPERIÊNCIA</span><h2>Estrutura</h2><p>O topo acompanha a pessoa. As telas mudam durante a conversa.</p></div>
+        <div class="dynamic-panel-title"><span>JORNADA</span><h2>Estrutura</h2><p>Topo e microlanding pages na mesma árvore.</p></div>
         <div class="dynamic-structure-tree" role="tree" aria-label="Estrutura do formulário">${treeItems}</div>
-        ${editable ? `<details class="dynamic-screen-catalog"><summary><span class="material-symbols-outlined">add</span> Nova tela</summary><div class="dynamic-add"><span>Comece com uma composição pronta</span>${presets.map(([preset,label,icon]) => `<button data-add-screen="${preset}"><b class="material-symbols-outlined">${icon}</b>${label}</button>`).join('')}</div></details><details class="dynamic-element-catalog"><summary><span class="material-symbols-outlined">add</span> ${editingHeader ? 'Adicionar ao topo' : 'Adicionar conteúdo'}</summary><div class="dynamic-add">${Object.entries(TYPES).filter(([type]) => (editingHeader ? HEADER_TYPES.has(type) : !['logo', 'progress'].includes(type)) && (mediaEnabled() || type !== 'vsl')).map(([type, meta]) => `<button data-add-type="${type}"><b class="material-symbols-outlined">${meta.icon}</b>${meta.label}</button>`).join('')}</div></details>` : '<p class="dynamic-vsl-permission">Você pode visualizar este formulário. A edição exige form.write.</p>'}
+        ${editable ? `<details class="dynamic-element-catalog"><summary><span class="material-symbols-outlined">add</span> ${editingHeader ? 'Adicionar ao topo' : 'Elemento'}</summary><div class="dynamic-add">${Object.entries(TYPES).filter(([type]) => (editingHeader ? HEADER_TYPES.has(type) : !['logo', 'progress'].includes(type)) && (mediaEnabled() || type !== 'vsl')).map(([type, meta]) => `<button data-add-type="${type}"><b class="material-symbols-outlined">${meta.icon}</b>${meta.label}</button>`).join('')}</div></details><details class="dynamic-screen-catalog"><summary><span class="material-symbols-outlined">add</span> Nova tela</summary><div class="dynamic-add"><span>Comece com uma composição pronta</span>${presets.map(([preset,label,icon]) => `<button data-add-screen="${preset}"><b class="material-symbols-outlined">${icon}</b>${label}</button>`).join('')}</div></details>` : '<p class="dynamic-vsl-permission">Você pode visualizar este formulário. A edição exige form.write.</p>'}
       </aside>
-      <div class="dynamic-preview-panel" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas"><div class="dynamic-preview-toolbar"><span>PRÉVIA DA EXPERIÊNCIA</span><strong>Tela ${selected + 1} de ${current.steps.length}</strong></div><div id="dynamic-preview"></div></div>
+      <div class="dynamic-preview-panel" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas"><div class="dynamic-preview-toolbar"><span>CANVAS · TELA ${selected + 1}</span><strong>Computador</strong></div><div id="dynamic-preview"></div></div>
       <aside class="dynamic-properties-panel" data-editor-panel="inspector" id="${workspaceId}-panel-inspector" role="tabpanel" aria-labelledby="${workspaceId}-tab-inspector">
-        <div class="dynamic-panel-title"><span>${editingHeader ? 'APARECE EM TODAS AS TELAS' : `EDITANDO A TELA ${selected + 1}`}</span><h2>${editingHeader ? 'Topo fixo' : escape(screen.title)}</h2><p>Clique em um bloco da prévia ou da estrutura para editar.</p></div>
+        ${element ? `<div class="dynamic-inspector-title"><span class="material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><div><em>ELEMENTO</em><h2>${escape(TYPES[element.type].label)}</h2></div></div>` : `<div class="dynamic-panel-title"><span>${editingHeader ? 'APARECE EM TODAS AS TELAS' : `EDITANDO A TELA ${selected + 1}`}</span><h2>${editingHeader ? 'Topo fixo' : escape(screen.title)}</h2></div>`}
         ${editingHeader ? '' : `<details class="dynamic-settings-group"><summary><span><b class="material-symbols-outlined">tune</b>Configurações da tela</span><b class="material-symbols-outlined">expand_more</b></summary><div class="dynamic-settings-content">
           <label>Nome da tela<input data-screen-field="title" maxlength="100" value="${escape(screen.title)}"></label>
           <div class="dynamic-inline"><label>Animação de entrada<select data-screen-field="motion">${MOTIONS.map(([value,label]) => `<option value="${value}"${screen.motion === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label>Avançar após<input data-screen-field="timer" type="number" min="0" max="15" value="${screen.timer || 0}"><small>0 desativa</small></label></div>
@@ -518,21 +570,21 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
           <div class="dynamic-step-actions"><button data-screen-move="-1" aria-label="Mover tela para cima" title="Mover tela para cima"${selected === 0 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span></button><button data-screen-move="1" aria-label="Mover tela para baixo" title="Mover tela para baixo"${selected === current.steps.length - 1 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span></button><button data-screen-duplicate aria-label="Duplicar tela" title="Duplicar tela"><span class="material-symbols-outlined">content_copy</span></button><button data-screen-delete aria-label="Excluir tela" title="Excluir tela" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
         </div></details>`}
         ${element ? `<div class="dynamic-element-editor">
-        <div class="dynamic-panel-title"><span>ELEMENTO ${selectedElement + 1}</span><h2>${TYPES[element.type].label}</h2></div>
-        <div class="dynamic-step-actions"><button data-element-move="-1" aria-label="Mover elemento para cima" title="Mover elemento para cima"${selectedElement === 0 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span></button><button data-element-move="1" aria-label="Mover elemento para baixo" title="Mover elemento para baixo"${selectedElement === activeElements.length - 1 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span></button><button data-element-duplicate aria-label="Duplicar elemento" title="Duplicar elemento"><span class="material-symbols-outlined">content_copy</span></button><button data-element-delete aria-label="Excluir elemento" title="Excluir elemento" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
+        <div class="dynamic-step-actions dynamic-utility-actions"><button data-element-move="-1" aria-label="Mover elemento para cima" title="Mover elemento para cima"${selectedElement === 0 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span></button><button data-element-move="1" aria-label="Mover elemento para baixo" title="Mover elemento para baixo"${selectedElement === activeElements.length - 1 ? ' disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span></button><button data-element-duplicate aria-label="Duplicar elemento" title="Duplicar elemento"><span class="material-symbols-outlined">content_copy</span></button><button data-element-delete aria-label="Excluir elemento" title="Excluir elemento" class="dynamic-danger"><span class="material-symbols-outlined">delete</span></button></div>
+        ${element.type === 'image_choice' ? imageChoiceInspector(element) : `
         <label>Tipo<select data-field="type">${Object.entries(TYPES).filter(([type]) => (!editingHeader || HEADER_TYPES.has(type)) && (mediaEnabled() || type !== 'vsl' || element.type === 'vsl')).map(([type, meta]) => `<option value="${type}"${element.type === type ? ' selected' : ''}>${meta.label}</option>`).join('')}</select></label>
         <label>Título ou pergunta<input data-field="title" maxlength="180" value="${escape(element.title)}"></label>
         <label>Texto de apoio<textarea data-field="description" maxlength="1200" placeholder="Opcional">${escape(element.description)}</textarea></label>
         ${optionsEditor(element, { vslVideos, canReadVsl: mediaEnabled() && can('video.read'), loadError: vslLoadError })}
         ${INFORMATIONAL.has(element.type) ? '' : `<label class="dynamic-check"><input data-field="required" type="checkbox"${element.required ? ' checked' : ''}> Resposta obrigatória</label>`}
         <div class="dynamic-customize"><h3>Ícone</h3><label>Ícone Google<select data-field="icon">${ICONS.map(([name, label]) => `<option value="${name}"${(element.icon || TYPES[element.type].icon) === name ? ' selected' : ''}>${label}</option>`).join('')}</select></label></div>
-        <details class="dynamic-finish-settings"><summary>Finalização e integração</summary><label>Título final<input data-setting="title" maxlength="120" value="${escape(current.completion.title)}"></label><label>Mensagem final<textarea data-setting="message" maxlength="500">${escape(current.completion.message)}</textarea></label><label>Webhook HTTPS<input data-setting="webhook" type="url" placeholder="https://..." value="${escape(current.webhook)}"></label></details>
+        <details class="dynamic-finish-settings"><summary>Finalização e integração</summary><label>Título final<input data-setting="title" maxlength="120" value="${escape(current.completion.title)}"></label><label>Mensagem final<textarea data-setting="message" maxlength="500">${escape(current.completion.message)}</textarea></label><label>Webhook HTTPS<input data-setting="webhook" type="url" placeholder="https://..." value="${escape(current.webhook)}"></label></details>`}
         </div>` : `<div class="dynamic-element-editor dynamic-element-editor-empty"><div class="dynamic-panel-title"><span>TOPO FIXO</span><h2>Nenhum elemento</h2><p>Adicione um elemento ao topo para editar sua aparência e comportamento.</p></div></div>`}
       </aside>`;
     bindWorkspaceTabs();
     syncWorkspacePanels({ focusTab: focusWorkspaceTab });
     bindEditor(treeNodes);
-    if (!editable) $('#dynamic-editor').querySelectorAll('.dynamic-properties-panel input, .dynamic-properties-panel select, .dynamic-properties-panel textarea, .dynamic-properties-panel .dynamic-step-actions button, .dynamic-properties-panel .dynamic-vsl-option').forEach((control) => { control.disabled = true; });
+    if (!editable) $('#dynamic-editor').querySelectorAll('.dynamic-properties-panel input, .dynamic-properties-panel select, .dynamic-properties-panel textarea, .dynamic-properties-panel button, .dynamic-steps-panel button').forEach((control) => { control.disabled = true; });
     if (!isCompactWorkspace() && focusTreeNodeId && activeTreeItem) restoreFormTreeFocus(document.querySelectorAll('[data-tree-node]'), focusTreeNodeId, activeTreeItem);
     renderPreview();
     if (pendingVslOptionFocusId !== null) {
@@ -546,9 +598,20 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     const previewOptions = { vslEmbedUrls, canReadVsl: mediaEnabled() && can('video.read'), vslLoadError };
     const visibleHeader = current.headerElements.filter((element) => mediaEnabled() || element.type !== 'vsl');
     const visibleElements = screen.elements.filter((element) => mediaEnabled() || element.type !== 'vsl');
-    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-browser"><div class="dynamic-preview-fixed">${visibleHeader.map((element, index) => previewHeaderElement(element, index, editingHeader && index === selectedElement, previewOptions)).join('')}</div><div class="dynamic-preview-stage"><div class="dynamic-preview-card dynamic-composed" data-motion="${escape(screen.motion || 'fade-up')}"><p>${escape(screen.title).toUpperCase()}</p><div class="dynamic-preview-elements">${visibleElements.map((element, index) => element.type === 'vsl'
-      ? previewVslElementMarkup({ element, index, selected: !editingHeader && index === selectedElement, options: previewOptions })
-      : `<button type="button" class="dynamic-preview-element" data-preview-element="${index}" aria-current="${!editingHeader && index === selectedElement}"><span class="dynamic-preview-icon material-symbols-outlined">${escape(element.icon || TYPES[element.type].icon)}</span><h1>${escape(element.title)}</h1>${element.description ? `<div class="dynamic-preview-description">${escape(element.description)}</div>` : ''}${previewAnswer(element, previewOptions)}<span class="dynamic-edit-hint"><i class="material-symbols-outlined" aria-hidden="true">edit</i> Editar</span></button>`).join('')}</div><button class="dynamic-preview-next" type="button">${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button></div></div></div>`;
+    const selectedFor = (element) => !editingHeader && visibleElements.indexOf(element) === selectedElement;
+    const fieldTypes = new Set(['short_text', 'email', 'phone', 'number', 'date']);
+    const composed = [];
+    let pendingFields = [];
+    const flushFields = () => { if (pendingFields.length) { composed.push(`<div class="dynamic-canvas-input-row">${pendingFields.join('')}</div>`); pendingFields = []; } };
+    visibleElements.forEach((element, index) => {
+      const markup = element.type === 'vsl'
+        ? previewVslElementMarkup({ element, index, selected: selectedFor(element), options: previewOptions })
+        : previewElementMarkup(element, index, selectedFor(element), previewOptions);
+      if (fieldTypes.has(element.type)) pendingFields.push(markup);
+      else { flushFields(); composed.push(markup); }
+    });
+    flushFields();
+    $('#dynamic-preview').innerHTML = `<div class="dynamic-preview-browser"><div class="dynamic-preview-fixed">${visibleHeader.map((element, index) => previewHeaderElement(element, index, editingHeader && index === selectedElement, previewOptions)).join('')}</div><div class="dynamic-preview-stage"><div class="dynamic-preview-card dynamic-composed" data-motion="${escape(screen.motion || 'fade-up')}">${composed.join('') || `<div class="dynamic-canvas-title"><h1>${escape(screen.title)}</h1></div>`}<button class="dynamic-preview-next" type="button">${selected === current.steps.length - 1 ? 'Enviar respostas' : 'Continuar'} <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button></div></div></div>`;
     document.querySelectorAll('[data-preview-header]').forEach((button) => { button.onclick = () => { editingHeader = true; selectedElement = Number(button.dataset.previewHeader); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
     document.querySelectorAll('[data-preview-element]').forEach((button) => { button.onclick = () => { editingHeader = false; selectedElement = Number(button.dataset.previewElement); activeWorkspacePanel = 'inspector'; renderEditor({ focusWorkspaceTab: isCompactWorkspace() }); }; });
   }
@@ -582,6 +645,25 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
         renderEditor();
       };
     });
+    document.querySelectorAll('[data-visual-label], [data-visual-description], [data-visual-image], [data-visual-icon]').forEach((input) => {
+      input.oninput = () => {
+        if (!can('form.write')) return;
+        const index = Number(input.dataset.visualLabel ?? input.dataset.visualDescription ?? input.dataset.visualImage ?? input.dataset.visualIcon);
+        const option = element().options?.[index];
+        if (!option) return;
+        if (input.dataset.visualLabel !== undefined) option.label = input.value;
+        else if (input.dataset.visualDescription !== undefined) option.description = input.value;
+        else if (input.dataset.visualImage !== undefined) option.imageUrl = input.value;
+        else option.icon = input.value;
+        markDirty(); renderPreview();
+      };
+      input.onchange = input.oninput;
+    });
+    document.querySelectorAll('[data-visual-delete]').forEach((button) => {
+      button.onclick = () => { if (!can('form.write') || element().options.length <= 1) return; element().options.splice(Number(button.dataset.visualDelete), 1); markDirty(); renderEditor(); };
+    });
+    const addVisualOption = $('[data-visual-add]');
+    if (addVisualOption) addVisualOption.onclick = () => { if (!can('form.write')) return; element().options.push({ label: `Opção ${element().options.length + 1}`, imageUrl: '', icon: 'image', description: '' }); markDirty(); renderEditor(); };
     const vslOptions = [...document.querySelectorAll('[data-vsl-option]')];
     const vslOptionIds = vslOptions.map((button) => String(button.dataset.vslOption || ''));
     vslOptions.forEach((button) => {

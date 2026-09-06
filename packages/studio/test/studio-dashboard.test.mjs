@@ -6,21 +6,33 @@ import { analyticsPanelModel, applyDashboardNavigation, canCreateProject, create
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
 
-test('Home expõe navegação de projetos, quizzes e histórico sem menu de empresa', async () => {
+test('Home e Projeto alternam a navegação canônica sem criar uma terceira sidebar', async () => {
   const html = await readFile(htmlPath, 'utf8');
 
   assert.match(html, /<section id="studio-home"[^>]*aria-labelledby="studio-home-title"/);
   assert.match(html, /<section id="company-view"[^>]*aria-labelledby="company-view-title"/);
   assert.match(html, /id="nav-home"[^>]*aria-current="page"/);
+  assert.match(html, /data-sidebar-context="studio"/);
+  assert.match(html, /SEU STUDIO[\s\S]*Início[\s\S]*Projetos[\s\S]*Empresa e equipe[\s\S]*Plano e cobrança/);
+  assert.doesNotMatch(html, /id="nav-studio-agents"/);
+  assert.match(html, /data-sidebar-context="project"[^>]*hidden/);
+  assert.match(html, /PROJETO[\s\S]*Visão geral[\s\S]*Landing pages[\s\S]*Formulários \/ Quizzes[\s\S]*Analytics[\s\S]*Rastreamento[\s\S]*Publicação[\s\S]*Agentes/);
   assert.match(html, /id="nav-pages"[^>]*title="Páginas"/);
   assert.match(html, /id="nav-forms"[^>]*title="Quizzes"/);
-  assert.match(html, /id="nav-history"/);
-  assert.doesNotMatch(html, /id="nav-company"/);
+  assert.match(html, /id="nav-company"/);
+  assert.match(html, /id="nav-project-analytics"/);
   assert.match(html, /id="project-switcher"[^>]*aria-label="Selecionar projeto"/);
   assert.match(html, /id="history-view"/);
   assert.doesNotMatch(html, /id="home-companies"/);
   assert.match(html, /id="home-projects" class="project-grid"/);
   assert.match(html, /id="home-activity" class="activity-list"/);
+  assert.match(html, /id="home-history-all"/);
+  assert.match(html, /id="project-content-all"[^>]*data-project-filter="all"/);
+  assert.match(html, /id="project-content-filter"[^>]*hidden/);
+  assert.match(html, /analytics-panel[\s\S]*id="open-analytics"/);
+  assert.match(html, /project-heading-actions"><button[^>]*id="project-settings-action">Configurar projeto<\/button><button[^>]*id="project-create-action">\+ Criar<\/button><\/div>/);
+  assert.match(html, /Seus projetos\./);
+  assert.match(html, /DA IDEIA AO AR/);
   assert.match(html, /id="new-project-dialog"/);
 });
 
@@ -83,8 +95,26 @@ test('resumo do projeto remove VSLs e vídeos quando a mídia está desligada', 
   assert.equal(projectCardCounts(overview).videos, 0);
   const model = projectOverviewModel(overview);
   assert.equal(model.content.some((item) => item.kind === 'video'), false);
-  assert.equal(model.metrics.some(([label]) => label === 'VSLs'), false);
-  assert.deepEqual(projectOverviewModel({ ...overview, runtime: { media: true } }).metrics.find(([label]) => label === 'VSLs'), ['VSLs', 4]);
+  assert.equal(model.metrics.some(({ label }) => label === 'VSLs'), false);
+  assert.equal(projectOverviewModel({ ...overview, runtime: { media: true } }).metrics.some(({ label }) => label === 'VSLs'), false);
+});
+
+test('overview trata zero visitas como dado real, mantém VSL publicada coerente e deriva a estrutura', () => {
+  const model = projectOverviewModel({
+    project: { id: 'project-a', name: 'Projeto', slug: 'projeto' },
+    runtime: { media: true, analytics: true },
+    analytics: { visitors: 0 },
+    counts: { pages: 1, forms: 0, videos: 1, publishedPages: 1, publishedForms: 0, publishedVideos: 1, submissions: 0 },
+    content: [{ id: 'page', kind: 'page', name: 'Página', published: true }],
+    domain: { domain: 'exemplo.com.br', verificationStatus: 'verified' },
+    integrations: { vercel: 'configured', analytics: 'configured', agents: 'pending' },
+  });
+
+  assert.deepEqual(model.metrics[0], { label: 'VISITANTES', value: '0', detail: 'Nos últimos 7 dias' });
+  assert.deepEqual(model.metrics[2], { label: 'CONVERSÃO', value: '—', detail: 'Sem visitas para calcular' });
+  assert.deepEqual(model.metrics[3], { label: 'ATIVOS PUBLICADOS', value: '2', detail: '1 página · 0 formulários · 1 VSL' });
+  assert.equal(model.structureComplete, 3);
+  assert.equal(model.structureTotal, 4);
 });
 
 test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wireframe', async () => {
@@ -99,7 +129,9 @@ test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wire
   assert.match(app, /canCreateProject\(studioShell\)/);
   assert.match(app, /await studioShell\.initialize\(\);\s*dashboardContextFlow\.bootstrap\(\);/);
   assert.match(app, /createVslUI\(\{ api, getShell: \(\) => studioShell, toast \}\)/);
-  assert.match(app, /nav-vsl'\)\.hidden = !mediaPipelineEnabled \|\| !studioShell\?\.can\?\.\('video\.read'\)/);
+  assert.match(app, /function syncSidebarContext\(view\)/);
+  assert.match(app, /sidebarContextFor\(view\)/);
+  assert.match(app, /nav-project-analytics/);
   assert.match(app, /api\('\/billing'\)/);
   assert.match(app, /Abrir checkout/);
   assert.match(app, /Cancelar renovação/);
@@ -230,7 +262,7 @@ test('navegação atualiza aria-current e a ação de projeto depende da capacid
   assert.equal(canCreateProject({ can: () => false }), false);
 });
 
-test('visão do projeto mostra somente o overview autorizado, estados e contagens reais', () => {
+test('visão do projeto traduz dados reais para as quatro métricas e a estrutura canônica', () => {
   const overview = {
     project: { id: 'project-a', name: 'Campanha real', slug: 'campanha-real' },
     counts: { pages: 2, forms: 1, publishedPages: 1, publishedForms: 0, submissions: 7 },
@@ -249,15 +281,21 @@ test('visão do projeto mostra somente o overview autorizado, estados e contagen
   assert.equal(model.title, 'Campanha real');
   assert.equal(model.domain.label, 'exemplo.com.br');
   assert.deepEqual(model.metrics, [
-    ['Páginas', 2], ['Quizzes', 1], ['VSLs', 0], ['Publicados', 1], ['Leads / respostas', 7],
+    { label: 'VISITANTES', value: '—', detail: 'Dados indisponíveis' },
+    { label: 'LEADS', value: '7', detail: 'Respostas recebidas' },
+    { label: 'CONVERSÃO', value: '—', detail: 'Aguardando visitas' },
+    { label: 'ATIVOS PUBLICADOS', value: '1', detail: '1 página · 0 formulários' },
   ]);
   assert.equal(model.content[0].status, 'Publicado');
   assert.equal(model.content[1].status, 'Rascunho');
   assert.equal(model.content[1].responses, 7);
   assert.deepEqual(filterProjectContent(model.content, 'pages').map((item) => item.id), ['page-a']);
   assert.deepEqual(filterProjectContent(model.content, 'forms').map((item) => item.id), ['form-a']);
-  assert.deepEqual(model.modules, [
-    ['Analytics', 'Ainda não configurado'], ['Rastreamento', 'Em breve'], ['Publicação', 'Configurado'], ['Agentes', 'Ainda não configurado'],
+  assert.deepEqual(model.structure, [
+    { icon: 'language', label: 'Domínio', detail: 'exemplo.com.br', state: 'Ativo' },
+    { icon: 'cloud', label: 'Vercel', detail: 'Publicação do projeto', state: 'Conectada' },
+    { icon: 'monitoring', label: 'Analytics + Tracking', detail: 'Dados do projeto', state: 'Pendente' },
+    { icon: 'smart_toy', label: 'Agentes', detail: 'Acesso do projeto', state: 'Pendente' },
   ]);
 });
 
@@ -343,10 +381,10 @@ test('Conversões usam linha acessível com estado legível e filtros móveis co
   assert.match(css, /\.conversion-row\s*\{[^}]*grid-template-columns:/s);
 });
 
-test('menu de VSL respeita o runtime de mídia sem remover a capacidade de vídeo', async () => {
+test('filtro de VSL respeita o runtime de mídia sem acrescentar item fora da navegação do wireframe', async () => {
   const app = await readFile(appPath, 'utf8');
   assert.match(app, /mediaPipelineEnabled = false/);
-  assert.match(app, /!mediaPipelineEnabled \|\| !studioShell\?\.can\?\.\('video\.read'\)/);
+  assert.match(app, /videosFilter\.hidden = !mediaPipelineEnabled/);
   assert.match(app, /mediaPipelineEnabled = overview\.runtime\?\.media === true/);
 });
 
@@ -462,7 +500,7 @@ test('painel "Visitas nos últimos 7 dias" usa as classes do wireframe, sem cita
   assert.match(html, /<section id="analytics-panel"[^>]*class="surface analytics-card"[^>]*hidden/);
   assert.match(html, /<h2 id="analytics-panel-title">Visitas nos últimos 7 dias<\/h2>/);
   assert.match(html, /id="analytics-updated"[^>]*>Coletor legado · migração pendente<\/span>/);
-  assert.match(html, /class="button ghost">Abrir Analytics</);
+  assert.match(html, /analytics-card[\s\S]*id="open-analytics"[^>]*>Abrir Analytics</);
   assert.match(html, /id="analytics-chart" class="chart"/);
   assert.match(html, /id="analytics-journey" class="journey"/);
   assert.doesNotMatch(html, /Umami/);
@@ -479,6 +517,34 @@ test('painel "Visitas nos últimos 7 dias" usa as classes do wireframe, sem cita
   assert.match(app, /analyticsPanelModel\(/);
   assert.match(app, /analyticsUpdated\.textContent = model\.updatedLabel \|\| 'Origem dos dados indisponível'/);
   assert.match(app, /analytics\/summary\?from=.*&to=/, 'a rota exige from/to (server/project-api.mjs: analyticsRange) — sem isso o resumo sempre responde 400');
+  assert.match(app, /\$\('#open-analytics'\)\.onclick/, 'Abrir Analytics precisa ter ação associada');
+  assert.match(app, /setDashboardView\('project'\)/, 'Abrir Analytics precisa levar à visão que contém o painel');
   assert.match(css, /@media\s*\(max-width:\s*900px\)\s*\{\s*\.project-columns\s*>\s*\.analytics-card\s*\{\s*grid-column:\s*1\s*\/\s*-1;/, 'o painel deve colapsar no breakpoint de 900px do wireframe, numa regra própria');
   assert.match(css, /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.project-metrics,\s*\n\s*\.project-columns\s*\{\s*\n\s*grid-template-columns:\s*1fr;/, 'o breakpoint geral de 760px das demais seções continua intacto');
+});
+
+test('filtros permanecem disponíveis para o estado interno, mas não duplicam a biblioteca no overview', async () => {
+  const [html, css, app] = await Promise.all([
+    readFile(htmlPath, 'utf8'),
+    readFile(new URL('../public/styles.css', import.meta.url), 'utf8'),
+    readFile(appPath, 'utf8'),
+  ]);
+
+  for (const filter of ['pages', 'forms', 'leads', 'conversions']) assert.match(html, new RegExp(`data-project-filter="${filter}"`));
+  assert.match(html, /id="project-content-filter"[^>]*hidden/);
+  assert.match(css, /#project-content-filter\[hidden\]\s*\{\s*display:none !important/);
+  assert.match(app, /\$\('#project-content-all'\)\.onclick/);
+  assert.match(app, /setDashboardView\('pages'\)/);
+  assert.match(css, /#dashboard > aside\.is-open\s*\{\s*transform:\s*translateX\(0\)/);
+  assert.doesNotMatch(css, /\.mobile-menu,\.mobile-drawer-backdrop\s*\{\s*display\s*:\s*none !important/);
+});
+
+test('ações de cabeçalho levam para superfícies reais do projeto', async () => {
+  const [html, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(appPath, 'utf8')]);
+
+  assert.match(html, /id="project-settings-action">Configurar projeto</);
+  assert.match(app, /\$\('#project-settings-action'\)\.onclick = action\(/);
+  assert.match(app, /const details = \$\('#project-publication \.publication-details'\);\s*details\.open = true/);
+  assert.match(app, /\$\('#project-publication'\)\.scrollIntoView/);
+  assert.doesNotMatch(app, /\$\('#project-settings-action'\)\.onclick = \(\) => setDashboardView\('settings'\)/);
 });

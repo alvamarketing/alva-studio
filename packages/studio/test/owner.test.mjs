@@ -21,14 +21,25 @@ test('configurações são uma view interna acessível e reaproveitam o formulá
   assert.match(app, /settingsMount:\s*\$\('#settings-view'\)/);
   assert.match(owner, /dialogNode\?\.tagName === 'DIALOG'/);
   assert.match(owner, /dialogNode\.replaceWith\(section\)/);
-  assert.match(owner, /id="tab-account"/);
-  assert.match(owner, /id = 'tab-company'/);
-  assert.match(owner, /id="tab-vercel"/);
+  assert.match(owner, /id="account-publication-settings"/);
+  assert.doesNotMatch(owner, /id="tab-vercel"/);
+  assert.doesNotMatch(owner, /id="panel-vercel"/);
   assert.match(owner, /selectSettingsTab\(\{ container: settingsContainer/);
   assert.match(owner, /settingsGuard\.isCurrent/);
   assert.match(owner, /closeSettings/);
-  assert.match(owner, /\(\$\('#tab-' \+ access\.tab\) \|\| dialog\.querySelector\('h2'\)\)\?\.focus\(\)/);
+  assert.match(owner, /nav\.setAttribute\('aria-orientation', 'vertical'\)/);
+  assert.match(owner, /settingsSidebarTabs\(\)\.find\(\(button\) => button\.dataset\.settingsSidebarTab === access\.tab\)/);
+  assert.doesNotMatch(owner, /\$\('#tab-' \+ access\.tab\)\?\.focus\(\)/);
   assert.match(owner, /id="owner-logout"/);
+});
+
+test('dados da empresa não simulam domínio, fuso persistido ou edição inexistente', async () => {
+  const owner = await readFile(ownerPath, 'utf8');
+  assert.match(owner, /Domínio padrão<input id="company-details-domain" readonly placeholder="Não informado no cadastro da empresa">/);
+  assert.match(owner, /Fuso deste navegador<input id="company-details-timezone" readonly/);
+  assert.match(owner, /Contexto local deste dispositivo; não é uma preferência salva da empresa\./);
+  assert.doesNotMatch(owner, /document\.querySelector\('#project-domain'\)/);
+  assert.doesNotMatch(owner, /id="company-details-edit"/);
 });
 test('abertura tardia de configurações é cancelada ao navegar', () => {
   const guard = createSettingsOpenGuard();
@@ -38,28 +49,33 @@ test('abertura tardia de configurações é cancelada ao navegar', () => {
   const second = guard.begin();
   assert.equal(guard.isCurrent(second), true);
 });
-test('abas de configurações alternam painel exclusivo e estado acessível', () => {
+test('abas laterais alternam painel exclusivo e Vercel permanece em Preferências', () => {
   const tab = (name) => ({
-    dataset: { ownerTab: name },
+    dataset: { settingsSidebarTab: name },
     attributes: {},
     tabIndex: null,
     setAttribute(key, value) { this.attributes[key] = value; },
   });
-  const tabs = [tab('account'), tab('company'), tab('vercel')];
-  const panels = Object.fromEntries(tabs.map((button) => [`#panel-${button.dataset.ownerTab}`, { hidden: false }]));
+  const tabs = [tab('account'), tab('company'), tab('team'), tab('billing')];
+  const panels = Object.fromEntries(tabs.map((button) => [`#panel-${button.dataset.settingsSidebarTab}`, { hidden: false }]));
   const container = {
-    querySelectorAll(selector) { return selector === '[data-owner-tab]' ? tabs : []; },
     querySelector(selector) { return panels[selector] || null; },
   };
-  for (const selected of ['account', 'company', 'vercel']) {
-    assert.equal(selectSettingsTab({ container, requestedTab: selected, canManageIntegration: true }), selected);
+  const tabList = {
+    querySelectorAll(selector) { return selector === '[data-settings-sidebar-tab]' ? tabs : []; },
+  };
+  for (const selected of ['account', 'company', 'team', 'billing']) {
+    assert.equal(selectSettingsTab({ container, tabList, requestedTab: selected, canManageIntegration: true }), selected);
     for (const button of tabs) {
-      const active = button.dataset.ownerTab === selected;
+      const active = button.dataset.settingsSidebarTab === selected;
       assert.equal(button.attributes['aria-selected'], String(active));
       assert.equal(button.tabIndex, active ? 0 : -1);
-      assert.equal(panels[`#panel-${button.dataset.ownerTab}`].hidden, !active);
+      assert.equal(panels[`#panel-${button.dataset.settingsSidebarTab}`].hidden, !active);
     }
   }
+  assert.equal(selectSettingsTab({ container, tabList, requestedTab: 'vercel', canManageIntegration: true }), 'account');
+  assert.equal(tabs[0].attributes['aria-selected'], 'true');
+  assert.equal(panels['#panel-account'].hidden, false);
 });
 test('fluxo Vercel libera o botão para o próximo editor', async () => {
   const app = await readFile(appPath, 'utf8');
@@ -89,5 +105,5 @@ test('editor e analista não carregam nem veem configurações de integração',
   assert.equal(await load(), null);
   assert.equal(calls, 0);
   assert.deepEqual(settingsAccess({ canManageIntegration: false, requestedTab: 'vercel' }), { integration: false, tab: 'account' });
-  assert.deepEqual(settingsAccess({ canManageIntegration: true, requestedTab: 'vercel' }), { integration: true, tab: 'vercel' });
+  assert.deepEqual(settingsAccess({ canManageIntegration: true, requestedTab: 'vercel' }), { integration: true, tab: 'account' });
 });

@@ -68,7 +68,9 @@
 .dynamic-editor-grid {
   min-height: calc(100vh - 64px);
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px);
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr) minmax(0, 340px);
+  width: 100%;
+  min-width: 0;
   background: var(--alva-cloud);
   color: var(--alva-ink);
 }
@@ -80,6 +82,7 @@
   background: var(--alva-white);
   padding: 24px 18px;
   overflow: auto;
+  min-width: 0;
 }
 .dynamic-list-heading {
   display: flex;
@@ -696,4 +699,137 @@
 @media (prefers-reduced-motion: reduce) {
   .dynamic-preview-card,
   .dynamic-mini-chart i { animation: none !important; }
+}
+
+/* Formulário · Diagnóstico comercial — contrato visual do wireframe */
+.dynamic-form-header { min-height: 64px; height: 64px; gap: 14px; padding: 0 16px; font-family: Inter, var(--font-sans); }
+.dynamic-form-header::before { content: 'Formulário ·'; order: 1; color: #101828; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.dynamic-form-header #form-back { order: 0; width: 36px; height: 36px; flex-basis: 36px; }
+.dynamic-form-header #dynamic-form-name { order: 2; width: min(300px, 24vw); min-width: 0; padding-left: 0; color: #101828; font-size: 13px; }
+.dynamic-form-header #form-save-state { order: 3; display: flex; align-items: center; gap: 5px; min-width: 0; margin-right: auto; overflow: hidden; color: #667085; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.dynamic-form-header #form-save-state::before { content: '✓'; display: grid; width: 16px; height: 16px; place-items: center; border: 1px solid #20a464; border-radius: 50%; color: #20a464; font-weight: 800; }
+.dynamic-form-header .editor-actions { order: 4; margin-left: 0; gap: 8px; }
+.dynamic-form-header #form-responses, .dynamic-form-header #form-public-link, .dynamic-form-header .form-preview-control { width: auto; height: auto; min-height: 36px; padding: 10px 14px; font-size: 0; }
+.dynamic-form-header #form-responses::after { content: 'Respostas'; font-size: 12px; font-weight: 650; }
+.dynamic-form-header #form-public-link::after { content: 'Publicar'; font-size: 12px; font-weight: 650; }
+.dynamic-form-header .form-preview-control { font-size: 12px; font-weight: 650; }
+.dynamic-form-header #form-responses svg, .dynamic-form-header #form-public-link svg { display: none; }
+.dynamic-form-header #form-save { min-height: 36px; padding: 10px 14px; font-size: 0; }
+.dynamic-form-header #form-save::after { content: 'Salvar'; font-size: 12px; font-weight: 650; }
+
+.dynamic-editor-grid { min-height: 0; height: calc(100vh - 64px); grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 320px); font-family: Inter, var(--font-sans); background: #f6f8fb; }
+.dynamic-steps-panel, .dynamic-properties-panel { padding: 21px 14px; background: #fff; }
+.dynamic-properties-panel { padding: 22px 18px; }
+.dynamic-panel-title > span, .dynamic-preview-toolbar > span { color: #286eea; font-size: 9px; font-weight: 800; letter-spacing: .14em; }
+.dynamic-panel-title h2 { margin: 7px 0; font-size: 19px; }
+.dynamic-panel-title p { margin: 0 0 20px; color: #667085; font-size: 11px; line-height: 1.5; }
+.dynamic-structure-tree { gap: 5px; margin-bottom: 0; }
+.dynamic-tree-item { grid-template-columns: 18px 22px minmax(0, 1fr) auto; gap: 6px; min-height: 38px; padding: 5px 8px; border: 1px solid transparent; border-radius: 9px; color: #344054; }
+.dynamic-tree-item[style*='--dynamic-tree-level:2'] { padding-left: 28px; }
+.dynamic-tree-item:hover { background: #f6f8fb; }
+.dynamic-tree-item[aria-selected='true'], .dynamic-tree-item.is-active-screen { border-color: #9bbcff; background: #edf4ff; color: #174ea6; }
+.dynamic-tree-item .drag { color: #98a2b3; font-size: 17px; }
+.dynamic-tree-item .type-icon { color: currentColor; font-size: 18px; }
+.dynamic-tree-item > b { display: none; }
+.dynamic-tree-copy strong { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dynamic-tree-copy small, .dynamic-tree-count { display: block; color: #98a2b3; font-size: 9px; white-space: nowrap; }
+.dynamic-tree-item-screen { margin-top: 7px; font-weight: 700; }
+.dynamic-element-catalog, .dynamic-screen-catalog { margin: 5px 7px 10px; }
+.dynamic-element-catalog > summary, .dynamic-screen-catalog > summary { min-height: 38px; padding: 9px; border-radius: 9px; }
+.dynamic-element-catalog { margin-top: 5px; }
+.dynamic-screen-catalog { margin-top: 0; }
+
+.dynamic-preview-panel { padding: 20px 28px 50px; }
+.dynamic-preview-toolbar { width: min(740px, 100%); margin: 0 auto 14px; color: #667085; font-size: 10px; }
+.dynamic-preview-browser { width: min(740px, 100%); min-height: 760px; border: 1px solid #e1e7ef; border-radius: 0; box-shadow: 0 12px 35px #1018280c; }
+.dynamic-preview-fixed { position: static; min-height: 64px; padding: 0 32px; gap: 30px; border-bottom-color: #e1e7ef; background: #fff; backdrop-filter: none; }
+.dynamic-preview-fixed > button { padding: 7px 0; border: 0; border-radius: 0; }
+.dynamic-preview-brand { font-size: 16px; }
+.dynamic-preview-brand i { font-size: 20px; }
+.dynamic-preview-stage { min-height: 696px; padding: 52px 74px; background: #fff; }
+.dynamic-preview-card { min-height: 0; }
+.dynamic-canvas-intro, .dynamic-canvas-choice, .dynamic-canvas-input, .dynamic-canvas-block { position: relative; width: 100%; color: #101828; text-align: left; background: transparent; border: 1px solid transparent; border-radius: 0; box-shadow: none; }
+.dynamic-canvas-intro { display: block; padding: 0; text-align: center; }
+.dynamic-canvas-intro h1, .dynamic-canvas-title h1 { margin: 0; font-size: 32px; line-height: 1.05; letter-spacing: -.045em; }
+.dynamic-canvas-intro p { margin: 15px 0 0; color: #667085; font-size: 14px; line-height: 1.6; }
+.dynamic-canvas-input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 30px 0; }
+.dynamic-canvas-input { display: grid; gap: 6px; padding: 0; }
+.dynamic-canvas-input strong { font-size: 10px; font-weight: 700; }
+.dynamic-canvas-input > span:not(.selection-label) { padding: 10px 11px; border: 1px solid #e1e7ef; border-radius: 10px; color: #98a2b3; font-size: 11px; }
+.selected-block { outline: 2px solid #286eea; outline-offset: 7px; }
+.selection-label { position: absolute; z-index: 2; top: -28px; right: -7px; padding: 5px 8px; border-radius: 6px 6px 0 0; background: #286eea; color: #fff; font-size: 9px; font-weight: 700; }
+.dynamic-canvas-choice { display: block; padding: 7px; }
+.dynamic-canvas-choice h3 { margin: 0 0 14px; font-size: 18px; }
+.dynamic-canvas-option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dynamic-canvas-option-grid > span { display: grid; min-height: 120px; place-items: center; padding: 14px; border: 1px solid #e1e7ef; border-radius: 13px; background: #fff; }
+.dynamic-canvas-option-grid i { color: #286eea; font-size: 32px; }
+.dynamic-canvas-option-grid img { width: 100%; height: 72px; object-fit: cover; border-radius: 8px; }
+.dynamic-canvas-option-grid strong { font-size: 11px; }
+.dynamic-canvas-option-grid small { color: #667085; font-size: 9px; }
+.inline-plus { position: absolute; bottom: -21px; left: 50%; display: grid; width: 28px; height: 28px; place-items: center; transform: translateX(-50%); border: 1px solid #e1e7ef; border-radius: 50%; background: #fff; color: #286eea; box-shadow: 0 5px 14px #10182816; font-style: normal; }
+.dynamic-canvas-block { display: grid; gap: 9px; padding: 16px 0; }
+.dynamic-canvas-block > .material-symbols-outlined { color: #286eea; }
+.dynamic-preview-next { float: none; width: auto; margin-top: 32px; padding: 10px 14px; border-radius: 10px; }
+
+.dynamic-inspector-title { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; }
+.dynamic-inspector-title > span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: #edf4ff; color: #286eea; }
+.dynamic-inspector-title em { color: #286eea; font-size: 9px; font-style: normal; font-weight: 800; letter-spacing: .14em; }
+.dynamic-inspector-title h2 { margin: 2px 0 0; font-size: 19px; }
+.dynamic-element-editor { margin: 0; padding: 0; border-top: 0; background: transparent; }
+.dynamic-utility-actions { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0 0 16px; }
+.dynamic-properties-panel label { margin: 14px 0; color: #667085; font-size: 10px; font-weight: 600; }
+.dynamic-properties-panel :is(input, select, textarea) { margin-top: 6px; border-color: #e1e7ef; border-radius: 10px; padding: 10px 11px; font-size: 11px; }
+.dynamic-section-title { margin: 23px 0 9px; color: #101828; font-size: 10px; font-weight: 800; }
+.dynamic-switch { display: flex !important; align-items: center; justify-content: space-between; }
+.dynamic-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.dynamic-switch i { width: 37px; height: 21px; padding: 3px; border-radius: 12px; background: #286eea; }
+.dynamic-switch i::after { content: ''; display: block; width: 15px; height: 15px; margin-left: auto; border-radius: 50%; background: #fff; }
+.dynamic-option-list { display: grid; gap: 9px; }
+.dynamic-option-edit { display: grid; grid-template-columns: 40px 1fr repeat(2, 30px); gap: 8px; align-items: center; padding: 9px; border: 1px solid #e1e7ef; border-radius: 11px; }
+.dynamic-option-edit > .material-symbols-outlined { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 9px; background: #edf4ff; color: #286eea; }
+.dynamic-option-edit div { min-width: 0; }
+.dynamic-option-edit input { width: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; font-size: 10px; }
+.dynamic-option-edit input + input { margin-top: 3px; color: #667085; font-size: 9px; }
+.dynamic-option-edit select { width: 100%; margin: 3px 0 0; padding: 3px 0; border: 0; border-radius: 0; color: #667085; font-size: 9px; }
+.dynamic-option-edit button { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; }
+.dynamic-option-edit button:last-child { color: #e5484d; }
+.dynamic-dashed-action { width: 100%; margin-top: 9px; border-style: dashed; border-color: #8ab0fa; color: #286eea; }
+
+@media (max-width: 1050px) {
+  .dynamic-form-header { flex-wrap: wrap; min-height: 112px; height: auto; padding: 8px; }
+  .dynamic-form-header .editor-actions { width: 100%; margin-left: 0; }
+  .dynamic-editor-grid { height: calc(100dvh - 112px); grid-template-columns: 230px minmax(0, 1fr); }
+  .dynamic-properties-panel { position: fixed; z-index: 19; top: 112px; right: 0; width: 320px; height: calc(100dvh - 112px); box-shadow: -15px 0 40px #10182815; }
+}
+@media (max-width: 760px) {
+  .dynamic-form-header { flex-wrap: wrap; height: auto; min-height: 112px; padding: 8px; }
+  .dynamic-form-header .editor-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; min-width: 0; margin-left: 0; gap: 6px; }
+  .dynamic-form-header :is(#form-responses, #form-public-link, .form-preview-control, #form-save) { width: 100%; min-width: 0; padding-inline: 8px; }
+  .dynamic-editor-grid { display: block; height: auto; }
+  .editor-workspace-tabs { display: flex; position: sticky; top: 0; z-index: 12; padding: 8px; background: #fff; border-bottom: 1px solid #e1e7ef; }
+  .editor-workspace-tabs [data-workspace-tab='structure'] { display: none; }
+  .dynamic-steps-panel { display: none; }
+  .dynamic-preview-panel, .dynamic-properties-panel { padding: 12px; }
+  .dynamic-properties-panel { position: static; width: auto; height: auto; box-shadow: none; }
+  .dynamic-preview-browser { min-height: 0; }
+  .dynamic-preview-stage { min-height: 0; padding: 42px 28px; }
+  .dynamic-canvas-input-row { grid-template-columns: 1fr; }
+  /* Quiz · canvas "Computador": keep the desktop preview contained inside
+     the mobile panel so the CTA and selected outline stay reachable. */
+  .dynamic-preview-panel,
+  .dynamic-preview-browser,
+  .dynamic-preview-stage,
+  .dynamic-preview-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .dynamic-preview-panel { overflow-x: auto; scrollbar-width: thin; }
+  .dynamic-preview-browser { margin-inline: 0; }
+  .dynamic-preview-stage { overflow-x: auto; }
+  .dynamic-preview-card > .dynamic-preview-next {
+    display: inline-flex;
+    max-width: 100%;
+    white-space: normal;
+  }
 }
