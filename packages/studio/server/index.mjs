@@ -176,6 +176,7 @@ export function createApp({
   dnsLookup,
   webhookTimeoutMs,
   webhookIntervalMs,
+  webhookWorkerEnabled = process.env.WEBHOOK_WORKER_ENABLED !== 'false',
   analyticsRetentionIntervalMs,
   collectLimiterOptions,
   runtimeFlags = readRuntimeFlags(),
@@ -199,7 +200,7 @@ export function createApp({
       ...(analyticsRetentionIntervalMs === undefined ? {} : { intervalMs: analyticsRetentionIntervalMs }),
     })
     : null;
-  const webhookWorker = database
+  const webhookWorker = database && webhookWorkerEnabled
     ? startWebhookWorker({
       repository: new WebhookDeliveryRepository(database),
       dnsLookup,
@@ -284,6 +285,18 @@ export function createApp({
       const localHost = req.headers.host === expected || req.headers.host === 'localhost:' + res.socket.localPort;
       const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
       const path = new URL(req.url, 'http://' + expected).pathname;
+      // Saúde fica fora da autenticação para o orquestrador poder distinguir um
+      // processo vivo de um banco pronto. A resposta não revela detalhes do banco.
+      if (req.method === 'GET' && path === '/health/live') return json({ status: 'live' });
+      if (req.method === 'GET' && path === '/health/ready') {
+        try {
+          if (!database) throw new Error('database unavailable');
+          await database.query('SELECT 1');
+          return json({ status: 'ready' });
+        } catch {
+          return json({ status: 'not_ready' }, 503);
+        }
+      }
       const publicVsl = req.method === 'GET' ? path.match(/^\/(embed\/)?v\/([^/]+)$/) : null;
       const studioHost = publicOrigin && req.headers.host === new URL(publicOrigin).host;
       const domainScope = Boolean(publicOrigin && !studioHost);

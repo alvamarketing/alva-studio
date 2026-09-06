@@ -37,10 +37,10 @@
 
 **Interfaces:** serviços `studio-web`, `studio-worker`, `studio-media-worker`, `studio-postgres`, `umami`, `umami-postgres`, `nvs`, `nvs-mariadb`; endpoints `/health/live` e `/health/ready`.
 
-- [ ] Fixar imagens por versão e digest; manter bancos e painéis em rede privada.
-- [ ] Executar migrações e health checks sem setup manual.
-- [ ] Criar backup/restore testável e provar que reinício preserva os três bancos.
-- [ ] Testar a composição real, revisar segredos e commitar.
+- [x] Fixar imagens por versão e digest; manter bancos e painéis em rede privada.
+- [x] Executar migrações e health checks sem setup manual.
+- [x] Criar backup/restore testável e provar que reinício preserva os três bancos.
+- [x] Testar a composição real, revisar segredos e commitar.
 
 ### Task 3: Incorporar o NVS Core 0.3.10
 

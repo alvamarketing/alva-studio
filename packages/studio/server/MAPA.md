@@ -2,6 +2,7 @@
 
 - `index.mjs`: servidor HTTP, mapa dos módulos públicos e entrypoints SaaS (PostgreSQL obrigatório) e legado explícito para migração/rollback.
 - `runtime-flags.mjs`: leitura restritiva das flags dos motores comerciais e capacidades públicas sanitizadas; tudo nasce desligado até opt-in literal do ambiente.
+- `runtime-worker.mjs` e `runtime-worker-healthcheck.mjs`: entrypoint e heartbeat verificável dos workers; webhook consome a fila real, enquanto mídia só comprova conectividade até sua etapa própria.
 - `db/`: adaptador PostgreSQL e migrações ordenadas do schema SaaS.
   - `postgres.mjs`: pool com tratamento de erro de cliente ocioso, transações e executor idempotente de migrações com checksum.
   - `migrations/001_saas_foundation.sql`: empresas, memberships, projetos, conteúdo, versões, integrações e auditoria.

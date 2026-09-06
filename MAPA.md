@@ -10,6 +10,7 @@
   - `superpowers/specs/`: decisões de arquitetura aprovadas.
   - `superpowers/plans/`: planos executáveis derivados das especificações.
 - `scripts/`: scripts originais do monorepo.
+- `runtime/`: composição Docker/Coolify do Studio e runbooks operacionais, com bancos e motores internos isolados.
 - `produto/`: especificação e sequência de desenvolvimento do Alva Studio.
 - `.estado/`: registros curtos dos gates de validação das fundações do produto.
 

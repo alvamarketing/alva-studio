@@ -1,0 +1,155 @@
+name: alva-studio-runtime
+
+services:
+  studio-web:
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.studio
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
+      HOST: 0.0.0.0
+      PORT: 4178
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify}
+      WEBHOOK_WORKER_ENABLED: "false"
+      UMAMI_RUNTIME_ENABLED: "false"
+      NVS_RUNTIME_ENABLED: "false"
+      PIXELS_ENABLED: "false"
+      MEDIA_PIPELINE_ENABLED: "false"
+      BILLING_ENFORCEMENT: "false"
+    depends_on:
+      studio-postgres:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:4178:4178
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4178/health/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  studio-worker:
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.studio
+    restart: unless-stopped
+    command: ["node", "server/runtime-worker.mjs", "--role=webhook"]
+    environment:
+      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
+      WEBHOOK_WORKER_INTERVAL_MS: 5000
+    depends_on:
+      studio-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+  studio-media-worker:
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.studio
+    restart: unless-stopped
+    command: ["node", "server/runtime-worker.mjs", "--role=media"]
+    environment:
+      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
+      MEDIA_PIPELINE_ENABLED: "false"
+    depends_on:
+      studio-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+  studio-postgres:
+    image: postgres:16.6-alpine3.21@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: ${STUDIO_POSTGRES_PASSWORD:?Defina STUDIO_POSTGRES_PASSWORD no ambiente do Coolify}
+      POSTGRES_DB: studio
+    volumes:
+      - studio-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d studio"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  umami:
+    image: ghcr.io/umami-software/umami:3.3.1@sha256:fa32d116cf20cad52cbc3fad9a63b46e7fa02299d8f967168eb453d49c476b4a
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_POSTGRES_PASSWORD:?Defina UMAMI_POSTGRES_PASSWORD no ambiente do Coolify}@umami-postgres:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:?Defina UMAMI_APP_SECRET no ambiente do Coolify}
+    depends_on:
+      umami-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/heartbeat').then((r) => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  umami-postgres:
+    image: postgres:16.6-alpine3.21@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_POSTGRES_PASSWORD:?Defina UMAMI_POSTGRES_PASSWORD no ambiente do Coolify}
+      POSTGRES_DB: umami
+    volumes:
+      - umami-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  nvs:
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.nvs
+    restart: unless-stopped
+    depends_on:
+      nvs-mariadb:
+        condition: service_healthy
+    environment:
+      NVS_MARIADB_HOST: nvs-mariadb
+      NVS_MARIADB_DATABASE: nvs
+      NVS_MARIADB_USER: nvs
+      NVS_MARIADB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
+    healthcheck:
+      test: ["CMD", "php", "healthcheck.php"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  nvs-mariadb:
+    image: mariadb:11.4@sha256:611a2fcc5fa7c6ceb8644c6f74b25ede004ff6c3a6b38c8f8c23d3bbf6c26430
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: nvs
+      MARIADB_USER: nvs
+      MARIADB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
+      MARIADB_ROOT_PASSWORD: ${NVS_MARIADB_ROOT_PASSWORD:?Defina NVS_MARIADB_ROOT_PASSWORD no ambiente do Coolify}
+    volumes:
+      - nvs-mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p\"$$MARIADB_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  studio-postgres-data:
+  umami-postgres-data:
+  nvs-mariadb-data:

@@ -203,6 +203,27 @@ test('inicialização SaaS exige DATABASE_URL e só inicia o app depois de migra
   assert.deepEqual(calls.at(-1), 'close');
 });
 
+test('inicialização SaaS aceita host externo apenas com PUBLIC_ORIGIN explícita', async () => {
+  const previous = process.env.PUBLIC_ORIGIN;
+  process.env.PUBLIC_ORIGIN = 'https://studio.localhost';
+  const database = { close: async () => {} };
+  try {
+    const runtime = await startSaaS({
+      connectionString: 'postgres://nao-registre-esta-url',
+      createDatabaseFn: () => database,
+      migrateFn: async () => {},
+      appFactory: () => createApp({ dataDir: join(tmpdir(), 'alva-saas-public-origin-test') }),
+      port: 0,
+      host: '0.0.0.0',
+      log: () => {},
+    });
+    await runtime.close();
+  } finally {
+    if (previous === undefined) delete process.env.PUBLIC_ORIGIN;
+    else process.env.PUBLIC_ORIGIN = previous;
+  }
+});
+
 test('falha de boot SaaS fecha a conexão sem registrar a URL', async () => {
   const calls = [];
   const database = { close: async () => calls.push('close') };
