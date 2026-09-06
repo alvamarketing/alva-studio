@@ -8,6 +8,10 @@ import { NvsClient, UmamiClient } from './tracking-clients.mjs';
 import { startTrackingProvisionWorker } from './tracking-provision-worker.mjs';
 import { NvsCommercialOutboxRepository } from './repositories/nvs-commercial-outbox-repository.mjs';
 import { startCommercialEventsWorker } from './commercial-events-worker.mjs';
+import { BillingRepository } from './repositories/billing-repository.mjs';
+import { AsaasClient } from './asaas-client.mjs';
+import { startBillingWorker } from './billing-worker.mjs';
+import { billingRuntimeEnvironment } from './runtime-flags.mjs';
 
 export async function startRuntimeWorker({
   role,
@@ -24,11 +28,15 @@ export async function startRuntimeWorker({
   startTrackingWorkerFn = startTrackingProvisionWorker,
   commercialRepositoryFactory = (database) => new NvsCommercialOutboxRepository(database),
   startCommercialWorkerFn = startCommercialEventsWorker,
+  billingRepositoryFactory = (database) => new BillingRepository(database),
+  startBillingWorkerFn = startBillingWorker,
+  billingEnvironment = billingRuntimeEnvironment(),
+  billingClientFactory = (environment) => new AsaasClient({ environment, apiKey: environment === 'production' ? process.env.ASAAS_PRODUCTION_API_KEY : process.env.ASAAS_SANDBOX_API_KEY }),
   trackingProvisionEnabled = process.env.TRACKING_PROVISION_ENABLED === 'true',
   nvsRuntimeEnabled = process.env.NVS_RUNTIME_ENABLED === 'true',
   log = console.log,
 } = {}) {
-  if (!['webhook', 'tracking', 'media'].includes(role)) throw new Error('Papel de worker inválido.');
+  if (!['webhook', 'tracking', 'media', 'billing'].includes(role)) throw new Error('Papel de worker inválido.');
   if (typeof connectionString !== 'string' || !connectionString) throw new Error('DATABASE_URL é obrigatória para o worker.');
   if (!Number.isFinite(intervalMs) || intervalMs < 1_000) throw new Error('Intervalo de heartbeat inválido.');
   if (!Number.isFinite(webhookIntervalMs) || webhookIntervalMs < 1_000) throw new Error('Intervalo da fila de webhook inválido.');
@@ -38,6 +46,7 @@ export async function startRuntimeWorker({
   let webhookWorker;
   let trackingWorker;
   let commercialWorker;
+  let billingWorker;
   let closed = false;
   try {
     await migrateFn(database);
@@ -56,6 +65,9 @@ export async function startRuntimeWorker({
     if (role === 'tracking' && nvsRuntimeEnabled) {
       commercialWorker = startCommercialWorkerFn({ repository: commercialRepositoryFactory(database), client: new NvsClient() });
     }
+    if (role === 'billing') {
+      billingWorker = startBillingWorkerFn({ repository: billingRepositoryFactory(database), clientFactory: billingClientFactory });
+    }
     const heartbeat = async () => {
       await database.query('SELECT 1');
       await writeFile(heartbeatFile, JSON.stringify({ role, at: new Date().toISOString() }), { mode: 0o600 });
@@ -69,7 +81,8 @@ export async function startRuntimeWorker({
         clearInterval(timer);
         webhookWorker?.stop?.();
         trackingWorker?.stop?.();
-        commercialWorker?.stop?.();
+      commercialWorker?.stop?.();
+      billingWorker?.stop?.();
         await database.close().catch(() => {});
         return exitCode;
       },
@@ -81,6 +94,7 @@ export async function startRuntimeWorker({
     webhookWorker?.stop?.();
     trackingWorker?.stop?.();
     commercialWorker?.stop?.();
+    billingWorker?.stop?.();
     await database.close().catch(() => {});
     throw error;
   }

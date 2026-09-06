@@ -99,8 +99,9 @@ async function activeMembership(client, { companyId, userId }) {
 }
 
 export class CompanyRepository {
-  constructor(database) {
+  constructor(database, { billingPolicy = null } = {}) {
     this.database = database;
+    this.billingPolicy = billingPolicy;
   }
 
   async create({ ownerUserId, name, slug }) {
@@ -238,6 +239,13 @@ export class CompanyRepository {
       const actor = await activeMembership(client, { companyId, userId: actorUserId });
       if (!actor) throw fail('Empresa não encontrada.', 404);
       if (!hasCapability(actor.role, 'member.manage')) throw fail('Sem permissão para convidar membros.', 403);
+      await this.billingPolicy?.assertQuota(client, {
+        companyId, resource: 'members',
+        countSql: `SELECT (
+          (SELECT count(*) FROM company_memberships WHERE company_id = $1 AND status = 'active') +
+          (SELECT count(*) FROM invitations WHERE company_id = $1 AND accepted_at IS NULL AND expires_at > now())
+        )::int AS count`,
+      });
 
       const existing = await client.query(
         `SELECT membership.status
@@ -275,6 +283,10 @@ export class CompanyRepository {
       );
       const identity = invitationIdentity.rows[0];
       if (!identity) throw fail('Convite inválido.', 404);
+      await this.billingPolicy?.assertQuota(client, {
+        companyId: identity.company_id, resource: 'members',
+        countSql: `SELECT count(*)::int AS count FROM company_memberships WHERE company_id = $1 AND status = 'active'`,
+      });
       await client.query(
         'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
         [identity.company_id, identity.email],

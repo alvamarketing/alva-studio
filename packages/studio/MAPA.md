@@ -1,7 +1,7 @@
 # Studio
 
-- `server/`: HTTP, fundação PostgreSQL multiempresa, compatibilidade local, publicação por projeto e integração Vercel.
-- `public/`: interface, editores e seção de publicação por projeto.
+- `server/`: HTTP, fundação PostgreSQL multiempresa, cobrança Asaas, compatibilidade local, publicação por projeto e integração Vercel.
+- `public/`: interface, editores, publicação por projeto e cartão de plano e cobrança da empresa.
 - `test/`: testes automatizados.
 - `README.md`: uso, configuração e limites.
 - `package.json` e `pnpm-lock.yaml`: dependências e comandos.

@@ -21,7 +21,12 @@ services:
       PUBLICATION_RUNTIME_HMAC_SECRET: ${PUBLICATION_RUNTIME_HMAC_SECRET:-}
       PIXELS_ENABLED: ${PIXELS_ENABLED:-false}
       MEDIA_PIPELINE_ENABLED: "false"
-      BILLING_ENFORCEMENT: "false"
+      BILLING_ENFORCEMENT: ${BILLING_ENFORCEMENT:-false}
+      ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-sandbox}
+      ASAAS_SANDBOX_API_KEY: ${ASAAS_SANDBOX_API_KEY:-}
+      ASAAS_SANDBOX_WEBHOOK_TOKEN: ${ASAAS_SANDBOX_WEBHOOK_TOKEN:-}
+      ASAAS_PRODUCTION_API_KEY: ${ASAAS_PRODUCTION_API_KEY:-}
+      ASAAS_PRODUCTION_WEBHOOK_TOKEN: ${ASAAS_PRODUCTION_WEBHOOK_TOKEN:-}
     depends_on:
       studio-postgres:
         condition: service_healthy
@@ -62,6 +67,27 @@ services:
     environment:
       DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
       MEDIA_PIPELINE_ENABLED: "false"
+    depends_on:
+      studio-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+  studio-billing-worker:
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.studio
+    restart: unless-stopped
+    command: ["node", "server/runtime-worker.mjs", "--role=billing"]
+    environment:
+      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
+      ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-sandbox}
+      ASAAS_SANDBOX_API_KEY: ${ASAAS_SANDBOX_API_KEY:-}
+      ASAAS_PRODUCTION_API_KEY: ${ASAAS_PRODUCTION_API_KEY:-}
     depends_on:
       studio-postgres:
         condition: service_healthy

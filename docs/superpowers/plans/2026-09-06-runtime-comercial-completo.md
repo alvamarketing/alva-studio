@@ -144,6 +144,22 @@ A Task 8 fica fora da certificação V1 e será retomada somente após a V1 come
 - [ ] Homologar checkout, webhook, reconciliação e cancelamento no Asaas Sandbox.
 - [ ] Revisar segurança/visual, rodar suíte e commitar.
 
+**Progresso de implementação (2026-09-06, aguardando revisão):** migração 017,
+pedido idempotente, checkout hospedado, inbox/worker Asaas, cancelamento no fim
+do período, limites transacionais 5/10/5, gate opcional de publicação e cartão
+de Empresa foram implementados e testados com PostgreSQL/fakes locais. A
+homologação sandbox, revisão visual independente, suíte completa e commit
+continuam pendentes; nenhum segredo, egress real ou conta Asaas foi usado.
+
+**Correção de revisão (2026-09-06, aguardando revisão):** a mesma migração 017
+passou a deduplicar a inbox por ambiente/provedor/ID do evento, com hash apenas
+para auditoria; pedidos abertos são reutilizados por até 65 minutos entre
+cliques, e assinatura vigente bloqueia nova recorrência. A fila ganhou
+disponibilidade, backoff, máximo de tentativas e estados separados para retry,
+review e lifecycle de inadimplência/reembolso. A primeira confirmação vincula o
+customer e toda confirmação reconsulta assinatura. Nenhuma condição deste
+registro marca o nó como concluído.
+
 ### Task 10: Expor agentes MCP por projeto
 
 **Files:** migração de chaves/runs, servidor MCP, APIs administrativas e tela de conexão.

@@ -2,6 +2,10 @@ function enabled(environment, name) {
   return environment?.[name] === 'true';
 }
 
+export function billingRuntimeEnvironment(environment = process.env) {
+  return environment?.ASAAS_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
+}
+
 export function readRuntimeFlags(environment = process.env) {
   return Object.freeze({
     umamiRuntime: enabled(environment, 'UMAMI_RUNTIME_ENABLED'),

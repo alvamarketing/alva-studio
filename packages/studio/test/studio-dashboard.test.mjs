@@ -100,7 +100,10 @@ test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wire
   assert.match(app, /await studioShell\.initialize\(\);\s*dashboardContextFlow\.bootstrap\(\);/);
   assert.match(app, /createVslUI\(\{ api, getShell: \(\) => studioShell, toast \}\)/);
   assert.match(app, /nav-vsl'\)\.hidden = !mediaPipelineEnabled \|\| !studioShell\?\.can\?\.\('video\.read'\)/);
-  assert.match(app, /futureText\.textContent = 'Em breve'/);
+  assert.match(app, /api\('\/billing'\)/);
+  assert.match(app, /Abrir checkout/);
+  assert.match(app, /Cancelar renovação/);
+  assert.match(app, /alva\.billing\.checkout/);
   assert.doesNotMatch(dashboardShell, /Imobiliárias|Diagnóstico comercial|Projeto CMA|Profissional|2 de 5/);
 });
 

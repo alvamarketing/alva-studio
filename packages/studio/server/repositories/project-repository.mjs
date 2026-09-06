@@ -1,4 +1,5 @@
 import { normalizeProjectSlug } from '../domain/access.mjs';
+import { withTransaction } from '../db/postgres.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -53,14 +54,20 @@ const AUTHORIZED_PROJECTS = `
 `;
 
 export class ProjectRepository {
-  constructor(database) {
+  constructor(database, { billingPolicy = null } = {}) {
     this.database = database;
+    this.billingPolicy = billingPolicy;
   }
 
   async create({ companyId, actorUserId, name, slug }) {
     const projectName = requiredName(name);
     const normalizedSlug = projectSlug(slug);
-    const { rows } = await this.database.query(
+    return withTransaction(this.database, async (client) => {
+    await this.billingPolicy?.assertQuota(client, {
+      companyId, resource: 'projects',
+      countSql: `SELECT count(*)::int AS count FROM projects WHERE company_id = $1 AND status = 'active'`,
+    });
+    const { rows } = await client.query(
       `INSERT INTO projects (company_id, name, slug, created_by)
        SELECT $1, $2, $3, membership.user_id
        FROM company_memberships membership
@@ -73,6 +80,7 @@ export class ProjectRepository {
     );
     if (!rows.length) throw fail('Projeto não encontrado.', 404);
     return projectRecord(rows[0]);
+    });
   }
 
   async listForUser({ companyId, userId }) {

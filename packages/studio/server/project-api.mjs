@@ -179,6 +179,7 @@ export function createProjectApi({
   tracking,
   commercialOutbox,
   runtimeFlags,
+  billing,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -205,6 +206,22 @@ export function createProjectApi({
     if (method === 'PUT' && path === '/api/account') return json(await sessionService.account(req, await body(req), res, secure));
 
     const context = await sessionService.require(req);
+    if (method === 'GET' && path === '/api/billing') {
+      if (!billing) throw fail('A cobrança ainda não está configurada.', 503);
+      return json(await billing.summary({ companyId: context.companyId }));
+    }
+    if (method === 'POST' && path === '/api/billing/checkout') {
+      await sessionService.authorize(context, 'billing.manage');
+      if (!billing?.service) { await body(req); throw fail('A cobrança ainda não está configurada.', 503); }
+      const input = await body(req);
+      return json(await billing.service.checkout({ companyId: context.companyId, actorUserId: context.user.id, idempotencyKey: input.idempotencyKey }));
+    }
+    if (method === 'POST' && path === '/api/billing/cancel') {
+      await sessionService.authorize(context, 'billing.manage');
+      if (!billing?.service) { await body(req); throw fail('A cobrança ainda não está configurada.', 503); }
+      await body(req);
+      return json(await billing.service.cancel({ companyId: context.companyId, actorUserId: context.user.id }));
+    }
     const requireIntegration = async () => {
       if (!context.currentProjectId) throw fail('Escolha um projeto ativo.', 409);
       await sessionService.authorize(context, 'integration.manage', context.currentProjectId);

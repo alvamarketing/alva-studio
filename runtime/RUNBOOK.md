@@ -44,6 +44,22 @@ quanto no worker de provisionamento. As flags `UMAMI_RUNTIME_ENABLED`,
 `NVS_RUNTIME_ENABLED` e `TRACKING_PROVISION_ENABLED` exigem valor literal
 `true` e continuam desligadas até aceite operacional.
 
+## Cobrança Asaas V1
+
+O runtime inicia em `ASAAS_ENVIRONMENT=sandbox`. Guarde
+`ASAAS_SANDBOX_API_KEY` e `ASAAS_SANDBOX_WEBHOOK_TOKEN` separadamente de
+`ASAAS_PRODUCTION_API_KEY` e `ASAAS_PRODUCTION_WEBHOOK_TOKEN`; os valores
+nunca devem aparecer em comando, log ou arquivo versionado. Não ative produção
+até homologar o sandbox e promover o plano de produção de `draft`.
+
+O proxy HTTPS entrega `POST /api/billing/webhook/asaas` ao `studio-web`.
+Essa rota só autentica o token em tempo constante e coloca o evento sanitizado
+na inbox, rejeitando corpo acima de 64 KB. `studio-billing-worker` reconsulta
+o Asaas e só então atualiza pagamento, assinatura e entitlement. O worker usa
+a chave do ambiente declarado; não compartilhe uma chave entre os dois
+ambientes. Um evento em revisão requer inspeção do pedido e da resposta do
+provedor no banco, sem tentar liberar entitlement manualmente.
+
 ## Subir e verificar
 
 O `studio-web` aplica as migrações antes de abrir a porta. Consulte

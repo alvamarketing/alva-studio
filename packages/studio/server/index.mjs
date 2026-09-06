@@ -40,6 +40,12 @@ import { normalizeUmamiGatewayPayload } from './umami-gateway.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
 import { readRuntimeFlags, requiredTrackingEngines } from './runtime-flags.mjs';
+import { billingRuntimeEnvironment } from './runtime-flags.mjs';
+import { AsaasClient } from './asaas-client.mjs';
+import { BillingRepository } from './repositories/billing-repository.mjs';
+import { BillingService } from './billing-service.mjs';
+import { acceptBillingWebhook } from './billing-webhook.mjs';
+import { BillingPolicy } from './billing-policy.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 const NVS_VSL_EVENTS = new Set(['vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
@@ -216,6 +222,7 @@ export function createApp({
   runtimeFlags = readRuntimeFlags(),
   umamiClient,
   runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET,
+  billingOptions = {},
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -251,6 +258,19 @@ export function createApp({
     ? new NvsCommercialOutboxRepository(database) : null;
   const runtimeConsents = runtimeFlags.pixels && database ? new PublicationRuntimeRepository(database) : null;
   const runtimeConsentGateway = runtimeConsents ? new RuntimeConsentGateway({ repository: runtimeConsents }) : null;
+  const billingEnvironment = billingOptions.environment || billingRuntimeEnvironment();
+  const billingRepository = database ? new BillingRepository(database) : null;
+  const billingApiKey = billingOptions.apiKey || (billingEnvironment === 'production' ? process.env.ASAAS_PRODUCTION_API_KEY : process.env.ASAAS_SANDBOX_API_KEY);
+  const billingWebhookSecret = billingOptions.webhookSecret || (billingEnvironment === 'production' ? process.env.ASAAS_PRODUCTION_WEBHOOK_TOKEN : process.env.ASAAS_SANDBOX_WEBHOOK_TOKEN);
+  const billingClientFactory = billingOptions.clientFactory || ((environment) => new AsaasClient({ environment, apiKey: billingApiKey }));
+  const billing = billingRepository ? {
+    repository: billingRepository,
+    summary: (scope) => billingRepository.summary({ ...scope, environment: billingEnvironment }),
+    service: billingApiKey && publicOrigin
+      ? new BillingService({ repository: billingRepository, clientFactory: billingClientFactory, site: publicOrigin, environment: billingEnvironment, audit: new AuditRepository(database) })
+      : null,
+  } : null;
+  const billingPolicy = billingRepository ? new BillingPolicy({ environment: billingEnvironment, enforcement: runtimeFlags.billingEnforcement, repository: billingRepository }) : null;
   const commercialConsentResolver = runtimeConsents ? async ({ companyId, projectId, environment, origin, publicationId, subjectId }) => {
     const manifest = runtimeManifest(await runtimeConsents.currentForOrigin({ publicationId, origin }));
     if (!manifest || manifest.companyId !== companyId || manifest.projectId !== projectId || manifest.environment !== environment) throw error('Escopo de consentimento inválido.', 403);
@@ -270,20 +290,21 @@ export function createApp({
       deployments,
       publisherFactory: (credentials) => injectedPublisher || new Publisher(credentials),
       audit: new AuditRepository(database),
-      domains: new ProjectDomainRepository(database),
+      domains: new ProjectDomainRepository(database, { billingPolicy }),
       tracking,
       runtimeManifests: runtimeConsents,
       runtimeEnabled: runtimeFlags.pixels === true,
       runtimeOrigin: publicOrigin || 'http://127.0.0.1',
       runtimeHmacSecret,
       trackingRequiredEngines: requiredTrackingEngines(runtimeFlags),
+      billingPolicy,
     })
     : null;
   const projectApi = database
     ? createProjectApi({
       sessionService: new SessionService(database, sessionOptions),
-      companies: new CompanyRepository(database),
-      projects: new ProjectRepository(database),
+      companies: new CompanyRepository(database, { billingPolicy }),
+      projects: new ProjectRepository(database, { billingPolicy }),
       content,
       videos,
       analytics,
@@ -297,6 +318,7 @@ export function createApp({
       integrations,
       publication,
       runtimeFlags,
+      billing,
       setupAllowed: (req) => {
         const expected = `127.0.0.1:${req.socket.localPort}`;
         const localHost = req.headers.host === expected || req.headers.host === `localhost:${req.socket.localPort}`;
@@ -371,6 +393,7 @@ export function createApp({
       const publicProjectSubmission = Boolean(publicFormRequest && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
       const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
       const publicUmami = path === '/api/public/umami/send' && req.method === 'POST';
+      const publicBillingWebhook = Boolean(billingRepository && path === '/api/billing/webhook/asaas');
       const publicRuntimeConsent = runtimeConsentGateway && path === '/_alva/consent' && ['GET', 'POST'].includes(req.method);
       const publicRuntimeLoader = runtimeConsents && path === '/_alva/runtime.js' && req.method === 'GET';
       const runtimeGatewayProtected = Boolean(runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || (publicFormRequest && ['POST', 'OPTIONS'].includes(req.method))));
@@ -381,7 +404,7 @@ export function createApp({
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
+      if (!publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
       // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
       const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
@@ -389,6 +412,13 @@ export function createApp({
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
+      if (publicBillingWebhook) {
+        if (!studioHost && publicOrigin) throw error('Endereço não permitido.', 403);
+        const contentLength = Number(req.headers['content-length']);
+        if (Number.isFinite(contentLength) && contentLength > 64 * 1024) throw error('Corpo muito grande.', 413);
+        const accepted = await acceptBillingWebhook({ method: req.method, headers: req.headers, raw: await rawBody(req, 64 * 1024, 'Corpo muito grande.'), secret: billingWebhookSecret, environment: billingEnvironment, repository: billingRepository });
+        res.writeHead(accepted.status); return res.end();
+      }
       // Report-Only por enquanto: só reporta violação, nunca bloqueia — a migração para modo
       // reforçado é decisão futura, depois que todo script inline aceitar o nonce.
       const publicHtmlNonce = (actionOrigin) => {
@@ -714,7 +744,7 @@ export function createApp({
       throw error('Não encontrado.', 404);
     } catch (e) {
       if (!res.headersSent)
-        json({ error: (e.status || e.statusCode) ? e.message : 'Não foi possível concluir. Tente novamente.' }, e.status || e.statusCode || 500);
+        json({ error: (e.status || e.statusCode) ? e.message : 'Não foi possível concluir. Tente novamente.', ...(e.code ? { code: e.code } : {}) }, e.status || e.statusCode || 500);
       else res.end();
     }
   });

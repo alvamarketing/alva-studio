@@ -8,7 +8,7 @@ function publicRun(run, snapshot) {
   return snapshot ? { ...run, snapshotHash: snapshot.hash, manifest: snapshot.manifest } : run;
 }
 export class PublicationService {
-  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains, tracking, runtimeManifests = null, runtimeEnabled = false, runtimeOrigin = '', runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET, trackingRequired = false, trackingRequiredEngines = trackingRequired ? ['umami', 'nvs'] : [] } = {}) {
+  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains, tracking, runtimeManifests = null, runtimeEnabled = false, runtimeOrigin = '', runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET, trackingRequired = false, trackingRequiredEngines = trackingRequired ? ['umami', 'nvs'] : [], billingPolicy = null } = {}) {
     this.snapshotBuilder = snapshotBuilder;
     this.integrations = integrations;
     this.deployments = deployments;
@@ -21,6 +21,7 @@ export class PublicationService {
     this.runtimeOrigin = runtimeOrigin;
     this.runtimeHmacSecret = runtimeHmacSecret;
     this.trackingRequiredEngines = [...new Set(trackingRequiredEngines)].sort();
+    this.billingPolicy = billingPolicy;
   }
 
   async requireTracking(input, environment) {
@@ -107,6 +108,7 @@ export class PublicationService {
   async production(input) {
     if (input.confirmed !== true) throw fail('A confirmação da publicação em produção é obrigatória.', 409);
     if (!input.previewRunId) throw fail('Valide uma prévia antes de publicar em produção.', 409);
+    await this.billingPolicy?.requireProductionAccess(input.companyId);
     await this.requireTracking(input, 'production');
     const snapshot = await this.snapshotBuilder.build({ ...input, environment: 'production' });
     const preview = await this.deployments.find({ companyId: input.companyId, projectId: input.projectId, runId: input.previewRunId });
@@ -129,6 +131,9 @@ export class PublicationService {
     const run = await this.deployments.find({ companyId, projectId, runId });
     if (!run || run.environment !== 'production') throw fail('Publique em produção antes de configurar o domínio.', 409);
     if (String(run.status).toUpperCase() !== 'READY') throw fail('O domínio só pode ser configurado após a publicação estar no ar.', 409);
+    // Reserva a cota antes do egress: uma falha posterior fica pendente para conciliação,
+    // mas não cria domínios externos acima do limite da empresa.
+    if (this.domains) await this.domains.save({ companyId, projectId, environment: 'production', domain, verificationStatus: 'pending', reserve: true });
     const { credentials, publisher } = await this.publisher({ companyId, projectId });
     const result = await publisher.domain({ projectId: credentials.vercelProjectId, domain });
     if (this.domains) await this.domains.save({ companyId, projectId, environment: 'production', domain: result.name || domain, verificationStatus: result.verified ? 'verified' : 'pending' });

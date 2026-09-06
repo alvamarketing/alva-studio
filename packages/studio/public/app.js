@@ -262,7 +262,7 @@ async function selectProject(projectId) {
   projectContentFilter = 'all';
   setDashboardView('project');
 }
-function renderCompanyOverview(overview, { content = $('#company-content'), title = $('#company-view-title'), role = $('#company-role') } = {}) {
+function renderCompanyOverview(overview, { content = $('#company-content'), title = $('#company-view-title'), role = $('#company-role'), billing = null } = {}) {
   clear(content);
   if (title) title.textContent = overview.company.name;
   if (role) role.textContent = `Seu papel: ${roleLabel(overview.role)}`;
@@ -318,14 +318,66 @@ function renderCompanyOverview(overview, { content = $('#company-content'), titl
     team.append(teamTitle, list);
     content.append(team);
   }
-  const future = document.createElement('section');
-  future.className = 'company-overview-section company-future';
-  const futureTitle = document.createElement('h2');
-  futureTitle.textContent = 'Plano e cobrança';
-  const futureText = document.createElement('p');
-  futureText.textContent = 'Em breve';
-  future.append(futureTitle, futureText);
-  content.append(future);
+  const billingCard = document.createElement('section');
+  billingCard.className = 'company-overview-section company-future';
+  const billingTitle = document.createElement('h2');
+  billingTitle.textContent = 'Plano e cobrança';
+  const billingText = document.createElement('p');
+  const entitlement = billing?.entitlement;
+  const limits = entitlement?.limits || { projects: 5, members: 10, domains: 5 };
+  const period = entitlement?.currentPeriodEnd ? new Date(entitlement.currentPeriodEnd).toLocaleDateString('pt-BR') : '';
+  billingText.textContent = entitlement?.status === 'active'
+    ? `Plano ativo · renova até ${period}`
+    : entitlement?.status === 'cancel_at_period_end'
+      ? `Cancelamento agendado · acesso até ${period}`
+      : 'Plano mensal para publicar e crescer com a equipe.';
+  const billingLimits = document.createElement('div');
+  billingLimits.className = 'company-counts';
+  for (const [label, value] of [['Projetos', limits.projects], ['Membros', limits.members], ['Domínios', limits.domains]]) {
+    const item = document.createElement('div');
+    const amount = document.createElement('strong');
+    amount.textContent = String(value);
+    const caption = document.createElement('span');
+    caption.textContent = label;
+    item.append(amount, caption);
+    billingLimits.append(item);
+  }
+  billingCard.append(billingTitle, billingText, billingLimits);
+  if (studioShell?.can?.('billing.manage')) {
+    const checkout = document.createElement('button');
+    checkout.type = 'button';
+    checkout.className = 'primary';
+    checkout.textContent = 'Abrir checkout';
+    checkout.onclick = action(async () => {
+      checkout.disabled = true;
+      const companyId = studioShell.state().currentCompany?.id || 'current';
+      const storageKey = `alva.billing.checkout.${companyId}.${billing?.environment || 'sandbox'}`;
+      const stored = (() => {
+        try {
+          const value = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          return value?.key && value.createdAt > Date.now() - 65 * 60_000 ? value.key : null;
+        } catch { return null; }
+      })();
+      const idempotencyKey = stored || globalThis.crypto?.randomUUID?.() || `checkout-${Date.now()}`;
+      try { localStorage.setItem(storageKey, JSON.stringify({ key: idempotencyKey, createdAt: Date.now() })); } catch {}
+      const result = await api('/billing/checkout', 'POST', { idempotencyKey });
+      if (!result.checkoutUrl) throw new Error('O checkout ainda está sendo preparado. Tente novamente em instantes.');
+      window.location.assign(result.checkoutUrl);
+    });
+    billingCard.append(checkout);
+    if (entitlement?.status === 'active') {
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.textContent = 'Cancelar renovação';
+      cancel.onclick = action(async () => {
+        if (!window.confirm('Cancelar a renovação ao fim do período já pago?')) return;
+        await api('/billing/cancel', 'POST');
+        await renderCompany();
+      });
+      billingCard.append(cancel);
+    }
+  }
+  content.append(billingCard);
 }
 async function renderCompany() {
   if (!studioShell) return;
@@ -350,11 +402,14 @@ async function renderCompany() {
   status.textContent = 'Carregando empresa…';
   status.dataset.state = 'loading';
   try {
-    const overview = await api(`/companies/${state.currentCompany.id}/overview`);
+    const [overview, billing] = await Promise.all([
+      api(`/companies/${state.currentCompany.id}/overview`),
+      api('/billing').catch(() => null),
+    ]);
     if (request !== companyOverviewRequest || state.currentCompany.id !== studioShell.state().currentCompany?.id) return;
     status.textContent = '';
     status.dataset.state = overview.projects.length ? 'ready' : 'empty';
-    renderCompanyOverview(overview);
+    renderCompanyOverview(overview, { billing });
   } catch (error) {
     if (request !== companyOverviewRequest) return;
     status.textContent = error.message || 'Não foi possível carregar a empresa.';
@@ -1444,10 +1499,10 @@ ownerUI = createOwnerUI({
     $('#settings-company-status').textContent = 'Carregando dados da empresa…';
     const target = $('#settings-company-content');
     if (!state?.currentCompany || !target) return;
-    api(`/companies/${state.currentCompany.id}/overview`).then((overview) => {
+    Promise.all([api(`/companies/${state.currentCompany.id}/overview`), api('/billing').catch(() => null)]).then(([overview, billing]) => {
       if (studioShell?.state().currentCompany?.id !== state.currentCompany.id || $('#settings-view').hidden) return;
       $('#settings-company-status').textContent = '';
-      renderCompanyOverview(overview, { content: target, title: $('#settings-company-name'), role: $('#settings-company-role') });
+      renderCompanyOverview(overview, { content: target, title: $('#settings-company-name'), role: $('#settings-company-role'), billing });
     }).catch((error) => {
       if ($('#settings-view').hidden) return;
       $('#settings-company-status').textContent = error.message || 'Não foi possível carregar a empresa.';

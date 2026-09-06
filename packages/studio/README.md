@@ -81,7 +81,7 @@ Depois do corte, todas as sessões devem ser encerradas e os usuários entram no
 
 O conector Vercel atual pertence ao modo local e cifra o token em disco. A integração Vercel SaaS, por empresa e projeto, com cofre de segredos, domínio compartilhado por rotas e publicação atômica ainda está pendente. O painel SaaS responde que essa configuração está em preparação para evitar sugerir que existe uma conexão real.
 
-Aurora, Umami, NVS, rastreamento de conversão, MCP/agentes e Asaas também são próximas etapas. A fundação já reserva o isolamento necessário, mas não provisiona contas, não envia eventos, não cria chaves de agente e não processa pagamentos. Planos, preços e créditos serão definidos em uma etapa comercial própria.
+Aurora, MCP/agentes e mídia continuam etapas próprias. A cobrança V1 usa um único plano recorrente por empresa, com checkout hospedado Asaas, sandbox por padrão e dados comerciais definidos somente pelo servidor. O webhook público aceita no máximo 64 KB, exige token de ao menos 32 caracteres em comparação de tempo constante, deduplica pelo ID de evento Asaas, persiste apenas inbox sanitizada e confirma acesso somente no worker após reconsulta. Não há carteira, créditos, pacotes, mídia ou Apps/Lab neste contrato.
 
 ## Runtime comercial
 
@@ -99,6 +99,32 @@ As flags não provisionam serviços, não expõem painéis nem tornam uma integr
 ativa por si mesmas. O coletor Node existente continua registrando eventos
 durante a migração; após o corte homologado para Umami e NVS reais, sua leitura
 fica preservada por 90 dias.
+
+### Cobrança Asaas V1
+
+`ASAAS_ENVIRONMENT=sandbox` é o padrão. As chaves e tokens
+`ASAAS_SANDBOX_*` e `ASAAS_PRODUCTION_*` são separados; nunca use um
+segredo de produção no sandbox. O plano de produção nasce como `draft` e
+recusa checkout até revisão operacional. O servidor fixa empresa, ambiente,
+plano, preço e moeda BRL no pedido antes de chamar o provedor. Um timeout deixa
+o pedido em `submitting` para reconciliação, evitando nova cobrança incerta.
+
+Os limites são aplicados com lock transacional antes de criar projeto, convite
+de membro ou reserva de domínio: 5 projetos, 10 membros (incluindo convites
+pendentes) e 5 domínios. `BILLING_ENFORCEMENT=true` exige entitlement ativo
+somente para publicação em produção; sem a flag, o comportamento histórico de
+publicação é preservado. O cancelamento troca o estado para
+`cancel_at_period_end` e preserva acesso até o período pago terminar.
+
+Configure o webhook Asaas em
+`POST /api/billing/webhook/asaas` com o token do mesmo ambiente. O processo
+`studio-billing-worker` é o único que consulta pagamentos/assinaturas no
+provedor e valida pagamento, referência externa, valor, moeda, ambiente,
+cliente conhecido e assinatura antes de conceder entitlement. Falhas transitórias
+e órfãos usam retry com disponibilidade/backoff e limite de tentativas;
+divergências, reembolsos e chargebacks ficam em revisão e nunca liberam acesso.
+Isso inclui reembolso solicitado/em andamento, disputa de chargeback e espera
+de reversão de chargeback.
 
 ## Dados e segurança
 

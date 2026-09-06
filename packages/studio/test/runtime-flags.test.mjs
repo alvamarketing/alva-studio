@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readRuntimeFlags, requiredTrackingEngines } from '../server/runtime-flags.mjs';
+import { billingRuntimeEnvironment, readRuntimeFlags, requiredTrackingEngines } from '../server/runtime-flags.mjs';
 
 test('flags de runtime exigem opt-in literal e permanecem desligadas por padrão', () => {
   assert.deepEqual(readRuntimeFlags({}), {
@@ -45,4 +45,10 @@ test('motores obrigatórios de rastreamento seguem exatamente as flags ativas', 
     [{ NVS_RUNTIME_ENABLED: 'true' }, ['nvs']],
     [{ UMAMI_RUNTIME_ENABLED: 'true', NVS_RUNTIME_ENABLED: 'true' }, ['umami', 'nvs']],
   ]) assert.deepEqual(requiredTrackingEngines(readRuntimeFlags(environment)), expected);
+});
+
+test('cobrança usa sandbox por padrão e exige produção explícita', () => {
+  assert.equal(billingRuntimeEnvironment({}), 'sandbox');
+  assert.equal(billingRuntimeEnvironment({ ASAAS_ENVIRONMENT: 'production' }), 'production');
+  assert.equal(billingRuntimeEnvironment({ ASAAS_ENVIRONMENT: 'PRODUCTION' }), 'sandbox');
 });

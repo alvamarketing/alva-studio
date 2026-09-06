@@ -305,8 +305,8 @@ export class DeploymentRepository {
 }
 
 export class ProjectDomainRepository {
-  constructor(database) { this.database = database; }
-  async save({ companyId, projectId, environment = 'production', domain, verificationStatus = 'pending' }) {
+  constructor(database, { billingPolicy = null } = {}) { this.database = database; this.billingPolicy = billingPolicy; }
+  async save({ companyId, projectId, environment = 'production', domain, verificationStatus = 'pending', reserve = false }) {
     const value = String(domain || '').trim().toLowerCase();
     if (!value || value.length > 253) throw fail('Domínio inválido.', 400);
     const run = async (client) => {
@@ -315,6 +315,20 @@ export class ProjectDomainRepository {
       );
       if (existing.rows[0] && (existing.rows[0].company_id !== companyId || existing.rows[0].project_id !== projectId || existing.rows[0].environment !== environment))
         throw fail('Este domínio já está conectado a outro projeto.', 409);
+      if (!existing.rows[0] && environment === 'production') await this.billingPolicy?.assertQuota(client, {
+        companyId, resource: 'domains',
+        countSql: `SELECT count(*)::int AS count FROM project_domains WHERE company_id = $1 AND environment = 'production' AND (is_canonical OR verification_status = 'pending')`,
+      });
+      if (reserve && existing.rows[0]) return existing.rows[0];
+      if (reserve) {
+        const result = await client.query(
+          `INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status, updated_at)
+           VALUES ($1, $2, $3, $4, false, $5, now())
+           RETURNING id, company_id, project_id, environment, domain, is_canonical, verification_status, updated_at`,
+          [companyId, projectId, environment, value, verificationStatus],
+        );
+        return result.rows[0];
+      }
       await client.query(
         `UPDATE project_domains SET is_canonical = false, updated_at = now()
           WHERE company_id = $1 AND project_id = $2 AND environment = $3`, [companyId, projectId, environment],

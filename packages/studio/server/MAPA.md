@@ -1,8 +1,8 @@
 # server
 
 - `index.mjs`: servidor HTTP, mapa dos módulos públicos e entrypoints SaaS (PostgreSQL obrigatório) e legado explícito para migração/rollback.
-- `runtime-flags.mjs`: leitura restritiva das flags dos motores comerciais e capacidades públicas sanitizadas; tudo nasce desligado até opt-in literal do ambiente.
-- `runtime-worker.mjs` e `runtime-worker-healthcheck.mjs`: entrypoint e heartbeat verificável dos workers; webhook e provisionamento de tracking consomem filas próprias, enquanto mídia só comprova conectividade até sua etapa própria.
+- `runtime-flags.mjs`: leitura restritiva das flags dos motores comerciais, ambiente sandbox padrão de cobrança e capacidades públicas sanitizadas; tudo nasce desligado até opt-in literal do ambiente.
+- `runtime-worker.mjs` e `runtime-worker-healthcheck.mjs`: entrypoint e heartbeat verificável dos workers; webhook, cobrança e provisionamento de tracking consomem filas próprias, enquanto mídia só comprova conectividade até sua etapa própria.
 - `db/`: adaptador PostgreSQL e migrações ordenadas do schema SaaS.
   - `postgres.mjs`: pool com tratamento de erro de cliente ocioso, transações e executor idempotente de migrações com checksum.
   - `migrations/001_saas_foundation.sql`: empresas, memberships, projetos, conteúdo, versões, integrações e auditoria.
@@ -19,11 +19,13 @@
   - `migrations/013_tracking_provisioning.sql`: bindings Umami/NVS por ambiente, destinos cifrados e fila transacional de provisionamento com lease.
   - `migrations/014_umami_cutover.sql`: token público opaco por ambiente e marco de corte do coletor legado.
   - `migrations/015_nvs_commercial_outbox.sql`: fila transacional de conversões NVS com deduplicação, lease, retry e auditoria sanitizada.
+  - `migrations/017_asaas_billing.sql`: plano por ambiente, pedidos, assinatura, entitlement, inbox idempotente por evento Asaas, retry com disponibilidade e fila de revisão.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
-- `project-api.mjs`: API multiempresa, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
+- `project-api.mjs`: API multiempresa, rotas de cobrança autenticadas, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
+- `asaas-client.mjs`, `billing-service.mjs`, `billing-webhook.mjs`, `billing-worker.mjs` e `billing-policy.mjs`: contrato recorrente hospedado, reconsulta assíncrona de pagamento/assinatura, inbox limitado/autenticado e gates transacionais 5/10/5.
 - `tracking-clients.mjs`, `tracking-provision-worker.mjs` e `commercial-events-worker.mjs`: clientes internos de Umami/NVS, provisionamento por projeto e entrega assíncrona de conversões comerciais.
 - `outbound-webhook.mjs`: entrega best-effort pós-persistência por HTTPS, com timeout, sem credenciais/cabeçalhos repassados, bloqueio de destinos locais/privados e status `delivered`/`failed`; fila, retry, idempotência e defesa contra DNS rebinding ficam no nó `worker_webhook`.
 - `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
@@ -40,7 +42,8 @@
 - `vercel-runtime-gateway.mjs`: artefatos da Function e rewrites de deploy, derivação da chave escopada e proxy preservando cookie/corpo.
 - `conversion-consent-policy.mjs` e `commercial-conversion-service.mjs`: policy de conversões, allowlists de atribuição e fan-out consent-aware.
 - `publication-cors.mjs`: validação de origens HTTPS autorizadas para submissões públicas do projeto.
-- `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto e execuções idempotentes.
+- `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto, reserva transacional de domínio e execuções idempotentes.
+- `repositories/billing-repository.mjs`: persistência de plano/pedido/assinatura/entitlement, reprocessamento de eventos e auditoria sem payload financeiro bruto.
 - `repositories/tracking-repository.mjs`: bindings e destinos de tracking isolados por empresa, projeto e ambiente, sem expor referências remotas.
 - `repositories/nvs-commercial-outbox-repository.mjs`: outbox comercial cifrada por binding, com contatos normalizados/hash somente no servidor, click IDs allowlisted e sem respostas brutas.
 - `repositories/publication-runtime-repository.mjs`: manifestos, consentimentos vinculados ao escopo e nonces de replay persistidos.
