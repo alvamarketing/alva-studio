@@ -1064,8 +1064,15 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   const configuredOverview = await alice.request(`/api/projects/${records.projectA.id}/overview`);
   assert.equal(configuredOverview.status, 200);
   overview = await configuredOverview.json();
-  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'configured', agents: 'configured' });
-  assertKeys(overview, ['project', 'counts', 'content', 'domain', 'integrations']);
+  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'pending', agents: 'configured' });
+  assert.deepEqual(overview.runtime, {
+    analytics: false,
+    conversions: false,
+    pixels: false,
+    media: false,
+    billing: false,
+  });
+  assertKeys(overview, ['project', 'counts', 'content', 'domain', 'integrations', 'runtime']);
   assertKeys(overview.project, ['id', 'companyId', 'name', 'slug', 'status', 'createdBy', 'createdAt', 'updatedAt']);
   assertKeys(overview.counts, ['pages', 'forms', 'publishedPages', 'publishedForms', 'submissions']);
   assert.ok(overview.content.every((item) => {
@@ -1074,6 +1081,7 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   }));
   assertKeys(overview.domain, ['domain', 'verificationStatus']);
   assertKeys(overview.integrations, ['vercel', 'analytics', 'agents']);
+  assertKeys(overview.runtime, ['analytics', 'conversions', 'pixels', 'media', 'billing']);
   assert.equal(JSON.stringify(overview).includes('configuration'), false);
   assert.equal(JSON.stringify(overview).includes('não-expor'), false);
   assert.equal(JSON.stringify(overview).includes('segredo-nunca-exposto'), false);

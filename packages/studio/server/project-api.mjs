@@ -1,5 +1,6 @@
 import { normalizeProjectSlug, normalizeRoute } from './domain/access.mjs';
 import { renderLeadsCsv } from './leads-csv.mjs';
+import { publicRuntimeCapabilities } from './runtime-flags.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -130,6 +131,20 @@ function pendingVercel() {
   return { connected: false, tokenConfigured: false, teamId: '', source: null, pending: true };
 }
 
+function overviewForRuntime(overview, runtimeFlags) {
+  const runtime = publicRuntimeCapabilities(runtimeFlags);
+  return {
+    ...overview,
+    runtime,
+    integrations: {
+      ...overview.integrations,
+      // A flag só autoriza a futura integração; sem adaptador/provisionamento real,
+      // a configuração existente ainda descreve o coletor Node histórico.
+      analytics: 'pending',
+    },
+  };
+}
+
 async function legacyPageFor(content, context, page) {
   const settings = await content.pageSettings({
     companyId: context.companyId, projectId: page.projectId, actorId: context.user.id, pageId: page.id,
@@ -152,6 +167,7 @@ export function createProjectApi({
   publication,
   videos,
   analytics,
+  runtimeFlags,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -240,7 +256,10 @@ export function createProjectApi({
     if (projectOverview && method === 'GET') {
       const projectId = projectOverview[1];
       await sessionService.authorize(context, null, projectId);
-      return json(await projects.overview({ companyId: context.companyId, projectId, userId: context.user.id }));
+      return json(overviewForRuntime(
+        await projects.overview({ companyId: context.companyId, projectId, userId: context.user.id }),
+        runtimeFlags,
+      ));
     }
 
     const leads = path.match(/^\/api\/projects\/([^/]+)\/(leads|leads\.csv)$/);
@@ -275,7 +294,11 @@ export function createProjectApi({
       await sessionService.authorize(context, 'analytics.read', projectId);
       const search = new URL(req.url, 'http://localhost').searchParams;
       const { from, to } = analyticsRange(search.get('from'), search.get('to'));
-      return json(await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to }));
+      return json({
+        ...await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to }),
+        source: 'legacy',
+        readOnly: false,
+      });
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);

@@ -26,10 +26,10 @@
 
 **Interfaces:** produz feature flags `UMAMI_RUNTIME_ENABLED`, `NVS_RUNTIME_ENABLED`, `PIXELS_ENABLED`, `MEDIA_PIPELINE_ENABLED` e `BILLING_ENFORCEMENT`, todas seguras/desligadas por padrão.
 
-- [ ] Remover afirmações de conclusão incompatíveis com motores reais e dividir os nós em runtime, provisionamento, integração e homologação.
-- [ ] Cobrir por teste que nenhuma UI ou API anuncia motor ativo com a flag desligada.
-- [ ] Registrar o checkpoint de resgate `4c5224a` e o baseline 393/393 na certificação.
-- [ ] Rodar `pnpm test:studio` e `git diff --check`; submeter o diff a revisão independente e commitar.
+- [x] Remover afirmações de conclusão incompatíveis com motores reais e dividir os nós em runtime, provisionamento, integração e homologação.
+- [x] Cobrir por teste que nenhuma UI ou API anuncia motor ativo com a flag desligada.
+- [x] Registrar o checkpoint de resgate `4c5224a` e o baseline 393/393 na certificação.
+- [x] Rodar `pnpm test:studio` e `git diff --check`; submeter o diff a revisão independente e commitar.
 
 ### Task 2: Criar o runtime Docker/Coolify
 

@@ -73,8 +73,9 @@ test('o intervalo padrão cobre exatamente os últimos 7 dias, terminando agora 
   assert.equal(range.from, '2026-08-29T12:00:00.000Z');
 });
 
-test('a legenda nunca menciona Umami', () => {
+test('ausência de metadados de origem não anuncia analytics atualizado ou ativo', () => {
   const model = analyticsPanelModel(summaryWith([{ date: '2026-09-01', visits: 1 }]));
+  assert.equal(model.updatedLabel, 'Origem dos dados indisponível');
   assert.equal(model.updatedLabel.toLowerCase().includes('umami'), false);
-  assert.match(model.updatedLabel, /Coletor interno/);
+  assert.doesNotMatch(model.updatedLabel, /atualizado|ativo/i);
 });

@@ -27,6 +27,7 @@ import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
+import { readRuntimeFlags } from './runtime-flags.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 
@@ -177,6 +178,7 @@ export function createApp({
   webhookIntervalMs,
   analyticsRetentionIntervalMs,
   collectLimiterOptions,
+  runtimeFlags = readRuntimeFlags(),
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -232,6 +234,7 @@ export function createApp({
       validateWebhook: validateWebhookUrl,
       integrations,
       publication,
+      runtimeFlags,
       setupAllowed: (req) => {
         const expected = `127.0.0.1:${req.socket.localPort}`;
         const localHost = req.headers.host === expected || req.headers.host === `localhost:${req.socket.localPort}`;

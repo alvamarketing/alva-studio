@@ -81,21 +81,61 @@ nos:
       caminho: .estado/leads_integracoes.md
       casa: "[0-9]+ pass, 0 fail"
   - id: tracking_coletor
-    estado: pendente
-    faz: Coletar visitas, origem, UTMs e eventos de VSL e formulário em um coletor interno compatível com o modelo do Umami, sem cookie e sem dado pessoal
+    estado: feito
+    faz: Manter o coletor Node legado registrando visitas, origem, UTMs e eventos de VSL e formulário até o corte, sem se declarar Umami real
     depende:
       - leads_integracoes
       - vsl_player
-    produz: Visualizações, origem, conversão por conteúdo e marcos 25/50/75/100 da VSL no projeto correto
+    produz: Coleta legada isolada por projeto até o corte e compatibilidade de leitura por 90 dias após o corte
     passa_quando:
       tipo: arquivo
       caminho: .estado/tracking_coletor.md
       casa: "Prova: coletor sem PII, isolado por projeto, [0-9]+ testes verdes"
+  - id: runtime_comercial
+    estado: pendente
+    faz: Executar Studio, Umami e NVS Core como motores internos isolados, sem painel ou credencial administrativa pública
+    depende:
+      - tracking_coletor
+    produz: Runtime reproduzível com bancos separados, workers e health checks privados
+    passa_quando:
+      tipo: arquivo
+      caminho: .estado/runtime_comercial.md
+      casa: "Prova: runtime interno reproduzível, [0-9]+ testes verdes"
+  - id: provisionamento_motores
+    estado: pendente
+    faz: Provisionar de forma idempotente um website Umami e uma propriedade NVS para cada projeto e ambiente
+    depende:
+      - runtime_comercial
+    produz: Bindings isolados por projeto e ambiente, com retry, backoff e sem IDs remotos no navegador
+    passa_quando:
+      tipo: arquivo
+      caminho: .estado/provisionamento_motores.md
+      casa: "Prova: provisionamento idempotente e isolado, [0-9]+ testes verdes"
+  - id: integracao_motores
+    estado: pendente
+    faz: Integrar publicação, analytics, lead e conversão aos motores provisionados sem dupla escrita no coletor histórico
+    depende:
+      - provisionamento_motores
+    produz: Pageviews no Umami e eventos comerciais deduplicados no NVS, apresentados apenas pelo Studio
+    passa_quando:
+      tipo: arquivo
+      caminho: .estado/integracao_motores.md
+      casa: "Prova: eventos reais sem IDs administrativos expostos, [0-9]+ testes verdes"
+  - id: homologacao_motores
+    estado: pendente
+    faz: Homologar os motores reais em containers com dois tenants, retry, isolamento e transição do histórico
+    depende:
+      - integracao_motores
+    produz: Corte validado, histórico Node em leitura por 90 dias e evidências de serviços reais
+    passa_quando:
+      tipo: arquivo
+      caminho: .estado/homologacao_motores.md
+      casa: "Prova: homologação real concluída, [0-9]+ testes verdes"
   - id: tracking_pixels
     estado: pendente
     faz: Injetar pixels de mídia por projeto atrás de consentimento opt-in, com CSP de nonce por resposta e allowlist só dos provedores habilitados
     depende:
-      - tracking_coletor
+      - homologacao_motores
     produz: Meta, GA4, TikTok, LinkedIn e Taboola carregados apenas após consentimento registrado, sem pixel dentro do player de VSL
     passa_quando:
       tipo: arquivo
@@ -115,7 +155,7 @@ nos:
     estado: pendente
     faz: Integrar uma assinatura empresarial inicial ao Asaas e aplicar o acesso essencial
     depende:
-      - tracking_coletor
+      - homologacao_motores
     produz: Checkout hospedado, webhook idempotente e um plano comercial por empresa
     passa_quando:
       tipo: arquivo
@@ -146,6 +186,7 @@ nos:
     faz: Adicionar upload próprio, processamento e CDN quando o uso de VSL justificar essa infraestrutura
     depende:
       - vsl_nos_editores
+      - runtime_comercial
     produz: Biblioteca de mídia com upload assinado, transcodificação e entrega por CDN
     passa_quando:
       tipo: arquivo

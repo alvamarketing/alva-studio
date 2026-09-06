@@ -83,6 +83,23 @@ O conector Vercel atual pertence ao modo local e cifra o token em disco. A integ
 
 Aurora, Umami, NVS, rastreamento de conversão, MCP/agentes e Asaas também são próximas etapas. A fundação já reserva o isolamento necessário, mas não provisiona contas, não envia eventos, não cria chaves de agente e não processa pagamentos. Planos, preços e créditos serão definidos em uma etapa comercial própria.
 
+## Runtime comercial
+
+Os motores internos comerciais nascem desligados. Somente o valor literal
+`true` ativa cada flag; qualquer valor ausente ou diferente mantém o recurso
+indisponível:
+
+- `UMAMI_RUNTIME_ENABLED`
+- `NVS_RUNTIME_ENABLED`
+- `PIXELS_ENABLED`
+- `MEDIA_PIPELINE_ENABLED`
+- `BILLING_ENFORCEMENT`
+
+As flags não provisionam serviços, não expõem painéis nem tornam uma integração
+ativa por si mesmas. O coletor Node existente continua registrando eventos
+durante a migração; após o corte homologado para Umami e NVS reais, sua leitura
+fica preservada por 90 dias.
+
 ## Dados e segurança
 
 O servidor escuta somente em `127.0.0.1` por padrão. Para operar atrás de um proxy HTTPS próprio, configure `HOST` e `PUBLIC_ORIGIN` com a origem pública exata. Segredos, tokens e senhas nunca devem entrar no navegador, HTML publicado, logs, fixtures ou Git.

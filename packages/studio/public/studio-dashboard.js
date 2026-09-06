@@ -122,6 +122,7 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
   }));
   const published = Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0) + Number(counts.publishedVideos || 0);
   const configured = (value) => value === 'configured' ? 'Configurado' : 'Ainda não configurado';
+  const analyticsConfigured = overview.runtime?.analytics === true && overview.integrations?.analytics === 'configured';
   return {
     status: content.length ? 'ready' : 'empty',
     message: content.length ? '' : 'Este projeto ainda não tem conteúdos.',
@@ -140,7 +141,7 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
       ? { label: overview.domain.domain, state: 'verified' }
       : { label: 'Domínio ainda não verificado', state: 'pending' },
     modules: [
-      ['Analytics', configured(overview.integrations?.analytics)],
+      ['Analytics', configured(analyticsConfigured ? 'configured' : 'pending')],
       ['Rastreamento', 'Em breve'],
       ['Publicação', configured(overview.integrations?.vercel)],
       ['Agentes', configured(overview.integrations?.agents)],
@@ -183,7 +184,9 @@ export function analyticsPanelModel(summary, { phase = 'ready', error = '', canR
     phase: hasVisits || funnel.length ? 'ready' : 'empty',
     bars,
     funnel,
-    updatedLabel: 'Coletor interno · atualizado agora',
+    updatedLabel: summary?.source === 'legacy'
+      ? 'Coletor legado · migração pendente'
+      : 'Origem dos dados indisponível',
   };
 }
 

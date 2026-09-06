@@ -223,6 +223,7 @@ test('visão do projeto mostra somente o overview autorizado, estados e contagen
     ],
     domain: { domain: 'exemplo.com.br', verificationStatus: 'verified' },
     integrations: { vercel: 'configured', analytics: 'pending', agents: 'pending' },
+    runtime: { analytics: true },
   };
 
   const model = projectOverviewModel(overview);
@@ -241,6 +242,31 @@ test('visão do projeto mostra somente o overview autorizado, estados e contagen
   assert.deepEqual(model.modules, [
     ['Analytics', 'Ainda não configurado'], ['Rastreamento', 'Em breve'], ['Publicação', 'Configurado'], ['Agentes', 'Ainda não configurado'],
   ]);
+});
+
+test('visão do projeto não anuncia analytics interno ativo sem capacidade de runtime', () => {
+  const model = projectOverviewModel({
+    project: { id: 'project-a', name: 'Campanha real', slug: 'campanha-real' },
+    counts: {}, content: [], domain: null,
+    integrations: { vercel: 'pending', analytics: 'configured', agents: 'pending' },
+    runtime: { analytics: false, conversions: false, pixels: false, media: false, billing: false },
+  });
+
+  assert.deepEqual(model.modules, [
+    ['Analytics', 'Ainda não configurado'], ['Rastreamento', 'Em breve'], ['Publicação', 'Ainda não configurado'], ['Agentes', 'Ainda não configurado'],
+  ]);
+  assert.equal(JSON.stringify(model).includes('Umami'), false);
+  assert.equal(JSON.stringify(model).includes('NVS'), false);
+});
+
+test('painel identifica o coletor legado ainda em migração, sem anunciá-lo como runtime ativo', () => {
+  const model = analyticsPanelModel({
+    dailyVisits: [{ date: '2026-09-06T00:00:00.000Z', visits: 3 }], funnel: [], source: 'legacy', readOnly: false,
+  });
+
+  assert.equal(model.updatedLabel, 'Coletor legado · migração pendente');
+  assert.equal(model.updatedLabel.includes('Umami'), false);
+  assert.equal(model.updatedLabel.includes('NVS'), false);
 });
 
 test('visão do projeto separa carregamento, erro e projeto vazio', () => {
@@ -399,6 +425,7 @@ test('painel "Visitas nos últimos 7 dias" usa as classes do wireframe, sem cita
 
   assert.match(html, /<section id="analytics-panel"[^>]*class="surface analytics-card"[^>]*hidden/);
   assert.match(html, /<h2 id="analytics-panel-title">Visitas nos últimos 7 dias<\/h2>/);
+  assert.match(html, /id="analytics-updated"[^>]*>Coletor legado · migração pendente<\/span>/);
   assert.match(html, /class="button ghost">Abrir Analytics</);
   assert.match(html, /id="analytics-chart" class="chart"/);
   assert.match(html, /id="analytics-journey" class="journey"/);
@@ -414,8 +441,8 @@ test('painel "Visitas nos últimos 7 dias" usa as classes do wireframe, sem cita
 
   assert.match(app, /studioShell\?\.can\?\.\('analytics\.read'\)/);
   assert.match(app, /analyticsPanelModel\(/);
+  assert.match(app, /analyticsUpdated\.textContent = model\.updatedLabel \|\| 'Origem dos dados indisponível'/);
   assert.match(app, /analytics\/summary\?from=.*&to=/, 'a rota exige from/to (server/project-api.mjs: analyticsRange) — sem isso o resumo sempre responde 400');
   assert.match(css, /@media\s*\(max-width:\s*900px\)\s*\{\s*\.project-columns\s*>\s*\.analytics-card\s*\{\s*grid-column:\s*1\s*\/\s*-1;/, 'o painel deve colapsar no breakpoint de 900px do wireframe, numa regra própria');
   assert.match(css, /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.project-metrics,\s*\n\s*\.project-columns\s*\{\s*\n\s*grid-template-columns:\s*1fr;/, 'o breakpoint geral de 760px das demais seções continua intacto');
 });
-

@@ -609,6 +609,8 @@ function paintAnalyticsPanel(model) {
   const status = $('#analytics-status');
   const chart = $('#analytics-chart');
   const journey = $('#analytics-journey');
+  const analyticsUpdated = $('#analytics-updated');
+  if (analyticsUpdated) analyticsUpdated.textContent = model.updatedLabel || 'Origem dos dados indisponível';
   const messages = { loading: 'Carregando visitas…', error: model.message, empty: 'Ainda não há visitas neste período.' };
   status.textContent = messages[model.phase] || '';
   status.dataset.state = model.phase;

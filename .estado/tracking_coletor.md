@@ -3,12 +3,19 @@ no: tracking_coletor
 status: feito
 ---
 
-# Coletor de tracking interno — certificação
+# Coletor Node histórico — certificação de linha de base
 
-Revalidação independente executada em 2026-09-05 no branch
-`codex/alva-studio-editor`. Não alterei código de produto, não fiz commit nem
-push. Os critérios automatizados e documentais estão satisfeitos; as ressalvas
-visuais estão registradas abaixo.
+O coletor atual é uma implementação Node interna, compatível apenas com parte
+do modelo de dados do Umami. Ele **não é Umami 3.3.1**, não provisiona o motor
+real e não autoriza o produto a anunciá-lo como tal. Ele continua registrando
+visitas e eventos até o corte homologado, para não interromper a medição atual.
+Depois do corte para os motores reais, seus dados ficam disponíveis somente
+para leitura por 90 dias; esse regime é planejado e depende da homologação do
+corte.
+
+O checkpoint de resgate é `4c5224a` (`wip(studio): preserva vsl pixels e
+cobranca em andamento`). A linha de base resgatada foi **393/393 testes
+aprovados**, antes da retomada do runtime comercial.
 
 ## Evidências automatizadas
 
@@ -17,8 +24,8 @@ visuais estão registradas abaixo.
   pública `/f`, `event_data` de formulário e VSL, UTMs, click IDs, referrer,
   lead emitido após a persistência da submissão, `dailyVisits`, retenção,
   CORS, PII, isolamento, CSP e `tracker.js`.
-- Suíte completa: `node --test packages/studio/test/*.test.mjs` →
-  **393 pass, 0 fail, 0 cancelados, 0 ignorados**.
+- Suíte completa da linha de base: `node --test packages/studio/test/*.test.mjs`
+  → **393 pass, 0 fail, 0 cancelados, 0 ignorados**.
 - `git diff --check` → limpo.
 - Inspeção confirmou a migração `012_analytics_websites.sql`: backfill de
   projetos ativos e trigger para provisionar projeto ativado, com
@@ -32,8 +39,9 @@ visuais estão registradas abaixo.
 
 Prova: coletor sem PII, isolado por projeto, 393 testes verdes
 
-Esta linha registra a evidência automatizada exigida pelo contrato do grafo;
-as capturas e ressalvas visuais abaixo completam o registro de homologação.
+Esta linha registra somente a evidência do coletor histórico. A homologação de
+Umami e NVS reais pertence aos nós `runtime_comercial`,
+`provisionamento_motores`, `integracao_motores` e `homologacao_motores`.
 
 ## Verificação visual
 
@@ -59,8 +67,9 @@ hexadecimal em `styles.css`.
 
 Desvios previstos pela Task 12, conferidos na comparação:
 
-1. A legenda do produto não usa “Umami”; exibe “Coletor interno”, enquanto a
-   referência ainda mostra “Umami · atualizado agora”.
+1. A legenda do produto não usa “Umami”; exibe “Coletor interno”. A referência
+   ainda mostra “Umami · atualizado agora”, que só será apropriado depois da
+   homologação do motor real.
 2. Os estados de carregando, vazio e erro existem no produto para o contrato
    de dados, mas não aparecem na referência visual estática.
 3. As barras recebem nomes acessíveis por `aria-label`/`title` sem alterar o
