@@ -186,6 +186,18 @@
               <h2 id="project-modules-title">Próximos módulos</h2>
               <div id="project-modules" class="project-modules"></div>
             </section>
+            <section id="project-agent-keys" class="project-surface" aria-labelledby="project-agent-keys-title" hidden>
+              <div class="section-heading"><div><span class="eyebrow">AGENTES</span><h2 id="project-agent-keys-title">Conectar agentes</h2></div></div>
+              <p>Crie uma chave limitada a este projeto. O segredo aparece uma única vez.</p>
+              <form id="mcp-key-form" class="publication-details">
+                <label>Nome da conexão<input name="name" required maxlength="100" placeholder="Ex.: Claude Code"></label>
+                <label>Validade<select name="expiresInDays"><option value="30">30 dias</option><option value="90" selected>90 dias</option><option value="365">1 ano</option></select></label>
+                <label class="mcp-key-scope"><input class="mcp-key-scope-input" name="drafts" type="checkbox"> Permitir criar rascunhos</label>
+                <button class="primary" type="submit">Criar chave</button>
+              </form>
+              <p id="mcp-key-status" class="dashboard-status" role="status" aria-live="polite"></p>
+              <div id="mcp-key-list" class="project-content-list" aria-live="polite"></div>
+            </section>
             <section id="project-publication" class="project-surface publication-surface" aria-labelledby="project-publication-title">
               <div class="section-heading"><div><span class="eyebrow">PUBLICAÇÃO</span><h2 id="project-publication-title">Coloque seu projeto no ar</h2></div><span id="publication-state" class="publication-state" role="status">Conecte a Vercel</span></div>
               <p id="publication-summary">As rotas publicadas deste projeto serão enviadas juntas para um único destino.</p>

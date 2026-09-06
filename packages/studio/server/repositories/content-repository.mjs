@@ -327,14 +327,14 @@ export class ContentRepository {
     }
   }
 
-  async createPage({ companyId, projectId, actorId, name, route: routeValue, template, editorState = {}, renderedHtml = '' }) {
+  async createPage({ companyId, projectId, actorId, name, route: routeValue, template, editorState = {}, renderedHtml = '', client: suppliedClient = null }) {
     const pageName = requiredName(name, 'Nome da página');
     const pageRoute = route(routeValue);
     const state = json(editorState, 'Estado do editor');
     const html = validRenderedHtml(renderedHtml);
     const pageTemplate = optionalTemplate(template);
     try {
-      return await withTransaction(this.database, async (client) => {
+      const create = async (client) => {
         await authorizedProject(client, { companyId, projectId, actorId, capability: 'page.write' });
         const routeId = await createRoute(client, { companyId, projectId, path: pageRoute, contentType: 'page' });
         const { rows } = await client.query(
@@ -344,18 +344,19 @@ export class ContentRepository {
           [companyId, projectId, routeId, pageName, pageTemplate, JSON.stringify(state), html, actorId],
         );
         return pageRecord({ ...rows[0], route: pageRoute });
-      });
+      };
+      return suppliedClient ? await create(suppliedClient) : await withTransaction(this.database, create);
     } catch (error) {
       throw routeConflict(error);
     }
   }
 
-  async createForm({ companyId, projectId, actorId, name, route: routeValue, draftSchema = {} }) {
+  async createForm({ companyId, projectId, actorId, name, route: routeValue, draftSchema = {}, client: suppliedClient = null }) {
     const formName = requiredName(name, 'Nome do formulário');
     const formRoute = route(routeValue);
     const schema = normalizeFormInput(draftSchema);
     try {
-      return await withTransaction(this.database, async (client) => {
+      const create = async (client) => {
         await authorizedProject(client, { companyId, projectId, actorId, capability: 'form.write' });
         const routeId = await createRoute(client, { companyId, projectId, path: formRoute, contentType: 'form' });
         const { rows } = await client.query(
@@ -370,7 +371,8 @@ export class ContentRepository {
            WHERE project.company_id = $1 AND project.id = $2`, [companyId, projectId],
         );
         return formRecord({ ...rows[0], route: formRoute, ...project.rows[0] });
-      });
+      };
+      return suppliedClient ? await create(suppliedClient) : await withTransaction(this.database, create);
     } catch (error) {
       throw routeConflict(error);
     }

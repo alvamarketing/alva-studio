@@ -625,6 +625,11 @@ main {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(250px, 0.8fr);
   gap: 16px;
+  min-width: 0;
+}
+.project-columns > .project-surface,
+.project-columns > .analytics-card {
+  min-width: 0;
 }
 /* Task 10: painel "Visitas nos últimos 7 dias" — reproduz docs/wireframes/alva-studio-ui-reference.html,
    seção "Visitas nos últimos 7 dias", com os tokens do Studio no lugar dos do wireframe. */
@@ -876,6 +881,17 @@ main {
 .publication-details label { display: grid; gap: 5px; color: var(--alva-muted); font-size: 11px; }
 .publication-details input { width: 100%; min-height: 42px; }
 .publication-details button { min-height: 44px; justify-self: start; }
+.publication-details .mcp-key-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.publication-details .mcp-key-scope-input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--alva-blue);
+}
 @keyframes studio-spin {
   to { transform: rotate(360deg); }
 }

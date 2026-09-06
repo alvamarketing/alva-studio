@@ -14,7 +14,7 @@ O editor visual, modelos, formulários dinâmicos, respostas locais, exportaçã
 
 ## Limites da fundação
 
-O servidor padrão não liga automaticamente ao PostgreSQL: a composição de produção e o shell visual SaaS são próximos passos. Webhooks podem ser configurados com uma URL HTTPS sem credenciais, mas ainda não há resolução DNS, defesa contra SSRF ou DNS rebinding, nem entrega: a execução assíncrona fica `pending` e não faz egress nesta fundação. Vercel por empresa e projeto, domínio de múltiplas rotas, cofre de segredos, Aurora/Umami/NVS, tracking, MCP/agentes, armazenamento S3 e Asaas não estão prontos. Eles não podem ser exibidos como conectados, publicados ou cobrados.
+O servidor padrão não liga automaticamente ao PostgreSQL: a composição de produção e o shell visual SaaS são próximos passos. Webhooks podem ser configurados com uma URL HTTPS sem credenciais, mas ainda não há resolução DNS, defesa contra SSRF ou DNS rebinding, nem entrega: a execução assíncrona fica `pending` e não faz egress nesta fundação. Vercel por empresa e projeto, domínio de múltiplas rotas, cofre de segredos, Aurora/Umami/NVS, tracking e Asaas ainda exigem suas homologações próprias. O MCP por projeto está limitado a consulta e rascunhos idempotentes, sem publicação, cobrança, domínio, equipe, tracking, analytics ou mídia; ele não pode ser exibido como uma automação de produção até a certificação final.
 
 As referências de IZI, Aurora e Asaas informam contratos e segurança, mas preços, créditos, nomes comerciais, limites e fluxos daquele produto não foram copiados. Nenhuma publicação, DNS, evento de tracking ou cobrança real é executada sem uma homologação e confirmação próprias.
 

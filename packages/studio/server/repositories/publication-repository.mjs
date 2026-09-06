@@ -360,11 +360,11 @@ export class ProjectDomainRepository {
 
 export class AuditRepository {
   constructor(database) { this.database = database; }
-  async record({ companyId, projectId, actorUserId, action, resourceType, resourceId, revision, result, metadata = {} }) {
-    await this.database.query(
-      `INSERT INTO audit_events (company_id, project_id, actor_user_id, action, resource_type, resource_id, revision, result, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
-      [companyId, projectId || null, actorUserId || null, action, resourceType, resourceId || null, revision ?? null, result, JSON.stringify(metadata)],
+  async record({ companyId, projectId, actorUserId, actorAgentKeyId, action, resourceType, resourceId, revision, result, metadata = {}, client = this.database }) {
+    await client.query(
+      `INSERT INTO audit_events (company_id, project_id, actor_user_id, actor_agent_key_id, action, resource_type, resource_id, revision, result, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
+      [companyId, projectId || null, actorUserId || null, actorAgentKeyId || null, action, resourceType, resourceId || null, revision ?? null, result, JSON.stringify(metadata)],
     );
   }
 }

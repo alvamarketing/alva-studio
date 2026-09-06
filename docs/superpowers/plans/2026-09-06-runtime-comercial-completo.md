@@ -164,14 +164,22 @@ registro marca o nó como concluído.
 
 ### Task 10: Expor agentes MCP por projeto
 
-**Files:** migração de chaves/runs, servidor MCP, APIs administrativas e tela de conexão.
+**Files:** migração de chaves/operações/limites, servidor MCP, APIs administrativas e cartão “Conectar agentes” na seção do wireframe “Estrutura do projeto”.
 
-**Interfaces:** `POST /mcp`, JSON-RPC 2.0; Bearer `alva_…`; ferramentas fechadas para leitura, analytics, leads, validação e rascunhos.
+**Interfaces:** `POST /mcp`, JSON-RPC 2.0; Bearer `alva_…`; `initialize`, `notifications/initialized`, `ping`, `tools/list` e `tools/call`. As únicas ferramentas são consultar o projeto autorizado, listar páginas, listar quizzes, consultar conteúdo e criar rascunhos de página ou quiz. A chave fixa empresa e projeto; nenhum argumento escolhe outro escopo.
 
-- [ ] Guardar apenas hash, prefixo, escopos, validade, limites e auditoria.
-- [ ] Implementar initialize, ping, tools/list e tools/call com idempotência.
-- [ ] Impedir publicação, domínio, tracking, equipe e cobrança por qualquer ferramenta.
-- [ ] Testar duas chaves/projetos, expiração, revogação e revisão; commitar.
+- [x] Guardar somente hash, prefixo, escopos `read`/`drafts`, validade, último uso, idempotência e auditoria; o segredo aparece uma única vez.
+- [x] Implementar protocolo negociado, corpo limitado sem batch, limite atômico persistido por chave e JSON Schemas fechados.
+- [x] Proibir publicação, cobrança, domínio, equipe, tracking, analytics, mídia, créditos, modelos, WaveSpeed, Apps e Lab; erros das ferramentas usam `result.isError`.
+- [x] Executar revisão independente, suíte completa e verificação visual da seção “Estrutura do projeto”; commitar somente após esse fechamento.
+
+**Fechamento da Etapa 10 (2026-09-06):** revisão independente aprovada após
+correções de concorrência, atomicidade da auditoria e compatibilidade JSON-RPC;
+11 testes focados e a suíte completa final com 518/518 passaram. A interface foi
+conferida em 1440×900 e 390×844 sem vazamento do segredo. Nenhuma credencial
+real, produção, DNS, cobrança ou egress foi usado.
+
+**Checkpoint local (2026-09-06):** migração 018, chaves por projeto, APIs administrativas, servidor MCP e cartão simples de conexão foram implementados com PostgreSQL efêmero. Criação e revogação de chave compartilham uma transação com sua auditoria, e a criação do rascunho faz a claim, o conteúdo e o vínculo idempotente numa única transação; uma falha intermediária faz rollback integral. Os testes focados cobrem hash/segredo único, membership ativa, idempotência concorrente e retry, rate limit atômico, limite concorrente de chaves, escopo fixo, protocolo, catálogo fechado, Origin explícita, revogação, API administrativa e rollback de auditoria. Não houve egress, credencial real, produção, DNS ou homologação externa. O nó continua pendente até revisão independente e suíte completa.
 
 ### Task 11: Piloto comercial e certificação
 

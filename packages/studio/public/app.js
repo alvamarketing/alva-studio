@@ -682,6 +682,56 @@ function renderProjectOverview(overview) {
   }
   renderProjectContent(model);
 }
+function formatMcpKeyDate(value) {
+  return value ? new Date(value).toLocaleDateString('pt-BR') : 'sem data';
+}
+function mcpKeyRow(key, projectId) {
+  const row = document.createElement('article');
+  row.className = 'project-content-row';
+  const icon = document.createElement('span');
+  icon.className = 'material-symbols-outlined project-content-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = 'key';
+  const details = document.createElement('div');
+  const name = document.createElement('strong');
+  name.textContent = key.name;
+  const meta = document.createElement('span');
+  meta.textContent = `${key.prefix}… · expira em ${formatMcpKeyDate(key.expiresAt)}${key.lastUsedAt ? ' · em uso' : ''}${key.revokedAt ? ' · revogada' : ''}`;
+  details.append(name, meta);
+  row.append(icon, details);
+  if (!key.revokedAt) {
+    const revoke = document.createElement('button');
+    revoke.type = 'button';
+    revoke.className = 'project-content-open';
+    revoke.textContent = 'Revogar';
+    revoke.onclick = action(async () => {
+      if (!confirm(`Revogar a chave “${key.name}”? Agentes conectados perdem acesso imediatamente.`)) return;
+      await api(`/projects/${projectId}/mcp/keys/${key.id}`, 'DELETE', {});
+      toast('Chave MCP revogada.');
+      await renderMcpKeys(projectId);
+    });
+    row.append(revoke);
+  }
+  return row;
+}
+async function renderMcpKeys(projectId) {
+  const section = $('#project-agent-keys');
+  if (!section) return;
+  const allowed = Boolean(studioShell?.can?.('project.manage'));
+  section.hidden = !allowed;
+  if (!allowed) return;
+  const list = clear($('#mcp-key-list'));
+  const status = $('#mcp-key-status');
+  status.textContent = 'Carregando chaves…';
+  try {
+    const keys = await api(`/projects/${projectId}/mcp/keys`);
+    if (studioShell.state().currentProject?.id !== projectId) return;
+    status.textContent = keys.length ? '' : 'Nenhuma chave MCP criada neste projeto.';
+    for (const key of keys) list.append(mcpKeyRow(key, projectId));
+  } catch (error) {
+    status.textContent = error.message || 'Não foi possível carregar as chaves MCP.';
+  }
+}
 function renderPublication(overview, publication = {}) {
   const configured = publication.integration?.connectionStatus === 'configured' || overview.integrations?.vercel === 'configured';
   const publishedRoutes = (overview.content || []).filter((item) => item.published);
@@ -804,6 +854,7 @@ async function renderProject() {
     renderProjectOverview(overview);
     renderPublication(overview, publication);
     renderAnalyticsPanel(state.currentProject.id);
+    renderMcpKeys(state.currentProject.id);
   } catch (error) {
     if (request !== projectOverviewRequest) return;
     const model = projectOverviewModel(null, { phase: 'error', error: error.message });
@@ -1336,6 +1387,22 @@ $('#publication-domain-form').onsubmit = action(async (event) => {
   await api(`/projects/${projectId}/publication/domain`, 'POST', { ...data, runId: publication.production?.id });
   toast('Domínio conectado.');
   await renderProject();
+});
+$('#mcp-key-form').onsubmit = action(async (event) => {
+  event.preventDefault();
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) throw new Error('Escolha um projeto antes de criar uma chave MCP.');
+  const form = event.target;
+  const data = new FormData(form);
+  const result = await api(`/projects/${projectId}/mcp/keys`, 'POST', {
+    name: String(data.get('name') || ''),
+    scopes: data.get('drafts') ? ['read', 'drafts'] : ['read'],
+    expiresInDays: Number(data.get('expiresInDays')),
+  });
+  form.reset();
+  await renderMcpKeys(projectId);
+  $('#mcp-key-status').textContent = `Copie agora e guarde em local seguro: ${result.token}`;
+  toast('Chave MCP criada. O segredo aparece somente agora.');
 });
 $('#nav-pages').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');

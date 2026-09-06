@@ -180,6 +180,8 @@ export function createProjectApi({
   commercialOutbox,
   runtimeFlags,
   billing,
+  mcpKeys,
+  mcpAudit,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
     if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
@@ -288,6 +290,29 @@ export function createProjectApi({
         await projects.overview({ companyId: context.companyId, projectId, userId: context.user.id }),
         runtimeFlags,
       ));
+    }
+
+    const mcpKeyRoute = path.match(/^\/api\/projects\/([^/]+)\/mcp\/keys(?:\/([^/]+))?$/);
+    if (mcpKeyRoute) {
+      const [, projectId, keyId] = mcpKeyRoute;
+      if (!mcpKeys) throw fail('A conexão de agentes ainda está indisponível.', 503);
+      await sessionService.authorize(context, 'project.manage', projectId);
+      if (method === 'GET' && !keyId) return json(await mcpKeys.list({ companyId: context.companyId, projectId, actorUserId: context.user.id }));
+      if (method === 'POST' && !keyId) {
+        const input = await body(req);
+        const created = await mcpKeys.createWithAudit({
+          audit: mcpAudit,
+          companyId: context.companyId, projectId, actorUserId: context.user.id,
+          name: input.name, scopes: input.scopes, expiresInDays: input.expiresInDays,
+        });
+        return json(created, 201);
+      }
+      if (method === 'DELETE' && keyId) {
+        await body(req);
+        const revoked = await mcpKeys.revokeWithAudit({ audit: mcpAudit, companyId: context.companyId, projectId, actorUserId: context.user.id, keyId });
+        return json(revoked);
+      }
+      throw fail('Não encontrado.', 404);
     }
 
     const leads = path.match(/^\/api\/projects\/([^/]+)\/(leads|leads\.csv)$/);

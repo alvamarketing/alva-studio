@@ -78,6 +78,31 @@ exige teste parametrizado dos cinco adaptadores em `pending`, `denied` e
 PII/hash em pending/denied e egress ausente somente quando flag técnica ou
 provider estiver desligado.
 
+## MCP por projeto
+
+O Studio expõe `POST /mcp` apenas por JSON-RPC 2.0 e autentica uma chave
+`alva_` de 32 bytes aleatórios. A chave pertence a uma empresa e a um projeto;
+o servidor guarda somente SHA-256, prefixo, escopos, validade, último uso e
+auditoria. A criação ou revogação da chave e seu registro compartilham uma
+transação. A interface autenticada cria, lista e revoga chaves por projeto, e
+o segredo aparece somente na resposta de criação.
+
+O protocolo aceita `initialize`, `notifications/initialized`, `ping`,
+`tools/list` e `tools/call`, negocia versões compatíveis e limita corpo/rate
+limit sem aceitar batch. Cada chamada revalida usuário ativo, membership e
+grant do projeto; identificadores do agente não podem mudar o escopo. As seis
+ferramentas fechadas são: consultar projeto, listar páginas, listar quizzes,
+consultar uma página/quiz e criar rascunho de página/quiz. Criação usa
+idempotência persistida por chave, projeto e operação: claim, criação e vínculo
+do recurso compartilham uma única transação; repetir o mesmo pedido retorna o
+recurso original e payload diferente falha.
+
+Não há ferramentas para publicação, cobrança, domínio, equipe, tracking,
+analytics, mídia, créditos, modelos, WaveSpeed, Apps ou Lab. Falhas de uma
+ferramenta são devolvidas como `result.isError`; protocolo, autenticação e
+método HTTP usam respostas JSON-RPC/401/403/405 coerentes. A auditoria usa
+`actor_agent_key_id`, sem segredo ou PII.
+
 
 ### Allowlist canônica de atribuição
 

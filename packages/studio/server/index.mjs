@@ -46,6 +46,8 @@ import { BillingRepository } from './repositories/billing-repository.mjs';
 import { BillingService } from './billing-service.mjs';
 import { acceptBillingWebhook } from './billing-webhook.mjs';
 import { BillingPolicy } from './billing-policy.mjs';
+import { McpKeyRepository } from './repositories/mcp-repository.mjs';
+import { createMcpServer } from './mcp-server.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 const NVS_VSL_EVENTS = new Set(['vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
@@ -300,11 +302,19 @@ export function createApp({
       billingPolicy,
     })
     : null;
+  const companies = database ? new CompanyRepository(database, { billingPolicy }) : null;
+  const projects = database ? new ProjectRepository(database, { billingPolicy }) : null;
+  const mcp = database ? createMcpServer({
+    database,
+    keys: new McpKeyRepository(database),
+    projects,
+    content,
+  }) : null;
   const projectApi = database
     ? createProjectApi({
       sessionService: new SessionService(database, sessionOptions),
-      companies: new CompanyRepository(database, { billingPolicy }),
-      projects: new ProjectRepository(database, { billingPolicy }),
+      companies,
+      projects,
       content,
       videos,
       analytics,
@@ -319,6 +329,8 @@ export function createApp({
       publication,
       runtimeFlags,
       billing,
+      mcpKeys: new McpKeyRepository(database),
+      mcpAudit: new AuditRepository(database),
       setupAllowed: (req) => {
         const expected = `127.0.0.1:${req.socket.localPort}`;
         const localHost = req.headers.host === expected || req.headers.host === `localhost:${req.socket.localPort}`;
@@ -394,6 +406,7 @@ export function createApp({
       const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
       const publicUmami = path === '/api/public/umami/send' && req.method === 'POST';
       const publicBillingWebhook = Boolean(billingRepository && path === '/api/billing/webhook/asaas');
+      const publicMcp = Boolean(mcp && path === '/mcp');
       const publicRuntimeConsent = runtimeConsentGateway && path === '/_alva/consent' && ['GET', 'POST'].includes(req.method);
       const publicRuntimeLoader = runtimeConsents && path === '/_alva/runtime.js' && req.method === 'GET';
       const runtimeGatewayProtected = Boolean(runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || (publicFormRequest && ['POST', 'OPTIONS'].includes(req.method))));
@@ -404,11 +417,11 @@ export function createApp({
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if (!publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
+      if ((publicMcp && origin && origin !== expectedOrigin) || (!publicMcp && !publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))))
         throw error('Origem não permitida.', 403);
       // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
       const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicMcp && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
@@ -418,6 +431,14 @@ export function createApp({
         if (Number.isFinite(contentLength) && contentLength > 64 * 1024) throw error('Corpo muito grande.', 413);
         const accepted = await acceptBillingWebhook({ method: req.method, headers: req.headers, raw: await rawBody(req, 64 * 1024, 'Corpo muito grande.'), secret: billingWebhookSecret, environment: billingEnvironment, repository: billingRepository });
         res.writeHead(accepted.status); return res.end();
+      }
+      if (publicMcp) {
+        const contentLength = Number(req.headers['content-length']);
+        if (Number.isFinite(contentLength) && contentLength > 64 * 1024) throw error('Corpo MCP muito grande.', 413);
+        const response = await mcp.handle({ method: req.method, headers: req.headers, raw: req.method === 'POST' ? await rawBody(req, 64 * 1024, 'Corpo MCP muito grande.') : Buffer.alloc(0) });
+        if (response.headers) for (const [name, value] of Object.entries(response.headers)) res.setHeader(name, value);
+        if (response.body === null) { res.writeHead(response.status); return res.end(); }
+        return json(response.body, response.status);
       }
       // Report-Only por enquanto: só reporta violação, nunca bloqueia — a migração para modo
       // reforçado é decisão futura, depois que todo script inline aceitar o nonce.

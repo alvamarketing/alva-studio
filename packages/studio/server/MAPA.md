@@ -20,11 +20,13 @@
   - `migrations/014_umami_cutover.sql`: token público opaco por ambiente e marco de corte do coletor legado.
   - `migrations/015_nvs_commercial_outbox.sql`: fila transacional de conversões NVS com deduplicação, lease, retry e auditoria sanitizada.
   - `migrations/017_asaas_billing.sql`: plano por ambiente, pedidos, assinatura, entitlement, inbox idempotente por evento Asaas, retry com disponibilidade e fila de revisão.
+  - `migrations/018_agent_mcp.sql`: chaves MCP por projeto, operações idempotentes, limite persistente e vínculo de auditoria de agente.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
-- `project-api.mjs`: API multiempresa, rotas de cobrança autenticadas, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
+- `project-api.mjs`: API multiempresa, rotas de cobrança e administração de chaves MCP autenticadas, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
+- `mcp-server.mjs`: fronteira JSON-RPC MCP negociada, catálogo fechado de leitura/rascunho e respostas de erro seguras.
 - `asaas-client.mjs`, `billing-service.mjs`, `billing-webhook.mjs`, `billing-worker.mjs` e `billing-policy.mjs`: contrato recorrente hospedado, reconsulta assíncrona de pagamento/assinatura, inbox limitado/autenticado e gates transacionais 5/10/5.
 - `tracking-clients.mjs`, `tracking-provision-worker.mjs` e `commercial-events-worker.mjs`: clientes internos de Umami/NVS, provisionamento por projeto e entrega assíncrona de conversões comerciais.
 - `outbound-webhook.mjs`: entrega best-effort pós-persistência por HTTPS, com timeout, sem credenciais/cabeçalhos repassados, bloqueio de destinos locais/privados e status `delivered`/`failed`; fila, retry, idempotência e defesa contra DNS rebinding ficam no nó `worker_webhook`.
@@ -44,6 +46,7 @@
 - `publication-cors.mjs`: validação de origens HTTPS autorizadas para submissões públicas do projeto.
 - `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto, reserva transacional de domínio e execuções idempotentes.
 - `repositories/billing-repository.mjs`: persistência de plano/pedido/assinatura/entitlement, reprocessamento de eventos e auditoria sem payload financeiro bruto.
+- `repositories/mcp-repository.mjs`: hashes de chave, escopos, validade, revogação, rate limit persistente e idempotência por projeto.
 - `repositories/tracking-repository.mjs`: bindings e destinos de tracking isolados por empresa, projeto e ambiente, sem expor referências remotas.
 - `repositories/nvs-commercial-outbox-repository.mjs`: outbox comercial cifrada por binding, com contatos normalizados/hash somente no servidor, click IDs allowlisted e sem respostas brutas.
 - `repositories/publication-runtime-repository.mjs`: manifestos, consentimentos vinculados ao escopo e nonces de replay persistidos.

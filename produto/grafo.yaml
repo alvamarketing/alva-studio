@@ -171,11 +171,11 @@ nos:
       casa: "Prova: cobrança sandbox confirmada, webhook idempotente, [0-9]+ testes verdes"
   - id: agentes_mcp
     fase: v1
-    estado: pendente
-    faz: Expor leitura e criação de rascunhos por agentes, mantendo publicação como ação humana
+    estado: feito
+    faz: Expor MCP JSON-RPC por projeto, com chaves em hash, consulta de projeto/páginas/quizzes/conteúdo e criação idempotente de rascunhos, mantendo publicação como ação humana
     depende:
       - cobranca_empresa
-    produz: MCP por projeto com chaves em hash, leitura e rascunhos auditáveis
+    produz: MCP por projeto com chaves em hash, rate limit persistente, isolamento revalidado e rascunhos auditáveis; sem publicação, cobrança, domínio, equipe, tracking, analytics ou mídia
     passa_quando:
       tipo: arquivo
       caminho: .estado/agentes_mcp.md
