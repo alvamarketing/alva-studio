@@ -209,7 +209,7 @@ test('página pública da VSL inclui o script do tracker do projeto e a CSP corr
   const seed = await seedCompany(database, { email: 'vsl-tracker@alva.test', companyName: 'VSL Tracker', slug: 'vsl-tracker', password: senha });
   const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'projeto' });
   await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'trk-vsl-pagina');
-  const app = await start(t, database);
+  const app = await start(t, database, { runtimeFlags: { mediaPipeline: true } });
   const alice = client(app.base);
   const login = await alice.request('/api/login', 'POST', { email: 'vsl-tracker@alva.test', password: senha });
   assert.equal(login.status, 200, await login.text());

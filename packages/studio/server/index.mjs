@@ -460,7 +460,7 @@ export function createApp({
         const handled = await projectApi({ req, res, path, method: req.method, json });
         if (handled !== false) return handled;
       }
-      if (content && videos && publicVsl) {
+      if (runtimeFlags.mediaPipeline && content && videos && publicVsl) {
         const embed = Boolean(publicVsl[1]);
         const video = await videos.getPublicVideo(publicVsl[2]);
         res.removeHeader('X-Frame-Options');
@@ -494,10 +494,12 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        const resolved = await resolvePublishedVslReferencesForRender({
-          database, companyId: form.companyId, projectId: form.projectId, publicOrigin: publicOrigin || expectedOrigin,
-          references: extractVslReferences(form),
-        });
+        const resolved = runtimeFlags.mediaPipeline
+          ? await resolvePublishedVslReferencesForRender({
+            database, companyId: form.companyId, projectId: form.projectId, publicOrigin: publicOrigin || expectedOrigin,
+            references: extractVslReferences(form),
+          })
+          : new Map();
         const vslEmbedUrls = new Map([...resolved].map(([publicId, value]) => [publicId, value.embedUrl]));
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
         const trackerPublicId = analytics ? await trackerPublicIdForProject(database, form.companyId, form.projectId) : null;

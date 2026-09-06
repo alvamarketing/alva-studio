@@ -57,10 +57,11 @@ export function createLatestRequestGuard() {
 
 export function projectCardCounts(overview = {}) {
   const counts = overview.counts || {};
+  const mediaEnabled = overview.runtime?.media !== false;
   return {
     pages: Number(counts.pages || 0),
     forms: Number(counts.forms || 0),
-    videos: Number(counts.videos || 0),
+    videos: mediaEnabled ? Number(counts.videos || 0) : 0,
     submissions: Number(counts.submissions || 0),
     published: Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0) + Number(counts.publishedVideos || 0),
   };
@@ -115,12 +116,13 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
   if (!overview?.project) return { status: 'empty', message: 'Escolha ou crie um projeto para continuar.', content: [], metrics: [], modules: [] };
 
   const counts = overview.counts || {};
-  const content = (overview.content || []).map((item) => ({
+  const mediaEnabled = overview.runtime?.media !== false;
+  const content = (overview.content || []).filter((item) => mediaEnabled || item.kind !== 'video').map((item) => ({
     ...item,
     status: item.published ? 'Publicado' : 'Rascunho',
     responses: Number(item.submissionCount || 0),
   }));
-  const published = Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0) + Number(counts.publishedVideos || 0);
+  const published = Number(counts.publishedPages || 0) + Number(counts.publishedForms || 0) + (mediaEnabled ? Number(counts.publishedVideos || 0) : 0);
   const configured = (value) => value === 'configured' ? 'Configurado' : 'Ainda não configurado';
   const analyticsConfigured = overview.runtime?.analytics === true && overview.integrations?.analytics === 'configured';
   return {
@@ -132,7 +134,7 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
     metrics: [
       ['Páginas', Number(counts.pages || 0)],
       ['Quizzes', Number(counts.forms || 0)],
-      ['VSLs', Number(counts.videos || 0)],
+      ...(mediaEnabled ? [['VSLs', Number(counts.videos || 0)]] : []),
       ['Publicados', published],
       ['Leads / respostas', Number(counts.submissions || 0)],
     ],

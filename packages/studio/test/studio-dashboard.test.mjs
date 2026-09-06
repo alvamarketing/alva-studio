@@ -73,6 +73,20 @@ test('overview bem-sucedido sem vídeos normaliza todas as contagens conhecidas 
   });
 });
 
+test('resumo do projeto remove VSLs e vídeos quando a mídia está desligada', () => {
+  const overview = {
+    project: { name: 'Projeto', slug: 'projeto' },
+    runtime: { media: false },
+    counts: { pages: 1, forms: 2, videos: 4, publishedPages: 1, publishedVideos: 3 },
+    content: [{ kind: 'page', name: 'Página' }, { kind: 'video', name: 'VSL' }],
+  };
+  assert.equal(projectCardCounts(overview).videos, 0);
+  const model = projectOverviewModel(overview);
+  assert.equal(model.content.some((item) => item.kind === 'video'), false);
+  assert.equal(model.metrics.some(([label]) => label === 'VSLs'), false);
+  assert.deepEqual(projectOverviewModel({ ...overview, runtime: { media: true } }).metrics.find(([label]) => label === 'VSLs'), ['VSLs', 4]);
+});
+
 test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wireframe', async () => {
   const [html, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(appPath, 'utf8')]);
   const dashboardShell = html.slice(html.indexOf('<section id="studio-home"'), html.indexOf('<section id="pages-view"'));
@@ -85,7 +99,7 @@ test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wire
   assert.match(app, /canCreateProject\(studioShell\)/);
   assert.match(app, /await studioShell\.initialize\(\);\s*dashboardContextFlow\.bootstrap\(\);/);
   assert.match(app, /createVslUI\(\{ api, getShell: \(\) => studioShell, toast \}\)/);
-  assert.match(app, /nav-vsl'\)\.hidden = !studioShell\?\.can\?\.\('video\.read'\)/);
+  assert.match(app, /nav-vsl'\)\.hidden = !mediaPipelineEnabled \|\| !studioShell\?\.can\?\.\('video\.read'\)/);
   assert.match(app, /futureText\.textContent = 'Em breve'/);
   assert.doesNotMatch(dashboardShell, /Imobiliárias|Diagnóstico comercial|Projeto CMA|Profissional|2 de 5/);
 });
@@ -324,6 +338,13 @@ test('Conversões usam linha acessível com estado legível e filtros móveis co
   assert.match(css, /\.conversion-status-dead \.conversion-state/);
   assert.match(css, /\.project-filter\s*\{[^}]*overflow-x:\s*auto/s);
   assert.match(css, /\.conversion-row\s*\{[^}]*grid-template-columns:/s);
+});
+
+test('menu de VSL respeita o runtime de mídia sem remover a capacidade de vídeo', async () => {
+  const app = await readFile(appPath, 'utf8');
+  assert.match(app, /mediaPipelineEnabled = false/);
+  assert.match(app, /!mediaPipelineEnabled \|\| !studioShell\?\.can\?\.\('video\.read'\)/);
+  assert.match(app, /mediaPipelineEnabled = overview\.runtime\?\.media === true/);
 });
 
 test('analista pode ler e exportar leads, enquanto quem não tem submission.read não vê o filtro', async () => {

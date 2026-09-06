@@ -86,7 +86,7 @@ test('rotas HTTP servem somente versão publicada e o hls.js local', async (t) =
   const repository = new VideoRepository(database);
   const created = await repository.createVideo({ companyId: company.id, projectId: project.id, actorId: user.id, name: 'VSL pública', sourceUrl: 'https://media.example.test/vsl.m3u8', sourceType: 'hls' });
   await repository.publishVideo({ companyId: company.id, projectId: project.id, actorId: user.id, videoId: created.id, lockVersion: 0 });
-  const server = createApp({ database });
+  const server = createApp({ database, runtimeFlags: { mediaPipeline: true } });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { server.closeAllConnections?.(); await new Promise((resolve) => server.close(resolve)); });
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -103,5 +103,11 @@ test('rotas HTTP servem somente versão publicada e o hls.js local', async (t) =
   assert.equal((await fetch(`${base}/v/missing-public-id`)).status, 404);
   assert.equal((await fetch(`${base}/vendor/hls.min.js`)).status, 200);
   assert.equal((await fetch(`${base}/vsl-ui.js`)).status, 200);
+  const disabled = createApp({ database, runtimeFlags: { mediaPipeline: false } });
+  await new Promise((resolve) => disabled.listen(0, '127.0.0.1', resolve));
+  const disabledBase = `http://127.0.0.1:${disabled.address().port}`;
+  assert.equal((await fetch(`${disabledBase}/v/${created.publicId}`)).status, 404);
+  assert.equal((await fetch(`${disabledBase}/embed/v/${created.publicId}`)).status, 404);
+  await new Promise((resolve) => disabled.close(resolve));
   await database.close();
 });

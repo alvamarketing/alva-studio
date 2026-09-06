@@ -131,10 +131,18 @@ function pendingVercel() {
   return { connected: false, tokenConfigured: false, teamId: '', source: null, pending: true };
 }
 
-function overviewForRuntime(overview, runtimeFlags) {
+export function overviewForRuntime(overview, runtimeFlags) {
   const runtime = publicRuntimeCapabilities(runtimeFlags);
+  const counts = { ...(overview.counts || {}) };
+  const content = Array.isArray(overview.content) ? [...overview.content] : [];
+  if (!runtime.media) {
+    delete counts.videos;
+    delete counts.publishedVideos;
+  }
   return {
     ...overview,
+    counts,
+    content: runtime.media ? content : content.filter((item) => item.kind !== 'video'),
     runtime,
     integrations: {
       ...overview.integrations,
@@ -442,6 +450,7 @@ export function createProjectApi({
 
     const videoCollection = path.match(/^\/api\/projects\/([^/]+)\/videos$/);
     if (videoCollection) {
+      if (runtimeFlags?.mediaPipeline === false) throw fail('A função de VSL está indisponível neste ambiente.', 404);
       const [, projectId] = videoCollection;
       await sessionService.authorize(context, null, projectId);
       if (!videos) throw fail('O player de VSL ainda não está disponível.', 409);
@@ -458,6 +467,7 @@ export function createProjectApi({
 
     const video = path.match(/^\/api\/projects\/([^/]+)\/videos\/([^/]+)(?:\/(duplicate|publish))?$/);
     if (video) {
+      if (runtimeFlags?.mediaPipeline === false) throw fail('A função de VSL está indisponível neste ambiente.', 404);
       const [, projectId, videoId, action] = video;
       await sessionService.authorize(context, null, projectId);
       if (!videos) throw fail('O player de VSL ainda não está disponível.', 409);

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createProjectApi } from '../server/project-api.mjs';
 
-function setup() {
+function setup(options = {}) {
   const calls = [];
   const videos = {
     listVideos: async (input) => { calls.push(['list', input]); return [{ id: 'v1' }]; },
@@ -19,6 +19,7 @@ function setup() {
   };
   const api = createProjectApi({
     sessionService, videos, body: async (req) => req.bodyValue,
+    runtimeFlags: { mediaPipeline: true, ...options.runtimeFlags },
   });
   return { api, videos, calls };
 }
@@ -56,4 +57,14 @@ test('API bloqueia leitura de VSL quando video.read é negado', async () => {
   });
   await assert.rejects(() => request(api, '/api/projects/project-1/videos', 'GET'), /Sem permissão/);
   assert.deepEqual(calls.map(([, , capability]) => capability), [null, 'video.read']);
+});
+
+test('API mantém VSL indisponível sem consultar dados quando mídia está desligada', async () => {
+  const { api, calls } = setup({ runtimeFlags: { mediaPipeline: false } });
+  await assert.rejects(() => request(api, '/api/projects/project-1/videos', 'GET'), (error) => {
+    assert.equal(error.status, 404);
+    assert.match(error.message, /indisponível/);
+    return true;
+  });
+  assert.deepEqual(calls, []);
 });

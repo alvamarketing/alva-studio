@@ -386,6 +386,7 @@ export function createFriendlyEditor({
   onOpenFormSettings = () => {},
   vslVideos = [],
   vslLoadError = '',
+  mediaEnabled = () => true,
   publicOrigin = globalThis.location?.origin || '',
   can = () => true,
 }) {
@@ -429,8 +430,8 @@ export function createFriendlyEditor({
   let pendingVslOptionFocusId = null;
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
   const interactionPolicy = applyEditorInteractionPolicy(host, can);
-  const canInsertVsl = () => interactionPolicy.canAdd;
-  const canReadVsl = () => Boolean(can('video.read'));
+  const canInsertVsl = () => interactionPolicy.canAdd && mediaEnabled();
+  const canReadVsl = () => mediaEnabled() && Boolean(can('video.read'));
   const isCompactWorkspace = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 740px)').matches;
   function syncWorkspacePanels({ focusTab = false } = {}) {
     const state = workspaceState(activeWorkspacePanel);
@@ -603,14 +604,19 @@ export function createFriendlyEditor({
   }
   function renderTree() {
     const wrapper = editor.getWrapper();
-    const nodes = componentTreeNodes(wrapper, editor.getSelected());
     treeComponents = new Map();
     const collect = (component) => {
       const id = componentTreeId(component);
       if (id) treeComponents.set(id, component);
+      const element = component.getEl?.();
+      if (element && (component.is?.('vsl') || component.get?.('type') === 'vsl')) element.hidden = !mediaEnabled();
       componentChildren(component).forEach(collect);
     };
     componentChildren(wrapper).forEach(collect);
+    const nodes = componentTreeNodes(wrapper, editor.getSelected()).filter((node) => {
+      const component = treeComponents.get(node.id);
+      return mediaEnabled() || !(component?.is?.('vsl') || component?.get?.('type') === 'vsl');
+    });
     tree.replaceChildren();
     if (!nodes.length) {
       const empty = document.createElement('p');
@@ -832,6 +838,10 @@ export function createFriendlyEditor({
   function render() {
     clearTimeout(repaint);
     const model = editor.getSelected();
+    if (!mediaEnabled() && (model?.is?.('vsl') || model?.get?.('type') === 'vsl')) {
+      editor.select(editor.getWrapper());
+      return render();
+    }
     // Preserve the field and cursor while typing; repaint on selection, blur, undo or redo.
     if (
       model === activeModel &&

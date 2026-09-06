@@ -4,6 +4,7 @@ import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
 import { promisify } from 'node:util';
 import { request as httpRequest } from 'node:http';
 import { createApp } from '../server/index.mjs';
+import { overviewForRuntime } from '../server/project-api.mjs';
 import { validateFormAnswers } from '../server/form-answer-validation.mjs';
 import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
@@ -18,13 +19,14 @@ async function legacyPassword(password) {
 }
 
 async function start(t, database, options = {}) {
-  const { publicOrigin, authOptions, sessionOptions = {}, dnsLookup, webhookFetch } = options;
+  const { publicOrigin, authOptions, sessionOptions = {}, dnsLookup, webhookFetch, runtimeFlags } = options;
   const server = createApp({
     database,
     publicOrigin,
     authOptions,
     dnsLookup,
     webhookFetch,
+    runtimeFlags,
     sessionOptions: { sessionTTL: 60_000, ...sessionOptions },
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -1108,6 +1110,17 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   await database.close();
 });
 
+test('overview remove VSLs do DTO quando mídia está desligada e preserva com mídia ligada', () => {
+  const input = { counts: { pages: 1, videos: 2, publishedVideos: 1 }, content: [{ id: 'v1', kind: 'video', name: 'VSL secreta' }, { id: 'p1', kind: 'page', name: 'Página' }] };
+  const disabled = overviewForRuntime(input, { mediaPipeline: false });
+  assert.equal(disabled.counts.videos, undefined);
+  assert.equal(disabled.counts.publishedVideos, undefined);
+  assert.deepEqual(disabled.content, [{ id: 'p1', kind: 'page', name: 'Página' }]);
+  const enabled = overviewForRuntime(input, { mediaPipeline: true });
+  assert.deepEqual(enabled.counts, input.counts);
+  assert.deepEqual(enabled.content, input.content);
+});
+
 
 test('coletor público ingere evento de origem publicada, recusa origem não publicada e não revela se o tracker existe', async (t) => {
   const { connectionString } = await postgresFixture(t);
@@ -1260,7 +1273,7 @@ test('CSP da VSL pública inclui a origem do próprio Studio em connect-src', as
   const database = createDatabase({ connectionString });
   await migrate(database);
   const records = await seed(database);
-  const app = await start(t, database);
+  const app = await start(t, database, { runtimeFlags: { mediaPipeline: true } });
   const alice = client(app.base);
   await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
   const created = await alice.request(`/api/projects/${records.projectA.id}/videos`, 'POST', {

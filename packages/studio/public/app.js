@@ -43,6 +43,7 @@ let editor,
   leadsNextCursor = null,
   mobileMenuTrigger,
   mobileDrawer,
+  mediaPipelineEnabled = false,
   config = { vercelConnected: false };
 const homeOverviewGuard = createLatestRequestGuard();
 const analyticsPanelGuard = createLatestRequestGuard();
@@ -69,9 +70,15 @@ function setActiveNavigation(view) {
   applyDashboardNavigation({ home: $('#nav-home'), history: $('#nav-history'), project: $('#nav-project'), pages: $('#nav-pages'), forms: $('#nav-forms'), vsl: $('#nav-vsl'), settings: $('#app-settings') }, view);
 }
 function updateVslNavigation() {
-  $('#nav-vsl').hidden = !studioShell?.can?.('video.read');
+  $('#nav-vsl').hidden = !mediaPipelineEnabled || !studioShell?.can?.('video.read');
+  const videosFilter = $('[data-project-filter="videos"]');
+  if (videosFilter) {
+    videosFilter.hidden = !mediaPipelineEnabled;
+    if (videosFilter.hidden && projectContentFilter === 'videos') projectContentFilter = 'all';
+  }
 }
 function setDashboardView(view, { settingsTab = 'account' } = {}) {
+  if (view === 'vsl' && !mediaPipelineEnabled) view = 'project';
   const sections = {
     home: '#studio-home',
     company: '#company-view',
@@ -161,11 +168,15 @@ function renderHome() {
     try {
       const overview = await api(`/projects/${project.id}/overview`);
       if (!homeOverviewGuard.isCurrent(request, context, studioShell.state().currentCompany?.id || '') || $('#studio-home').hidden) return;
+      mediaPipelineEnabled = overview.runtime?.media === true;
+      updateVslNavigation();
       project.counts = projectCardCounts(overview);
       const card = projects.querySelector(`[data-project-id="${project.id}"]`);
       if (card) for (const [key] of [['pages'], ['forms'], ['videos'], ['submissions'], ['published']]) {
         const amount = card.querySelector(`[data-count-key="${key}"]`);
         if (amount) amount.textContent = project.counts[key] === undefined ? '—' : String(project.counts[key]);
+        const count = card.querySelector(`[data-count-key="${key}"]`)?.parentElement;
+        if (count && key === 'videos') count.hidden = !mediaPipelineEnabled;
       }
     } catch {
       if (!homeOverviewGuard.isCurrent(request, context, studioShell.state().currentCompany?.id || '') || $('#studio-home').hidden) return;
@@ -234,6 +245,7 @@ function projectCard(project) {
     amount.dataset.countKey = key;
     amount.textContent = project.counts?.[key] === undefined ? '—' : String(project.counts[key]);
     value.append(amount, label);
+    if (key === 'videos' && mediaPipelineEnabled === false) value.hidden = true;
     counts.append(value);
   }
   const unavailable = document.createElement('span');
@@ -730,6 +742,8 @@ async function renderProject() {
     ]);
     if (request !== projectOverviewRequest || state.currentProject.id !== studioShell.state().currentProject?.id) return;
     const model = projectOverviewModel(overview);
+    mediaPipelineEnabled = overview.runtime?.media === true;
+    updateVslNavigation();
     status.dataset.state = model.status;
     status.textContent = model.message;
     renderProjectOverview(overview);
@@ -898,7 +912,7 @@ async function openPage(id) {
   const projectId = page.projectId || studioShell?.state().currentProject?.id;
   let vslVideos = [];
   let vslLoadError = '';
-  if (studioShell?.can?.('video.read') && projectId) {
+  if (mediaPipelineEnabled && studioShell?.can?.('video.read') && projectId) {
     try {
       vslVideos = await api(`/projects/${projectId}/videos`);
     } catch {
@@ -923,6 +937,7 @@ async function openPage(id) {
     onOpenFormSettings: () => $('#settings').click(),
     vslVideos,
     vslLoadError,
+    mediaEnabled: () => mediaPipelineEnabled,
     publicOrigin: window.location.origin,
     can: (capability) => studioShell?.can?.(capability),
   });
@@ -1177,7 +1192,7 @@ function resetPageList() {
 async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
-formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability), getProjectId: () => studioShell?.state().currentProject?.id, publicOrigin: window.location.origin });
+formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability), getProjectId: () => studioShell?.state().currentProject?.id, publicOrigin: window.location.origin, mediaEnabled: () => mediaPipelineEnabled });
 const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
 contextBoundary = createStudioContextBoundary({
   savePage: save,

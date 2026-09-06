@@ -1,5 +1,9 @@
 versao: 2
-produto: Alva Studio — criar, organizar e publicar landing pages, formulários e VSLs por projeto
+produto: Alva Studio — criar, organizar e publicar landing pages e quizzes por projeto
+# V1: páginas, quizzes, analytics, tracking, cobrança e agentes. V2: mídia/VSL própria.
+roadmap:
+  v1: páginas, quizzes, analytics, tracking, cobrança e agentes
+  v2: mídia e VSL própria com upload, R2, FFmpeg e HLS
 stack:
   linguagem: JavaScript ESM
   framework: GrapesJS 0.23.6
@@ -49,6 +53,7 @@ nos:
       caminho: .estado/publicacao_por_projeto.md
       casa: "Suíte final: [0-9]+ testes aprovados, 0 falhas"
   - id: vsl_player
+    fase: v2
     estado: feito
     faz: Criar VSL por URL ou streaming pronto, com autoplay mutado, progresso, retomada, CTA temporizado e embed responsivo
     depende:
@@ -59,6 +64,7 @@ nos:
       caminho: .estado/vsl_player.md
       casa: "Suíte final: [0-9]+ testes aprovados, 0 falhas"
   - id: vsl_nos_editores
+    fase: v2
     estado: feito
     faz: Reutilizar cada VSL como bloco nas landing pages e nas microlanding pages dos formulários dinâmicos
     depende:
@@ -85,7 +91,6 @@ nos:
     faz: Manter o coletor Node legado registrando visitas, origem, UTMs e eventos de VSL e formulário até o corte, sem se declarar Umami real
     depende:
       - leads_integracoes
-      - vsl_player
     produz: Coleta legada isolada por projeto até o corte e compatibilidade de leitura por 90 dias após o corte
     passa_quando:
       tipo: arquivo
@@ -132,6 +137,7 @@ nos:
       caminho: .estado/homologacao_motores.md
       casa: "Prova: homologação real concluída, [0-9]+ testes verdes"
   - id: tracking_pixels
+    fase: v1
     estado: pendente
     faz: Injetar pixels de mídia por projeto atrás de consentimento opt-in, com CSP de nonce por resposta e allowlist só dos provedores habilitados
     depende:
@@ -142,6 +148,7 @@ nos:
       caminho: .estado/tracking_pixels.md
       casa: "Prova: pixel só após consentimento, CSP com nonce e allowlist por projeto, [0-9]+ testes verdes"
   - id: tracking_conversoes
+    fase: v1
     estado: pendente
     faz: Enviar conversões server-side às plataformas com hashes SHA-256 de e-mail e telefone e click IDs, sem PII em claro e sem IP ou user agent
     depende:
@@ -152,6 +159,7 @@ nos:
       caminho: .estado/tracking_conversoes.md
       casa: "Prova: payload sem PII em claro, sem IP e sem user agent, deduplicado por tracking_event_id, [0-9]+ testes verdes"
   - id: cobranca_empresa
+    fase: v1
     estado: pendente
     faz: Integrar uma assinatura empresarial inicial ao Asaas e aplicar o acesso essencial
     depende:
@@ -162,6 +170,7 @@ nos:
       caminho: .estado/cobranca_empresa.md
       casa: "Prova: cobrança sandbox confirmada, webhook idempotente, [0-9]+ testes verdes"
   - id: agentes_mcp
+    fase: v1
     estado: pendente
     faz: Expor leitura e criação de rascunhos por agentes, mantendo publicação como ação humana
     depende:
@@ -182,6 +191,7 @@ nos:
       caminho: .estado/worker_webhook.md
       casa: "Suíte completa rodada localmente: [0-9]+/[0-9]+"
   - id: midia_cdn
+    fase: v2
     estado: pendente
     faz: Adicionar upload próprio, processamento e CDN quando o uso de VSL justificar essa infraestrutura
     depende:

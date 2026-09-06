@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** executar Umami, NVS e VSL própria dentro do Alva Studio e concluir tracking, cobrança e agentes por projeto.
+**Goal:** entregar a V1 comercial do Alva Studio com páginas, quizzes, analytics, tracking, cobrança e agentes por projeto; a VSL própria fica planejada para a V2.
 
-**Architecture:** o Studio é o control plane em Node/PostgreSQL; Umami 3.3.1 e NVS Core 0.3.10 são sidecars internos com bancos isolados; R2 e um worker FFmpeg sustentam a VSL própria; Vercel recebe somente snapshots publicados.
+**Architecture:** a V1 usa o Studio como control plane Node/PostgreSQL, Umami 3.3.1 e NVS Core 0.3.10 como sidecars internos com bancos isolados, e Vercel para snapshots publicados. A V2 adicionará R2 e worker FFmpeg para VSL própria.
 
-**Tech Stack:** Node.js 22 ESM, PostgreSQL, Umami 3.3.1, PHP, MariaDB 11.4, Docker Compose/Coolify, Cloudflare R2, FFmpeg, Vercel, node:test.
+**Tech Stack V1:** Node.js 22 ESM, PostgreSQL, Umami 3.3.1, PHP, MariaDB 11.4, Docker Compose/Coolify, Vercel, node:test.
+
+**Tech Stack V2:** Cloudflare R2, FFmpeg e HLS para mídia própria.
 
 **Spec:** `docs/superpowers/specs/2026-09-06-runtime-comercial-completo-design.md`
 
@@ -17,6 +19,8 @@
 - Nenhuma etapa é marcada pronta apenas por mock; o serviço real em container faz parte do aceite.
 - Subagentes não fazem push, publicação, DNS, cobrança real ou egress com credencial real.
 - Toda tela cita e compara a seção correspondente de `docs/wireframes/alva-studio-ui-reference.html`.
+
+**Ordem de entrega V1:** Tasks 6 → 7 → 9 → 10 → 11. A Task 8 e qualquer infraestrutura de mídia própria pertencem à V2 e não bloqueiam a V1.
 
 ---
 
@@ -97,6 +101,10 @@
 - [ ] Carregar Meta, GA4, TikTok, LinkedIn e Taboola uma vez, somente após opt-in.
 - [ ] Testar publicação real de staging, CSP, revogação, dois tenants, revisão visual e commit.
 
+## V2 — Mídia própria
+
+A Task 8 fica fora da certificação V1 e será retomada somente após a V1 comercial estar homologada.
+
 ### Task 8: Entregar VSL própria com R2 e HLS
 
 **Files:** schema de mídia, cliente R2, media worker, gateway de playback, biblioteca e tela “Configure sua VSL”.
@@ -135,9 +143,9 @@
 
 **Files:** runbooks, matriz E2E e certificações `.estado`.
 
-**Interfaces:** um projeto de staging percorre criação → provisão → mídia → publicação → visita → lead → conversão → cobrança → agente.
+**Interfaces V1:** um projeto de staging percorre criação → provisão → publicação → visita → lead → conversão → cobrança → agente. Mídia/VSL própria é critério da V2.
 
 - [ ] Restaurar backups e testar rollback de publicação.
-- [ ] Executar matriz contra containers reais, Vercel/R2 de staging e Asaas Sandbox.
+- [ ] Executar matriz contra containers reais, Vercel de staging e Asaas Sandbox. R2 fica na certificação V2.
 - [ ] Verificar todas as telas em 1440×900 e 390×844 por revisor independente.
 - [ ] Fazer revisão final ampla, suíte completa, inventário de segredos e commit; produção permanece aguardando aprovação explícita.
