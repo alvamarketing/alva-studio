@@ -67,11 +67,10 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
+  const activeView = view === 'home' && studioShell?.state?.().currentProject ? 'project' : view;
   const navigation = {
     home: $('#nav-home'),
     projects: $('#nav-projects'),
-    company: $('#nav-company'),
-    billing: $('#nav-billing'),
     project: $('#nav-project'),
     pages: $('#nav-pages'),
     forms: $('#nav-forms'),
@@ -81,20 +80,20 @@ function setActiveNavigation(view) {
     projectAgents: $('#nav-project-agents'),
     settings: $('#app-settings'),
   };
-  applyDashboardNavigation(Object.fromEntries(Object.entries(navigation).filter(([, element]) => element)), view);
+  applyDashboardNavigation(Object.fromEntries(Object.entries(navigation).filter(([, element]) => element)), activeView);
 }
-function sidebarContextFor(view) {
-  return ['project', 'pages', 'forms', 'vsl'].includes(view) ? 'project' : 'studio';
+function sidebarContextFor(view, hasProject = false) {
+  return hasProject || ['project', 'pages', 'forms', 'vsl'].includes(view) ? 'project' : 'studio';
 }
 function syncSidebarContext(view) {
   const sidebar = $('#studio-sidebar');
   if (!sidebar) return;
-  const context = sidebarContextFor(view);
+  const hasProject = Boolean(studioShell?.state?.().currentProject);
+  const context = sidebarContextFor(view, hasProject);
   sidebar.dataset.context = context;
   for (const group of sidebar.querySelectorAll('[data-sidebar-context]')) {
     group.hidden = group.dataset.sidebarContext !== context;
   }
-  const hasProject = Boolean(studioShell?.state?.().currentProject);
   const canReadAnalytics = Boolean(studioShell?.can?.('analytics.read'));
   const canManageProject = Boolean(studioShell?.can?.('project.manage'));
   const analytics = $('#nav-project-analytics');
@@ -114,6 +113,7 @@ function updateVslNavigation() {
   }
 }
 function setDashboardView(view, { settingsTab = 'account' } = {}) {
+  if (view === 'home' && studioShell?.state?.().currentProject) view = 'project';
   if (view === 'vsl' && !mediaPipelineEnabled) view = 'project';
   const sections = {
     home: '#studio-home',
@@ -155,6 +155,7 @@ function renderDashboardState(state) {
   dashboardStateOverride = state;
   const activeView = Object.entries({ home: '#studio-home', company: '#company-view', history: '#history-view', settings: '#settings-view', project: '#project-view', pages: '#pages-view', forms: '#forms-view', vsl: '#vsl-view' }).find(([, selector]) => !$(selector).hidden)?.[0] || 'home';
   syncSidebarContext(activeView);
+  setActiveNavigation(activeView);
   updateVslNavigation();
   if (!$('#studio-home').hidden) renderHome();
   if (!$('#history-view').hidden) renderHistory();
@@ -1468,8 +1469,6 @@ dashboardContextFlow = createDashboardProjectFlow({
 });
 $('#nav-home').onclick = () => setDashboardView('home');
 $('#nav-projects').onclick = () => setDashboardView('home');
-$('#nav-company').onclick = () => setDashboardView('company');
-$('#nav-billing').onclick = () => setDashboardView('settings', { settingsTab: 'billing' });
 $('#nav-project').onclick = action(async () => {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar sua visão geral.');
   projectContentFilter = 'all';
@@ -1636,7 +1635,7 @@ document.addEventListener('keydown', (event) => {
 $('#project-switcher').onchange = action(async (event) => {
   if (event.target.value === studioShell.state().currentProject?.id) return;
   await dashboardContextFlow.selectProject(event.target.value);
-  setDashboardView('home');
+  setDashboardView('project');
 });
 $('#new-project').onclick = () => {
   const form = $('#new-project-form');
@@ -1719,7 +1718,7 @@ ownerUI = createOwnerUI({
       $('#dashboard').hidden = true;
     } else {
       $('#dashboard').hidden = false;
-      setDashboardView('home');
+      setDashboardView(studioShell.state().currentProject ? 'project' : 'home');
     }
   },
   beforeLogout: save,
@@ -1739,7 +1738,7 @@ ownerUI = createOwnerUI({
       $('#settings-company-status').textContent = error.message || 'Não foi possível carregar a empresa.';
     });
   },
-  onSettingsClosed: () => setDashboardView('home'),
+  onSettingsClosed: () => setDashboardView(studioShell?.state().currentProject ? 'project' : 'home'),
   canManageIntegration: () => !studioShell?.state().session?.user || studioShell.can('integration.manage'),
   onLoggedOut: async () => {
     clearTimeout(timer);

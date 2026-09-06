@@ -13,13 +13,21 @@ test('Home e Projeto alternam a navegação canônica sem criar uma terceira sid
   assert.match(html, /<section id="company-view"[^>]*aria-labelledby="company-view-title"/);
   assert.match(html, /id="nav-home"[^>]*aria-current="page"/);
   assert.match(html, /data-sidebar-context="studio"/);
-  assert.match(html, /SEU STUDIO[\s\S]*Início[\s\S]*Projetos[\s\S]*Empresa e equipe[\s\S]*Plano e cobrança/);
+  assert.match(html, /SEU STUDIO[\s\S]*Início[\s\S]*Projetos/);
   assert.doesNotMatch(html, /id="nav-studio-agents"/);
-  assert.match(html, /data-sidebar-context="project"[^>]*hidden/);
-  assert.match(html, /PROJETO[\s\S]*Visão geral[\s\S]*Landing pages[\s\S]*Formulários \/ Quizzes[\s\S]*Analytics[\s\S]*Rastreamento[\s\S]*Publicação[\s\S]*Agentes/);
+  assert.doesNotMatch(html, /id="nav-company"|id="nav-billing"/);
+  assert.match(html, /data-sidebar-context="project"/);
+  assert.match(html, /PROJETO[\s\S]*Visão geral[\s\S]*Páginas[\s\S]*Quizzes[\s\S]*Analytics[\s\S]*Rastreamento[\s\S]*Publicação[\s\S]*Agentes/);
+  assert.match(html, /id="nav-pages"[^>]*title="Páginas">[\s\S]*?<span class="sidebar-label">Páginas<\/span>/);
+  assert.match(html, /id="nav-forms"[^>]*title="Quizzes">[\s\S]*?<span class="sidebar-label">Quizzes<\/span>/);
+  const pagesNav = html.match(/<button[^>]*id="nav-pages"[^>]*>[\s\S]*?<\/button>/)?.[0];
+  const quizzesNav = html.match(/<button[^>]*id="nav-forms"[^>]*>[\s\S]*?<\/button>/)?.[0];
+  assert.ok(pagesNav);
+  assert.ok(quizzesNav);
+  assert.doesNotMatch(pagesNav, /Landing pages/);
+  assert.doesNotMatch(quizzesNav, /Formulários \/ Quizzes/);
   assert.match(html, /id="nav-pages"[^>]*title="Páginas"/);
   assert.match(html, /id="nav-forms"[^>]*title="Quizzes"/);
-  assert.match(html, /id="nav-company"/);
   assert.match(html, /id="nav-project-analytics"/);
   assert.match(html, /id="project-switcher"[^>]*aria-label="Selecionar projeto"/);
   assert.match(html, /id="history-view"/);
@@ -130,13 +138,33 @@ test('Home e Empresa usam os dados reais e não os exemplos ilustrativos do wire
   assert.match(app, /await studioShell\.initialize\(\);\s*dashboardContextFlow\.bootstrap\(\);/);
   assert.match(app, /createVslUI\(\{ api, getShell: \(\) => studioShell, toast \}\)/);
   assert.match(app, /function syncSidebarContext\(view\)/);
-  assert.match(app, /sidebarContextFor\(view\)/);
+  assert.match(app, /sidebarContextFor\(view, hasProject\)/);
   assert.match(app, /nav-project-analytics/);
   assert.match(app, /api\('\/billing'\)/);
   assert.match(app, /Abrir checkout/);
   assert.match(app, /Cancelar renovação/);
   assert.match(app, /alva\.billing\.checkout/);
   assert.doesNotMatch(dashboardShell, /Imobiliárias|Diagnóstico comercial|Projeto CMA|Profissional|2 de 5/);
+});
+
+test('troca de projeto pelo seletor mantém a visão do projeto e seus módulos', async () => {
+  const app = await readFile(appPath, 'utf8');
+
+  assert.match(app, /await dashboardContextFlow\.selectProject\(event\.target\.value\);\s*setDashboardView\('project'\);/);
+  assert.match(app, /nav-project-analytics/);
+  assert.match(app, /nav-project-tracking/);
+  assert.match(app, /nav-project-publication/);
+  assert.match(app, /nav-project-agents/);
+  assert.match(app, /videosFilter\.hidden = !mediaPipelineEnabled/);
+});
+
+test('entrada autenticada e retorno das configurações preservam a visão do projeto', async () => {
+  const app = await readFile(appPath, 'utf8');
+
+  assert.match(app, /dashboardContextFlow\.bootstrap\(\);[\s\S]*setDashboardView\(studioShell\.state\(\)\.currentProject \? 'project' : 'home'\);/);
+  assert.match(app, /onSettingsClosed: \(\) => setDashboardView\(studioShell\?\.state\(\)\.currentProject \? 'project' : 'home'\)/);
+  assert.match(app, /const activeView = view === 'home' && studioShell\?\.state\?\.\(\)\.currentProject \? 'project' : view;/);
+  assert.match(app, /const context = sidebarContextFor\(view, hasProject\);/);
 });
 
 test('troca de empresa limpa a superfície imediatamente e restaura o seletor confirmado quando falha', async () => {

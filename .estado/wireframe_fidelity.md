@@ -22,9 +22,10 @@
 - Configurações: aprovado em `/tmp/alva-ui-rereview-settings-r4.md`.
 - Overflow e cabeçalhos responsivos: aprovado em `/tmp/alva-ui-review-overflow-r3.md`.
 - Verificação visual integrada: desktop aprovado; as duas falhas mobile encontradas foram corrigidas e aprovadas em `/tmp/alva-ui-mobile-final-review.md`, com conferência em 433 px e 355 px.
+- Navegação da Home com projeto ativo: aprovada em `/tmp/alva-home-integrations-review-r2.md`; menu confirmado no navegador com Visão geral, Páginas, Quizzes, Analytics, Rastreamento, Publicação e Agentes.
 
 ## Verificação final
 
-- `pnpm test:studio`: 528 testes aprovados, 0 falhas.
+- `pnpm test:studio`: 530 testes aprovados, 0 falhas após a correção final da navegação.
 - `git diff --check`: aprovado.
-- Relatório: `/tmp/alva-ui-full-tests-final.md`.
+- Relatórios: `/tmp/alva-ui-full-tests-final.md` e `/tmp/alva-home-integrations-full-tests.md`.
