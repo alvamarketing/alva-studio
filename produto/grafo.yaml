@@ -138,7 +138,7 @@ nos:
       casa: "Prova: homologação real concluída, [0-9]+ testes verdes"
   - id: tracking_pixels
     fase: v1
-    estado: pendente
+    estado: feito
     faz: "Injetar pixels de mídia por projeto atrás de consentimento opt-in escopado por projeto, domínio, ambiente, snapshot, publicação e policyVersion: 1, com CSP de nonce e allowlist fechada por provedor e policyVersion: 1"
     depende:
       - homologacao_motores
@@ -149,7 +149,7 @@ nos:
       casa: "Prova: pixel só após consentimento, CSP com nonce e allowlist por projeto, [0-9]+ testes verdes"
   - id: tracking_conversoes
     fase: v1
-    estado: pendente
+    estado: feito
     faz: "Persistir eventos no Studio, encaminhar ao NVS e enviar aos adaptadores externos habilitados em pending, denied ou granted; limitar pending/denied a evento, tracking_event_id, tempo, conteúdo, valor/moeda e IDs pseudônimos allowlisted por adaptador (Meta fbc/fbp; Google gclid/gbraid/wbraid; TikTok ttclid; LinkedIn li_fat_id→linkedin_tracking_uuid; Taboola tblci→taboola_click_id), recusar campos desconhecidos e gerar hashes normalizados somente no servidor em granted; somente flags técnicas ou providers desabilitados bloqueiam egress"
     depende:
       - tracking_pixels

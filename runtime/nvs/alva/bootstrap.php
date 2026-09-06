@@ -82,9 +82,14 @@ final class AlvaSanitizer
     private static function clickIds(array $params): array
     {
         $safe = [];
-        foreach (['gclid', 'gbraid', 'wbraid', 'linkedin_tracking_uuid', 'taboola_click_id'] as $key) {
-            $value = trim((string) ($params[$key] ?? ''));
-            if ($value !== '' && preg_match('/^[A-Za-z0-9._~-]{1,200}$/', $value)) $safe[$key] = $value;
+        $allowed = ['fbc' => ['fbc'], 'fbp' => ['fbp'], 'gclid' => ['gclid'], 'gbraid' => ['gbraid'], 'wbraid' => ['wbraid'], 'ttclid' => ['ttclid'], 'linkedin_tracking_uuid' => ['linkedin_tracking_uuid', 'li_fat_id'], 'taboola_click_id' => ['taboola_click_id', 'tblci']];
+        foreach ($allowed as $canonical => $names) {
+            foreach ($names as $name) {
+                $raw = $params[$name] ?? null;
+                if (!is_string($raw)) continue;
+                $value = trim($raw);
+                if ($value !== '' && preg_match('/^[A-Za-z0-9._~-]{1,200}$/', $value)) { $safe[$canonical] = $value; break; }
+            }
         }
         return $safe;
     }
@@ -93,12 +98,13 @@ final class AlvaSanitizer
         $id = trim((string) ($body['tracking_event_id'] ?? '')); $name = strtolower(trim((string) ($body['event_name'] ?? '')));
         if (!preg_match('/^[A-Za-z0-9_.:-]{1,190}$/', $id)) throw new InvalidArgumentException('invalid_tracking_event_id');
         if (!in_array($name, AlvaNvs::COMMERCIAL_EVENTS, true)) throw new InvalidArgumentException('event_not_allowed');
+        $state = (string) ($body['consent_state'] ?? 'pending'); if (!in_array($state, ['pending', 'denied', 'granted'], true)) throw new InvalidArgumentException('invalid_consent_state');
         $user = is_array($body['user'] ?? null) ? $body['user'] : []; $params = is_array($body['params'] ?? null) ? $body['params'] : [];
         $safeParams = [];
         if (isset($params['value']) && is_numeric($params['value']) && is_finite((float) $params['value'])) $safeParams['value'] = (float) $params['value'];
         if (isset($params['currency']) && preg_match('/^[A-Za-z]{3}$/', (string) $params['currency'])) $safeParams['currency'] = strtoupper((string) $params['currency']);
         foreach (['transaction_id', 'content_id'] as $key) if (isset($params[$key]) && is_string($params[$key]) && preg_match('/^[A-Za-z0-9_.:-]{1,190}$/', $params[$key])) $safeParams[$key] = $params[$key];
-        return ['property_id' => $propertyId, 'tracking_event_id' => $id, 'event_name' => $name, 'event_time' => isset($body['event_time']) ? (int) $body['event_time'] : time(), 'user' => array_filter(['email_sha256' => self::suppliedHash($user['email_sha256'] ?? null) ?? self::hashEmail($user['email'] ?? null), 'phone_sha256' => self::suppliedHash($user['phone_sha256'] ?? null) ?? self::hashPhone($user['phone'] ?? null)]), 'click_ids' => self::clickIds($params), 'params' => $safeParams];
+        return ['property_id' => $propertyId, 'tracking_event_id' => $id, 'event_name' => $name, 'event_time' => isset($body['event_time']) ? (int) $body['event_time'] : time(), 'consent_state' => $state, 'user' => $state === 'granted' ? array_filter(['email_sha256' => self::suppliedHash($user['email_sha256'] ?? null) ?? self::hashEmail($user['email'] ?? null), 'phone_sha256' => self::suppliedHash($user['phone_sha256'] ?? null) ?? self::hashPhone($user['phone'] ?? null)]) : [], 'click_ids' => self::clickIds($params), 'params' => $safeParams];
     }
     public static function publicEvent(array $body, string $propertyId): array
     {

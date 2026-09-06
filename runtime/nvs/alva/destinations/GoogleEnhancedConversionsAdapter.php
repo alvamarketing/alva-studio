@@ -23,6 +23,7 @@ final class GoogleEnhancedConversionsAdapter extends AlvaHttpDestination
             'eventTimestamp' => gmdate('Y-m-d\TH:i:s\Z', (int) $event['event_time']),
             'eventSource' => 'WEB',
             'eventName' => $event['event_name'],
+            'consent' => ['adUserData' => ($event['consent_state'] ?? 'pending') === 'granted' ? 'GRANTED' : 'DENIED', 'adPersonalization' => ($event['consent_state'] ?? 'pending') === 'granted' ? 'GRANTED' : 'DENIED', 'adStorage' => ($event['consent_state'] ?? 'pending') === 'granted' ? 'GRANTED' : 'DENIED', 'analyticsStorage' => ($event['consent_state'] ?? 'pending') === 'granted' ? 'GRANTED' : 'DENIED'],
         ];
         if ($adIdentifiers !== []) $conversion['adIdentifiers'] = $adIdentifiers;
         if ($userIdentifiers !== []) $conversion['userData'] = ['userIdentifiers' => $userIdentifiers];

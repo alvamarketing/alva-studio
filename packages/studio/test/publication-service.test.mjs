@@ -106,3 +106,60 @@ test('overview mantém a prévia READY separada da última produção', async ()
   assert.equal(result.preview.id, 'preview-building');
   assert.equal(result.latestPreviewReady.id, 'preview-ready');
 });
+
+test('produção adiciona Function ao payload da Vercel sem alterar snapshot e registra o manifesto pelo host retornado', async () => {
+  const snapshot = { hash: 'a'.repeat(64), manifest: [], files: [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }] };
+  const calls = []; let savedManifest;
+  const service = new PublicationService({
+    snapshotBuilder: { build: async () => snapshot },
+    integrations: { credentials: async () => ({ token: 'token', vercelProjectId: 'prj_1' }) },
+    deployments: {
+      async find() { return { id: 'preview-1', environment: 'preview', status: 'READY', snapshotHash: snapshot.hash, externalProjectId: 'prj_1' }; },
+      async createOrGet(input) { return { id: 'run-production', ...input, externalDeploymentId: null, status: 'queued' }; },
+      async updateExternal(input) { return { id: 'run-production', ...input, externalDeploymentId: 'dpl-1', status: 'READY' }; },
+    },
+    publisherFactory: () => ({ publish: async (input) => { calls.push(input); return { id: 'dpl-1', projectId: 'prj_1', state: 'READY', url: 'lp.example.test' }; } }),
+    runtimeEnabled: true,
+    runtimeOrigin: 'https://studio.example.test',
+    runtimeHmacSecret: 'root-secret-only-at-studio',
+    runtimeManifests: { saveManifest: async (input) => { savedManifest = input; } },
+    audit: { record: async () => {} },
+  });
+  await service.production({ companyId: 'company', projectId: 'project', requestedBy: 'user', previewRunId: 'preview-1', confirmed: true, expectedRevision: 3 });
+  assert.deepEqual(snapshot.files, [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }]);
+  assert.ok(calls[0].files.some((file) => file.file === 'api/_alva/[...path].js'));
+  assert.match(calls[0].files.find((file) => file.file === 'index.html').data, /action="\/api\/public\/forms\/acme\/lp\/submissions"/);
+  assert.equal(calls[0].runtimeEnv.PUBLICATION_RUNTIME_HMAC_SECRET, undefined);
+  assert.equal(savedManifest.manifest.publicationId, 'run-production');
+  assert.equal(savedManifest.manifest.origin, 'https://lp.example.test');
+});
+
+test('domínio verificado move o manifesto ao host canônico e preserva publicação, snapshot e providers', async () => {
+  let saved;
+  const current = { publication_id: 'run-1', snapshot_hash: 'a'.repeat(64), version: 3, policy_version: 1, environment: 'production', providers: [{ provider: 'meta', id: '123' }] };
+  const service = new PublicationService({
+    integrations: { credentials: async () => ({ vercelProjectId: 'project' }) },
+    deployments: { find: async () => ({ id: 'run-1', environment: 'production', status: 'READY' }) },
+    publisherFactory: () => ({ domain: async () => ({ name: 'lp.example.test', verified: true }) }),
+    domains: { save: async () => {} }, audit: { record: async () => {} },
+    runtimeManifests: { current: async () => current, saveManifest: async (input) => { saved = input; } },
+  });
+  await service.domain({ companyId: 'company', projectId: 'project', requestedBy: 'user', runId: 'run-1', domain: 'lp.example.test' });
+  assert.deepEqual(saved.manifest.providers, current.providers);
+  assert.equal(saved.manifest.publicationId, 'run-1');
+  assert.equal(saved.manifest.snapshotHash, current.snapshot_hash);
+  assert.equal(saved.manifest.origin, 'https://lp.example.test');
+});
+
+test('pixels habilitados falham fechados sem a raiz HMAC de runtime', async () => {
+  let published = false;
+  const service = new PublicationService({
+    snapshotBuilder: { build: async () => ({ hash: 'a'.repeat(64), manifest: [], files: [{ file: 'index.html', data: '<html></html>' }] }) },
+    integrations: { credentials: async () => ({ token: 'token', vercelProjectId: 'project' }) },
+    deployments: { createOrGet: async (input) => ({ id: 'run-1', ...input, status: 'queued' }), claim: async () => ({ claimed: true, token: 'claim' }), recordFailure: async () => null },
+    publisherFactory: () => ({ publish: async () => { published = true; } }),
+    runtimeEnabled: true, runtimeOrigin: 'https://studio.example.test', runtimeHmacSecret: '', audit: { record: async () => {} },
+  });
+  await assert.rejects(() => service.send({ companyId: 'company', projectId: 'project', requestedBy: 'user', environment: 'production', expectedRevision: 1, snapshot: { hash: 'a'.repeat(64), manifest: [], files: [{ file: 'index.html', data: '<html></html>' }] } }), /segredo de runtime/i);
+  assert.equal(published, false);
+});

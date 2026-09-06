@@ -376,7 +376,7 @@ export function createProjectApi({
       }
       if (action === 'destinations' && provider && method === 'PUT') {
         const input = await body(req);
-        return json(await tracking.saveDestination({ companyId: context.companyId, projectId, provider, environment: input.environment, configuration: input.configuration }));
+        return json(await tracking.saveDestination({ companyId: context.companyId, projectId, provider, environment: input.environment, configuration: input.configuration, publicConfiguration: input.publicConfiguration }));
       }
       throw fail('Não encontrado.', 404);
     }

@@ -22,6 +22,10 @@ const PROVIDER_VALUE_RULES = {
   linkedin: { conversion_urn: /^urn:lla:llaPartnerConversion:\d{1,20}$/, access_token: CREDENTIAL, linkedin_version: /^\d{6}$/ },
   taboola: {},
 };
+const PUBLIC_PROVIDER_FIELDS = {
+  meta: { pixel_id: /^\d{1,20}$/ }, tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/ },
+  google: { measurement_id: /^G-[A-Z0-9]{4,20}$/ }, linkedin: { partner_id: /^\d{1,30}$/ }, taboola: { account_id: /^[A-Za-z0-9_-]{1,255}$/ },
+};
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
 function environment(value) { if (!ENVIRONMENTS.has(value)) throw fail('Ambiente de rastreamento inválido.'); return value; }
@@ -216,11 +220,14 @@ export class TrackingRepository {
     return this.database.transaction ? this.database.transaction(run) : run(this.database);
   }
 
-  async saveDestination({ companyId, projectId, environment: rawEnvironment, provider, configuration }) {
+  async saveDestination({ companyId, projectId, environment: rawEnvironment, provider, configuration, publicConfiguration = undefined }) {
     const targetEnvironment = environment(rawEnvironment);
     if (!PROVIDERS.has(provider)) throw fail('Destino de rastreamento inválido.');
     if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) throw fail('Configuração do destino inválida.');
     if (Object.keys(configuration).some((key) => !PROVIDER_FIELDS[provider].has(key) || typeof configuration[key] !== 'string' || !PROVIDER_VALUE_RULES[provider][key]?.test(configuration[key])) || REQUIRED_PROVIDER_FIELDS[provider].some((key) => !configuration[key])) throw fail('Configuração do destino inválida.');
+    const derived = provider === 'meta' ? { pixel_id: configuration.pixel_id } : provider === 'tiktok' ? { pixel_code: configuration.pixel_code } : {};
+    const publicValue = publicConfiguration === undefined ? derived : publicConfiguration;
+    if (!publicValue || typeof publicValue !== 'object' || Array.isArray(publicValue) || Object.keys(publicValue).some((key) => !Object.hasOwn(PUBLIC_PROVIDER_FIELDS[provider], key) || typeof publicValue[key] !== 'string' || !PUBLIC_PROVIDER_FIELDS[provider][key].test(publicValue[key]))) throw fail('Configuração pública do destino inválida.');
     const plain = JSON.stringify(configuration);
     if (plain.length > 12_000) throw fail('Configuração do destino excede o limite.');
     await this.database.transaction(async (client) => {
@@ -230,10 +237,10 @@ export class TrackingRepository {
       );
       if (!binding.rows[0]) throw fail('Binding de rastreamento não encontrado.', 404);
       await client.query(
-        `INSERT INTO tracking_destinations (company_id, project_id, environment, provider, binding_id, encrypted_configuration)
-         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (company_id, project_id, environment, provider)
-         DO UPDATE SET binding_id = EXCLUDED.binding_id, encrypted_configuration = EXCLUDED.encrypted_configuration, updated_at = now()`,
-        [companyId, projectId, targetEnvironment, provider, binding.rows[0].id, this.vault.encrypt(plain, destinationScope({ companyId, projectId, environment: targetEnvironment, provider }))],
+        `INSERT INTO tracking_destinations (company_id, project_id, environment, provider, binding_id, encrypted_configuration, public_configuration)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) ON CONFLICT (company_id, project_id, environment, provider)
+         DO UPDATE SET binding_id = EXCLUDED.binding_id, encrypted_configuration = EXCLUDED.encrypted_configuration, public_configuration = EXCLUDED.public_configuration, updated_at = now()`,
+        [companyId, projectId, targetEnvironment, provider, binding.rows[0].id, this.vault.encrypt(plain, destinationScope({ companyId, projectId, environment: targetEnvironment, provider })), JSON.stringify(publicValue)],
       );
       await client.query(`UPDATE tracking_bindings SET status = 'pending', last_error = NULL, updated_at = now() WHERE id = $1`, [binding.rows[0].id]);
       const job = await client.query(
@@ -255,6 +262,16 @@ export class TrackingRepository {
       [companyId, projectId, targetEnvironment],
     );
     return rows.map((row) => ({ provider: row.provider, environment: targetEnvironment, configured: true }));
+  }
+
+  async publicProviders({ companyId, projectId, environment: rawEnvironment }) {
+    const targetEnvironment = environment(rawEnvironment);
+    const { rows } = await this.database.query(`SELECT provider, public_configuration FROM tracking_destinations WHERE company_id=$1 AND project_id=$2 AND environment=$3 ORDER BY provider`, [companyId, projectId, targetEnvironment]);
+    return rows.map((row) => {
+      const config = row.public_configuration || {};
+      const id = row.provider === 'meta' ? config.pixel_id : row.provider === 'tiktok' ? config.pixel_code : row.provider === 'google' ? config.measurement_id : row.provider === 'linkedin' ? config.partner_id : config.account_id;
+      return { provider: row.provider === 'google' ? 'ga4' : row.provider, id };
+    });
   }
 
   async nvsDestinations({ companyId, projectId, environment: rawEnvironment }) {

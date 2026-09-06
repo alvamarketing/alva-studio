@@ -28,7 +28,7 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
       [ids.company.id, ids.project.id, 'preview', vault.encrypt('nvs_preview_property', scope(ids, 'preview'))],
     );
     const outbox = new NvsCommercialOutboxRepository(database, { vault });
-    const event = { companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' } };
+    const event = { companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' }, attribution: { gclid: 'google-click', unknown: 'blocked' } };
     await database.transaction((client) => outbox.enqueue(client, event));
     await database.transaction((client) => outbox.enqueue(client, event));
     const vsl = { ...event, trackingEventId: 'a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'vsl_progress', answers: {}, params: { content_id: 'vsl-123', value: 75 } };
@@ -45,6 +45,7 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
       email_sha256: createHash('sha256').update('pessoa@example.test').digest('hex'),
       phone_sha256: createHash('sha256').update('5511999999999').digest('hex'),
     });
+    assert.deepEqual(payload.attribution, { gclid: 'google-click' });
     assert.equal(JSON.stringify(payload).includes('Pessoa@Example'), false);
     assert.equal(JSON.stringify(payload).includes('Nunca enviar'), false);
     const status = await outbox.status({ companyId: ids.company.id, projectId: ids.project.id });

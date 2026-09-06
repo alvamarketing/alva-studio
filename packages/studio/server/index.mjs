@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -27,6 +28,11 @@ import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
 import { NvsCommercialOutboxRepository } from './repositories/nvs-commercial-outbox-repository.mjs';
+import { PublicationRuntimeRepository } from './repositories/publication-runtime-repository.mjs';
+import { RuntimeConsentGateway } from './runtime-consent-gateway.mjs';
+import { createRuntimeLoader } from './publication-runtime.mjs';
+import { resolveConsentState } from './conversion-consent-policy.mjs';
+import { runtimeManifest, verifiedRuntimeAttribution, verifyRuntimeGatewayEnvelope } from './runtime-gateway-security.mjs';
 import { UmamiClient } from './tracking-clients.mjs';
 import { UmamiAnalyticsClient } from './umami-analytics.mjs';
 import { UmamiAnalyticsReader } from './umami-analytics-reader.mjs';
@@ -105,30 +111,35 @@ function parsePublicFormRequest(path, method, domainScope) {
     return null;
   }
 }
-async function body(req) {
-  if (!req.headers['content-type']?.startsWith('application/json')) throw error('Envie JSON.', 415);
+function runtimeAttribution(cookie, gateway, rootSecret) {
+  const value = String(cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_attribution='))?.slice('alva_runtime_attribution='.length);
+  return gateway ? verifiedRuntimeAttribution(value, gateway.manifest, rootSecret) : {};
+}
+async function rawBody(req, max = 8 * 1024 * 1024, tooLarge = 'Página muito grande. Use URLs para imagens.') {
+  if (req.alvaRawBody) {
+    if (req.alvaRawBody.length > max) throw error(tooLarge, 413);
+    return req.alvaRawBody;
+  }
   let size = 0;
   const chunks = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 8 * 1024 * 1024) throw error('Página muito grande. Use URLs para imagens.', 413);
+    if (size > max) throw error(tooLarge, 413);
     chunks.push(chunk);
   }
+  req.alvaRawBody = Buffer.concat(chunks);
+  return req.alvaRawBody;
+}
+async function body(req) {
+  if (!req.headers['content-type']?.startsWith('application/json')) throw error('Envie JSON.', 415);
   try {
-    return JSON.parse(Buffer.concat(chunks).toString() || '{}');
+    return JSON.parse((await rawBody(req)).toString() || '{}');
   } catch {
     throw error('JSON inválido.', 400);
   }
 }
 async function publicAnswers(req) {
-  let size = 0;
-  const chunks = [];
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > 5 * 1024 * 1024) throw error('Resposta muito grande.', 413);
-    chunks.push(chunk);
-  }
-  const raw = Buffer.concat(chunks).toString();
+  const raw = (await rawBody(req, 5 * 1024 * 1024, 'Resposta muito grande.')).toString();
   if (req.headers['content-type']?.startsWith('application/json')) {
     try { return JSON.parse(raw || '{}'); } catch { throw error('Resposta inválida.', 400); }
   }
@@ -204,6 +215,7 @@ export function createApp({
   collectLimiterOptions,
   runtimeFlags = readRuntimeFlags(),
   umamiClient,
+  runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET,
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -237,7 +249,15 @@ export function createApp({
   const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
   const commercialOutbox = runtimeFlags.nvsRuntime && database && process.env.TRACKING_MASTER_KEY
     ? new NvsCommercialOutboxRepository(database) : null;
-  content = database ? new ContentRepository(database, { publicOrigin, commercialOutbox }) : null;
+  const runtimeConsents = runtimeFlags.pixels && database ? new PublicationRuntimeRepository(database) : null;
+  const runtimeConsentGateway = runtimeConsents ? new RuntimeConsentGateway({ repository: runtimeConsents }) : null;
+  const commercialConsentResolver = runtimeConsents ? async ({ companyId, projectId, environment, origin, publicationId, subjectId }) => {
+    const manifest = runtimeManifest(await runtimeConsents.currentForOrigin({ publicationId, origin }));
+    if (!manifest || manifest.companyId !== companyId || manifest.projectId !== projectId || manifest.environment !== environment) throw error('Escopo de consentimento inválido.', 403);
+    const storedConsent = subjectId ? await runtimeConsents.currentConsent({ manifest, subjectId }) : null;
+    return resolveConsentState({ manifest, storedConsent });
+  } : null;
+  content = database ? new ContentRepository(database, { publicOrigin, commercialOutbox, commercialConsentResolver }) : null;
   const umami = runtimeFlags.umamiRuntime && database ? (umamiClient || new UmamiClient()) : null;
   const umamiAnalytics = runtimeFlags.umamiRuntime && database && tracking
     ? new UmamiAnalyticsReader({ database, legacy: analytics, tracking, client: new UmamiAnalyticsClient() })
@@ -252,6 +272,10 @@ export function createApp({
       audit: new AuditRepository(database),
       domains: new ProjectDomainRepository(database),
       tracking,
+      runtimeManifests: runtimeConsents,
+      runtimeEnabled: runtimeFlags.pixels === true,
+      runtimeOrigin: publicOrigin || 'http://127.0.0.1',
+      runtimeHmacSecret,
       trackingRequiredEngines: requiredTrackingEngines(runtimeFlags),
     })
     : null;
@@ -320,7 +344,8 @@ export function createApp({
     try {
       const expected = '127.0.0.1:' + res.socket.localPort;
       const localHost = req.headers.host === expected || req.headers.host === 'localhost:' + res.socket.localPort;
-      const expectedOrigin = publicOrigin || 'http://' + req.headers.host;
+      const gatewayHost = req.headers['x-alva-runtime-gateway'] === '1' ? req.headers['x-alva-public-host'] : null;
+      const expectedOrigin = gatewayHost ? `https://${gatewayHost}` : publicOrigin || 'http://' + req.headers.host;
       const path = new URL(req.url, 'http://' + expected).pathname;
       // Saúde fica fora da autenticação para o orquestrador poder distinguir um
       // processo vivo de um banco pronto. A resposta não revela detalhes do banco.
@@ -335,7 +360,8 @@ export function createApp({
         }
       }
       const publicVsl = req.method === 'GET' ? path.match(/^\/(embed\/)?v\/([^/]+)$/) : null;
-      const studioHost = publicOrigin && req.headers.host === new URL(publicOrigin).host;
+      const effectiveHost = gatewayHost || req.headers.host;
+      const studioHost = publicOrigin && effectiveHost === new URL(publicOrigin).host;
       const domainScope = Boolean(publicOrigin && !studioHost);
       const publicFormRequest = content ? parsePublicFormRequest(path, req.method, domainScope) : null;
       const legacyPublicSubmission = !content && req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/submit$/.test(path);
@@ -345,15 +371,21 @@ export function createApp({
       const publicProjectSubmission = Boolean(publicFormRequest && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
       const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
       const publicUmami = path === '/api/public/umami/send' && req.method === 'POST';
-      if (publicOrigin ? (!studioHost && !publicDomainRequest) : !localHost)
+      const publicRuntimeConsent = runtimeConsentGateway && path === '/_alva/consent' && ['GET', 'POST'].includes(req.method);
+      const publicRuntimeLoader = runtimeConsents && path === '/_alva/runtime.js' && req.method === 'GET';
+      const runtimeGatewayProtected = Boolean(runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || (publicFormRequest && ['POST', 'OPTIONS'].includes(req.method))));
+      const runtimeGateway = runtimeGatewayProtected
+        ? await verifyRuntimeGatewayEnvelope({ repository: runtimeConsents, rootSecret: runtimeHmacSecret, method: req.method, path, headers: req.headers, body: await rawBody(req), now: Math.floor(Date.now() / 1000) })
+        : null;
+      if (publicOrigin ? (!studioHost && !publicDomainRequest && !publicRuntimeConsent && !publicRuntimeLoader) : !localHost)
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin)))
         throw error('Origem não permitida.', 403);
       // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
       const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
-      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
@@ -366,6 +398,24 @@ export function createApp({
         }));
         return nonce;
       };
+      if (publicRuntimeConsent) {
+        const publicationId = new URL(req.url, `http://${expected}`).searchParams.get('publicationId') || '';
+        if (publicationId !== runtimeGateway.publicationId) throw error('Publicação de runtime inválida.', 403);
+        const cookie = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length);
+        const subjectId = /^[A-Za-z0-9._~-]{16,160}$/.test(cookie || '') ? cookie : randomUUID();
+        if (!cookie) res.setHeader('Set-Cookie', `alva_runtime_consent=${subjectId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${secure ? '; Secure' : ''}`);
+        const runtimeOrigin = runtimeGateway.origin;
+        const result = await runtimeConsentGateway.handle({ method: req.method, publicationId, origin: runtimeOrigin, subjectId, body: req.method === 'POST' ? await body(req) : undefined });
+        return json(result);
+      }
+      if (publicRuntimeLoader) {
+        const publicationId = new URL(req.url, `http://${expected}`).searchParams.get('publicationId') || '';
+        const row = runtimeGateway.manifest;
+        if (publicationId !== row.publicationId) throw error('Publicação de runtime inválida.', 403);
+        const source = createRuntimeLoader({ publicationId: row.publicationId, snapshotHash: row.snapshotHash, policyVersion: row.policyVersion, origin: row.origin, domain: row.domain, environment: row.environment, providers: row.providers });
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+        return res.end(source);
+      }
       if (content && publicProjectSubmission) {
         const requestOrigin = req.headers.origin;
         const allowedOrigins = requestOrigin && requestOrigin !== expectedOrigin
@@ -381,7 +431,7 @@ export function createApp({
         }
         if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
       }
-      if (content && publicDomainRequest && !customDomainOriginAllowed(origin, req.headers.host))
+      if (content && publicDomainRequest && !customDomainOriginAllowed(origin, effectiveHost))
         throw error('Origem não autorizada para este domínio.', 403);
       if (analytics && content && publicCollect && !runtimeFlags.umamiRuntime) {
         if (req.method === 'OPTIONS') {
@@ -520,12 +570,12 @@ export function createApp({
         if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);
         const saved = domainScope
-          ? await content.submitPublicFormForDomain({ host: req.headers.host, route: publicFormRequest.route, input, origin })
+          ? await content.submitPublicFormForDomain({ host: effectiveHost, route: publicFormRequest.route, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length) })
           : await content.submitPublicFormForProject({
             companySlug: publicFormRequest.companySlug,
             projectSlug: publicFormRequest.projectSlug,
             route: publicFormRequest.route,
-            input, origin,
+            input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length),
           });
         await analytics?.recordLead({
           companyId: saved.form.companyId,

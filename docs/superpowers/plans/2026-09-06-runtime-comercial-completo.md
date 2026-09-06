@@ -96,11 +96,13 @@
 
 **Interfaces:** rotas reservadas `/_alva/loader.js`, `/_alva/consent`, `/_alva/event`; manifesto inclui `publicationId`, `snapshotHash`, policy e providers.
 
-- [ ] Aceitar consentimento apenas em produção e invalidá-lo por mudança de URL, versão, domínio ou snapshot.
-- [ ] Assinar chamadas com HMAC/nonce/timestamp e impedir replay; artifact seguro é imutável e não removível.
-- [ ] Carregar Meta, GA4, TikTok, LinkedIn e Taboola uma vez, somente após opt-in.
-- [ ] Testar publicação real de staging, CSP, revogação, dois tenants, revisão visual e commit.
-- [ ] Parametrizar os cinco adaptadores (Meta, Google, TikTok, LinkedIn e Taboola) em `pending`/`denied`/`granted`: uma chamada por estado, `tracking_event_id` preservado, sem PII/hash nos dois primeiros e egress ausente somente com flag técnica ou provider desligado.
+- [x] Aceitar consentimento apenas em produção e invalidá-lo por mudança de URL, versão, domínio ou snapshot.
+- [x] Assinar chamadas com HMAC/nonce/timestamp e impedir replay; artefato seguro é imutável e não removível.
+- [x] Carregar Meta, GA4, TikTok, LinkedIn e Taboola uma vez, somente após opt-in.
+- [x] Validar publicação de staging com publisher/Function fake e request capture local, CSP, revogação e dois tenants, sem egress nem credenciais reais. Publicação Vercel real, revisão visual e commit permanecem fora desta validação.
+- [x] Parametrizar os cinco adaptadores (Meta, Google, TikTok, LinkedIn e Taboola) em `pending`/`denied`/`granted`: uma chamada por estado, `tracking_event_id` preservado, sem PII/hash nos dois primeiros e egress ausente somente com flag técnica ou provider desligado.
+
+**Fechamento da Etapa 7 (2026-09-06):** aprovada para a validação local/fake sem egress descrita acima. Não houve publicação real em staging, uso de credenciais, DNS ou revisão visual; esses itens permanecem pendentes para a homologação apropriada. A VSL própria permanece fora da certificação V1, e a próxima etapa é a Task 9 — Asaas, usando o port do IZI.
 
 **Política de consentimento:** eventos comerciais e seu `tracking_event_id` são
 emitidos em `pending`, `denied` e `granted`. Nos dois primeiros estados, o

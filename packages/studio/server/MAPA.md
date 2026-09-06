@@ -36,9 +36,13 @@
 - `repositories/analytics-repository.mjs`: persistência isolada de sessões, eventos, atribuição, conversões, marcos VSL, resumo e retenção.
 - `publication-snapshot.mjs`: snapshot determinístico de todas as rotas publicadas de um projeto.
 - `publication-service.mjs`: coordenação de preview, produção confirmada, status, domínio e auditoria.
+- `publication-runtime.mjs`, `runtime-consent-gateway.mjs` e `runtime-gateway-security.mjs`: manifesto público, consentimento decidido no servidor e verificação da fronteira assinada por host/publicação/snapshot/ambiente/replay.
+- `vercel-runtime-gateway.mjs`: artefatos da Function e rewrites de deploy, derivação da chave escopada e proxy preservando cookie/corpo.
+- `conversion-consent-policy.mjs` e `commercial-conversion-service.mjs`: policy de conversões, allowlists de atribuição e fan-out consent-aware.
 - `publication-cors.mjs`: validação de origens HTTPS autorizadas para submissões públicas do projeto.
 - `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto e execuções idempotentes.
 - `repositories/tracking-repository.mjs`: bindings e destinos de tracking isolados por empresa, projeto e ambiente, sem expor referências remotas.
-- `repositories/nvs-commercial-outbox-repository.mjs`: outbox comercial cifrada por binding, com contatos normalizados/hash somente no servidor e sem respostas brutas.
+- `repositories/nvs-commercial-outbox-repository.mjs`: outbox comercial cifrada por binding, com contatos normalizados/hash somente no servidor, click IDs allowlisted e sem respostas brutas.
+- `repositories/publication-runtime-repository.mjs`: manifestos, consentimentos vinculados ao escopo e nonces de replay persistidos.
 - `publisher.mjs`: chamadas Vercel para previews, produção, status e domínio, com retry temporário.
 - `auth.mjs`: conta única, sessões e credencial Vercel cifrada em disco do modo local legado.

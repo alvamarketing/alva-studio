@@ -75,3 +75,29 @@ A V1 prioriza páginas, quizzes, analytics, tracking, cobrança e agentes na ord
 - Ocultação de referências VSL legadas no editor (2026-09-06): referências preservadas no modelo/HTML e bloqueadas de mutação com mídia desligada; catálogo e edição restaurados com mídia ligada. Suíte completa 441/441.
 
 - Política de consentimento para conversões formalizada (2026-09-06): gateway resolve estado exclusivamente server-side pelo manifesto; eventos NVS são sempre persistidos/deduplicados, encaminhados ao NVS e enviados aos adaptadores habilitados em pending/denied/granted; allowlist fechada por adaptador e IDs pseudônimos permitidos sem PII/hash em pending/denied; hashes somente server-side em granted; `policyVersion: 1` e escopo completo por projeto/domínio/ambiente/snapshot/publicação; Google mapeia os quatro sinais por estado; revogação somente futura. Critério de evidência acrescentado: teste parametrizado dos cinco adaptadores nos três estados, uma chamada por estado, `tracking_event_id` preservado, sem PII/hash em pending/denied e egress bloqueado apenas por flag técnica/provider desligado. Implementação permanece pendente e migration 016 continua separada.
+
+- Task 7 — implementação da política (2026-09-06): persistência server-side por escopo, policy recursiva com allowlists e Google Consent Mode, gateway de ações nomeadas, loader sem localStorage e fan-out testado 5×3 foram adicionados. A ligação das rotas reservadas e do serviço ao snapshot/publicação continua pendente de integração do runtime.
+
+- Task 7 — Function Vercel (2026-09-06): produção acrescenta uma única Function e rewrites ao payload, fora do snapshot canônico; chave HMAC é derivada por `run.id`/snapshot/ambiente e a raiz não sai do Studio. A fronteira HTTP verifica manifesto, host, escopo, assinatura e replay PostgreSQL antes de loader, consentimento ou formulário. E2E HTTP passou para bloqueio direto, loader/consent assinados e submissão de lead; request capture valida corpo/cookie e a outbox preserva somente click IDs allowlisted.
+
+- Task 7 — correção P1/P2: atribuição da landing passa somente por cookie HttpOnly assinado e allowlist fechada; domínio verificado move o manifesto e invalida o escopo anterior; loader inicializa SDKs públicos apenas após grant; overlay cria/estende CSP com nonce e sem abertura ampla; publicationId divergente é rejeitado e raiz HMAC foi documentada para operação.
+
+- Task 7 — fechamento TikTok/CSP/default-off (2026-09-06): TikTok prepara fila oficial `_i/_t/_o`, faz `load` e `page` antes de carregar `events.js?sdkid=<id>&lib=ttq`; teste DOM parametrizado prova os cinco bootstraps uma vez só após grant. Matriz CSP separa script/coleta por provider e preserva frame/VSL, fontes e assets. Compose mantém pixels desligados por padrão e tolera HMAC ausente nesse estado, enquanto a publicação habilitada falha fechada sem a raiz.
+
+- Task 7 — correção de click IDs internos (2026-09-06): NVS normaliza os canônicos internos `linkedin_tracking_uuid`/`taboola_click_id` e os aliases browser já previstos para um único mapa de saída, recusando desconhecidos e objetos aninhados. Policy PHP e integração MariaDB/Docker limpa passaram; Taboola recebe novamente seu identificador obrigatório.
+
+## Fechamento da Etapa 7 — aprovada (2026-09-06)
+
+A Etapa 7 foi concluída e aprovada dentro do escopo de validação local/fake sem
+egress: consentimento server-side somente em produção com invalidação por
+escopo, HMAC com timestamp/nonce e replay persistido, artefatos e rotas
+reservadas, CSP por provider, carregamento único após opt-in, default-off e
+matriz 5×3 dos adaptadores com `tracking_event_id` preservado. A validação de
+publicação usou publisher/Function fake e request capture, sem credenciais ou
+chamada externa.
+
+Não declarar publicação real/staging, DNS, credenciais, egress real ou revisão
+visual: esses itens não ocorreram nesta etapa. A integração NVS local teve uma
+execução bloqueada por serviço indisponível; as provas de policy e a integração
+Docker descartável foram aprovadas. A VSL própria permanece fora da
+certificação V1. Próxima etapa: **Task 9 — Asaas**, via port do IZI.

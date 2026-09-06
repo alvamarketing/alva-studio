@@ -8,7 +8,7 @@ final class CoreTikTokAdapter extends AlvaHttpDestination
     {
         return ['event_source' => 'web', 'event_source_id' => $credentials['pixel_code'] ?? null, 'data' => [[
             'event' => $event['event_name'], 'event_time' => $event['event_time'], 'event_id' => $event['tracking_event_id'],
-            'user' => array_filter(['email' => $event['user']['email_sha256'] ?? null, 'phone' => $event['user']['phone_sha256'] ?? null]),
+            'user' => array_filter(['email' => $event['user']['email_sha256'] ?? null, 'phone' => $event['user']['phone_sha256'] ?? null, 'ttclid' => $event['click_ids']['ttclid'] ?? null]),
             'properties' => $event['params'],
         ]]];
     }

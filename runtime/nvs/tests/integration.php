@@ -46,12 +46,14 @@ $script = (string) file_get_contents('http://127.0.0.1/lib/nvs.js'); foreach (['
 
 [$status] = request('/internal/v1/events', [
     'property_id' => 'alpha', 'tracking_event_id' => 'evt-alpha-1', 'event_name' => 'lead',
+    'consent_state' => 'granted',
     'user' => ['email' => 'Person@Example.test ', 'phone' => '+55 (11) 99999-9999'],
     'params' => ['value' => 19.9, 'currency' => 'brl', 'transaction_id' => 'tx-alpha-1', 'gclid' => 'GCLID.alpha-1', 'linkedin_tracking_uuid' => 'li-track_1', 'taboola_click_id' => 'USER.CLICK_ID_EXAMPLE', 'wbraid' => 'https://forbidden.example/', 'email' => 'forbidden@example.test'],
     'context' => ['ip_address' => '203.0.113.9', 'user_agent' => 'forbidden-agent'],
 ]); same(202, $status, 'allowlisted commercial event must queue');
 [$status] = request('/internal/v1/events', [
     'property_id' => 'alpha', 'tracking_event_id' => 'evt-alpha-vsl', 'event_name' => 'vsl_progress',
+    'consent_state' => 'granted',
     'user' => ['email_sha256' => hash('sha256', 'pessoa@example.test')],
     'params' => ['content_id' => 'vsl-123', 'value' => 75],
 ]); same(202, $status, 'internal VSL event with pre-hashed contact must queue');

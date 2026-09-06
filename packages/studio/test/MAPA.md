@@ -23,6 +23,9 @@
 - `runtime-health.test.mjs`: endpoints de saúde e contrato estático da composição Docker, backup e restauração.
 - `tracking-provision.test.mjs`: bindings por ambiente, leases, tentativas, criptografia com escopo, destinos NVS e gate de publicação.
 - `nvs-commercial-outbox.test.mjs`: outbox comercial, hash de contato, deduplicação por propriedade/evento/destino, HMAC e retry sanitizado.
+- `publication-runtime.test.mjs`, `runtime-consent-gateway.test.mjs` e `runtime-gateway-security.test.mjs`: manifesto, consentimento server-side, replay PostgreSQL e E2E HTTP assinado.
+- `vercel-runtime-gateway.test.mjs`: artefatos da Function, chave derivada, rewrites e captura de corpo/cookie sem egress Vercel.
+- `conversion-consent-policy.test.mjs` e `commercial-conversion-service.test.mjs`: allowlists, estados de consentimento e fan-out 5×3.
 
 - `templates.test.mjs`: catálogo e consistência dos formulários.
 - `editor*.test.mjs`: controles do editor guiado.

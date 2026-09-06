@@ -61,7 +61,8 @@ export class Publisher {
     if (!projectId || !Array.isArray(files) || !files.length) throw fail('Snapshot sem arquivos para publicar.', 400);
     if (legacy && !input.html) throw fail('Salve a página antes de publicar.', 400);
     if (!['preview', 'production'].includes(environment)) throw fail('Ambiente de publicação inválido.', 400);
-    const payload = { name: input.projectName || projectId, project: projectId, ...(environment === 'production' ? { target: 'production' } : {}), projectSettings: { framework: null }, files: files.map((file) => ({ ...file, encoding: file.encoding || 'utf-8' })) };
+    const runtimeEnv = input.runtimeEnv && typeof input.runtimeEnv === 'object' && !Array.isArray(input.runtimeEnv) ? input.runtimeEnv : null;
+    const payload = { name: input.projectName || projectId, project: projectId, ...(environment === 'production' ? { target: 'production' } : {}), ...(runtimeEnv ? { env: runtimeEnv } : {}), projectSettings: { framework: null }, files: files.map((file) => ({ ...file, encoding: file.encoding || 'utf-8' })) };
     const result = await this.request('/v13/deployments', payload);
     return { id: result.id, projectId: result.projectId || result.project?.id || projectId, url: result.url, state: result.readyState || result.status || 'QUEUED', ...(input.snapshotHash ? { snapshotHash: input.snapshotHash } : {}), ...(input.revision !== undefined ? { revision: input.revision } : {}), environment, createdAt: new Date().toISOString() };
   }

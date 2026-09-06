@@ -3,6 +3,7 @@ import { SecretVault } from './publication-repository.mjs';
 
 const EVENTS = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
 const ENVIRONMENTS = new Set(['preview', 'production']);
+const ATTRIBUTION_KEYS = new Set(['fbc', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id', 'tblci']);
 const BACKOFF_MS = [30_000, 120_000, 600_000, 3_600_000, 14_400_000, 43_200_000];
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
@@ -19,6 +20,10 @@ function contact(answers = {}) {
     ...(normalizedPhone.length >= 8 && normalizedPhone.length <= 15 ? [['phone_sha256', hash(normalizedPhone)]] : []),
   ]);
 }
+function attribution(values = {}) {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) throw fail('Identificadores de atribuição inválidos.');
+  return Object.fromEntries(Object.entries(values).flatMap(([key, value]) => ATTRIBUTION_KEYS.has(key) && typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[key, value]] : []));
+}
 function record(row) {
   return row && { id: row.id, companyId: row.company_id, projectId: row.project_id, environment: row.environment, propertyId: row.property_id, trackingEventId: row.tracking_event_id, eventName: row.event_name, status: row.status, attemptCount: row.attempt_count, nextAttemptAt: row.next_attempt_at, lastError: row.last_error || null, deliveredAt: row.delivered_at, createdAt: row.created_at };
 }
@@ -34,8 +39,8 @@ export const MAX_COMMERCIAL_ATTEMPTS = BACKOFF_MS.length;
 
 export class NvsCommercialOutboxRepository {
   constructor(database, { vault = new SecretVault({ masterKey: process.env.TRACKING_MASTER_KEY }) } = {}) { this.database = database; this.vault = vault; }
-  async enqueue(client, { companyId, projectId, environment, trackingEventId, eventName, answers = {}, params = {}, at = new Date() }) {
-    if (!ENVIRONMENTS.has(environment) || !EVENTS.has(eventName)) throw fail('Evento comercial inválido.');
+  async enqueue(client, { companyId, projectId, environment, trackingEventId, eventName, consentState = 'pending', answers = {}, attribution: rawAttribution = {}, params = {}, at = new Date() }) {
+    if (!ENVIRONMENTS.has(environment) || !EVENTS.has(eventName) || !['pending', 'denied', 'granted'].includes(consentState)) throw fail('Evento comercial inválido.');
     const binding = await client.query(
       `SELECT encrypted_remote_reference FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'nvs' AND status = 'ready'`,
       [companyId, projectId, environment],
@@ -43,7 +48,8 @@ export class NvsCommercialOutboxRepository {
     if (!binding.rows[0]?.encrypted_remote_reference) return null;
     const propertyId = this.vault.decrypt(binding.rows[0].encrypted_remote_reference, bindingScope({ companyId, projectId, environment }));
     if (!/^[a-z0-9][a-z0-9_]{0,99}$/.test(propertyId)) throw fail('Propriedade NVS inválida.', 503);
-    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), user: contact(answers), params };
+    const cleanAttribution = attribution(rawAttribution);
+    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), params };
     const inserted = await client.query(
       `INSERT INTO nvs_commercial_outbox (company_id, project_id, environment, property_id, tracking_event_id, event_name, destination, payload)
        VALUES ($1, $2, $3, $4, $5, $6, 'nvs', $7::jsonb)

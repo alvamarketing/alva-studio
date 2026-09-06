@@ -6,7 +6,9 @@ CREATE TABLE publication_runtime_manifests (
   publication_id varchar(120) NOT NULL,
   snapshot_hash char(64) NOT NULL,
   version integer NOT NULL CHECK (version >= 0),
+  policy_version integer NOT NULL DEFAULT 1 CHECK (policy_version >= 1),
   origin varchar(253) NOT NULL,
+  domain varchar(253) NOT NULL,
   policy jsonb NOT NULL DEFAULT '{}'::jsonb,
   providers jsonb NOT NULL DEFAULT '[]'::jsonb,
   revoked_at timestamptz,
@@ -27,3 +29,18 @@ CREATE TABLE publication_runtime_replays (
   PRIMARY KEY (publication_id, nonce)
 );
 CREATE INDEX publication_runtime_replays_expiry ON publication_runtime_replays (expires_at);
+
+CREATE TABLE publication_runtime_consents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  publication_id varchar(120) NOT NULL REFERENCES publication_runtime_manifests(publication_id),
+  consent_subject varchar(160) NOT NULL,
+  scope_hash char(64) NOT NULL,
+  state varchar(20) NOT NULL CHECK (state IN ('pending', 'denied', 'granted')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (publication_id, consent_subject, scope_hash)
+);
+CREATE INDEX publication_runtime_consents_scope ON publication_runtime_consents (publication_id, consent_subject, scope_hash);
+
+ALTER TABLE tracking_destinations
+  ADD COLUMN public_configuration jsonb NOT NULL DEFAULT '{}'::jsonb;

@@ -8,7 +8,7 @@ final class CoreMetaAdapter extends AlvaHttpDestination
     {
         return ['data' => [[
             'event_name' => $event['event_name'], 'event_time' => $event['event_time'], 'event_id' => $event['tracking_event_id'],
-            'action_source' => 'website', 'user_data' => array_filter(['em' => $event['user']['email_sha256'] ?? null, 'ph' => $event['user']['phone_sha256'] ?? null]),
+            'action_source' => 'website', 'user_data' => array_filter(['em' => $event['user']['email_sha256'] ?? null, 'ph' => $event['user']['phone_sha256'] ?? null, 'fbc' => $event['click_ids']['fbc'] ?? null, 'fbp' => $event['click_ids']['fbp'] ?? null]),
             'custom_data' => $event['params'],
         ]]];
     }

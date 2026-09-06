@@ -308,11 +308,12 @@ async function assertPublishedPathAvailable(client, { companyId, projectId, path
 }
 
 export class ContentRepository {
-  constructor(database, { publicOrigin = process.env.PUBLIC_ORIGIN, commercialOutbox = null } = {}) {
+  constructor(database, { publicOrigin = process.env.PUBLIC_ORIGIN, commercialOutbox = null, commercialConsentResolver = null } = {}) {
     this.database = database;
     this.publicOrigin = publicOrigin;
     this.webhookDeliveries = new WebhookDeliveryRepository(database);
     this.commercialOutbox = commercialOutbox;
+    this.commercialConsentResolver = commercialConsentResolver;
   }
 
   async assertPublishedVslReferences(client, { companyId, projectId, editorState, schema }) {
@@ -823,25 +824,25 @@ export class ContentRepository {
     return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, route: path }), path);
   }
 
-  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input, origin }) {
+  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input, origin, attribution, publicationId, subjectId }) {
     const path = publicRoute(routeValue ?? slug);
     return this.submitPublishedForm({
       resolve: (client) => this.publishedFormForProject(client, { companySlug, projectSlug, route: path }),
       route: path,
-      input, origin,
+      input, origin, attribution, publicationId, subjectId,
     });
   }
 
-  async submitPublicFormForDomain({ host, route: routeValue, slug, input, origin }) {
+  async submitPublicFormForDomain({ host, route: routeValue, slug, input, origin, attribution, publicationId, subjectId }) {
     const path = publicRoute(routeValue ?? slug);
     return this.submitPublishedForm({
       resolve: (client) => this.publishedFormForDomain(client, { host, route: path }),
       route: path,
-      input, origin,
+      input, origin, attribution, publicationId, subjectId,
     });
   }
 
-  async submitPublishedForm({ resolve, route: routeValue, input, origin }) {
+  async submitPublishedForm({ resolve, route: routeValue, input, origin, attribution, publicationId, subjectId }) {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
       const answers = validateFormAnswers(form.schema, input);
@@ -855,9 +856,10 @@ export class ContentRepository {
       if (this.commercialOutbox) {
         const environment = await this.publicationEnvironment(client, { companyId: form.company_id, projectId: form.project_id, origin });
         if (!environment) throw fail('Origem publicada obrigatória para conversões.', 403);
+        const consentState = this.commercialConsentResolver ? await this.commercialConsentResolver({ companyId: form.company_id, projectId: form.project_id, environment, origin, publicationId, subjectId }) : 'pending';
         await this.commercialOutbox.enqueue(client, {
           companyId: form.company_id, projectId: form.project_id, environment,
-          trackingEventId: eventId, eventName: 'lead', answers, at: rows[0].submitted_at,
+          trackingEventId: eventId, eventName: 'lead', consentState, answers, attribution, at: rows[0].submitted_at,
         });
       }
       let webhookDelivery = null;

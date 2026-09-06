@@ -1,13 +1,14 @@
 import { Publisher } from './publisher.mjs';
+import { runtimeGatewayArtifacts } from './vercel-runtime-gateway.mjs';
+import { buildRuntimeManifest } from './publication-runtime.mjs';
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
 
 function publicRun(run, snapshot) {
   return snapshot ? { ...run, snapshotHash: snapshot.hash, manifest: snapshot.manifest } : run;
 }
-
 export class PublicationService {
-  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains, tracking, trackingRequired = false, trackingRequiredEngines = trackingRequired ? ['umami', 'nvs'] : [] } = {}) {
+  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains, tracking, runtimeManifests = null, runtimeEnabled = false, runtimeOrigin = '', runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET, trackingRequired = false, trackingRequiredEngines = trackingRequired ? ['umami', 'nvs'] : [] } = {}) {
     this.snapshotBuilder = snapshotBuilder;
     this.integrations = integrations;
     this.deployments = deployments;
@@ -15,6 +16,10 @@ export class PublicationService {
     this.audit = audit || { record: async () => {} };
     this.domains = domains;
     this.tracking = tracking;
+    this.runtimeManifests = runtimeManifests;
+    this.runtimeEnabled = runtimeEnabled;
+    this.runtimeOrigin = runtimeOrigin;
+    this.runtimeHmacSecret = runtimeHmacSecret;
     this.trackingRequiredEngines = [...new Set(trackingRequiredEngines)].sort();
   }
 
@@ -39,11 +44,17 @@ export class PublicationService {
     const claim = this.deployments.claim ? await this.deployments.claim({ companyId, projectId, runId: run.id }) : { claimed: true, run };
     if (!claim.claimed) return publicRun(claim.run || run, snapshot);
     try {
+      const runtimeActive = this.runtimeEnabled && environment === 'production';
+      const publicProviders = runtimeActive && this.tracking?.publicProviders ? await this.tracking.publicProviders({ companyId, projectId, environment }) : [];
+      const runtime = runtimeActive
+        ? runtimeGatewayArtifacts(snapshot.files, { publicationId: run.id, snapshotHash: snapshot.hash, environment, runtimeOrigin: this.runtimeOrigin, runtimeHmacSecret: this.runtimeHmacSecret, providers: publicProviders })
+        : { files: snapshot.files, runtimeEnv: undefined };
       const result = await publisher.publish({
         projectId: credentials.vercelProjectId,
         teamId: credentials.teamId,
         environment,
-        files: snapshot.files,
+        files: runtime.files,
+        runtimeEnv: runtime.runtimeEnv,
         snapshotHash: snapshot.hash,
         revision: expectedRevision,
       });
@@ -57,6 +68,10 @@ export class PublicationService {
         claimToken: claim.token,
       });
       if (!persisted) return publicRun((await this.deployments.find({ companyId, projectId, runId: run.id })) || run, snapshot);
+      if (runtimeActive && this.runtimeManifests && result.url) {
+        const origin = new URL(/^https:\/\//i.test(result.url) ? result.url : `https://${result.url}`).origin;
+        await this.runtimeManifests.saveManifest({ companyId, projectId, manifest: { publicationId: run.id, snapshotHash: snapshot.hash, version: expectedRevision, policyVersion: 1, origin, domain: new URL(origin).hostname, environment, consent: { required: true, scope: 'publication' }, providers: publicProviders } });
+      }
       await this.audit.record({ companyId, projectId, actorUserId: requestedBy, action: `deployment.${environment}.success`, resourceType: 'deployment_run', resourceId: run.id, revision: expectedRevision, result: 'success', metadata: { snapshotHash: snapshot.hash } });
       return publicRun({ ...persisted, url: result.url || persisted.url }, snapshot);
     } catch (error) {
@@ -117,6 +132,13 @@ export class PublicationService {
     const { credentials, publisher } = await this.publisher({ companyId, projectId });
     const result = await publisher.domain({ projectId: credentials.vercelProjectId, domain });
     if (this.domains) await this.domains.save({ companyId, projectId, environment: 'production', domain: result.name || domain, verificationStatus: result.verified ? 'verified' : 'pending' });
+    if (result.verified && this.runtimeManifests) {
+      const current = await this.runtimeManifests.current({ companyId, projectId, environment: 'production', publicationId: run.id });
+      if (current) {
+        const origin = `https://${result.name || domain}`;
+        await this.runtimeManifests.saveManifest({ companyId, projectId, manifest: buildRuntimeManifest({ publicationId: current.publication_id, snapshotHash: current.snapshot_hash, version: current.version, policyVersion: current.policy_version, origin, domain: new URL(origin).hostname, environment: current.environment, providers: current.providers }) });
+      }
+    }
     await this.audit.record({ companyId, projectId, actorUserId: requestedBy, action: 'domain.configure.success', resourceType: 'deployment_run', resourceId: run.id, result: 'success', metadata: { domain: result.name || domain } });
     return result;
   }

@@ -154,6 +154,8 @@ test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens 
   assert.match(compose, /TRACKING_PROVISION_ENABLED: \$\{TRACKING_PROVISION_ENABLED:-false\}/);
   assert.match(compose, /UMAMI_RUNTIME_ENABLED: \$\{UMAMI_RUNTIME_ENABLED:-false\}/);
   assert.match(compose, /NVS_RUNTIME_ENABLED: \$\{NVS_RUNTIME_ENABLED:-false\}/);
+  assert.match(compose, /PIXELS_ENABLED: \$\{PIXELS_ENABLED:-false\}/);
+  assert.match(compose, /PUBLICATION_RUNTIME_HMAC_SECRET: \$\{PUBLICATION_RUNTIME_HMAC_SECRET:-\}/);
   assert.match(compose, /TRACKING_MASTER_KEY: \$\{TRACKING_MASTER_KEY:\?Defina TRACKING_MASTER_KEY no ambiente do Coolify\}/);
   assert.match(compose, /dockerfile: runtime\/Dockerfile\.umami/);
   assert.match(compose, /UMAMI_USERNAME: \$\{UMAMI_USERNAME:\?Defina UMAMI_USERNAME no ambiente do Coolify\}/);
