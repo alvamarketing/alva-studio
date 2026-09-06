@@ -34,7 +34,7 @@ compose() {
 }
 restart_writers() {
   if [ "$writers_stopped" = true ]; then
-    compose start studio-web studio-worker studio-media-worker umami nvs || true
+    compose start studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker || true
   fi
 }
 trap restart_writers EXIT HUP INT TERM
@@ -46,11 +46,11 @@ compose exec -T studio-postgres pg_isready -U studio -d studio
 compose exec -T umami-postgres pg_isready -U umami -d umami
 compose exec -T nvs-mariadb sh -ec 'exec mariadb-admin ping -h 127.0.0.1 -unvs -p"$MARIADB_PASSWORD" --silent'
 writers_stopped=true
-compose stop studio-web studio-worker studio-media-worker umami nvs
+compose stop studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker
 compose exec -T studio-postgres psql -v ON_ERROR_STOP=1 -U studio -d studio < "$input_dir/studio-postgres.sql"
 compose exec -T umami-postgres psql -v ON_ERROR_STOP=1 -U umami -d umami < "$input_dir/umami-postgres.sql"
 compose exec -T nvs-mariadb sh -ec 'exec mariadb -unvs -p"$MARIADB_PASSWORD" nvs' < "$input_dir/nvs-mariadb.sql"
-compose start studio-web studio-worker studio-media-worker umami nvs
+compose start studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker
 writers_stopped=false
 trap - EXIT HUP INT TERM
 echo "Restauração concluída a partir de: $input_dir"

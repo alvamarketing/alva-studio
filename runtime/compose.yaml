@@ -126,12 +126,37 @@ services:
       NVS_MARIADB_DATABASE: nvs
       NVS_MARIADB_USER: nvs
       NVS_MARIADB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
+      DB_HOST: nvs-mariadb
+      DB_DATABASE: nvs
+      DB_USERNAME: nvs
+      DB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
+      NVS_INTERNAL_HMAC_SECRET: ${NVS_INTERNAL_HMAC_SECRET:?Defina NVS_INTERNAL_HMAC_SECRET no ambiente do Coolify}
+      NVS_PROPERTY_SECRETS_KEY: ${NVS_PROPERTY_SECRETS_KEY:?Defina NVS_PROPERTY_SECRETS_KEY no ambiente do Coolify}
+      NVS_OUTBOX_DELIVERY_ENABLED: ${NVS_OUTBOX_DELIVERY_ENABLED:-false}
     healthcheck:
       test: ["CMD", "php", "healthcheck.php"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  nvs-outbox-worker:
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.nvs
+    restart: unless-stopped
+    command: ["php", "/app/alva/bin/outbox-worker.php"]
+    depends_on:
+      nvs:
+        condition: service_healthy
+    environment:
+      NVS_MARIADB_HOST: nvs-mariadb
+      NVS_MARIADB_DATABASE: nvs
+      NVS_MARIADB_USER: nvs
+      NVS_MARIADB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
+      NVS_INTERNAL_HMAC_SECRET: ${NVS_INTERNAL_HMAC_SECRET:?Defina NVS_INTERNAL_HMAC_SECRET no ambiente do Coolify}
+      NVS_PROPERTY_SECRETS_KEY: ${NVS_PROPERTY_SECRETS_KEY:?Defina NVS_PROPERTY_SECRETS_KEY no ambiente do Coolify}
+      NVS_OUTBOX_DELIVERY_ENABLED: ${NVS_OUTBOX_DELIVERY_ENABLED:-false}
 
   nvs-mariadb:
     image: mariadb:11.4@sha256:611a2fcc5fa7c6ceb8644c6f74b25ede004ff6c3a6b38c8f8c23d3bbf6c26430

@@ -1,7 +1,10 @@
 FROM php:8.3.15-cli-bookworm@sha256:0d3656c146a6a11c715b5d35169d80ffe1f67d6ae77ed39a1331f6889f794269
 WORKDIR /app
 RUN docker-php-ext-install pdo_mysql
-COPY runtime/nvs/public/ ./
+COPY runtime/nvs/vendor/nvs-core/ ./vendor/nvs-core/
+COPY runtime/nvs/alva/ ./alva/
+COPY runtime/nvs/public/ ./public/
+COPY runtime/nvs/tests/ ./tests/
 COPY runtime/nvs/healthcheck.php ./healthcheck.php
 EXPOSE 80
-CMD ["php", "-S", "0.0.0.0:80", "router.php"]
+CMD ["sh", "-c", "php /app/alva/bin/migrate.php && exec php -S 0.0.0.0:80 -t /app/public /app/public/router.php"]

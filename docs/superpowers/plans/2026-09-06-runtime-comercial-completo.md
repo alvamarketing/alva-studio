@@ -48,10 +48,10 @@
 
 **Interfaces:** `/internal/v1/properties`, `/internal/v1/events`, `/internal/v1/status` com HMAC, timestamp e nonce; coleta pública preserva `lib/nvs.js` e `ingest.php`.
 
-- [ ] Registrar origem, versão, contrato e hash; aplicar patches de forma reproduzível.
-- [ ] Isolar toda operação por `property_id` e cifrar segredos por propriedade.
-- [ ] Manter Meta/TikTok e adicionar destinos Google, LinkedIn e Taboola via outbox idempotente.
-- [ ] Rodar testes PHP/MariaDB reais, revisão independente e commit.
+- [x] Registrar origem, versão, contrato e hash; aplicar patches de forma reproduzível.
+- [x] Isolar toda operação por `property_id` e cifrar segredos por propriedade.
+- [x] Manter Meta/TikTok e adicionar destinos Google, LinkedIn e Taboola via outbox idempotente.
+- [x] Rodar testes PHP/MariaDB reais, revisão independente e commit.
 
 ### Task 4: Provisionar Umami e NVS por projeto
 

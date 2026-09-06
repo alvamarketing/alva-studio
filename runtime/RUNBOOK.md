@@ -14,10 +14,16 @@ não passe segredo por argumentos. `STUDIO_DATABASE_URL` usa a mesma senha de
 `PUBLIC_ORIGIN` com a URL HTTPS final do Coolify. A composição exige esse
 valor; forneça uma origem HTTPS explícita também em desenvolvimento e testes.
 
-As flags comerciais ficam literalmente em `false`: esta entrega inicia apenas
-a infraestrutura. Ela não provisiona Umami ou NVS, não envia eventos e não
-habilita pipeline de mídia. O NVS é uma base PHP com health checks e consulta
-real ao MariaDB; o Core e suas APIs entram em tarefa posterior. O
+As flags comerciais ficam literalmente em `false`: esta entrega não provisiona
+Umami, não envia eventos e não habilita pipeline de mídia. O NVS incorpora o
+Core 0.3.10 e aplica seu schema mais as migrações Alva antes de responder como
+pronto. As únicas APIs de controle são `/internal/v1/properties`,
+`/internal/v1/events` e `/internal/v1/status`; todas exigem HMAC SHA-256 sobre
+`timestamp + "\n" + nonce + "\n" + corpo`, janela de cinco minutos e nonce
+persistido. O gateway não expõe segredos. Cada evento entra em uma outbox
+transacional por propriedade, evento e destino; o envio externo permanece
+desligado por `NVS_OUTBOX_DELIVERY_ENABLED=false` até o provisionamento
+explícito de uma propriedade. O
 `studio-worker` executa a fila de webhooks fora do processo web. O
 `studio-media-worker` só registra heartbeat e conectividade PostgreSQL até a
 tarefa de mídia.
@@ -34,7 +40,7 @@ curl --fail http://127.0.0.1:4178/health/live
 curl --fail http://127.0.0.1:4178/health/ready
 ```
 
-Use nome de projeto isolado para não tocar serviços existentes. Confira as oito
+Use nome de projeto isolado para não tocar serviços existentes. Confira os nove
 health checks antes de usar o runtime. Umami valida `/api/heartbeat` com status
 200; a prontidão NVS consulta o MariaDB e só aprova JSON com `status: ready`.
 

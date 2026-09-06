@@ -1,0 +1,54 @@
+{
+  "system": "nvs-track-core",
+  "version": "0.3.10",
+  "contract_version": "1",
+  "generated_at": "2026-08-04T00:00:00-03:00",
+  "timezone": "America/Sao_Paulo",
+  "package": {
+    "type": "self_hosted_core",
+    "entry_setup": "setup.php",
+    "status_page": "core-status.php",
+    "api_dashboard_data": "api/dashboard-data.php",
+    "api_viewer_health": "api/viewer-health.php",
+    "ingest": "ingest.php",
+    "webhook": "webhook/dispatch.php",
+    "script": "lib/nvs.js"
+  },
+  "capabilities": [
+    "contract_v1",
+    "exact_dashboard_summary",
+    "brazil_date_ranges",
+    "known_bot_filtering",
+    "meta_pageview_diagnostics",
+    "fresh_fbc_per_fbclid",
+    "meta_browser_server_pageview_deduplication",
+    "webhook_property_precedence",
+    "orphan_purchase_reprocessing",
+    "checkout_purchase_meta_fallback",
+    "mandatory_webhook_secret",
+    "webhook_rate_limit",
+    "webhook_body_size_limit",
+    "uniform_webhook_rejection",
+    "multi_platform_checkout_translators",
+    "hotmart_purchase_webhook",
+    "kiwify_purchase_webhook",
+    "checkout_passthrough_capture",
+    "multi_destination_delivery",
+    "tiktok_events_api",
+    "per_destination_deduplication",
+    "multi_destination_browser_events",
+    "shared_event_fanout"
+  ],
+  "excluded": [
+    ".env",
+    "storage/logs/",
+    "storage/ratelimit/",
+    "storage/backups/",
+    "backups/",
+    "tmp/",
+    "temporary_files/"
+  ],
+  "hash_excludes": [
+    "NVS_CORE_MANIFEST.json"
+  ]
+}

@@ -1,0 +1,19 @@
+# NVS Tracking - Root Directory
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Se a requisição não for para arquivo ou pasta existente,
+    # envia para /public preservando query string
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ public/$1 [L,QSA]
+</IfModule>
+
+# Bloqueia acesso direto a arquivos/pastas sensíveis
+<FilesMatch "^(\.env|\.git|composer\.json|composer\.lock)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+Options -Indexes

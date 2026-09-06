@@ -95,9 +95,9 @@ test('worker de webhook inicializa a fila real fora do processo web', async (t) 
   assert.equal(calls.at(-1), 'close');
 });
 
-test('runtime Compose declara os oito serviços, bancos privados e imagens fixadas', async () => {
+test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens fixadas', async () => {
   const compose = await readFile(join(root, 'runtime/compose.yaml'), 'utf8');
-  for (const service of ['studio-web', 'studio-worker', 'studio-media-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-mariadb'])
+  for (const service of ['studio-web', 'studio-worker', 'studio-media-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])
     assert.match(compose, new RegExp(`^  ${service}:`, 'm'));
   assert.match(compose, /127\.0\.0\.1:4178:4178/);
   assert.match(compose, /PUBLIC_ORIGIN: \$\{PUBLIC_ORIGIN:\?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify\}/);
@@ -135,10 +135,10 @@ test('runbook e scripts tratam backup e restauração dos três bancos com confi
   assert.match(restore, /--project-name/);
   assert.match(backup, /mariadb-dump .* nvs/);
   assert.doesNotMatch(backup, /--all-databases/);
-  assert.match(restore, /compose stop studio-web studio-worker studio-media-worker umami nvs/);
-  assert.match(restore, /compose start studio-web studio-worker studio-media-worker umami nvs/);
+  assert.match(restore, /compose stop studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker/);
+  assert.match(restore, /compose start studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker/);
   assert.match(restore, /writers_stopped=true\ncompose stop/);
-  assert.match(restore, /compose start studio-web studio-worker studio-media-worker umami nvs\nwriters_stopped=false/);
+  assert.match(restore, /compose start studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker\nwriters_stopped=false/);
   assert.match(restore, /pg_isready -U studio -d studio/);
   assert.match(restore, /pg_isready -U umami -d umami/);
   assert.match(restore, /mariadb-admin ping/);

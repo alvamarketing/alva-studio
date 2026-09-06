@@ -1,0 +1,5 @@
+RewriteEngine On
+
+# Route /webhook/{platform}/{action} to dispatch.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^([a-z_]+)/([a-z_]+)$ dispatch.php?platform=$1&action=$2 [L,QSA]
