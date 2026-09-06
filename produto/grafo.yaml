@@ -180,6 +180,18 @@ nos:
       tipo: arquivo
       caminho: .estado/agentes_mcp.md
       casa: "Prova: chave em hash por projeto, nenhum agente publica sem ação humana, [0-9]+ testes verdes"
+  - id: certificacao_comercial_v1
+    fase: v1
+    estado: pendente
+    faz: Certificar a versão comercial com matriz integrada, recuperação, isolamento, revisão visual e homologação externa controlada
+    depende:
+      - cobranca_empresa
+      - agentes_mcp
+    produz: Evidência reproduzível da V1 sem VSL própria, com pendências externas explícitas até aprovação de produção
+    passa_quando:
+      tipo: arquivo
+      caminho: .estado/certificacao_comercial_v1.md
+      casa: "status: concluido"
   - id: worker_webhook
     estado: feito
     faz: Evoluir o webhook básico para fila com tentativas, idempotência, auditoria e defesa contra DNS rebinding

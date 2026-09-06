@@ -130,9 +130,9 @@ export class BillingRepository {
   async settleEvent({ id, claimToken, status, error = null }) {
     if (!['processed', 'retry', 'review', 'dead'].includes(status)) throw fail('Estado de evento inválido.');
     await this.database.query(
-      `UPDATE billing_events SET status = $3, attempt_count = attempt_count + 1, last_error = $4, claim_token = NULL, lease_expires_at = NULL,
-         processed_at = CASE WHEN $3 IN ('processed', 'review', 'dead') THEN now() ELSE NULL END WHERE id = $1 AND claim_token = $2`,
-      [id, claimToken, status, error ? String(error).replace(/[\r\n]/g, ' ').slice(0, 240) : null],
+      `UPDATE billing_events SET status = $3::varchar, attempt_count = attempt_count + 1, last_error = $4, claim_token = NULL, lease_expires_at = NULL,
+         processed_at = CASE WHEN $5 IN ('processed', 'review', 'dead') THEN now() ELSE NULL END WHERE id = $1 AND claim_token = $2`,
+      [id, claimToken, status, error ? String(error).replace(/[\r\n]/g, ' ').slice(0, 240) : null, status],
     );
   }
 

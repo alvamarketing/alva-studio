@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSettingsLoader, createSettingsOpenGuard, settingsAccess, validatePasswordConfirmation, vercelPayload } from '../public/owner.js';
+import { createSettingsLoader, createSettingsOpenGuard, selectSettingsTab, settingsAccess, validatePasswordConfirmation, vercelPayload } from '../public/owner.js';
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
 const ownerPath = new URL('../public/owner.js', import.meta.url);
@@ -24,6 +24,7 @@ test('configurações são uma view interna acessível e reaproveitam o formulá
   assert.match(owner, /id="tab-account"/);
   assert.match(owner, /id = 'tab-company'/);
   assert.match(owner, /id="tab-vercel"/);
+  assert.match(owner, /selectSettingsTab\(\{ container: settingsContainer/);
   assert.match(owner, /settingsGuard\.isCurrent/);
   assert.match(owner, /closeSettings/);
   assert.match(owner, /\(\$\('#tab-' \+ access\.tab\) \|\| dialog\.querySelector\('h2'\)\)\?\.focus\(\)/);
@@ -36,6 +37,29 @@ test('abertura tardia de configurações é cancelada ao navegar', () => {
   assert.equal(guard.isCurrent(first), false);
   const second = guard.begin();
   assert.equal(guard.isCurrent(second), true);
+});
+test('abas de configurações alternam painel exclusivo e estado acessível', () => {
+  const tab = (name) => ({
+    dataset: { ownerTab: name },
+    attributes: {},
+    tabIndex: null,
+    setAttribute(key, value) { this.attributes[key] = value; },
+  });
+  const tabs = [tab('account'), tab('company'), tab('vercel')];
+  const panels = Object.fromEntries(tabs.map((button) => [`#panel-${button.dataset.ownerTab}`, { hidden: false }]));
+  const container = {
+    querySelectorAll(selector) { return selector === '[data-owner-tab]' ? tabs : []; },
+    querySelector(selector) { return panels[selector] || null; },
+  };
+  for (const selected of ['account', 'company', 'vercel']) {
+    assert.equal(selectSettingsTab({ container, requestedTab: selected, canManageIntegration: true }), selected);
+    for (const button of tabs) {
+      const active = button.dataset.ownerTab === selected;
+      assert.equal(button.attributes['aria-selected'], String(active));
+      assert.equal(button.tabIndex, active ? 0 : -1);
+      assert.equal(panels[`#panel-${button.dataset.ownerTab}`].hidden, !active);
+    }
+  }
 });
 test('fluxo Vercel libera o botão para o próximo editor', async () => {
   const app = await readFile(appPath, 'utf8');

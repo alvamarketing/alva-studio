@@ -179,7 +179,7 @@ correções de concorrência, atomicidade da auditoria e compatibilidade JSON-RP
 conferida em 1440×900 e 390×844 sem vazamento do segredo. Nenhuma credencial
 real, produção, DNS, cobrança ou egress foi usado.
 
-**Checkpoint local (2026-09-06):** migração 018, chaves por projeto, APIs administrativas, servidor MCP e cartão simples de conexão foram implementados com PostgreSQL efêmero. Criação e revogação de chave compartilham uma transação com sua auditoria, e a criação do rascunho faz a claim, o conteúdo e o vínculo idempotente numa única transação; uma falha intermediária faz rollback integral. Os testes focados cobrem hash/segredo único, membership ativa, idempotência concorrente e retry, rate limit atômico, limite concorrente de chaves, escopo fixo, protocolo, catálogo fechado, Origin explícita, revogação, API administrativa e rollback de auditoria. Não houve egress, credencial real, produção, DNS ou homologação externa. O nó continua pendente até revisão independente e suíte completa.
+**Checkpoint local (2026-09-06):** migração 018, chaves por projeto, APIs administrativas, servidor MCP e cartão simples de conexão foram implementados com PostgreSQL efêmero. Criação e revogação de chave compartilham uma transação com sua auditoria, e a criação do rascunho faz a claim, o conteúdo e o vínculo idempotente numa única transação; uma falha intermediária faz rollback integral. Os testes focados cobrem hash/segredo único, membership ativa, idempotência concorrente e retry, rate limit atômico, limite concorrente de chaves, escopo fixo, protocolo, catálogo fechado, Origin explícita, revogação, API administrativa e rollback de auditoria. Não houve egress, credencial real, produção, DNS ou homologação externa. A Etapa 10 está encerrada localmente; a certificação integrada pertence à Etapa 11.
 
 ### Task 11: Piloto comercial e certificação
 
@@ -187,7 +187,11 @@ real, produção, DNS, cobrança ou egress foi usado.
 
 **Interfaces V1:** um projeto de staging percorre criação → provisão → publicação → visita → lead → conversão → cobrança → agente. Mídia/VSL própria é critério da V2.
 
-- [ ] Restaurar backups e testar rollback de publicação.
-- [ ] Executar matriz contra containers reais, Vercel de staging e Asaas Sandbox. R2 fica na certificação V2.
-- [ ] Verificar todas as telas em 1440×900 e 390×844 por revisor independente.
-- [ ] Fazer revisão final ampla, suíte completa, inventário de segredos e commit; produção permanece aguardando aprovação explícita.
+- [x] Executar matriz local descartável com PostgreSQL real, dois tenants e fakes injetados de publicação, provisionamento, cobrança e MCP; provar isolamento cruzado nessas superfícies, flags desligadas, outbox `pending`/`denied` sem PII ou hashes e preservação da última publicação pronta após falha.
+- [x] Fazer backup, mutar e restaurar uma tabela descartável no PostgreSQL efêmero usado pela matriz.
+- [x] Restaurar os três bancos juntos por `backup.sh` e `restore.sh` em uma composição Docker isolada, com probes distintas, checksums e garantia de não iniciar writers inativos.
+- [ ] Executar matriz contra Vercel de staging e Asaas Sandbox. R2 fica na certificação V2.
+- [x] Corrigir a troca das abas de configurações: Minha conta, Empresa e equipe e Publicação · Vercel agora atualizam o estado acessível e mostram somente o painel correspondente; teste funcional focado cobre as três abas.
+- [x] Repetir a verificação visual independente da correção em 1440×900 e 390×844; as 18 evidências estão listadas em `.estado/certificacao_comercial_v1.md` (12 superfícies gerais e as abas Minha conta, Empresa e equipe e Publicação · Vercel em desktop/mobile).
+- [x] Executar revisão final local: suíte pós-correções 523/523, `git diff --check`, sintaxe shell, Compose e varredura local de padrões de segredo sem achados; inventário e revisão visual locais concluídos.
+- [ ] Homologar Vercel staging e Asaas Sandbox; produção permanece aguardando autorização explícita. O checkpoint local aprovado deve ser commitado sem marcar a certificação externa como concluída.

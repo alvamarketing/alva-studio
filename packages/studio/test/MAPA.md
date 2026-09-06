@@ -22,6 +22,7 @@
 - `runtime-flags.test.mjs`: opt-in restritivo das flags comerciais e estado inicial seguro dos motores internos.
 - `billing.test.mjs`, `billing-repository.test.mjs`, `billing-service.test.mjs`, `billing-webhook.test.mjs`, `billing-worker.test.mjs`, `billing-api.test.mjs` e `billing-policy.test.mjs`: contrato Asaas recorrente, pedido idempotente, checkout, inbox autenticada de 64 KB, reconciliação, rotas públicas/autenticadas e cota transacional.
 - `mcp.test.mjs` e `mcp-ui.test.mjs`: chaves por projeto sem segredo persistido, protocolo JSON-RPC, idempotência, rate limit persistente, isolamento, catálogo fechado e tela de conexão.
+- `commercial-certification.test.mjs`: matriz descartável local da V1 com dois tenants, fakes injetados e prova de backup/restauração PostgreSQL sem egress.
 - `runtime-health.test.mjs`: endpoints de saúde e contrato estático da composição Docker, backup e restauração.
 - `tracking-provision.test.mjs`: bindings por ambiente, leases, tentativas, criptografia com escopo, destinos NVS e gate de publicação.
 - `nvs-commercial-outbox.test.mjs`: outbox comercial, hash de contato, deduplicação por propriedade/evento/destino, HMAC e retry sanitizado.

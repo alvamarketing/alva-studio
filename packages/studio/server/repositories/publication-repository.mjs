@@ -261,12 +261,12 @@ export class DeploymentRepository {
               external_project_id = COALESCE($5, external_project_id),
               external_url = COALESCE($6, external_url),
               claim_token = NULL, lease_expires_at = NULL,
-              status = $7,
+              status = $7::varchar,
               started_at = COALESCE(started_at, now()),
-              completed_at = CASE WHEN $7 = ANY($8::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
+              completed_at = CASE WHEN $10 = ANY($8::text[]) THEN COALESCE(completed_at, now()) ELSE completed_at END
         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND claim_token = $9
         RETURNING *`,
-      [companyId, projectId, runId, externalDeploymentId || null, externalProjectId || null, url || null, nextStatus, [...TERMINAL_STATES], claimToken],
+      [companyId, projectId, runId, externalDeploymentId || null, externalProjectId || null, url || null, nextStatus, [...TERMINAL_STATES], claimToken, nextStatus],
     );
     if (!rows.length) return null;
     const result = runRecord(rows[0]);

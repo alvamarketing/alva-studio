@@ -53,5 +53,5 @@ export async function postgresFixture(t) {
   if (!port) throw new Error('Não foi possível descobrir a porta PostgreSQL de teste.');
   const connectionString = `postgresql://studio:${password}@127.0.0.1:${port}/studio_test`;
   await waitForPostgres(containerId, connectionString);
-  return { connectionString };
+  return { connectionString, containerId };
 }

@@ -106,9 +106,59 @@ altere as linhas, restaure e confira os valores originais. Os volumes nomeados
 ser removidos durante esse procedimento.
 
 A restauração não é atômica entre os três bancos. O script confirma hashes e a
-saúde dos três serviços, interrompe `studio-web`, `studio-worker`,
-`studio-media-worker`, `umami` e `nvs` antes da primeira escrita e os religa
-por trap mesmo em falha. Uma falha durante a aplicação ainda exige restaurar
-novamente o mesmo backup nos três bancos. Antes de restaurar, gere um backup
-novo do estado atual para recuperação. O dump MariaDB usa somente o banco e
-usuário `nvs`, sem bancos de sistema nem a conta root.
+saúde dos três serviços, interrompe antes da primeira escrita somente os
+writers que já estavam ativos (`studio-web`, workers, `umami`, `nvs` e a fila
+NVS) e os religa por trap mesmo em falha. Uma falha durante a aplicação ainda
+exige restaurar novamente o mesmo backup nos três bancos. Antes de restaurar,
+gere um backup novo do estado atual para recuperação. O dump MariaDB usa
+somente o banco e usuário `nvs`, sem bancos de sistema nem a conta root.
+
+O restore captura quais writers estavam em execução e religa somente esses
+serviços. Assim, o ensaio dos bancos não inicia web, workers ou motores que não
+estavam ativos. O ensaio local reproduzível usa somente valores fictícios,
+projeto Docker único e imagens já disponíveis, sem pull:
+
+```sh
+runtime/backup-restore-local-test.sh
+```
+
+Ele sobe apenas `studio-postgres`, `umami-postgres` e `nvs-mariadb`, cria uma
+probe distinta em cada banco, executa `backup.sh`, altera as probes e executa
+`restore.sh --confirm-restore`. O runner valida `SHA256SUMS`, os três valores
+originais e que nenhum writer foi criado; o cleanup remove containers, volumes
+e arquivos temporários desse projeto isolado.
+
+## Certificação local da V1
+
+A matriz local é descartável e não usa produção, DNS, Vercel, Asaas, segredos
+reais nem egress. Execute somente no checkout de desenvolvimento:
+
+```sh
+node --test packages/studio/test/commercial-certification.test.mjs
+```
+
+Ela cria dois tenants em um PostgreSQL efêmero e percorre criação, provisão de
+tracking com clientes falsos, publicação falsa, visita, lead, conversão,
+cobrança falsa e MCP. Também confirma isolamento entre tenants, flags
+comerciais desligadas por padrão e que uma falha de publicação preserva a
+última publicação pronta. O teste faz backup, mutação e restauração reais de
+uma tabela descartável nesse PostgreSQL por `pg_dump` e `psql`.
+
+Cada tenant possui página, quiz, prévia, submissão e checkout próprios. A
+matriz tenta cruzar publicação, rota pública, outbox, cobrança e MCP e exige
+que os recursos do outro tenant não sejam lidos nem operados. Depois das
+submissões com consentimento `pending` e `denied`, ela lê o `payload` real em
+`nvs_commercial_outbox`: preserva `tracking_event_id` e `fbc`, mas não permite
+nome, e-mail, telefone, respostas, hashes nem chaves equivalentes, inclusive
+em objetos aninhados.
+
+O inventário de segredos da matriz fica em
+`runtime/commercial-local-certification.mjs`; ele contém somente nomes,
+localizações e finalidades. Valores nunca entram em documentação, testes ou
+logs.
+
+Esta é uma evidência local, não a certificação comercial final. A restauração
+coordenada dos três bancos por `backup.sh` e `restore.sh` foi exercitada no
+Compose descartável. Vercel de staging, Asaas Sandbox e revisão visual
+independente continuam pendentes. A VSL própria pertence à V2 e não integra os
+critérios da V1.

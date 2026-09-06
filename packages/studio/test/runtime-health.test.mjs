@@ -193,10 +193,11 @@ test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens 
 });
 
 test('runbook e scripts tratam backup e restauração dos três bancos com confirmação explícita', async () => {
-  const [backup, restore, runbook] = await Promise.all([
+  const [backup, restore, runbook, localRestore] = await Promise.all([
     readFile(join(root, 'runtime/backup.sh'), 'utf8'),
     readFile(join(root, 'runtime/restore.sh'), 'utf8'),
     readFile(join(root, 'runtime/RUNBOOK.md'), 'utf8'),
+    readFile(join(root, 'runtime/backup-restore-local-test.sh'), 'utf8'),
   ]);
   for (const name of ['studio-postgres.sql', 'umami-postgres.sql', 'nvs-mariadb.sql']) {
     assert.match(backup, new RegExp(name));
@@ -209,13 +210,17 @@ test('runbook e scripts tratam backup e restauração dos três bancos com confi
   assert.match(restore, /--project-name/);
   assert.match(backup, /mariadb-dump .* nvs/);
   assert.doesNotMatch(backup, /--all-databases/);
-  assert.match(restore, /compose stop studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker/);
-  assert.match(restore, /compose start studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker/);
-  assert.match(restore, /writers_stopped=true\ncompose stop/);
-  assert.match(restore, /compose start studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker\nwriters_stopped=false/);
+  assert.match(restore, /writer_services='studio-web studio-worker studio-media-worker studio-billing-worker studio-tracking-worker umami nvs nvs-outbox-worker'/);
+  assert.match(restore, /compose ps --status running -q/);
+  assert.match(restore, /active_writers/);
+  assert.doesNotMatch(restore, /compose stop studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker/);
   assert.match(restore, /pg_isready -U studio -d studio/);
   assert.match(restore, /pg_isready -U umami -d umami/);
   assert.match(restore, /mariadb-admin ping/);
   assert.match(runbook, /executa a fila de webhooks/);
   assert.match(runbook, /não é atômica entre os três bancos/);
+  assert.match(localRestore, /--pull never/);
+  assert.match(localRestore, /backup\.sh/);
+  assert.match(localRestore, /restore\.sh/);
+  assert.match(localRestore, /studio-postgres umami-postgres nvs-mariadb/);
 });

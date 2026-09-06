@@ -12,6 +12,18 @@ export function settingsAccess({ canManageIntegration = false, requestedTab = 'a
   return { integration, tab };
 }
 
+export function selectSettingsTab({ container, requestedTab = 'account', canManageIntegration = false } = {}) {
+  const tab = settingsAccess({ canManageIntegration, requestedTab }).tab;
+  container.querySelectorAll('[data-owner-tab]').forEach((button) => {
+    const selected = button.dataset.ownerTab === tab;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    const panel = container.querySelector('#panel-' + button.dataset.ownerTab);
+    if (panel) panel.hidden = !selected;
+  });
+  return tab;
+}
+
 export function createSettingsLoader({ api, canManageIntegration = () => true } = {}) {
   if (typeof api !== 'function') throw new Error('A API de configurações é obrigatória.');
   return async () => canManageIntegration() ? api('/settings') : null;
@@ -140,13 +152,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     });
   };
   function selectTab(tab) {
-    tab = settingsAccess({ canManageIntegration: canManageIntegration(), requestedTab: tab }).tab;
-    host.querySelectorAll('[data-owner-tab]').forEach((button) => {
-      const selected = button.dataset.ownerTab === tab;
-      button.setAttribute('aria-selected', String(selected));
-      button.tabIndex = selected ? 0 : -1;
-      $('#panel-' + button.dataset.ownerTab).hidden = !selected;
-    });
+    tab = selectSettingsTab({ container: settingsContainer, requestedTab: tab, canManageIntegration: canManageIntegration() });
     if (tab === 'company') onCompanySettings();
   }
   settingsContainer.querySelectorAll('[data-owner-tab]').forEach((button) => {

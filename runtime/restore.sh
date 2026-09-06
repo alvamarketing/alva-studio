@@ -9,6 +9,8 @@ env_file=''
 project_name='alva-studio-runtime'
 confirmed=false
 writers_stopped=false
+active_writers=''
+writer_services='studio-web studio-worker studio-media-worker studio-billing-worker studio-tracking-worker umami nvs nvs-outbox-worker'
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --input-dir) [ "$#" -ge 2 ] || usage; input_dir=$2; shift 2 ;;
@@ -33,8 +35,8 @@ compose() {
   else docker compose -p "$project_name" -f "$compose_file" "$@"; fi
 }
 restart_writers() {
-  if [ "$writers_stopped" = true ]; then
-    compose start studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker || true
+  if [ "$writers_stopped" = true ] && [ -n "$active_writers" ]; then
+    compose start $active_writers || true
   fi
 }
 trap restart_writers EXIT HUP INT TERM
@@ -45,12 +47,19 @@ done
 compose exec -T studio-postgres pg_isready -U studio -d studio
 compose exec -T umami-postgres pg_isready -U umami -d umami
 compose exec -T nvs-mariadb sh -ec 'exec mariadb-admin ping -h 127.0.0.1 -unvs -p"$MARIADB_PASSWORD" --silent'
-writers_stopped=true
-compose stop studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker
+for service in $writer_services; do
+  if compose ps --status running -q "$service" | grep -q .; then active_writers="${active_writers}${active_writers:+ }$service"; fi
+done
+if [ -n "$active_writers" ]; then
+  writers_stopped=true
+  compose stop $active_writers
+fi
 compose exec -T studio-postgres psql -v ON_ERROR_STOP=1 -U studio -d studio < "$input_dir/studio-postgres.sql"
 compose exec -T umami-postgres psql -v ON_ERROR_STOP=1 -U umami -d umami < "$input_dir/umami-postgres.sql"
 compose exec -T nvs-mariadb sh -ec 'exec mariadb -unvs -p"$MARIADB_PASSWORD" nvs' < "$input_dir/nvs-mariadb.sql"
-compose start studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker
-writers_stopped=false
+if [ -n "$active_writers" ]; then
+  compose start $active_writers
+  writers_stopped=false
+fi
 trap - EXIT HUP INT TERM
 echo "Restauração concluída a partir de: $input_dir"
