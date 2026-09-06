@@ -12,6 +12,13 @@ export function readRuntimeFlags(environment = process.env) {
   });
 }
 
+export function requiredTrackingEngines(flags = readRuntimeFlags()) {
+  return Object.freeze([
+    ...(flags.umamiRuntime === true ? ['umami'] : []),
+    ...(flags.nvsRuntime === true ? ['nvs'] : []),
+  ]);
+}
+
 export function publicRuntimeCapabilities(flags = readRuntimeFlags()) {
   return Object.freeze({
     analytics: flags.umamiRuntime === true,

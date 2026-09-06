@@ -25,9 +25,10 @@ import { PublicationSnapshotBuilder, extractVslReferences } from './publication-
 import { resolvePublishedVslReferencesForRender } from './vsl-reference.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
+import { TrackingRepository } from './repositories/tracking-repository.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
-import { readRuntimeFlags } from './runtime-flags.mjs';
+import { readRuntimeFlags, requiredTrackingEngines } from './runtime-flags.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 
@@ -210,6 +211,7 @@ export function createApp({
     })
     : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
+  const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
   const deployments = database ? new DeploymentRepository(database) : null;
   const publication = database
     ? new PublicationService({
@@ -219,6 +221,8 @@ export function createApp({
       publisherFactory: (credentials) => injectedPublisher || new Publisher(credentials),
       audit: new AuditRepository(database),
       domains: new ProjectDomainRepository(database),
+      tracking,
+      trackingRequiredEngines: requiredTrackingEngines(runtimeFlags),
     })
     : null;
   const projectApi = database
@@ -229,6 +233,7 @@ export function createApp({
       content,
       videos,
       analytics,
+      tracking,
       body,
       secure: Boolean(publicOrigin),
       limit: (address) => auth.limit(address),

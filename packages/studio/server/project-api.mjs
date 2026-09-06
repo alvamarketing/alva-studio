@@ -167,6 +167,7 @@ export function createProjectApi({
   publication,
   videos,
   analytics,
+  tracking,
   runtimeFlags,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
@@ -325,6 +326,27 @@ export function createProjectApi({
         await sessionService.clearCurrentProject(projectId);
         return json(archived);
       }
+    }
+
+    const trackingRoute = path.match(/^\/api\/projects\/([^/]+)\/tracking(?:\/(provision|status|retry|destinations)(?:\/([^/]+))?)?$/);
+    if (trackingRoute) {
+      const [, projectId, action = 'status', provider] = trackingRoute;
+      await sessionService.authorize(context, 'integration.manage', projectId);
+      if (!tracking) throw fail('O provisionamento de rastreamento ainda está pendente.', 409);
+      if (action === 'status' && method === 'GET') return json(await tracking.status({ companyId: context.companyId, projectId }));
+      if (action === 'provision' && method === 'POST') {
+        await body(req);
+        return json(await tracking.ensureJobs({ companyId: context.companyId, projectId }), 202);
+      }
+      if (action === 'retry' && method === 'POST') {
+        const input = await body(req);
+        return json(await tracking.retry({ companyId: context.companyId, projectId, environment: input.environment, engine: input.engine }));
+      }
+      if (action === 'destinations' && provider && method === 'PUT') {
+        const input = await body(req);
+        return json(await tracking.saveDestination({ companyId: context.companyId, projectId, provider, environment: input.environment, configuration: input.configuration }));
+      }
+      throw fail('Não encontrado.', 404);
     }
 
     const publicationRoute = path.match(/^\/api\/projects\/([^/]+)\/(?:publication|integration|integrations)(?:\/(vercel|preview|production|runs|status|domain)(?:\/([^/]+))?)?$/);

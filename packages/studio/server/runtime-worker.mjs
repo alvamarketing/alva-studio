@@ -3,6 +3,9 @@ import { pathToFileURL } from 'node:url';
 import { createDatabase, migrate } from './db/postgres.mjs';
 import { WebhookDeliveryRepository } from './repositories/webhook-repository.mjs';
 import { startWebhookWorker } from './webhook-worker.mjs';
+import { TrackingRepository } from './repositories/tracking-repository.mjs';
+import { NvsClient, UmamiClient } from './tracking-clients.mjs';
+import { startTrackingProvisionWorker } from './tracking-provision-worker.mjs';
 
 export async function startRuntimeWorker({
   role,
@@ -14,9 +17,13 @@ export async function startRuntimeWorker({
   migrateFn = migrate,
   webhookRepositoryFactory = (database) => new WebhookDeliveryRepository(database),
   startWebhookWorkerFn = startWebhookWorker,
+  trackingRepositoryFactory = (database) => new TrackingRepository(database),
+  trackingClientsFactory = () => ({ umami: new UmamiClient(), nvs: new NvsClient() }),
+  startTrackingWorkerFn = startTrackingProvisionWorker,
+  trackingProvisionEnabled = process.env.TRACKING_PROVISION_ENABLED === 'true',
   log = console.log,
 } = {}) {
-  if (!['webhook', 'media'].includes(role)) throw new Error('Papel de worker inválido.');
+  if (!['webhook', 'tracking', 'media'].includes(role)) throw new Error('Papel de worker inválido.');
   if (typeof connectionString !== 'string' || !connectionString) throw new Error('DATABASE_URL é obrigatória para o worker.');
   if (!Number.isFinite(intervalMs) || intervalMs < 1_000) throw new Error('Intervalo de heartbeat inválido.');
   if (!Number.isFinite(webhookIntervalMs) || webhookIntervalMs < 1_000) throw new Error('Intervalo da fila de webhook inválido.');
@@ -24,6 +31,7 @@ export async function startRuntimeWorker({
   const database = createDatabaseFn({ connectionString });
   let timer;
   let webhookWorker;
+  let trackingWorker;
   let closed = false;
   try {
     await migrateFn(database);
@@ -31,6 +39,12 @@ export async function startRuntimeWorker({
       webhookWorker = startWebhookWorkerFn({
         repository: webhookRepositoryFactory(database),
         intervalMs: webhookIntervalMs,
+      });
+    }
+    if (role === 'tracking' && trackingProvisionEnabled) {
+      trackingWorker = startTrackingWorkerFn({
+        repository: trackingRepositoryFactory(database),
+        clients: trackingClientsFactory(),
       });
     }
     const heartbeat = async () => {
@@ -45,6 +59,7 @@ export async function startRuntimeWorker({
         closed = true;
         clearInterval(timer);
         webhookWorker?.stop?.();
+        trackingWorker?.stop?.();
         await database.close().catch(() => {});
         return exitCode;
       },
@@ -54,6 +69,7 @@ export async function startRuntimeWorker({
   } catch (error) {
     clearInterval(timer);
     webhookWorker?.stop?.();
+    trackingWorker?.stop?.();
     await database.close().catch(() => {});
     throw error;
   }

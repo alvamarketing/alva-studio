@@ -59,10 +59,10 @@
 
 **Interfaces:** `POST /api/projects/:id/tracking/provision`, `GET /tracking/status`, `POST /tracking/retry`, `PUT /tracking/destinations/:provider`.
 
-- [ ] Criar bindings `project + environment + engine` e fila com lease, retry, backoff e dead-letter.
-- [ ] Criar website Umami e propriedade NVS de forma idempotente; preview e produção não compartilham identidade.
-- [ ] Bloquear publicação nova sem bindings prontos, preservando snapshots antigos.
-- [ ] Testar dois tenants, falhas parciais e containers reais; revisar e commitar.
+- [x] Criar bindings `project + environment + engine` e fila com lease, retry, backoff e dead-letter.
+- [x] Criar website Umami e propriedade NVS de forma idempotente; preview e produção não compartilham identidade.
+- [x] Bloquear publicação nova sem bindings prontos, preservando snapshots antigos.
+- [x] Testar dois tenants, falhas parciais e containers reais; revisar e commitar.
 
 ### Task 5: Cortar analytics para o Umami real
 

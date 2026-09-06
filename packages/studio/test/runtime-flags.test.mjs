@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readRuntimeFlags } from '../server/runtime-flags.mjs';
+import { readRuntimeFlags, requiredTrackingEngines } from '../server/runtime-flags.mjs';
 
 test('flags de runtime exigem opt-in literal e permanecem desligadas por padrão', () => {
   assert.deepEqual(readRuntimeFlags({}), {
@@ -36,4 +36,13 @@ test('flags de runtime exigem opt-in literal e permanecem desligadas por padrão
     mediaPipeline: true,
     billingEnforcement: true,
   });
+});
+
+test('motores obrigatórios de rastreamento seguem exatamente as flags ativas', () => {
+  for (const [environment, expected] of [
+    [{}, []],
+    [{ UMAMI_RUNTIME_ENABLED: 'true' }, ['umami']],
+    [{ NVS_RUNTIME_ENABLED: 'true' }, ['nvs']],
+    [{ UMAMI_RUNTIME_ENABLED: 'true', NVS_RUNTIME_ENABLED: 'true' }, ['umami', 'nvs']],
+  ]) assert.deepEqual(requiredTrackingEngines(readRuntimeFlags(environment)), expected);
 });

@@ -12,8 +12,9 @@ services:
       PORT: 4178
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify}
       WEBHOOK_WORKER_ENABLED: "false"
-      UMAMI_RUNTIME_ENABLED: "false"
-      NVS_RUNTIME_ENABLED: "false"
+      UMAMI_RUNTIME_ENABLED: ${UMAMI_RUNTIME_ENABLED:-false}
+      NVS_RUNTIME_ENABLED: ${NVS_RUNTIME_ENABLED:-false}
+      TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
       PIXELS_ENABLED: "false"
       MEDIA_PIPELINE_ENABLED: "false"
       BILLING_ENFORCEMENT: "false"
@@ -67,6 +68,35 @@ services:
       retries: 3
       start_period: 20s
 
+  studio-tracking-worker:
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.studio
+    restart: unless-stopped
+    command: ["node", "server/runtime-worker.mjs", "--role=tracking"]
+    environment:
+      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
+      TRACKING_PROVISION_ENABLED: ${TRACKING_PROVISION_ENABLED:-false}
+      TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
+      UMAMI_INTERNAL_URL: http://umami:3000
+      UMAMI_USERNAME: ${UMAMI_USERNAME:?Defina UMAMI_USERNAME no ambiente do Coolify}
+      UMAMI_PASSWORD: ${UMAMI_PASSWORD:?Defina UMAMI_PASSWORD no ambiente do Coolify}
+      NVS_INTERNAL_URL: http://nvs
+      NVS_INTERNAL_HMAC_SECRET: ${NVS_INTERNAL_HMAC_SECRET:?Defina NVS_INTERNAL_HMAC_SECRET no ambiente do Coolify}
+    depends_on:
+      studio-postgres:
+        condition: service_healthy
+      umami:
+        condition: service_healthy
+      nvs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
   studio-postgres:
     image: postgres:16.6-alpine3.21@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
     restart: unless-stopped
@@ -83,11 +113,15 @@ services:
       retries: 12
 
   umami:
-    image: ghcr.io/umami-software/umami:3.3.1@sha256:fa32d116cf20cad52cbc3fad9a63b46e7fa02299d8f967168eb453d49c476b4a
+    build:
+      context: ..
+      dockerfile: runtime/Dockerfile.umami
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://umami:${UMAMI_POSTGRES_PASSWORD:?Defina UMAMI_POSTGRES_PASSWORD no ambiente do Coolify}@umami-postgres:5432/umami
       APP_SECRET: ${UMAMI_APP_SECRET:?Defina UMAMI_APP_SECRET no ambiente do Coolify}
+      UMAMI_USERNAME: ${UMAMI_USERNAME:?Defina UMAMI_USERNAME no ambiente do Coolify}
+      UMAMI_PASSWORD: ${UMAMI_PASSWORD:?Defina UMAMI_PASSWORD no ambiente do Coolify}
     depends_on:
       umami-postgres:
         condition: service_healthy

@@ -21,6 +21,7 @@
 - `analytics-api.test.mjs`, `analytics-collect.test.mjs`, `analytics-csp.test.mjs`, `analytics-http.test.mjs`, `analytics-panel.test.mjs`, `analytics-repository.test.mjs` e `analytics-tracker.test.mjs`: contrato do coletor, isolamento, PII, CORS, CSP, persistência, retenção, resumo e painel.
 - `runtime-flags.test.mjs`: opt-in restritivo das flags comerciais e estado inicial seguro dos motores internos.
 - `runtime-health.test.mjs`: endpoints de saúde e contrato estático da composição Docker, backup e restauração.
+- `tracking-provision.test.mjs`: bindings por ambiente, leases, tentativas, criptografia com escopo, destinos NVS e gate de publicação.
 
 - `templates.test.mjs`: catálogo e consistência dos formulários.
 - `editor*.test.mjs`: controles do editor guiado.

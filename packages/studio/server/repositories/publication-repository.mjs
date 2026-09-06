@@ -12,23 +12,28 @@ function keyFrom(value) {
 export class SecretVault {
   constructor({ masterKey = process.env.VERCEL_MASTER_KEY } = {}) { this.key = keyFrom(masterKey); }
 
-  encrypt(value) {
+  encrypt(value, scope = null) {
     if (typeof value !== 'string' || !value) throw fail('Token Vercel inválido.', 400);
+    if (scope !== null && (typeof scope !== 'string' || !scope || scope.length > 512)) throw fail('Escopo de segredo inválido.', 400);
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    if (scope) cipher.setAAD(Buffer.from(scope, 'utf8'));
     return JSON.stringify({
       iv: iv.toString('hex'),
       data: Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]).toString('hex'),
       tag: cipher.getAuthTag().toString('hex'),
-      keyVersion: 1,
+      keyVersion: scope ? 2 : 1,
     });
   }
 
-  decrypt(value) {
+  decrypt(value, scope = null) {
     try {
       const secret = typeof value === 'string' ? JSON.parse(value) : value;
+      if (secret.keyVersion === 2 && (typeof scope !== 'string' || !scope)) throw new Error('scope_required');
+      if (secret.keyVersion !== 2 && scope) throw new Error('legacy_unscoped_secret');
       const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(secret.iv, 'hex'));
       decipher.setAuthTag(Buffer.from(secret.tag, 'hex'));
+      if (secret.keyVersion === 2) decipher.setAAD(Buffer.from(scope, 'utf8'));
       return Buffer.concat([decipher.update(Buffer.from(secret.data, 'hex')), decipher.final()]).toString('utf8');
     } catch {
       throw fail('Não foi possível ler a conexão Vercel. Salve-a novamente.', 500);

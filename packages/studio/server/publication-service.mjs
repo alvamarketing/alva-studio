@@ -7,13 +7,21 @@ function publicRun(run, snapshot) {
 }
 
 export class PublicationService {
-  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains } = {}) {
+  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains, tracking, trackingRequired = false, trackingRequiredEngines = trackingRequired ? ['umami', 'nvs'] : [] } = {}) {
     this.snapshotBuilder = snapshotBuilder;
     this.integrations = integrations;
     this.deployments = deployments;
     this.publisherFactory = publisherFactory;
     this.audit = audit || { record: async () => {} };
     this.domains = domains;
+    this.tracking = tracking;
+    this.trackingRequiredEngines = [...new Set(trackingRequiredEngines)].sort();
+  }
+
+  async requireTracking(input, environment) {
+    if (this.trackingRequiredEngines.length === 0) return;
+    if (!this.tracking) throw fail('Rastreamento do ambiente ainda não está pronto.', 409);
+    await this.tracking.assertReady({ companyId: input.companyId, projectId: input.projectId, environment, engines: this.trackingRequiredEngines });
   }
 
   async publisher(scope) {
@@ -60,6 +68,7 @@ export class PublicationService {
   }
 
   async preview(input) {
+    await this.requireTracking(input, 'preview');
     const snapshot = await this.snapshotBuilder.build(input);
     await this.audit.record({ companyId: input.companyId, projectId: input.projectId, actorUserId: input.requestedBy, action: 'deployment.preview.request', resourceType: 'project', resourceId: input.projectId, revision: input.expectedRevision, result: 'requested', metadata: { snapshotHash: snapshot.hash } });
     return this.send({ ...input, environment: 'preview', snapshot });
@@ -83,6 +92,7 @@ export class PublicationService {
   async production(input) {
     if (input.confirmed !== true) throw fail('A confirmação da publicação em produção é obrigatória.', 409);
     if (!input.previewRunId) throw fail('Valide uma prévia antes de publicar em produção.', 409);
+    await this.requireTracking(input, 'production');
     const snapshot = await this.snapshotBuilder.build(input);
     const preview = await this.deployments.find({ companyId: input.companyId, projectId: input.projectId, runId: input.previewRunId });
     const credentials = await this.integrations.credentials({ companyId: input.companyId, projectId: input.projectId });

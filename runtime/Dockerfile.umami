@@ -1,0 +1,8 @@
+FROM ghcr.io/umami-software/umami:3.3.1@sha256:fa32d116cf20cad52cbc3fad9a63b46e7fa02299d8f967168eb453d49c476b4a
+
+USER root
+RUN apk add --no-cache postgresql18-client=18.6-r0
+COPY runtime/umami-bootstrap.mjs /usr/local/bin/umami-bootstrap.mjs
+USER nextjs
+
+CMD ["sh", "-c", "export PATH=\"$PWD/node_modules/.bin:$PATH\" && node scripts/check-db.js && node /usr/local/bin/umami-bootstrap.mjs && node scripts/update-tracker.js && exec node server.js"]

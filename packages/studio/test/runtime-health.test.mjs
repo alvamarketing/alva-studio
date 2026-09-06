@@ -95,20 +95,77 @@ test('worker de webhook inicializa a fila real fora do processo web', async (t) 
   assert.equal(calls.at(-1), 'close');
 });
 
+test('worker de tracking consome a fila fora do processo web', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'alva-runtime-tracking-worker-'));
+  const heartbeatFile = join(directory, 'heartbeat.json');
+  const calls = [];
+  const database = { query: async (sql) => calls.push(sql), close: async () => calls.push('close') };
+  let stopped = false;
+  const runtime = await startRuntimeWorker({
+    role: 'tracking', connectionString: 'postgres://nao-registre-esta-url', heartbeatFile,
+    createDatabaseFn: () => database, migrateFn: async () => calls.push('migrate'),
+    trackingRepositoryFactory: (value) => ({ database: value }),
+    trackingClientsFactory: () => ({ umami: {}, nvs: {} }),
+    startTrackingWorkerFn: ({ repository, clients }) => { assert.equal(repository.database, database); assert.ok(clients.umami); calls.push('tracking-worker'); return { stop: () => { stopped = true; } }; }, trackingProvisionEnabled: true,
+    log: () => {},
+  });
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  assert.deepEqual(calls.slice(0, 3), ['migrate', 'tracking-worker', 'SELECT 1']);
+  await runtime.close();
+  assert.equal(stopped, true);
+});
+
+test('worker de tracking permanece em heartbeat sem consumir fila enquanto a flag está desligada', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'alva-runtime-tracking-disabled-'));
+  const heartbeatFile = join(directory, 'heartbeat.json');
+  let started = false;
+  const runtime = await startRuntimeWorker({
+    role: 'tracking', connectionString: 'postgres://nao-registre-esta-url', heartbeatFile,
+    createDatabaseFn: () => ({ query: async () => {}, close: async () => {} }), migrateFn: async () => {},
+    startTrackingWorkerFn: () => { started = true; return { stop: () => {} }; }, log: () => {},
+  });
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  assert.equal(started, false);
+  await runtime.close();
+});
+
 test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens fixadas', async () => {
   const compose = await readFile(join(root, 'runtime/compose.yaml'), 'utf8');
-  for (const service of ['studio-web', 'studio-worker', 'studio-media-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])
+  for (const service of ['studio-web', 'studio-worker', 'studio-media-worker', 'studio-tracking-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])
     assert.match(compose, new RegExp(`^  ${service}:`, 'm'));
   assert.match(compose, /127\.0\.0\.1:4178:4178/);
   assert.match(compose, /PUBLIC_ORIGIN: \$\{PUBLIC_ORIGIN:\?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify\}/);
   assert.match(compose, /WEBHOOK_WORKER_ENABLED: "false"/);
-  assert.match(compose, /ghcr\.io\/umami-software\/umami:3\.3\.1@sha256:fa32d116cf20cad52cbc3fad9a63b46e7fa02299d8f967168eb453d49c476b4a/);
+  assert.match(compose, /TRACKING_PROVISION_ENABLED: \$\{TRACKING_PROVISION_ENABLED:-false\}/);
+  assert.match(compose, /UMAMI_RUNTIME_ENABLED: \$\{UMAMI_RUNTIME_ENABLED:-false\}/);
+  assert.match(compose, /NVS_RUNTIME_ENABLED: \$\{NVS_RUNTIME_ENABLED:-false\}/);
+  assert.match(compose, /TRACKING_MASTER_KEY: \$\{TRACKING_MASTER_KEY:\?Defina TRACKING_MASTER_KEY no ambiente do Coolify\}/);
+  assert.match(compose, /dockerfile: runtime\/Dockerfile\.umami/);
+  assert.match(compose, /UMAMI_USERNAME: \$\{UMAMI_USERNAME:\?Defina UMAMI_USERNAME no ambiente do Coolify\}/);
   assert.match(compose, /mariadb:11\.4@sha256:611a2fcc5fa7c6ceb8644c6f74b25ede004ff6c3a6b38c8f8c23d3bbf6c26430/);
   assert.match(compose, /postgres:16\.6-alpine3\.21@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef/);
   const studioDockerfile = await readFile(join(root, 'runtime/Dockerfile.studio'), 'utf8');
   const nvsDockerfile = await readFile(join(root, 'runtime/Dockerfile.nvs'), 'utf8');
   assert.match(studioDockerfile, /node:22\.14\.0-alpine3\.21@sha256:9bef0ef1e268f60627da9ba7d7605e8831d5b56ad07487d24d1aa386336d1944/);
   assert.match(nvsDockerfile, /php:8\.3\.15-cli-bookworm@sha256:0d3656c146a6a11c715b5d35169d80ffe1f67d6ae77ed39a1331f6889f794269/);
+  const [umamiDockerfile, umamiBootstrap, umamiContract] = await Promise.all([
+    readFile(join(root, 'runtime/Dockerfile.umami'), 'utf8'), readFile(join(root, 'runtime/umami-bootstrap.mjs'), 'utf8'), readFile(join(root, 'runtime/umami-contract-test.sh'), 'utf8'),
+  ]);
+  assert.match(umamiDockerfile, /umami:3\.3\.1@sha256:fa32d116cf20cad52cbc3fad9a63b46e7fa02299d8f967168eb453d49c476b4a/);
+  assert.match(umamiDockerfile, /postgresql18-client=18\.6-r0/);
+  assert.match(umamiBootstrap, /crypt\(:'technical_password', gen_salt\('bf'\)\)/);
+  assert.match(umamiBootstrap, /'user', 'Tracking Provisioner'/);
+  assert.match(umamiBootstrap, /\\\\getenv technical_password UMAMI_PASSWORD/);
+  assert.match(umamiBootstrap, /spawn\('psql', \['-v', 'ON_ERROR_STOP=1'\]/);
+  assert.match(umamiBootstrap, /\/proc\/\$\{child\.pid\}\/cmdline/);
+  assert.doesNotMatch(umamiBootstrap, /--set=technical_password/);
+  assert.doesNotMatch(umamiBootstrap, /psql \"\$DATABASE_URL\"/);
+  assert.match(umamiBootstrap, /DELETE FROM "user"/);
+  assert.match(umamiContract, /payload\.id !== website\.id/);
+  assert.match(umamiContract, /duplicate\.status !== 500/);
+  assert.match(umamiContract, /UMAMI_BOOTSTRAP_ASSERT_ARGV=true/);
+  assert.match(umamiContract, /SELECT role FROM .*tracking-provisioner/);
+  assert.match(umamiContract, /SELECT NOT EXISTS \(SELECT 1 FROM .*username = 'admin'/);
   assert.doesNotMatch(compose, /^networks:/m);
   assert.match(compose, /\/api\/heartbeat/);
   assert.match(compose, /NVS_MARIADB_HOST: nvs-mariadb/);
@@ -135,10 +192,10 @@ test('runbook e scripts tratam backup e restauração dos três bancos com confi
   assert.match(restore, /--project-name/);
   assert.match(backup, /mariadb-dump .* nvs/);
   assert.doesNotMatch(backup, /--all-databases/);
-  assert.match(restore, /compose stop studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker/);
-  assert.match(restore, /compose start studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker/);
+  assert.match(restore, /compose stop studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker/);
+  assert.match(restore, /compose start studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker/);
   assert.match(restore, /writers_stopped=true\ncompose stop/);
-  assert.match(restore, /compose start studio-web studio-worker studio-media-worker umami nvs nvs-outbox-worker\nwriters_stopped=false/);
+  assert.match(restore, /compose start studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker\nwriters_stopped=false/);
   assert.match(restore, /pg_isready -U studio -d studio/);
   assert.match(restore, /pg_isready -U umami -d umami/);
   assert.match(restore, /mariadb-admin ping/);

@@ -28,6 +28,22 @@ explícito de uma propriedade. O
 `studio-media-worker` só registra heartbeat e conectividade PostgreSQL até a
 tarefa de mídia.
 
+O Umami cria ou atualiza a conta técnica indicada por `UMAMI_USERNAME` e
+`UMAMI_PASSWORD` com a role mínima `user`, diretamente no banco, depois das
+migrações e antes de abrir o servidor. Essa role cria e consulta somente os
+websites que possui, como confirma o teste de contrato. O bootstrap usa hash
+bcrypt no PostgreSQL e remove apenas o usuário seed conhecido da imagem pinada;
+ele não autentica com credenciais padrão nem depende de cadastro manual. O
+bootstrap entrega a senha ao cliente PostgreSQL somente por ambiente do
+processo filho, sem colocá-la em argumentos. A
+imagem instala o cliente PostgreSQL `postgresql18-client=18.6-r0` sobre a base
+Alpine já pinada, deixando a ferramenta de bootstrap reproduzível.
+`TRACKING_MASTER_KEY` é exclusiva do control plane
+e precisa estar disponível tanto no `studio-web` para o gate de publicação
+quanto no worker de provisionamento. As flags `UMAMI_RUNTIME_ENABLED`,
+`NVS_RUNTIME_ENABLED` e `TRACKING_PROVISION_ENABLED` exigem valor literal
+`true` e continuam desligadas até aceite operacional.
+
 ## Subir e verificar
 
 O `studio-web` aplica as migrações antes de abrir a porta. Consulte
@@ -43,6 +59,17 @@ curl --fail http://127.0.0.1:4178/health/ready
 Use nome de projeto isolado para não tocar serviços existentes. Confira os nove
 health checks antes de usar o runtime. Umami valida `/api/heartbeat` com status
 200; a prontidão NVS consulta o MariaDB e só aprova JSON com `status: ready`.
+
+O contrato da imagem Umami 3.3.1 pode ser reproduzido sem segredos reais:
+
+```sh
+runtime/umami-contract-test.sh
+```
+
+Ele usa containers e volumes descartáveis, autentica a conta técnica, confirma
+que `POST /api/websites` aceita o UUID estável do binding e que `GET` devolve
+os mesmos campos. A imagem pinada responde `500` ao POST duplicado; o cliente
+trata esse conflito por leitura e reconciliação do website existente.
 
 ## Backup, restauração e prova de persistência
 

@@ -2,7 +2,7 @@
 
 - `index.mjs`: servidor HTTP, mapa dos módulos públicos e entrypoints SaaS (PostgreSQL obrigatório) e legado explícito para migração/rollback.
 - `runtime-flags.mjs`: leitura restritiva das flags dos motores comerciais e capacidades públicas sanitizadas; tudo nasce desligado até opt-in literal do ambiente.
-- `runtime-worker.mjs` e `runtime-worker-healthcheck.mjs`: entrypoint e heartbeat verificável dos workers; webhook consome a fila real, enquanto mídia só comprova conectividade até sua etapa própria.
+- `runtime-worker.mjs` e `runtime-worker-healthcheck.mjs`: entrypoint e heartbeat verificável dos workers; webhook e provisionamento de tracking consomem filas próprias, enquanto mídia só comprova conectividade até sua etapa própria.
 - `db/`: adaptador PostgreSQL e migrações ordenadas do schema SaaS.
   - `postgres.mjs`: pool com tratamento de erro de cliente ocioso, transações e executor idempotente de migrações com checksum.
   - `migrations/001_saas_foundation.sql`: empresas, memberships, projetos, conteúdo, versões, integrações e auditoria.
@@ -16,11 +16,13 @@
   - `migrations/009_vsl_published_lock.sql`: revisão do rascunho usada para o estado de alterações não publicadas.
   - `migrations/011_analytics_collector.sql`: websites, sessões, eventos, dados estruturados e agregados internos do coletor.
   - `migrations/012_analytics_websites.sql`: backfill e provisionamento automático do tracker público por projeto.
+  - `migrations/013_tracking_provisioning.sql`: bindings Umami/NVS por ambiente, destinos cifrados e fila transacional de provisionamento com lease.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
 - `project-api.mjs`: API multiempresa, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
+- `tracking-clients.mjs` e `tracking-provision-worker.mjs`: clientes internos de Umami/NVS e consumo idempotente do provisionamento por projeto.
 - `outbound-webhook.mjs`: entrega best-effort pós-persistência por HTTPS, com timeout, sem credenciais/cabeçalhos repassados, bloqueio de destinos locais/privados e status `delivered`/`failed`; fila, retry, idempotência e defesa contra DNS rebinding ficam no nó `worker_webhook`.
 - `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
 - `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.
@@ -34,5 +36,6 @@
 - `publication-service.mjs`: coordenação de preview, produção confirmada, status, domínio e auditoria.
 - `publication-cors.mjs`: validação de origens HTTPS autorizadas para submissões públicas do projeto.
 - `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto e execuções idempotentes.
+- `repositories/tracking-repository.mjs`: bindings e destinos de tracking isolados por empresa, projeto e ambiente, sem expor referências remotas.
 - `publisher.mjs`: chamadas Vercel para previews, produção, status e domínio, com retry temporário.
 - `auth.mjs`: conta única, sessões e credencial Vercel cifrada em disco do modo local legado.
