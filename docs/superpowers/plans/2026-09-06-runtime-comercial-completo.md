@@ -139,19 +139,21 @@ A Task 8 fica fora da certificação V1 e será retomada somente após a V1 come
 
 **Interfaces:** manter `GET /api/billing`, `POST /checkout`, `POST /cancel` e webhook 64 KB; bloqueios retornam `billing_access_required`.
 
-- [ ] Corrigir expiração, cancelamento tardio, tipos de webhook, pedido expirado, auditoria e limites transacionais.
-- [ ] Manter plano inicial com 5 projetos, 10 membros e 5 domínios; preço configurável e produção bloqueada enquanto draft.
+- [x] Corrigir expiração, cancelamento tardio, tipos de webhook, pedido expirado, auditoria e limites transacionais.
+- [x] Manter plano inicial com 5 projetos, 10 membros e 5 domínios; preço configurável e produção bloqueada enquanto draft.
 - [ ] Homologar checkout, webhook, reconciliação e cancelamento no Asaas Sandbox.
 - [ ] Revisar segurança/visual, rodar suíte e commitar.
 
-**Progresso de implementação (2026-09-06, aguardando revisão):** migração 017,
+**Fechamento local (2026-09-06):** migração 017,
 pedido idempotente, checkout hospedado, inbox/worker Asaas, cancelamento no fim
 do período, limites transacionais 5/10/5, gate opcional de publicação e cartão
-de Empresa foram implementados e testados com PostgreSQL/fakes locais. A
-homologação sandbox, revisão visual independente, suíte completa e commit
-continuam pendentes; nenhum segredo, egress real ou conta Asaas foi usado.
+de Empresa foram implementados e testados com PostgreSQL/fakes locais. A suíte
+completa passou com 507/507 testes e a revisão independente aprovou o código e
+o contrato de segurança. O marco foi salvo no commit `459bf42` e enviado para
+o remoto. A homologação no Asaas Sandbox e a revisão visual continuam
+pendentes; nenhum segredo, egress real ou conta Asaas foi usado.
 
-**Correção de revisão (2026-09-06, aguardando revisão):** a mesma migração 017
+**Correção aprovada em revisão (2026-09-06):** a mesma migração 017
 passou a deduplicar a inbox por ambiente/provedor/ID do evento, com hash apenas
 para auditoria; pedidos abertos são reutilizados por até 65 minutos entre
 cliques, e assinatura vigente bloqueia nova recorrência. A fila ganhou

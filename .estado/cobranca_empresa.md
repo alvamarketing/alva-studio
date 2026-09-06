@@ -3,9 +3,10 @@ no: cobranca_empresa
 status: pendente
 ---
 
-# Cobrança empresarial Asaas V1 — evidência aguardando revisão
+# Cobrança empresarial Asaas V1 — implementação local aprovada
 
-Implementação local pendente de revisão e homologação sandbox. A migração 017
+Implementação local aprovada em revisão independente e pendente de homologação
+no Asaas Sandbox. A migração 017
 cria plano por ambiente, pedido com referência externa persistida antes do
 egress, assinatura, entitlement, inbox idempotente e fila de revisão. O
 checkout recorrente é hospedado e só recebe URL validada do host Asaas do
@@ -31,6 +32,7 @@ transacional e os limites 5/10/5. A publicação em produção consulta
 entitlement somente com `BILLING_ENFORCEMENT=true`; a flag nasce desligada.
 
 Evidência automatizada local atual: **61 testes focados verdes** para contrato,
-PostgreSQL, HTTP, webhook, worker, flags e cartão da Empresa. A homologação
-real do Asaas Sandbox, inspeção visual independente, suíte completa e revisão
-de segurança permanecem pendentes. Nenhum segredo ou egress real foi usado.
+PostgreSQL, HTTP, webhook, worker, flags e cartão da Empresa; a suíte completa
+passou com **507/507**. A revisão independente aprovou o código e o contrato de
+segurança. A homologação real do Asaas Sandbox e a inspeção visual independente
+permanecem pendentes. Nenhum segredo ou egress real foi usado.
