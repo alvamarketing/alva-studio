@@ -100,6 +100,20 @@
 - [ ] Assinar chamadas com HMAC/nonce/timestamp e impedir replay; artifact seguro é imutável e não removível.
 - [ ] Carregar Meta, GA4, TikTok, LinkedIn e Taboola uma vez, somente após opt-in.
 - [ ] Testar publicação real de staging, CSP, revogação, dois tenants, revisão visual e commit.
+- [ ] Parametrizar os cinco adaptadores (Meta, Google, TikTok, LinkedIn e Taboola) em `pending`/`denied`/`granted`: uma chamada por estado, `tracking_event_id` preservado, sem PII/hash nos dois primeiros e egress ausente somente com flag técnica ou provider desligado.
+
+**Política de consentimento:** eventos comerciais e seu `tracking_event_id` são
+emitidos em `pending`, `denied` e `granted`. Nos dois primeiros estados, o
+payload fica limitado a tempo, conteúdo, valor/moeda e identificadores
+pseudônimos de atribuição allowlisted (fbc, fbp, gclid, gbraid, wbraid, ttclid
+e equivalentes aprovados). Dados pessoais diretos e hashes ficam proibidos.
+Somente o servidor pode normalizar e gerar hashes no estado `granted`; o
+navegador não declara consentimento nem envia hashes. O consentimento é
+escopado por projeto, domínio, ambiente, snapshot, publicação e policyVersion, e sua
+revogação vale apenas para eventos futuros. O gateway resolve o estado somente
+do manifesto server-side; eventos são persistidos/deduplicados no Studio, encaminhados ao NVS e enviados
+aos adaptadores externos habilitados nos três estados; somente flags técnicas
+ou providers desabilitados bloqueiam egress.
 
 ## V2 — Mídia própria
 

@@ -42,6 +42,29 @@ pertencem à V2.
 
 A V1 não inclui player próprio, upload, armazenamento R2, transcodificação FFmpeg ou entrega HLS. Referências e eventos VSL já existentes permanecem compatíveis e documentados, mas não bloqueiam a certificação V1. Esses itens formam a V2.
 
+## Política de consentimento para conversões
+
+Eventos comerciais/NVS sempre podem ser emitidos nos estados `pending`,
+`denied` e `granted`. `pending` e `denied` permitem somente evento,
+`tracking_event_id`, tempo, conteúdo, valor/moeda e IDs pseudônimos de
+atribuição aprovados: `fbc`, `fbp`, `gclid`, `gbraid`, `wbraid`, `ttclid` e
+equivalentes explicitamente allowlisted. Não permitem PII direta nem hash.
+`granted` permite hashes normalizados, gerados exclusivamente no servidor.
+O browser nunca declara consentimento nem envia hash.
+
+Cada adaptador recebe o estado e a allowlist já reduzida. O adaptador Google
+mapeia o estado para `ad_user_data`, `ad_personalization`, `ad_storage` e
+`analytics_storage`. A UI chama os click IDs de identificadores pseudônimos de
+atribuição e explica o processamento limitado sem autorização para dados
+pessoais diretos. Revogação ou invalidação afeta apenas eventos futuros e
+nunca enriquece eventos retroativamente. A chave de consentimento é escopada
+por projeto, domínio, ambiente, snapshot, publicação e `policyVersion` (V1 = `1`).
+O gateway aceita o estado somente do manifesto server-side e recusa/ignora
+estado ou hash forjado no browser; eventos são sempre persistidos e
+deduplicados no Studio, encaminhados ao NVS e enviados aos adaptadores
+externos habilitados nos três estados. Somente flags técnicas ou providers
+desabilitados bloqueiam egress.
+
 ## Critério de pronto
 
 Na V1, um projeto novo deve provisionar os dois motores, publicar página e quiz na
@@ -49,4 +72,13 @@ Vercel, registrar pageview no Umami,
 lead/conversão no NVS, respeitar consentimento, exibir tudo no painel, aplicar
 assinatura Asaas e aceitar rascunhos por MCP. Eventos VSL existentes ficam fora da certificação V1. Cada marco exige teste contra
 serviços reais em containers, isolamento entre duas empresas, suíte completa,
-revisão independente e verificação visual desktop/celular.
+revisão independente e verificação visual desktop/celular. O gate de conversões
+exige teste parametrizado dos cinco adaptadores em `pending`, `denied` e
+`granted`, com uma chamada por estado, `tracking_event_id` preservado, sem
+PII/hash em pending/denied e egress ausente somente quando flag técnica ou
+provider estiver desligado.
+
+
+### Allowlist canônica de atribuição
+
+Meta aceita `fbc`/`fbp`; Google aceita `gclid`/`gbraid`/`wbraid`; TikTok aceita `ttclid`; LinkedIn mapeia `li_fat_id` para `linkedin_tracking_uuid`; Taboola mapeia `tblci` para `taboola_click_id`. Campos desconhecidos são recusados. Click IDs são pseudônimos permitidos em pending/denied. Google mapeia os quatro sinais para denied nesses estados e para granted em granted, sem ads_data_redaction.

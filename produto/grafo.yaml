@@ -139,7 +139,7 @@ nos:
   - id: tracking_pixels
     fase: v1
     estado: pendente
-    faz: Injetar pixels de mídia por projeto atrás de consentimento opt-in, com CSP de nonce por resposta e allowlist só dos provedores habilitados
+    faz: "Injetar pixels de mídia por projeto atrás de consentimento opt-in escopado por projeto, domínio, ambiente, snapshot, publicação e policyVersion: 1, com CSP de nonce e allowlist fechada por provedor e policyVersion: 1"
     depende:
       - homologacao_motores
     produz: Meta, GA4, TikTok, LinkedIn e Taboola carregados apenas após consentimento registrado, sem pixel dentro do player de VSL
@@ -150,14 +150,14 @@ nos:
   - id: tracking_conversoes
     fase: v1
     estado: pendente
-    faz: Enviar conversões server-side às plataformas com hashes SHA-256 de e-mail e telefone e click IDs, sem PII em claro e sem IP ou user agent
+    faz: "Persistir eventos no Studio, encaminhar ao NVS e enviar aos adaptadores externos habilitados em pending, denied ou granted; limitar pending/denied a evento, tracking_event_id, tempo, conteúdo, valor/moeda e IDs pseudônimos allowlisted por adaptador (Meta fbc/fbp; Google gclid/gbraid/wbraid; TikTok ttclid; LinkedIn li_fat_id→linkedin_tracking_uuid; Taboola tblci→taboola_click_id), recusar campos desconhecidos e gerar hashes normalizados somente no servidor em granted; somente flags técnicas ou providers desabilitados bloqueiam egress"
     depende:
       - tracking_pixels
-    produz: Meta CAPI, Google Enhanced Conversions, TikTok Events API, LinkedIn CAPI e Taboola S2S deduplicados por tracking_event_id
+    produz: "Adaptadores Meta, Google, TikTok, LinkedIn e Taboola deduplicados por tracking_event_id, recebendo estado e allowlist; Google mapeia ad_user_data, ad_personalization, ad_storage e analytics_storage"
     passa_quando:
       tipo: arquivo
       caminho: .estado/tracking_conversoes.md
-      casa: "Prova: payload sem PII em claro, sem IP e sem user agent, deduplicado por tracking_event_id, [0-9]+ testes verdes"
+      casa: "Prova: cinco adaptadores parametrizados em pending denied granted, uma chamada por estado, tracking_event_id preservado, payload sem PII ou hash em pending/denied, egress ausente somente com flag técnica ou provider desligado, [0-9]+ testes verdes"
   - id: cobranca_empresa
     fase: v1
     estado: pendente
