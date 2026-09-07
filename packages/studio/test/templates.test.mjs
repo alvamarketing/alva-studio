@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import grapesjs from 'grapesjs';
-import { templates, getTemplate, services, templateCss, formCss, chartCss, chartDonutBackgroundCss, blocks, normalizeForms, normalizeCharts, donutBackgroundFromData } from '../public/templates.js';
+import { templates, getTemplate, services, templateCss, formCss, chartCss, chartDonutBackgroundCss, blocks, normalizeForms, syncFormDelivery, normalizeCharts, donutBackgroundFromData } from '../public/templates.js';
 
 test('galeria de modelos mantém prévias proporcionais e seleção acessível', async () => {
   const [css, app] = await Promise.all([
@@ -124,6 +124,13 @@ test('normalização preserva atributos, valores e estilos; injeta CSS só uma v
   css = ''; // Loading another project must restore its missing base styles.
   normalizeForms(editor);
   assert.equal(additions, 2);
+});
+
+test('sincronização de destino não muta formulário já configurado', () => {
+  const attrs = { method: 'post', action: '#' }; let mutations = 0;
+  const form = { getAttributes: () => ({ ...attrs }), addAttributes: (next) => { mutations += 1; Object.assign(attrs, next); }, removeAttributes: (key) => { mutations += 1; delete attrs[key]; } };
+  assert.equal(syncFormDelivery(form, ''), 0); assert.equal(mutations, 0);
+  assert.equal(syncFormDelivery(form, 'https://hook.test/form'), 1); assert.equal(attrs.action, 'https://hook.test/form');
 });
 
 test('normalização tolera canvas vazio e blocos mantêm contrato de quatro posições', () => {

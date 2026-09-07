@@ -23,20 +23,24 @@ export const formCss = `
 export function normalizeForms(editor) {
   const wrapper = editor?.getWrapper?.();
   if (!wrapper) return 0;
-  const forms = wrapper.find?.('form') || [];
-  if (String(wrapper.get?.('tagName') || '').toLowerCase() === 'form') forms.unshift(wrapper);
+  const forms = [];
+  const seen = new Set();
+  const addForm = (component) => {
+    if (!component || seen.has(component)) return;
+    seen.add(component);
+    if (String(component.get?.('tagName') || '').toLowerCase() === 'form') forms.push(component);
+    (component.components?.().models || []).forEach(addForm);
+  };
+  // Component#find does not include newly appended native form components in
+  // headless GrapesJS. Use both paths so imported and newly inserted models work.
+  (wrapper.find?.('form') || []).forEach((form) => {
+    if (!seen.has(form)) { seen.add(form); forms.push(form); }
+  });
+  addForm(wrapper);
   for (const form of forms) {
-    if (typeof form.addClass === 'function') form.addClass('alva-form');
-    else {
-      const attrs = form.getAttributes?.() || {};
-      const classes = new Set(
-        String(attrs.class || '')
-          .split(/\s+/)
-          .filter(Boolean),
-      );
-      classes.add('alva-form');
-      form.addAttributes?.({ class: [...classes].join(' ') });
-    }
+    const attrs = form.getAttributes?.() || {};
+    const classes = String(attrs.class || '').split(/\s+/).filter(Boolean);
+    if (!classes.includes('alva-form')) form.addAttributes?.({ class: [...classes, 'alva-form'].join(' ') });
   }
   // Inspect the project rather than caching editor identity: loading a different project resets CSS.
   const css = editor.getCss?.() || '';
@@ -51,6 +55,18 @@ export function normalizeForms(editor) {
     for (const { rule, style } of custom) rule.addStyle?.(style);
   }
   return forms.length;
+}
+
+export function syncFormDelivery(form, webhook = '') {
+  const attrs = form?.getAttributes?.() || {};
+  const next = {};
+  if (attrs.method !== 'post') next.method = 'post';
+  if (attrs.action !== (webhook || '#')) next.action = webhook || '#';
+  // The editor parser intentionally strips inline handlers. Re-adding onsubmit
+  // during every save would create a fresh history mutation after an undo.
+  if (webhook && Object.hasOwn(attrs, 'onsubmit')) form.removeAttributes?.('onsubmit');
+  if (Object.keys(next).length) form.addAttributes?.(next);
+  return Object.keys(next).length + (webhook && Object.hasOwn(attrs, 'onsubmit') ? 1 : 0);
 }
 
 const form = (button = 'Solicitar contato', theme = 'light') =>

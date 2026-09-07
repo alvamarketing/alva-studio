@@ -1,5 +1,5 @@
 import { flushChanges } from './save-cycle.js';
-import { templates, getTemplate, normalizeForms } from './templates.js';
+import { templates, getTemplate, normalizeForms, syncFormDelivery } from './templates.js';
 import { buildPageExportHtml, createFriendlyEditor } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
@@ -998,14 +998,7 @@ async function saveOnce() {
   loading = true;
   try {
     normalizeForms(editor);
-    editor
-      .getWrapper()
-      .find('form')
-      .forEach((form) => {
-        form.addAttributes({ method: 'post', action: page.webhook || '#' });
-        if (page.webhook) form.removeAttributes('onsubmit');
-        else form.addAttributes({ onsubmit: 'return false' });
-      });
+    editor.getWrapper().find('form').forEach((form) => syncFormDelivery(form, page.webhook));
   } finally {
     loading = false;
   }
@@ -1272,14 +1265,7 @@ $('#settings-form').onsubmit = action(async (event) => {
     throw new Error('Informe o domínio sem https ou caminho.');
   page.webhook = webhook;
   page.domain = domain;
-  editor
-    .getWrapper()
-    .find('form')
-    .forEach((form) => {
-      form.addAttributes({ method: 'post', action: page.webhook || '#' });
-      if (page.webhook) form.removeAttributes('onsubmit');
-      else form.addAttributes({ onsubmit: 'return false' });
-    });
+  editor.getWrapper().find('form').forEach((form) => syncFormDelivery(form, page.webhook));
   markDirty();
   await save();
   toast('Configurações salvas.');

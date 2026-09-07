@@ -161,3 +161,17 @@ Ordem de execução aprovada:
 O Chromium confirmou o patch de níveis H1/H2/H3, tipografia, cor e alinhamento, ajustes de fundo, casas decimais e popover de movimento: H1 → H2 → desfazer funcionou; o painel alcançou o viewport mobile sem overflow; o ícone `star` foi desenhado na Prévia usando a fonte já existente. O fluxo abrir popover → selecionar `Flutuar` → salvar → reabrir preservou `data-alva-motion="float"`; Escape e segundo clique restauraram o foco. `/tmp/alva-inspector-review.md` foi aprovado pelo revisor Terra.
 
 A suíte final `/tmp/alva-inspector-suite-release.log` concluiu com 550/550 testes, 0 falhas, 0 skips, 43.913,101 ms e exit 0. Isso é evidência automatizada e não certifica a Etapa 5 nem a V1. A comparação lado a lado com o wireframe completo continua bloqueada pela URL policy e pela ausência de screenshot arquivado; as pendências das Etapas 6–18 permanecem.
+
+---
+
+## Checkpoint delimitado — realidade do catálogo VSL e formulários (2026-09-06)
+
+Este bloco é uma atualização localizada da auditoria. Preserva a conclusão executiva e não altera o diagnóstico de que a experiência comercial integrada permanece não homologada.
+
+- A correção de usabilidade removeu a falsa classificação de nós `TEXT` como VSL em `createVslComponentType.isComponent`: a checagem agora exige `hasAttribute(...) === true`. O `alva-field` original foi preservado, sem inferência de labels ausentes.
+- A edição de text nodes agora é segura e ao vivo; a FAQ permite editar o resumo `Pergunta` preservando a resposta; `Seção`, `Grupo` e `Duas colunas` exibem rótulos corretos.
+- `normalizeForms`/`syncFormDelivery` são idempotentes e não criam histórico para no-op. O problema final de redo foi atribuído à restauração da seleção após undo, que gerava `remove/add` e truncava a coleção selecionada; `UM.skip` síncrono foi limitado aos dois handlers de `restoreTreeSelection`, sem pausa global nem espera assíncrona.
+- O catálogo real GrapesJS com VSL/alva-field cobre 14 IDs e save/reopen/style. O caso `parentDIV` → botão/form cobre o controle negativo sem skip e o positivo com skip. A QA de navegador na cópia “Validação — blocos” preservou o original `aaa`, confirmou “Ver a oferta”, os labels “Seu nome”, “E-mail” e “WhatsApp”, e a FAQ “Como funciona a contratação?” com resposta preservada.
+- A revisão independente `/tmp/alva-catalog-review.md` foi atualizada e aprovada funcionalmente após a QA limpa. A suíte release final, executada com Node 24.17.0, concluiu 553 testes, 553 aprovados, 0 falhas, 0 cancelados, 0 skips e 0 todo, em 50.592,41825 ms (~50,6 s); `/tmp/alva-catalog-suite-release.exit` registra exit 0 e o log está em `/tmp/alva-catalog-suite-release.log`.
+
+Limites desta atualização: não certifica a Etapa 6 inteira nem a V1; não há captura local da landing com conteúdo (somente webhook externo), nem certificação de upload/publicação, E2E integral do catálogo ou QA de navegador para todos os 14 IDs. Screenshots lado a lado arquivadas e URL policy continuam pendentes. Cálculos do quiz, Analytics e demais etapas permanecem fora do escopo. As seções `Estrutura`, `Conteúdo` e `Biblioteca visual` foram preservadas, sem redesenho.

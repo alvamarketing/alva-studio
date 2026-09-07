@@ -151,3 +151,36 @@ test('árvore inclui gráficos irmãos após main com seções internas', async 
   assert.match(source, /fe-tree-synthetic/);
   editor.destroy();
 });
+
+test('restaurar parent após undo trunca redo sem skip e o preserva com skip', () => {
+  const run = (childDefinition, useSkip) => {
+    const editor = grapesjs.init({ headless: true, storageManager: false });
+    try {
+      const parent = editor.getWrapper().append({ tagName: 'div', components: [childDefinition] })[0];
+      const child = parent.components().at(0);
+      editor.select(child);
+      editor.UndoManager.clear();
+      child.remove();
+      editor.select(parent);
+      editor.UndoManager.undo();
+      assert.equal(editor.UndoManager.hasRedo(), true);
+      assert.equal(editor.getSelected(), child);
+      const restore = () => restoreTreeSelection(editor, parent.cid, new Map([[parent.cid, parent]]));
+      if (useSkip) editor.UndoManager.skip(restore);
+      else assert.equal(restore(), true);
+      const redoPreserved = editor.UndoManager.hasRedo();
+      if (useSkip) {
+        assert.equal(redoPreserved, true);
+        editor.UndoManager.redo();
+        assert.equal(parent.components().models.includes(child), false);
+      } else assert.equal(redoPreserved, false);
+    } finally { editor.destroy(); }
+  };
+  for (const child of [
+    { tagName: 'button', components: [{ type: 'textnode', content: 'Enviar' }] },
+    { tagName: 'form', components: [{ tagName: 'label', components: [{ type: 'textnode', content: 'Nome' }, { tagName: 'input', attributes: { name: 'nome' } }] }] },
+  ]) {
+    run(child, false);
+    run(child, true);
+  }
+});

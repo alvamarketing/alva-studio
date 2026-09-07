@@ -179,7 +179,7 @@ function cleanVslModel(model, publicId) {
 
 export function createVslComponentType({ publishedVslById = new Map(), publicOrigin = '', canReadVsl = () => true, loadError = '' } = {}) {
   return {
-    isComponent: (element) => element?.getAttribute?.(VSL_ATTRIBUTE) !== null,
+    isComponent: (element) => element?.hasAttribute?.(VSL_ATTRIBUTE) === true,
     model: {
       defaults: {
         tagName: 'div',
@@ -303,6 +303,15 @@ export function setHeadingLevel(model, level) {
 export function inspectorNumber(value, fallback = '') {
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number * 100) / 100 : fallback;
+}
+export function setComponentText(model, value) {
+  const lines = String(value ?? '').split(/\r?\n/);
+  const components = lines.flatMap((line, index) => [
+    ...(index ? [{ tagName: 'br' }] : []),
+    { type: 'textnode', content: line },
+  ]);
+  model?.components?.(components);
+  return components;
 }
 export function inspectorTextAlign(value, direction = 'ltr') {
   const normalized = String(value || '').toLowerCase();
@@ -647,7 +656,7 @@ function editorTreeIcon(component) {
   return ({
     main: 'web', section: 'web', nav: 'menu', footer: 'contact_mail', div: 'dashboard', article: 'view_agenda',
     p: 'format_align_left', span: 'format_align_left', small: 'format_align_left', a: 'arrow_forward', button: 'smart_button',
-    img: 'image', form: 'contact_page', input: 'short_text', textarea: 'subject', select: 'list_alt', label: 'label',
+    img: 'image', form: 'contact_page', input: 'short_text', textarea: 'subject', select: 'list_alt', label: 'label', summary: 'help',
   })[tag] || 'widgets';
 }
 
@@ -688,19 +697,21 @@ export function editorialElementLabel(component, { inNav = false } = {}) {
   if (/^h[2-6]$/.test(tag)) return 'Título';
   if (tag === 'strong' && (inNav || tagOf(component.parent?.()) === 'nav')) return 'Logo';
   if (tag === 'a' && (inNav || tagOf(component.parent?.()) === 'nav')) return 'Menu';
-  return ({ p: 'Texto', a: 'Botão', button: 'Botão', img: 'Imagem', form: 'Formulário', input: 'Campo', textarea: 'Mensagem', select: 'Lista de opções', label: 'Campo', })[tag] || '';
+  return ({ p: 'Texto', a: 'Botão', button: 'Botão', img: 'Imagem', form: 'Formulário', input: 'Campo', textarea: 'Mensagem', select: 'Lista de opções', label: 'Campo', summary: 'Pergunta', })[tag] || '';
 }
 
 export function editorialLabel(component) {
   const chart = chartAncestor(component);
   if (componentHasClass(chart, 'alva-chart-bars')) return 'Gráfico de barras';
   if (componentHasClass(chart, 'alva-donut')) return 'Gráfico circular';
-  const firstMeaningfulChild = (model) => {
-    for (const child of componentChildren(model)) {
-      const label = editorialElementLabel(child);
-      if (label) return label;
-      const nested = firstMeaningfulChild(child);
-      if (nested) return nested;
+  const layoutLabel = (model) => {
+    const tag = tagOf(model);
+    if (tag === 'section') return 'Seção';
+    if (tag === 'main') return 'Página';
+    if (tag === 'div') {
+      const children = componentChildren(model);
+      if (children.length === 2 && children.every((child) => tagOf(child) === 'div')) return 'Duas colunas';
+      return 'Grupo';
     }
     return '';
   };
@@ -708,8 +719,8 @@ export function editorialLabel(component) {
   while (current && !current.is?.('wrapper')) {
     const own = editorialElementLabel(current);
     if (own) return own;
-    const nested = firstMeaningfulChild(current);
-    if (nested) return nested;
+    const layout = layoutLabel(current);
+    if (layout) return layout;
     current = current.parent?.();
   }
   // Bare layout tags do not convey an editorial role. They must never leak
@@ -1277,13 +1288,13 @@ export function createFriendlyEditor({
   $('.fe-canvas-bar [data-undo]').onclick = () => {
     const selectedId = componentTreeId(editor.getSelected());
     run(() => editor.UndoManager.undo());
-    restoreTreeSelection(editor, selectedId, treeComponents);
+    editor.UndoManager.skip(() => restoreTreeSelection(editor, selectedId, treeComponents));
     render();
   };
   $('.fe-canvas-bar [data-redo]').onclick = () => {
     const selectedId = componentTreeId(editor.getSelected());
     run(() => editor.UndoManager.redo());
-    restoreTreeSelection(editor, selectedId, treeComponents);
+    editor.UndoManager.skip(() => restoreTreeSelection(editor, selectedId, treeComponents));
     render();
   };
 
@@ -1324,7 +1335,7 @@ export function createFriendlyEditor({
     if (options.placeholder) input.placeholder = options.placeholder;
     if (options.min !== undefined) input.min = options.min;
     if (options.max !== undefined) input.max = options.max;
-    input.onchange = () => {
+    const applyChange = () => {
       if (!interactionPolicy.canEdit) return;
       input.setCustomValidity('');
       try {
@@ -1336,7 +1347,11 @@ export function createFriendlyEditor({
         announce(error.message);
       }
     };
-    input.oninput = () => input.setCustomValidity('');
+    input.onchange = applyChange;
+    input.oninput = () => {
+      input.setCustomValidity('');
+      if (options.live) applyChange();
+    };
     row.append(input);
     parent.append(row);
     return input;
@@ -1558,17 +1573,17 @@ export function createFriendlyEditor({
         help(content, publishedVslById.size ? 'A prévia usa a versão publicada da VSL.' : 'Ainda não há VSLs publicadas neste projeto.');
       } else help(content, !canReadVsl() ? 'Você não tem permissão para visualizar VSLs.' : vslLoadError || 'Não foi possível carregar as VSLs. Tente novamente.');
     }
-    const textTags = /^(h[1-6]|p|span|small|strong|em|a|button)$/;
+    const textTags = /^(h[1-6]|p|span|small|strong|em|a|button|summary)$/;
     const isIcon = isMaterialIcon(model);
     const isHeading = /^h[1-6]$/.test(tag);
     const hasStructure = model.find('img,form,input,textarea,select,div,section').length > 0;
     if (textTags.test(tag) && !hasStructure && !isIcon) {
       field(
         content,
-        tag === 'a' || tag === 'button' ? 'Texto do botão' : isHeading ? 'Texto' : 'Seu texto',
+        tag === 'a' || tag === 'button' ? 'Texto do botão' : tag === 'summary' ? 'Pergunta' : isHeading ? 'Texto' : 'Seu texto',
         model.getEl()?.innerText || model.getEl()?.textContent || model.get('content') || '',
-        (value) => model.components(escapeText(value).replace(/\n/g, '<br>')),
-        { multiline: true },
+        (value) => setComponentText(model, value),
+        { multiline: true, live: true },
       );
       help(content, 'Você também pode dar dois cliques no texto da página.');
     }
@@ -1589,7 +1604,7 @@ export function createFriendlyEditor({
       content.append(level);
     }
     if (isIcon) {
-      field(content, 'Escolha o ícone', model.get('content') || model.getEl()?.textContent || 'star', (value) => model.components(escapeText(value)), {
+      field(content, 'Escolha o ícone', model.get('content') || model.getEl()?.textContent || 'star', (value) => setComponentText(model, value), {
         choices: [
           ['star', 'Estrela'], ['check_circle', 'Confirmação'], ['arrow_forward', 'Seta'], ['person', 'Pessoa'],
           ['phone', 'Telefone'], ['mail', 'E-mail'], ['location_on', 'Local'], ['calendar_month', 'Calendário'],
@@ -1725,7 +1740,7 @@ export function createFriendlyEditor({
       })();
       const rows = data.length ? data : [['Visitas', 52], ['Contatos', 26], ['Vendas', 22]];
       const title = componentsByTag(donut, 'strong')[0];
-      if (title) field(content, 'Título do gráfico', title.getEl()?.textContent || title.get('content') || 'Resultados', (value) => title.components(escapeText(value)));
+      if (title) field(content, 'Título do gráfico', title.getEl()?.textContent || title.get('content') || 'Resultados', (value) => setComponentText(title, value));
       chartItems(content, rows, {
         item: 'fatia', addLabel: '+ Adicionar fatia',
         change: (nextRows) => {

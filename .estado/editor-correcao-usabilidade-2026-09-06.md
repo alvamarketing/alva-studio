@@ -67,3 +67,21 @@ O arquivo não rastreado `docs/wireframes/alva-studio-analytics-tracking-referen
 - O popover aberto → `Flutuar` gravou `data-alva-motion="float"`; salvar, reabrir, Escape e segundo clique restauraram o foco conforme esperado. `/tmp/alva-inspector-review.md` foi aprovado pelo revisor Terra.
 - A suíte final de fechamento (`/tmp/alva-inspector-suite-release.log`) concluiu com 550/550 testes, 0 falhas, 0 skips, 43.913,101 ms e exit 0 (`/tmp/alva-inspector-suite-release.exit`). Isso é evidência automatizada, não certificação V1.
 - Este checkpoint não certifica a Etapa 5 nem a V1. A comparação lado a lado com o wireframe completo permanece bloqueada por URL policy e pela ausência de caminho arquivado para screenshot. Preservam-se as pendências das Etapas 6–18.
+
+---
+
+## Checkpoint delimitado — correções do catálogo Landing e formulários (2026-09-06)
+
+Este bloco registra somente o estado observado nesta rodada; não substitui os checkpoints anteriores nem certifica a Etapa 6 ou a V1.
+
+- O texto de botão e os labels desapareciam porque `createVslComponentType.isComponent` usava `optional getAttribute !== null`, confundindo nós `TEXT` com VSL (`undefined !== null`). A correção usa `hasAttribute(...) === true`; `alva-field` original foi mantido e não se inferiram labels perdidos.
+- `setComponentText` passou a tratar text nodes com segurança e a edição ao vivo. O resumo `Pergunta` da FAQ ficou editável com a resposta preservada. Os contêineres `Seção`, `Grupo` e `Duas colunas` exibem os rótulos corretos.
+- `normalizeForms` e `syncFormDelivery` ficaram idempotentes e evitam histórico no-op.
+- A causa distinta do Undo final foi isolada: a seleção restaurada após undo gerava `remove/add` na coleção selecionada (`trackSelection: true`), truncando o redo. A correção usa `UM.skip` síncrono somente para `restoreTreeSelection` nos dois handlers, sem `global pause` nem `await`.
+- Sol foi escalado depois de Terra; as hipóteses anteriores não resolveram o runtime. O trace local público sem conteúdo confirmou a causa; o trace temporário foi removido.
+- O teste do catálogo real GrapesJS com VSL/alva-field cobre 14 IDs, save/reopen/style. O teste com `parentDIV` e filho botão/form comprova o controle negativo sem skip e o positivo com skip.
+- QA no navegador, na cópia “Validação — blocos”, preservou o original `aaa`: botão “Ver a oferta”, formulário novo com labels “Seu nome”, “E-mail” e “WhatsApp”, e FAQ “Como funciona a contratação?” com resposta preservada.
+- CUA limpa: formulários: excluir → 4, desfazer → 5, salvar, refazer → 4; botão novo `delete → undo presente → save → redo ausente → undo/save`.
+- A revisão independente `/tmp/alva-catalog-review.md` foi atualizada e aprovada funcionalmente após a QA limpa. A suíte release final, executada com Node 24.17.0, concluiu 553 testes, 553 aprovados, 0 falhas, 0 cancelados, 0 skips e 0 todo, em 50.592,41825 ms (~50,6 s); `/tmp/alva-catalog-suite-release.exit` registra exit 0 e o log está em `/tmp/alva-catalog-suite-release.log`.
+
+Pendências mantidas: não há certificação da Etapa 6 inteira nem da V1; a captura local da landing está ausente (há somente webhook externo); upload/publicação, E2E integral do catálogo e QA de navegador para todos os 14 IDs não estão certificados; screenshots lado a lado arquivadas e URL policy continuam pendentes; cálculos do quiz, Analytics e demais itens das etapas seguintes continuam pendentes. As seções do wireframe permanecem `Estrutura`, `Conteúdo` e `Biblioteca visual`, sem redesenho.

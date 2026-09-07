@@ -18,6 +18,7 @@ import {
   setHeadingLevel,
   inspectorTextAlign,
   inspectorNumber,
+  setComponentText,
   renderMotionPopover,
   bindInspectorRepaintOnFocusout,
   panelMode,
@@ -57,6 +58,9 @@ test('heading troca somente a tag e ícone é reconhecido pelas classes do model
     assert.equal(heading.getAttributes().id, 'titulo');
     assert.equal(heading.getStyle().color, '#286eea');
     assert.equal(setHeadingLevel(heading, 'script'), false);
+    const editableButton = editor.getWrapper().append({ tagName: 'a', attributes: { href: '#contato' }, components: [{ type: 'textnode', content: 'Antes' }] })[0];
+    setComponentText(editableButton, 'Ver a oferta');
+    assert.match(editor.getHtml(), /<a href="#contato">Ver a oferta<\/a>/);
     const icon = editor.getWrapper().append({ tagName: 'span', classes: ['material-symbols-outlined'], components: [{ type: 'textnode', content: 'star' }] })[0];
     assert.equal(isMaterialIcon(icon), true);
     assert.equal(editorialElementLabel(icon), 'Ícone');
@@ -378,10 +382,11 @@ test('rótulos editoriais nunca expõem tags técnicas na seleção ou no inspet
     parent: () => null,
   });
 
-  assert.equal(editorialLabel(component('div')), 'Elemento');
+  assert.equal(editorialLabel(component('div')), 'Grupo');
   assert.equal(editorialLabel(component('span')), 'Elemento');
-  assert.equal(editorialLabel(component('section')), 'Elemento');
-  assert.equal(editorialLabel(component('div', [component('h1')])), 'Título principal');
+  assert.equal(editorialLabel(component('section')), 'Seção');
+  assert.equal(editorialLabel(component('div', [component('h1')])), 'Grupo');
+  assert.equal(editorialElementLabel(component('summary')), 'Pergunta');
 });
 
 test('a seleção distingue catálogo contextual de edição de elemento', () => {
