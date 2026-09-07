@@ -60,3 +60,10 @@ O arquivo não rastreado `docs/wireframes/alva-studio-analytics-tracking-referen
 - `/tmp/alva-tree-fix.md`
 - `/tmp/alva-chart-fix.md`
 - `/tmp/alva-color-fix.md`
+
+## Checkpoint de fechamento do inspector
+
+- O inspector recebeu níveis H1/H2/H3, tipografia, cor, alinhamento, ajustes de fundo, controle de casas decimais e popover de movimento. O Chromium confirmou H1 → H2 → desfazer, painel acessível no mobile sem overflow e ícone `star` desenhado na Prévia com a fonte já existente.
+- O popover aberto → `Flutuar` gravou `data-alva-motion="float"`; salvar, reabrir, Escape e segundo clique restauraram o foco conforme esperado. `/tmp/alva-inspector-review.md` foi aprovado pelo revisor Terra.
+- A suíte final de fechamento (`/tmp/alva-inspector-suite-release.log`) concluiu com 550/550 testes, 0 falhas, 0 skips, 43.913,101 ms e exit 0 (`/tmp/alva-inspector-suite-release.exit`). Isso é evidência automatizada, não certificação V1.
+- Este checkpoint não certifica a Etapa 5 nem a V1. A comparação lado a lado com o wireframe completo permanece bloqueada por URL policy e pela ausência de caminho arquivado para screenshot. Preservam-se as pendências das Etapas 6–18.

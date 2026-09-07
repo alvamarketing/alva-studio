@@ -162,7 +162,7 @@ export function applyEditorInteractionPolicy(root, can = () => false) {
   const policy = editorInteractionPolicy(can);
   const library = root?.querySelector?.('.fe-library');
   if (library) library.hidden = !policy.canAdd;
-  if (!policy.canEdit) root?.querySelectorAll?.('input, select, textarea, .fe-element-actions button, .fe-canvas-bar button').forEach((control) => { control.disabled = true; });
+  if (!policy.canEdit) root?.querySelectorAll?.('input, select, textarea, .fe-element-actions button, .fe-canvas-bar button, .fe-heading-levels button, .fe-motion-select button').forEach((control) => { control.disabled = true; });
   return policy;
 }
 
@@ -294,6 +294,107 @@ const tagOf = (model) => String(model?.get('tagName') || '').toLowerCase();
 const componentHasClass = (model, className) =>
   (model?.getClasses?.() || []).includes(className) ||
   String(model?.getAttributes?.().class || '').split(/\s+/).includes(className);
+export const isMaterialIcon = (model) => componentHasClass(model, 'material-symbols-outlined');
+export function setHeadingLevel(model, level) {
+  if (!/^h[1-3]$/.test(String(level))) return false;
+  model?.set?.('tagName', level);
+  return true;
+}
+export function inspectorNumber(value, fallback = '') {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number * 100) / 100 : fallback;
+}
+export function inspectorTextAlign(value, direction = 'ltr') {
+  const normalized = String(value || '').toLowerCase();
+  const rtl = String(direction || '').toLowerCase() === 'rtl';
+  if (normalized === 'start') return rtl ? 'right' : 'left';
+  if (normalized === 'end') return rtl ? 'left' : 'right';
+  return ['left', 'center', 'right'].includes(normalized) ? normalized : 'left';
+}
+const motionOptions = [
+  ['none', 'Nenhum', 'do_not_disturb_on'],
+  ['fade-up', 'Suave', 'animation'],
+  ['slide-left', 'Lateral', 'arrow_forward'],
+  ['zoom-in', 'Zoom', 'zoom_in'],
+  ['float', 'Flutuar', 'air'],
+];
+export function bindInspectorRepaintOnFocusout(inspector, repaint) {
+  const onFocusout = (event) => {
+    if (inspector.contains(event.relatedTarget)) return;
+    repaint();
+  };
+  inspector.addEventListener('focusout', onFocusout);
+  return () => inspector.removeEventListener('focusout', onFocusout);
+}
+export function renderMotionPopover({ document: ownerDocument = globalThis.document, value = 'none', canEdit = true, onChange = () => {} } = {}) {
+  const current = motionOptions.some(([id]) => id === value) ? value : 'none';
+  const root = ownerDocument.createElement('div');
+  root.className = 'fe-motion-select';
+  const trigger = ownerDocument.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'fe-motion-trigger';
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.disabled = !canEdit;
+  const list = ownerDocument.createElement('div');
+  list.className = 'fe-motion-popover';
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', 'Movimento');
+  list.hidden = true;
+  const close = ({ focus = false } = {}) => {
+    list.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    if (focus) trigger.focus();
+  };
+  const open = () => {
+    if (!canEdit) return;
+    list.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    list.querySelector('[aria-selected="true"]')?.focus();
+  };
+  const paint = (selected) => {
+    const [, label, icon] = motionOptions.find(([id]) => id === selected) || motionOptions[0];
+    trigger.replaceChildren();
+    const text = ownerDocument.createElement('span');
+    text.textContent = label;
+    const symbol = ownerDocument.createElement('span');
+    symbol.className = 'material-symbols-outlined';
+    symbol.setAttribute('aria-hidden', 'true');
+    symbol.textContent = icon;
+    const expand = ownerDocument.createElement('span');
+    expand.className = 'material-symbols-outlined';
+    expand.setAttribute('aria-hidden', 'true');
+    expand.textContent = 'expand_more';
+    trigger.append(text, symbol, expand);
+    list.querySelectorAll('[role="option"]').forEach((option) => option.setAttribute('aria-selected', String(option.dataset.motion === selected)));
+  };
+  motionOptions.forEach(([id, label, icon]) => {
+    const option = ownerDocument.createElement('button');
+    option.type = 'button'; option.className = 'fe-motion-option'; option.dataset.motion = id;
+    option.setAttribute('role', 'option'); option.tabIndex = -1; option.disabled = !canEdit;
+    option.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">${icon}</span><span></span>`;
+    option.lastElementChild.textContent = label;
+    option.onclick = () => { paint(id); onChange(id); close({ focus: true }); };
+    option.onkeydown = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close({ focus: true }); }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const options = [...list.querySelectorAll('[role="option"]')];
+        const index = options.indexOf(option);
+        options[(index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length].focus();
+      }
+    };
+    list.append(option);
+  });
+  // Keep an active inspector field focused on pointer click. Its blur otherwise
+  // schedules a repaint which replaces this popover immediately after opening.
+  trigger.onpointerdown = (event) => { if (canEdit) event.preventDefault(); };
+  trigger.onclick = () => (list.hidden ? open() : close({ focus: true }));
+  trigger.onkeydown = (event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } };
+  root.append(trigger, list);
+  paint(current);
+  return root;
+}
 const componentDescendants = (model) => {
   const children = model?.components?.().models || [];
   return children.flatMap((child) => [child, ...componentDescendants(child)]);
@@ -539,6 +640,8 @@ export function reorderTreeComponent({ source, target, position = 'after', canRe
 
 function editorTreeIcon(component) {
   const tag = tagOf(component);
+  if (isMaterialIcon(component)) return 'star';
+  if (tag === 'strong' && tagOf(component.parent?.()) === 'nav') return 'branding_watermark';
   if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'play_circle';
   if (/^h[1-6]$/.test(tag)) return 'title';
   return ({
@@ -573,6 +676,7 @@ function editorialSectionLabel(component, index) {
 
 export function editorialElementLabel(component, { inNav = false } = {}) {
   const tag = tagOf(component);
+  if (isMaterialIcon(component)) return 'Ícone';
   const chart = chartBlockContainer(component);
   if (chart === component) {
     const donut = componentHasClass(component, 'alva-donut') || componentDescendants(component).some((child) => componentHasClass(child, 'alva-donut'));
@@ -582,8 +686,8 @@ export function editorialElementLabel(component, { inNav = false } = {}) {
   if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'VSL';
   if (/^h1$/.test(tag)) return 'Título principal';
   if (/^h[2-6]$/.test(tag)) return 'Título';
-  if (tag === 'strong' && inNav) return 'Logo';
-  if (tag === 'a' && inNav) return 'Menu';
+  if (tag === 'strong' && (inNav || tagOf(component.parent?.()) === 'nav')) return 'Logo';
+  if (tag === 'a' && (inNav || tagOf(component.parent?.()) === 'nav')) return 'Menu';
   return ({ p: 'Texto', a: 'Botão', button: 'Botão', img: 'Imagem', form: 'Formulário', input: 'Campo', textarea: 'Mensagem', select: 'Lista de opções', label: 'Campo', })[tag] || '';
 }
 
@@ -1284,7 +1388,7 @@ export function createFriendlyEditor({
     return field(
       parent,
       label,
-      Number.isFinite(n) ? n : fallback,
+      Number.isFinite(n) ? inspectorNumber(n) : fallback,
       (value) => {
         if (value === '') {
           model.removeStyle(property);
@@ -1455,18 +1559,36 @@ export function createFriendlyEditor({
       } else help(content, !canReadVsl() ? 'Você não tem permissão para visualizar VSLs.' : vslLoadError || 'Não foi possível carregar as VSLs. Tente novamente.');
     }
     const textTags = /^(h[1-6]|p|span|small|strong|em|a|button)$/;
+    const isIcon = isMaterialIcon(model);
+    const isHeading = /^h[1-6]$/.test(tag);
     const hasStructure = model.find('img,form,input,textarea,select,div,section').length > 0;
-    if (textTags.test(tag) && !hasStructure) {
+    if (textTags.test(tag) && !hasStructure && !isIcon) {
       field(
         content,
-        tag === 'a' || tag === 'button' ? 'Texto do botão' : 'Seu texto',
+        tag === 'a' || tag === 'button' ? 'Texto do botão' : isHeading ? 'Texto' : 'Seu texto',
         model.getEl()?.innerText || model.getEl()?.textContent || model.get('content') || '',
         (value) => model.components(escapeText(value).replace(/\n/g, '<br>')),
         { multiline: true },
       );
       help(content, 'Você também pode dar dois cliques no texto da página.');
     }
-    if (tag === 'span' && String(attrs.class || '').includes('material-symbols-outlined')) {
+    if (isHeading) {
+      const level = document.createElement('div');
+      level.className = 'fe-field';
+      level.innerHTML = '<span>Nível do título</span><div class="fe-heading-levels" role="group" aria-label="Nível do título"></div>';
+      const choices = level.querySelector('.fe-heading-levels');
+      ['h1', 'h2', 'h3'].forEach((value) => {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.textContent = value.toUpperCase();
+        option.setAttribute('aria-pressed', String(tag === value));
+        option.disabled = !interactionPolicy.canEdit;
+        option.onclick = () => run(() => setHeadingLevel(model, value));
+        choices.append(option);
+      });
+      content.append(level);
+    }
+    if (isIcon) {
       field(content, 'Escolha o ícone', model.get('content') || model.getEl()?.textContent || 'star', (value) => model.components(escapeText(value)), {
         choices: [
           ['star', 'Estrela'], ['check_circle', 'Confirmação'], ['arrow_forward', 'Seta'], ['person', 'Pessoa'],
@@ -1650,32 +1772,18 @@ export function createFriendlyEditor({
     }
     if (content.children.length === 1)
       help(content, 'Selecione um elemento dentro deste grupo para editar seu conteúdo.');
-    const appearance = section('Aparência');
-    const colors = document.createElement('div');
-    colors.className = 'fe-color-grid';
-    appearance.append(colors);
-    color(colors, model, 'Cor do texto', 'color');
-    color(colors, model, 'Cor de fundo', 'background-color');
-    if (textTags.test(tag) || ['input', 'textarea'].includes(tag)) {
-      styleNumber(appearance, model, 'Tamanho do texto (px)', 'font-size', 16, 200);
+    const hasTypography = (textTags.test(tag) && !isIcon) || ['input', 'textarea'].includes(tag);
+    const appearance = section(hasTypography ? 'Tipografia' : 'Aparência');
+    if (hasTypography) {
+      styleNumber(appearance, model, 'Tamanho', 'font-size', 16, 200);
+      const typographyRow = document.createElement('div');
+      typographyRow.className = 'fe-color-grid';
+      appearance.append(typographyRow);
+      color(typographyRow, model, 'Cor', 'color');
       field(
-        appearance,
-        'Peso do texto',
-        styleValue(model, 'font-weight') || '400',
-        (value) => model.addStyle({ 'font-weight': value }),
-        {
-          choices: [
-            ['400', 'Normal'],
-            ['500', 'Médio'],
-            ['600', 'Destaque'],
-            ['700', 'Negrito'],
-          ],
-        },
-      );
-      field(
-        appearance,
-        'Alinhamento do texto',
-        styleValue(model, 'text-align') || 'left',
+        typographyRow,
+        'Alinhamento',
+        inspectorTextAlign(styleValue(model, 'text-align'), styleValue(model, 'direction') || attrs.dir),
         (value) => model.addStyle({ 'text-align': value }),
         {
           choices: [
@@ -1686,42 +1794,45 @@ export function createFriendlyEditor({
         },
       );
     }
-    styleNumber(appearance, model, 'Cantos arredondados (px)', 'border-radius', 0);
+    if (!hasTypography || ['a', 'button', 'input', 'textarea'].includes(tag)) color(appearance, model, 'Cor de fundo', 'background-color');
+    if (isIcon) {
+      color(appearance, model, 'Cor', 'color');
+      styleNumber(appearance, model, 'Tamanho', 'font-size', 16, 200);
+    }
     const space = section('Espaçamento');
-    styleNumber(space, model, 'Respiro acima (px)', 'padding-top', 0);
-    styleNumber(space, model, 'Respiro abaixo (px)', 'padding-bottom', 0);
-    styleNumber(space, model, 'Respiro nas laterais (px)', 'padding-left', 0).onchange = (event) => {
-      if (!interactionPolicy.canEdit) return;
-      const value = Number(event.target.value);
-      if (Number.isFinite(value) && value >= 0 && value <= 500)
-        model.addStyle({ 'padding-left': value + 'px', 'padding-right': value + 'px' });
-    };
-    styleNumber(space, model, 'Distância do próximo elemento (px)', 'margin-bottom', 0);
+    styleNumber(space, model, 'Distância abaixo', 'margin-bottom', 0);
     const motion = section('Movimento');
-    field(
-      motion,
-      'Como este elemento aparece',
-      attrs['data-alva-motion'] || 'none',
-      (value) => {
+    motion.append(renderMotionPopover({
+      value: attrs['data-alva-motion'] || 'none', canEdit: interactionPolicy.canEdit,
+      onChange: (value) => run(() => {
         if (value === 'none') model.removeAttributes('data-alva-motion');
         else model.addAttributes({ 'data-alva-motion': value });
-      },
-      { choices: [['none', 'Sem movimento'], ['fade-up', 'Subir suavemente'], ['slide-left', 'Entrar pela lateral'], ['zoom-in', 'Aproximar'], ['float', 'Flutuar']] },
-    );
-    field(motion, 'Duração (segundos)', parseFloat(styleValue(model, '--alva-duration')) || (attrs['data-alva-motion'] === 'float' ? 3 : 0.65), (value) => {
-      const number = Number(value);
-      if (!Number.isFinite(number) || number < 0.1 || number > 10) throw new Error('Use uma duração entre 0,1 e 10 segundos.');
-      model.addStyle({ '--alva-duration': number + 's' });
-    }, { type: 'number', min: 0.1, max: 10 });
-    field(motion, 'Atraso (segundos)', parseFloat(styleValue(model, '--alva-delay')) || 0, (value) => {
-      const number = Number(value);
-      if (!Number.isFinite(number) || number < 0 || number > 10) throw new Error('Use um atraso entre 0 e 10 segundos.');
-      model.addStyle({ '--alva-delay': number + 's' });
-    }, { type: 'number', min: 0, max: 10 });
+      }),
+    }));
     const advanced = document.createElement('details');
     advanced.className = 'fe-advanced';
     advanced.innerHTML = '<summary>Mais ajustes</summary>';
     props.append(advanced);
+    if (hasTypography) field(advanced, 'Peso do texto', styleValue(model, 'font-weight') || '400', (value) => model.addStyle({ 'font-weight': value }), { choices: [['400', 'Normal'], ['500', 'Médio'], ['600', 'Destaque'], ['700', 'Negrito']] });
+    styleNumber(advanced, model, 'Cantos arredondados (px)', 'border-radius', 0);
+    if (hasTypography && !['a', 'button', 'input', 'textarea'].includes(tag)) color(advanced, model, 'Cor de fundo', 'background-color');
+    field(advanced, 'Duração (segundos)', parseFloat(styleValue(model, '--alva-duration')) || (attrs['data-alva-motion'] === 'float' ? 3 : 0.65), (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0.1 || number > 10) throw new Error('Use uma duração entre 0,1 e 10 segundos.');
+      model.addStyle({ '--alva-duration': number + 's' });
+    }, { type: 'number', min: 0.1, max: 10 });
+    field(advanced, 'Atraso (segundos)', parseFloat(styleValue(model, '--alva-delay')) || 0, (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0 || number > 10) throw new Error('Use um atraso entre 0 e 10 segundos.');
+      model.addStyle({ '--alva-delay': number + 's' });
+    }, { type: 'number', min: 0, max: 10 });
+    styleNumber(advanced, model, 'Respiro acima (px)', 'padding-top', 0);
+    styleNumber(advanced, model, 'Respiro abaixo (px)', 'padding-bottom', 0);
+    styleNumber(advanced, model, 'Respiro nas laterais (px)', 'padding-left', 0).onchange = (event) => {
+      if (!interactionPolicy.canEdit) return;
+      const value = Number(event.target.value);
+      if (Number.isFinite(value) && value >= 0 && value <= 500) model.addStyle({ 'padding-left': value + 'px', 'padding-right': value + 'px' });
+    };
     field(
       advanced,
       'Largura',
@@ -1737,15 +1848,15 @@ export function createFriendlyEditor({
     styleNumber(advanced, model, 'Altura mínima (px)', 'min-height', '', 3000);
     if (['section', 'div', 'main', 'article'].includes(tag))
       styleNumber(advanced, model, 'Distância entre elementos (px)', 'gap', 0);
-    if (!interactionPolicy.canEdit) props.querySelectorAll('input, select, textarea, .fe-element-actions button, .fe-vsl-option').forEach((control) => { control.disabled = true; });
+    if (!interactionPolicy.canEdit) props.querySelectorAll('input, select, textarea, .fe-element-actions button, .fe-vsl-option, .fe-heading-levels button, .fe-motion-select button').forEach((control) => { control.disabled = true; });
     if (pendingVslOptionFocusId !== null) {
       restoreVslOptionFocus(props.querySelectorAll('[data-vsl-option]'), pendingVslOptionFocusId);
       pendingVslOptionFocusId = null;
     }
   }
-  props.addEventListener('focusout', () => {
+  cleanup.push(bindInspectorRepaintOnFocusout(props, () => {
     repaint = setTimeout(render, 100);
-  });
+  }));
   editor.on('component:selected component:deselected', render);
   editor.on('update', () => {
     if (!interactionPolicy.canEdit) return;
@@ -1762,6 +1873,7 @@ export function createFriendlyEditor({
     render();
   });
   function handleEditorKey(event, stopImmediate = false) {
+    if (event.target?.closest?.('.fe-motion-select')) return;
     if (!interactionPolicy.canEdit) return;
     const action = editorKeyboardAction(event, editor.getSelected());
     if (!action) return;

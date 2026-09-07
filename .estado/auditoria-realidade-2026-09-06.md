@@ -155,3 +155,9 @@ Ordem de execução aprovada:
 16. Configurar os cinco destinos com consentimento.
 17. Portar Asaas e MCP existentes.
 18. Certificar a V1.
+
+## Atualização do inspector em fechamento — 2026-09-06
+
+O Chromium confirmou o patch de níveis H1/H2/H3, tipografia, cor e alinhamento, ajustes de fundo, casas decimais e popover de movimento: H1 → H2 → desfazer funcionou; o painel alcançou o viewport mobile sem overflow; o ícone `star` foi desenhado na Prévia usando a fonte já existente. O fluxo abrir popover → selecionar `Flutuar` → salvar → reabrir preservou `data-alva-motion="float"`; Escape e segundo clique restauraram o foco. `/tmp/alva-inspector-review.md` foi aprovado pelo revisor Terra.
+
+A suíte final `/tmp/alva-inspector-suite-release.log` concluiu com 550/550 testes, 0 falhas, 0 skips, 43.913,101 ms e exit 0. Isso é evidência automatizada e não certifica a Etapa 5 nem a V1. A comparação lado a lado com o wireframe completo continua bloqueada pela URL policy e pela ausência de screenshot arquivado; as pendências das Etapas 6–18 permanecem.

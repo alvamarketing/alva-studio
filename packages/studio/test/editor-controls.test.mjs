@@ -13,6 +13,13 @@ import {
   removeChartRow,
   componentLabel,
   editorialLabel,
+  editorialElementLabel,
+  isMaterialIcon,
+  setHeadingLevel,
+  inspectorTextAlign,
+  inspectorNumber,
+  renderMotionPopover,
+  bindInspectorRepaintOnFocusout,
   panelMode,
   editorActionMeta,
   isCanvasBackgroundElement,
@@ -37,6 +44,71 @@ import {
   createReadOnlyMutationGuard,
   restoreVslOptionFocus,
 } from '../public/editor-shell.js';
+
+test('heading troca somente a tag e ícone é reconhecido pelas classes do modelo', () => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  try {
+    const heading = editor.getWrapper().append({ tagName: 'h2', attributes: { id: 'titulo' }, components: [{ type: 'textnode', content: 'Título com destaque' }] })[0];
+    heading.addStyle({ color: '#286eea' });
+    const children = heading.components().models;
+    assert.equal(setHeadingLevel(heading, 'h1'), true);
+    assert.equal(heading.get('tagName'), 'h1');
+    assert.equal(heading.components().models[0], children[0]);
+    assert.equal(heading.getAttributes().id, 'titulo');
+    assert.equal(heading.getStyle().color, '#286eea');
+    assert.equal(setHeadingLevel(heading, 'script'), false);
+    const icon = editor.getWrapper().append({ tagName: 'span', classes: ['material-symbols-outlined'], components: [{ type: 'textnode', content: 'star' }] })[0];
+    assert.equal(isMaterialIcon(icon), true);
+    assert.equal(editorialElementLabel(icon), 'Ícone');
+  } finally { editor.destroy(); }
+});
+
+test('controles DOM do inspector respeitam a permissão e o popover de movimento', async () => {
+  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
+  const dom = new JSDOM('<div class="fe-properties"><textarea aria-label="Texto"></textarea><div class="fe-heading-levels"><button>H1</button><button>H2</button><button>H3</button></div><input aria-label="Cor"><select aria-label="Alinhamento"><option>À esquerda</option></select><div class="fe-element-actions"><button>Mover</button></div></div>');
+  try {
+    const root = dom.window.document.querySelector('.fe-properties');
+    const changes = [];
+    const motion = renderMotionPopover({ document: dom.window.document, value: 'float', onChange: (value) => changes.push(value) });
+    root.append(motion);
+    const trigger = motion.querySelector('.fe-motion-trigger');
+    const popover = motion.querySelector('.fe-motion-popover');
+    assert.equal(trigger.firstElementChild.textContent, 'Flutuar');
+    assert.equal(popover.hidden, true);
+    let repaints = 0;
+    const unbindRepaint = bindInspectorRepaintOnFocusout(root, () => { repaints += 1; });
+    const text = root.querySelector('textarea');
+    text.focus();
+    const pointer = new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+    trigger.dispatchEvent(pointer);
+    assert.equal(pointer.defaultPrevented, true);
+    text.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true, relatedTarget: trigger }));
+    trigger.click();
+    assert.equal(repaints, 0);
+    assert.equal(popover.hidden, false);
+    trigger.click();
+    assert.equal(popover.hidden, true);
+    assert.equal(dom.window.document.activeElement, trigger);
+    trigger.click();
+    popover.querySelector('[data-motion="fade-up"]').click();
+    assert.deepEqual(changes, ['fade-up']);
+    assert.equal(trigger.firstElementChild.textContent, 'Suave');
+    assert.equal(popover.hidden, true);
+    trigger.click();
+    popover.querySelector('[data-motion="fade-up"]').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(popover.hidden, true);
+    assert.equal(inspectorTextAlign('start', 'ltr'), 'left');
+    assert.equal(inspectorTextAlign('start', 'rtl'), 'right');
+    assert.equal(inspectorTextAlign('end', 'rtl'), 'left');
+    assert.equal(inspectorNumber(28.139999389648438), 28.14);
+    text.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true }));
+    assert.equal(repaints, 1);
+    unbindRepaint();
+    const policy = applyEditorInteractionPolicy(root, () => false);
+    assert.equal(policy.canEdit, false);
+    assert.ok([...root.querySelectorAll('textarea, input, select, button')].every((control) => control.disabled));
+  } finally { dom.window.close(); }
+});
 
 test('referência de VSL no editor persiste somente o identificador público', () => {
   assert.deepEqual(vslBlockState(' public-vsl-123456 '), { type: 'vsl', publicId: 'public-vsl-123456' });
@@ -432,7 +504,7 @@ test('landing pages oferecem ícones, gráficos e movimento por elemento', async
   const source = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
   assert.match(source, /Movimento/);
   assert.match(source, /data-alva-motion/);
-  assert.match(source, /Subir suavemente/);
+  assert.match(source, /Suave/);
   assert.match(source, /\+ Adicionar barra/);
   assert.match(source, /\+ Adicionar fatia/);
 });

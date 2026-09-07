@@ -538,6 +538,11 @@
   font-size: 10px;
   padding: 7px;
 }
+.fe-heading-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: var(--radius-field); background: var(--alva-surface-alt); }
+.fe-heading-levels button { min-height: 32px; border: 0; border-radius: calc(var(--radius-field) - 2px); background: transparent; color: var(--alva-muted); font: 700 11px/1 inherit; cursor: pointer; }
+.fe-heading-levels button[aria-pressed='true'] { background: var(--alva-white); color: var(--alva-ink); box-shadow: 0 1px 2px rgb(16 24 40 / 10%); }
+.fe-heading-levels button:disabled { cursor: default; opacity: .58; }
+.fe-color-grid > .fe-field { margin: 0; }
 .fe-field input:focus-visible,
 .fe-field select:focus-visible,
 .fe-field textarea:focus-visible {
@@ -1012,3 +1017,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+.fe-motion-select { position: relative; }
+.fe-motion-trigger { width: 100%; min-height: 38px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--alva-line); border-radius: var(--radius-field); background: var(--alva-white); color: var(--alva-ink); font: 600 11px/1.2 inherit; text-align: left; cursor: pointer; }
+.fe-motion-trigger > span:nth-child(2) { color: var(--alva-blue); font-size: 17px; }
+.fe-motion-trigger > span:last-child { color: var(--alva-muted); font-size: 17px; }
+.fe-motion-popover { position: absolute; z-index: 4; right: 0; left: 0; top: calc(100% + 5px); display: grid; gap: 2px; padding: 5px; border: 1px solid var(--alva-line); border-radius: var(--radius-field); background: var(--alva-white); box-shadow: 0 12px 28px rgb(16 24 40 / 14%); }
+.fe-motion-popover[hidden] { display: none; }
+.fe-motion-option { width: 100%; display: grid; grid-template-columns: 19px 1fr; align-items: center; gap: 8px; padding: 8px; border: 0; border-radius: 7px; background: transparent; color: var(--alva-ink); font: 600 10px/1.2 inherit; text-align: left; cursor: pointer; }
+.fe-motion-option > .material-symbols-outlined { color: var(--alva-blue); font-size: 17px; }
+.fe-motion-option[aria-selected='true'] { background: var(--alva-surface-alt); color: var(--alva-blue); }
+.fe-motion-option:focus-visible, .fe-motion-trigger:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
+.fe-motion-trigger:disabled, .fe-motion-option:disabled { cursor: default; opacity: .58; }
