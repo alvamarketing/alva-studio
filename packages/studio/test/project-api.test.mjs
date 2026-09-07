@@ -473,18 +473,32 @@ test('formulário SaaS mantém rascunho, publica explicitamente em rota pública
   assert.equal(created.status, 201);
   let form = await created.json();
   assert.equal(form.slug.startsWith('/'), false);
+  const headerCanvas = {
+    version: 1,
+    editorState: { pages: [{ frames: [{ component: { tagName: 'header' } }] }] },
+    html: '<header>Diagnóstico</header>',
+    css: '.campo{color:#111}',
+  };
+  const canvas = { ...headerCanvas, editorState: { pages: [{ frames: [{ component: { tagName: 'section', components: [{ tagName: 'label', components: [{ type: 'textnode', content: 'Seu e-mail' }, { tagName: 'input', attributes: { name: 'email', type: 'email', required: true } }] }] } }] }] }, html: '<section class="campo"><label>Seu e-mail<input name="email" type="email" required></label></section>' };
   form = await (await alice.request(`/api/forms/${form.id}`, 'PUT', {
     revision: form.revision,
     headerElements: [],
+    headerCanvas,
     steps: [{
       id: 'inicio', title: 'Comece', motion: 'fade-up', elements: [
         { id: 'email', type: 'email', title: 'Seu e-mail', required: true, placeholder: 'voce@empresa.com' },
       ],
+      canvas,
     }],
     completion: { title: 'Recebemos', message: 'Logo entraremos em contato.' },
     webhook: 'https://hooks.example.test/receber',
   })).json();
   assert.equal(form.webhook, 'https://hooks.example.test/receber');
+  assert.deepEqual(form.headerCanvas, headerCanvas);
+  assert.match(form.steps[0].canvas.html, /data-answer=""/);
+  const reopenedDraft = await (await alice.request(`/api/forms/${form.id}`)).json();
+  assert.deepEqual(reopenedDraft.headerCanvas, headerCanvas, 'o topo composto atravessa save e reopen HTTP');
+  assert.match(reopenedDraft.steps[0].canvas.html, /data-answer=""/, 'a tela composta atravessa save e reopen HTTP');
   assert.equal(form.publishedVersionId, null, 'salvar no editor não publica o rascunho');
   const draftPublic = await fetch(`${app.base}${form.publicPath}`);
   assert.equal(draftPublic.status, 404, await draftPublic.text());

@@ -1,5 +1,6 @@
 import { blocks, normalizeCharts, normalizeForms, templateCss } from './templates.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
+import { materialSymbolsFontCss } from './quiz-elements.js';
 
 const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -24,6 +25,22 @@ export const blockIcons = {
 };
 
 export const VSL_ATTRIBUTE = 'data-alva-vsl';
+
+export function allocateQuizFieldNames(names = [], occupied = new Set(), makeName = () => `campo_${Math.random().toString(16).slice(2, 10)}`) {
+  const used = new Set(occupied);
+  const groups = new Map();
+  return Array.from(names, (raw) => {
+    const original = String(raw || '').trim();
+    let name = groups.get(original);
+    if (!name) {
+      name = original;
+      while (!name || used.has(name)) name = makeName();
+      groups.set(original, name);
+      used.add(name);
+    }
+    return name;
+  });
+}
 
 export function vslBlockState(publicId = '') {
   return { type: 'vsl', publicId: String(publicId ?? '').trim() };
@@ -242,8 +259,7 @@ export function renderVslReferences(html, { publicOrigin } = {}) {
 export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin } = {}) {
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escapeText(title) +
-    '</title><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block" rel="stylesheet"><style>' +
-    css +
+    '</title><style>' + materialSymbolsFontCss(publicOrigin) + css +
     '</style></head><body>' +
     renderVslReferences(html, { publicOrigin }) +
     '<script>' +
@@ -295,6 +311,20 @@ const componentHasClass = (model, className) =>
   (model?.getClasses?.() || []).includes(className) ||
   String(model?.getAttributes?.().class || '').split(/\s+/).includes(className);
 export const isMaterialIcon = (model) => componentHasClass(model, 'material-symbols-outlined');
+const materialIconChoices = [
+  ['image', 'Imagem'], ['forum', 'Mensagem/chat'], ['phone', 'Telefone'], ['mail', 'E-mail'], ['person', 'Pessoa'],
+  ['star', 'Estrela'], ['check_circle', 'Confirmação'], ['arrow_forward', 'Seta'], ['location_on', 'Local'],
+  ['calendar_month', 'Calendário'], ['analytics', 'Gráfico'], ['monitoring', 'Resultados'], ['play_circle', 'Vídeo'],
+  ['cloud_upload', 'Enviar arquivo'], ['task_alt', 'Tarefa'], ['home', 'Início'], ['tune', 'Ajustes'],
+];
+const materialIconChoicesFor = (value) => {
+  const current = String(value || '').trim();
+  return current && !materialIconChoices.some(([icon]) => icon === current)
+    ? [[current, 'Ícone atual'], ...materialIconChoices]
+    : materialIconChoices;
+};
+const quizImageChoiceHeadingCss = '.image-choices>:is(h1,h2,h3,p){grid-column:1/-1}';
+const hasQuizImageChoiceHeadingCss = (css) => /\.image-choices\s*>\s*:is\(\s*h1\s*,\s*h2\s*,\s*h3\s*,\s*p\s*\)\s*\{[^}]*grid-column\s*:\s*1\s*\/\s*-1\s*;?[^}]*\}/.test(String(css || ''));
 export function setHeadingLevel(model, level) {
   if (!/^h[1-3]$/.test(String(level))) return false;
   model?.set?.('tagName', level);
@@ -487,6 +517,7 @@ export function componentLabel(component) {
   const tag = tagOf(component);
   if (component?.is?.('wrapper')) return 'Página';
   if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'VSL';
+  if (componentHasClass(component, 'alva-embed-video')) return 'Vídeo incorporado';
   if (/^h[1-6]$/.test(tag)) return 'Título';
   return (
     {
@@ -649,9 +680,14 @@ export function reorderTreeComponent({ source, target, position = 'after', canRe
 
 function editorTreeIcon(component) {
   const tag = tagOf(component);
+  const quizType = String(componentAttributes(component)['data-quiz-type'] || '');
+  if (quizType === 'single_choice') return 'radio_button_checked';
+  if (quizType === 'multiple_choice') return 'checklist';
+  if (quizType === 'image_choice') return 'gallery_thumbnail';
   if (isMaterialIcon(component)) return 'star';
   if (tag === 'strong' && tagOf(component.parent?.()) === 'nav') return 'branding_watermark';
   if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'play_circle';
+  if (componentHasClass(component, 'alva-embed-video') || tag === 'iframe') return 'play_circle';
   if (/^h[1-6]$/.test(tag)) return 'title';
   return ({
     main: 'web', section: 'web', nav: 'menu', footer: 'contact_mail', div: 'dashboard', article: 'view_agenda',
@@ -685,6 +721,10 @@ function editorialSectionLabel(component, index) {
 
 export function editorialElementLabel(component, { inNav = false } = {}) {
   const tag = tagOf(component);
+  const quizType = String(componentAttributes(component)['data-quiz-type'] || '');
+  if (quizType === 'single_choice') return 'Escolha única';
+  if (quizType === 'multiple_choice') return 'Múltipla escolha';
+  if (quizType === 'image_choice') return 'Escolha visual';
   if (isMaterialIcon(component)) return 'Ícone';
   const chart = chartBlockContainer(component);
   if (chart === component) {
@@ -693,6 +733,7 @@ export function editorialElementLabel(component, { inNav = false } = {}) {
     if (donut) return 'Gráfico circular';
   }
   if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'VSL';
+  if (componentHasClass(component, 'alva-embed-video') || tag === 'iframe') return 'Vídeo incorporado';
   if (/^h1$/.test(tag)) return 'Título principal';
   if (/^h[2-6]$/.test(tag)) return 'Título';
   if (tag === 'strong' && (inNav || tagOf(component.parent?.()) === 'nav')) return 'Logo';
@@ -798,6 +839,11 @@ export function createFriendlyEditor({
   mediaEnabled = () => true,
   publicOrigin = globalThis.location?.origin || '',
   can = () => true,
+  headerSelector = '#editing .editor-header',
+  headerContext = 'Landing',
+  decorateHeader = true,
+  quizCanvas = false,
+  quizHeader = false,
 }) {
   const host = typeof container === 'string' ? document.querySelector(container) : container;
   if (!host) throw new Error('Não foi possível abrir a área de edição.');
@@ -833,13 +879,13 @@ export function createFriendlyEditor({
   const status = $('.fe-status');
   const tree = $('.fe-tree');
   const cleanup = [];
-  const pageHeader = document.querySelector('#editing .editor-header');
+  const pageHeader = decorateHeader && headerSelector ? document.querySelector(headerSelector) : null;
   if (pageHeader) {
     pageHeader.classList.add('landing-editor-header');
     if (!pageHeader.querySelector('.fe-editor-context')) {
       const context = document.createElement('span');
       context.className = 'fe-editor-context';
-      context.textContent = 'Landing ·';
+      context.textContent = `${headerContext} ·`;
       pageHeader.querySelector('#page-name')?.before(context);
     }
     if (!pageHeader.querySelector('.fe-saved-mark')) {
@@ -891,6 +937,29 @@ export function createFriendlyEditor({
   let readOnlyMutationGuard = null;
   let pendingVslOptionFocusId = null;
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
+  const quizChoiceOptionMarkup = ({ type, name, label, index, required = false }) => {
+    const visual = type === 'image_choice';
+    const inputType = type === 'multiple_choice' ? 'checkbox' : 'radio';
+    const requiredAttribute = required && type !== 'multiple_choice' ? ' required' : '';
+    const visualAttributes = visual ? ' data-quiz-image="" data-quiz-icon="image"' : '';
+    return `<label class="choice${visual ? ' choice-image' : ''}"><input type="${inputType}" name="${escapeText(name)}" value="${escapeText(label)}"${visualAttributes}${requiredAttribute}>${visual ? '<span class="choice-visual material-symbols-outlined">image</span>' : `<span class="choice-key">${index}</span>`}<span>${escapeText(label)}</span></label>`;
+  };
+  const quizChoiceBlockMarkup = ({ type, question, name, required = false }) => {
+    const visual = type === 'image_choice';
+    const requiredAttribute = type === 'multiple_choice' ? ` data-quiz-required="${required}"` : '';
+    return `<div class="choices${visual ? ' image-choices' : ''}" data-quiz-type="${type}" data-quiz-question="${escapeText(question)}"${requiredAttribute}><p>${escapeText(question)}</p>${['Opção 1', 'Opção 2'].map((label, index) => quizChoiceOptionMarkup({ type, name, label, index: index + 1, required })).join('')}</div>`;
+  };
+  const quizBlocks = quizCanvas ? [
+    ['quiz-single-choice', 'Escolha única', 'Captação', quizChoiceBlockMarkup({ type: 'single_choice', question: 'Nova pergunta', name: 'campo_escolha' })],
+    ['quiz-multiple-choice', 'Múltipla escolha', 'Captação', quizChoiceBlockMarkup({ type: 'multiple_choice', question: 'Nova pergunta', name: 'campo_multiplas' })],
+    ['quiz-image-choice', 'Escolha visual', 'Captação', quizChoiceBlockMarkup({ type: 'image_choice', question: 'Nova escolha visual', name: 'campo_visual' })],
+    ['quiz-select', 'Lista de opções', 'Captação', '<label>Nova pergunta<select name="campo_lista"><option value="Opção 1">Opção 1</option><option value="Opção 2">Opção 2</option></select></label>'],
+    ['quiz-range', 'Escala', 'Captação', '<label>Como você avalia?<input type="range" name="campo_escala" min="1" max="10" value="1"></label>'],
+    ['quiz-file', 'Arquivo', 'Captação', '<label>Envie um arquivo<input type="file" name="campo_arquivo"></label>'],
+  ] : [];
+  const quizSafeContent = (id, content) => quizCanvas && ['hero-section', 'contact-section'].includes(id)
+    ? `<section class="${id === 'hero-section' ? 'hero' : 'contact'}"><div><h2>Vamos conversar?</h2><p>Conte como podemos ajudar.</p><label>Seu nome<input type="text" name="campo_nome"></label><label>E-mail<input type="email" name="campo_email"></label><label>WhatsApp<input type="tel" name="campo_telefone"></label></div></section>`
+    : content;
   const interactionPolicy = applyEditorInteractionPolicy(host, can);
   const canInsertVsl = () => interactionPolicy.canAdd && mediaEnabled();
   const canReadVsl = () => mediaEnabled() && Boolean(can('video.read'));
@@ -979,11 +1048,11 @@ export function createFriendlyEditor({
     blockManager: {
       appendTo: $('.fe-blocks'),
       appendOnClick: (block) => { if (interactionPolicy.canAdd) insertBlock(block); },
-      blocks: blocks.filter(([id]) => interactionPolicy.canAdd && (id !== 'vsl' || canInsertVsl())).map(([id, label, category, content]) => ({
+      blocks: [...blocks, ...quizBlocks].filter(([id]) => interactionPolicy.canAdd && (id !== 'form' || !quizCanvas) && (!quizHeader || !['input', 'quiz-single-choice', 'quiz-multiple-choice', 'quiz-image-choice', 'quiz-select', 'quiz-range', 'quiz-file', 'hero-section', 'contact-section'].includes(id)) && (id !== 'vsl' || canInsertVsl())).map(([id, label, category, content]) => ({
         id,
         label,
         category,
-        content,
+        content: quizSafeContent(id, content),
         media: `<span class="fe-block-icon" aria-hidden="true">${blockIcons[id] || '+'}</span>`,
         attributes: {
           title: `Adicionar ${label.toLocaleLowerCase('pt-BR')}`,
@@ -997,23 +1066,40 @@ export function createFriendlyEditor({
   });
   // Canvas policy is deliberately separate from project HTML: it prevents saved
   // component scripts and form submissions from executing while editing.
-  editor.on('canvas:frame:load', ({ el }) => {
-    const doc = el.contentDocument;
+  const canvasInteractionDocuments = new WeakSet();
+  const canvasDocument = ({ window: frameWindow } = {}) => frameWindow?.document || null;
+  const installCanvasHead = (doc, frameWindow) => {
     if (!doc) return;
-    const policy = doc.createElement('meta');
-    policy.httpEquiv = 'Content-Security-Policy';
-    policy.content = "script-src 'none'; form-action 'none'; base-uri 'none'";
-    doc.head.prepend(policy);
-    const icons = doc.createElement('link');
-    icons.rel = 'stylesheet';
-    icons.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&display=block';
-    doc.head.append(icons);
-    const editorSelection = doc.createElement('style');
-    editorSelection.textContent = `
-      .alva-editor-selected { outline: 2px solid #286eea !important; outline-offset: 7px !important; }
-      .alva-editor-selected[data-alva-editor-label]::before { content: attr(data-alva-editor-label); position: absolute; z-index: 2147483647; right: -7px; top: -28px; padding: 5px 8px; border-radius: 6px 6px 0 0; background: #286eea; color: #fff; font: 700 9px/1 Inter, system-ui, sans-serif; letter-spacing: 0; white-space: nowrap; }
-    `;
-    doc.head.append(editorSelection);
+    if (!doc.head.querySelector('[data-alva-canvas-policy]')) {
+      const policy = doc.createElement('meta');
+      policy.dataset.alvaCanvasPolicy = 'true';
+      policy.httpEquiv = 'Content-Security-Policy';
+      policy.content = "script-src 'none'; form-action 'none'; base-uri 'none'";
+      doc.head.prepend(policy);
+    }
+    if (!doc.head.querySelector('[data-alva-material-symbols]')) {
+      const icons = doc.createElement('link');
+      icons.dataset.alvaMaterialSymbols = 'true';
+      icons.rel = 'stylesheet';
+      const canvasOrigin = [globalThis.location?.origin, doc.location?.origin, frameWindow.location?.origin]
+        .find((origin) => /^https?:\/\//.test(String(origin))) || 'http://studio.local';
+      icons.href = new URL('/material-symbols.css', canvasOrigin).href;
+      doc.head.append(icons);
+    }
+    if (!doc.head.querySelector('[data-alva-canvas-selection]')) {
+      const editorSelection = doc.createElement('style');
+      editorSelection.dataset.alvaCanvasSelection = 'true';
+      editorSelection.textContent = `
+        .material-symbols-outlined { font-family: 'Material Symbols Outlined' !important; font-weight: normal !important; font-style: normal !important; }
+        .alva-editor-selected { outline: 2px solid #286eea !important; outline-offset: 7px !important; }
+        .alva-editor-selected[data-alva-editor-label]::before { content: attr(data-alva-editor-label); position: absolute; z-index: 2147483647; right: -7px; top: -28px; padding: 5px 8px; border-radius: 6px 6px 0 0; background: #286eea; color: #fff; font: 700 9px/1 Inter, system-ui, sans-serif; letter-spacing: 0; white-space: nowrap; }
+      `;
+      doc.head.append(editorSelection);
+    }
+  };
+  const installCanvasInteractions = (doc) => {
+    if (!doc || canvasInteractionDocuments.has(doc)) return;
+    canvasInteractionDocuments.add(doc);
     const handleCanvasKey = (event) => { if (interactionPolicy.canEdit) handleEditorKey(event, true); };
     const preventInlineEditing = (event) => {
       if (!interactionPolicy.canInlineEdit) {
@@ -1035,7 +1121,17 @@ export function createFriendlyEditor({
       doc.removeEventListener('keydown', handleCanvasKey, true);
       doc.removeEventListener('dblclick', preventInlineEditing, true);
       doc.removeEventListener('click', clearSelection);
+      canvasInteractionDocuments.delete(doc);
     });
+  };
+  // GrapesJS emits frame:load before renderHead(), which replaces the head.
+  // Apply the CSP immediately, then restore all head resources at :head.
+  editor.on('canvas:frame:load', (payload) => installCanvasHead(canvasDocument(payload), payload?.window));
+  editor.on('canvas:frame:load:head', (payload) => installCanvasHead(canvasDocument(payload), payload?.window));
+  editor.on('canvas:frame:load:body', (payload) => {
+    const doc = canvasDocument(payload);
+    installCanvasHead(doc, payload?.window);
+    installCanvasInteractions(doc);
   });
   editor.DomComponents.addType('vsl', createVslComponentType({ publishedVslById, publicOrigin, canReadVsl, loadError: vslLoadError }));
   editor.DomComponents.addType('alva-field', {
@@ -1050,8 +1146,13 @@ export function createFriendlyEditor({
     editor.setComponents(html);
     editor.setStyle(css);
   }
+  // Old saved canvases predate the image-choice heading rule. Prefix it so an
+  // explicit user rule in the existing stylesheet still wins, and do it while
+  // loading so opening alone never marks the form dirty or sends a PUT.
+  if (quizCanvas && !hasQuizImageChoiceHeadingCss(editor.getCss()))
+    editor.setStyle(`${quizImageChoiceHeadingCss}\n${editor.getCss()}`);
   const beforeMigration = project ? JSON.stringify(editor.getProjectData()) : null;
-  normalizeForms(editor);
+  if (!quizCanvas) normalizeForms(editor);
   const lockComponent = (component) => {
     component?.set?.({ draggable: false, editable: false, droppable: false }, { silent: true });
     componentChildren(component).forEach(lockComponent);
@@ -1201,9 +1302,12 @@ export function createFriendlyEditor({
     tree.append(addSection);
   }
   function formStyles() {
-    normalizeForms(editor);
+    if (!quizCanvas) normalizeForms(editor);
   }
   function blockStyles() {
+    // Quiz canvases already carry their own scoped CSS. Adding the Landing
+    // starter sheet after it would reset body/background and field styling.
+    if (quizCanvas) return;
     const existingCss = editor.getCss();
     if (/--alva-block-base\s*:\s*1/.test(existingCss) || existingCss.includes('.hero-grid')) return;
     // Fill the blank page with block defaults, preserving every user declaration.
@@ -1216,7 +1320,7 @@ export function createFriendlyEditor({
     const selected = editor.getSelected();
     const wrapper = editor.getWrapper();
     const id = block.getId();
-    if (id === 'vsl' && !canInsertVsl()) {
+    if ((id === 'vsl' && !canInsertVsl()) || (quizCanvas && id === 'form')) {
       announce('Você não tem permissão para inserir uma VSL.');
       return;
     }
@@ -1253,9 +1357,33 @@ export function createFriendlyEditor({
         }
       }
     }
-    const added = target.append(block.get('content'), at === undefined ? {} : { at });
+    const quizCapture = quizCanvas && ['hero-section', 'contact-section'].includes(id);
+    const content = quizCapture
+      ? `<section class="${id === 'hero-section' ? 'hero' : 'contact'}"><div><h2>Vamos conversar?</h2><p>Conte como podemos ajudar.</p><label>Seu nome<input type="text" name="campo_nome" placeholder="Como podemos chamar você?"></label><label>E-mail<input type="email" name="campo_email" placeholder="voce@empresa.com.br"></label><label>WhatsApp<input type="tel" name="campo_telefone" placeholder="DDD + número"></label></div></section>`
+      : block.get('content');
+    const added = target.append(content, at === undefined ? {} : { at });
     if (id === 'bar-chart' || id === 'donut-chart') normalizeCharts(editor);
     formStyles();
+    if (quizCanvas && added[0]) {
+      const fieldsOf = (component) => {
+        const fields = [];
+        const visit = (node) => {
+          if (!node) return;
+          if (['input', 'textarea', 'select'].includes(tagOf(node))) fields.push(node);
+          componentChildren(node).forEach(visit);
+        };
+        visit(component);
+        return fields;
+      };
+      const insertedFields = added.flatMap(fieldsOf);
+      const inserted = new Set(insertedFields);
+      const used = new Set(fieldsOf(editor.getWrapper()).filter((field) => !inserted.has(field)).map((field) => String(field.getAttributes?.().name || '')).filter(Boolean));
+      const names = allocateQuizFieldNames(insertedFields.map((field) => field.getAttributes?.().name), used);
+      insertedFields.forEach((field, index) => {
+        const name = names[index];
+        field.addAttributes?.({ name });
+      });
+    }
     if (added[0]) editor.select(added[0], { scroll: true });
     announce(`${block.get('label')} adicionado. Ajuste o conteúdo no painel lateral.`);
   }
@@ -1271,6 +1399,26 @@ export function createFriendlyEditor({
     if (!interactionPolicy.canAdd) return;
     if (component) {
       blockStyles();
+      if (quizCanvas) {
+        const fieldsOf = (model) => {
+          const fields = [];
+          const visit = (node) => {
+            if (!node) return;
+            if (['input', 'textarea', 'select'].includes(tagOf(node))) fields.push(node);
+            componentChildren(node).forEach(visit);
+          };
+          visit(model);
+          return fields;
+        };
+        const inserted = new Set(fieldsOf(component));
+        const used = new Set(fieldsOf(editor.getWrapper()).filter((field) => !inserted.has(field)).map((field) => String(field.getAttributes?.().name || '')).filter(Boolean));
+        const fields = fieldsOf(component);
+        const names = allocateQuizFieldNames(fields.map((field) => field.getAttributes?.().name), used);
+        fields.forEach((field, index) => {
+          const name = names[index];
+          field.addAttributes?.({ name });
+        });
+      }
       if (componentWithClass(component, 'alva-chart-bars') || componentWithClass(component, 'alva-donut')) normalizeCharts(editor);
       if (tagOf(component) === 'form' || component.find('form').length) formStyles();
       announce('Elemento adicionado. Selecione para personalizar.');
@@ -1340,6 +1488,7 @@ export function createFriendlyEditor({
       input.setCustomValidity('');
       try {
         change(options.type === 'checkbox' ? input.checked : input.value);
+        if (quizCanvas) onChange();
         announce('Alteração aplicada. Você pode desfazer a qualquer momento.');
       } catch (error) {
         input.setCustomValidity(error.message);
@@ -1467,6 +1616,47 @@ export function createFriendlyEditor({
     parent.append(row);
     return hexInput;
   }
+  function normalizeQuizInsertedSubtree(root, original = null) {
+    if (!quizCanvas || !root) return;
+    const fieldsOf = (model) => {
+      const fields = [];
+      const visit = (node) => { if (!node) return; if (['input', 'textarea', 'select'].includes(tagOf(node))) fields.push(node); componentChildren(node).forEach(visit); };
+      visit(model);
+      return fields;
+    };
+    const inserted = fieldsOf(root);
+    const insertedSet = new Set(inserted);
+    const used = new Set(fieldsOf(editor.getWrapper()).filter((field) => !insertedSet.has(field)).map((field) => String(field.getAttributes?.().name || '')).filter(Boolean));
+    const names = allocateQuizFieldNames(inserted.map((field) => field.getAttributes?.().name), used);
+    inserted.forEach((field, index) => field.addAttributes?.({ name: names[index] }));
+    const ids = new Map();
+    const nodes = (model) => { const all = []; const visitAll = (node) => { if (!node) return; all.push(node); componentChildren(node).forEach(visitAll); }; visitAll(model); return all; };
+    if (original) {
+      fieldsOf(original).forEach((node, index) => {
+        const source = node.getAttributes?.().id;
+        if (!source || !inserted[index]) return;
+        const target = inserted[index].getAttributes?.().id || `id_${Math.random().toString(16).slice(2, 10)}`;
+        inserted[index].addAttributes?.({ id: target });
+        ids.set(String(source), String(target));
+      });
+      const before = nodes(original);
+      const after = nodes(root);
+      before.forEach((node, index) => {
+        const source = node.getAttributes?.().id;
+        const target = after[index]?.getAttributes?.().id;
+        if (source && target) ids.set(String(source), String(target));
+      });
+    }
+    const nextId = (value) => { const source = String(value || ''); if (!ids.has(source)) ids.set(source, `id_${Math.random().toString(16).slice(2, 10)}`); return ids.get(source); };
+    const visit = (node) => {
+      const attrs = node?.getAttributes?.() || {};
+      if (attrs.id && !insertedSet.has(node)) node.addAttributes?.({ id: ids.get(String(attrs.id)) || nextId(attrs.id) });
+      if (attrs.for) node.addAttributes?.({ for: ids.get(String(attrs.for)) || nextId(attrs.for) });
+      componentChildren(node).forEach(visit);
+    };
+    visit(root);
+  }
+
   function render() {
     clearTimeout(repaint);
     const model = editor.getSelected();
@@ -1503,6 +1693,84 @@ export function createFriendlyEditor({
     inspectorTitle.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">${editorTreeIcon(model)}</span><div><small>CONTEÚDO</small><h2></h2></div>`;
     inspectorTitle.querySelector('h2').textContent = editorialLabel(model);
     props.append(inspectorTitle);
+    const quizType = quizCanvas ? String(attrs['data-quiz-type'] || '') : '';
+    if (quizType) {
+      const descendants = (node) => componentChildren(node).flatMap((child) => [child, ...descendants(child)]);
+      const ancestor = (node, name) => {
+        let current = node;
+        while (current && tagOf(current) !== name) current = current.parent?.();
+        return current;
+      };
+      const choiceLabel = (option) => ancestor(option, 'label');
+      const choiceText = (label) => descendants(label).find((node) => tagOf(node) === 'span' && !isMaterialIcon(node) && !componentHasClass(node, 'choice-key'));
+      const choiceImage = (label) => descendants(label).find((node) => tagOf(node) === 'img');
+      const choiceIcon = (label) => descendants(label).find((node) => tagOf(node) === 'span' && isMaterialIcon(node));
+      const quiz = section('Pergunta e opções');
+      field(quiz, quizType === 'image_choice' ? 'Escolha visual' : 'Pergunta', attrs['data-quiz-question'] || '', (value) => {
+        model.addAttributes({ 'data-quiz-question': value });
+        const owner = model.parent?.();
+        const visible = descendants(model).find((node) => /^h[1-6]$/.test(tagOf(node)) || tagOf(node) === 'p')
+          || componentChildren(owner).find((node) => /^h[1-6]$/.test(tagOf(node)));
+        if (visible) setComponentText(visible, value);
+      });
+      if (quizType === 'multiple_choice') field(quiz, 'Obrigatória', attrs['data-quiz-required'] === 'true', (value) => model.addAttributes({ 'data-quiz-required': String(value) }), { type: 'checkbox' });
+      const modelFields = [];
+      const visitQuizModel = (node) => { if (!node) return; if (['input', 'option'].includes(tagOf(node))) modelFields.push(node); componentChildren(node).forEach(visitQuizModel); };
+      visitQuizModel(model);
+      if (['single_choice', 'image_choice'].includes(quizType)) field(quiz, 'Obrigatória', Boolean(modelFields[0]?.getAttributes?.().required), (value) => {
+        model.addAttributes({ 'data-quiz-required': String(value) });
+        modelFields.filter((input) => tagOf(input) === 'input').forEach((input) => value ? input.addAttributes({ required: true }) : input.removeAttributes?.('required'));
+      }, { type: 'checkbox' });
+      const options = modelFields.filter((option) => tagOf(option) === 'option' || ['radio', 'checkbox'].includes(String(option.getAttributes?.().type || '').toLowerCase()));
+      options.forEach((option, index) => {
+        field(quiz, `Opção ${index + 1}`, option.get?.('value') || option.getAttributes?.().value || '', (value) => {
+          option.set?.('value', value);
+          option.addAttributes({ value });
+          const label = choiceLabel(option);
+          const text = choiceText(label);
+          if (text) setComponentText(text, value);
+        });
+        if (quizType === 'image_choice') {
+          field(quiz, `Imagem ${index + 1}`, option.getAttributes?.()['data-quiz-image'] || '', (value) => {
+            option.addAttributes({ 'data-quiz-image': value });
+            const label = choiceLabel(option);
+            let image = choiceImage(label);
+            if (!image && value) image = label?.append?.(`<img src="${escapeText(value)}" alt="">`)?.[0];
+            if (image) { image.set?.('src', value); image.addAttributes({ src: value }); }
+          });
+          const label = choiceLabel(option);
+          const existingIcon = choiceIcon(label);
+          const currentIcon = option.getAttributes?.()['data-quiz-icon']
+            || [existingIcon, ...descendants(existingIcon)].map((node) => node?.get?.('content')).find(Boolean)
+            || existingIcon?.getEl?.()?.textContent || '';
+          field(quiz, `Ícone ${index + 1}`, currentIcon, (value) => {
+            option.addAttributes({ 'data-quiz-icon': value });
+            let icon = choiceIcon(label);
+            if (!icon && value) icon = label?.append?.(`<span class="choice-visual material-symbols-outlined">${escapeText(value)}</span>`)?.[0];
+            if (icon) setComponentText(icon, value);
+          }, { choices: materialIconChoicesFor(currentIcon) });
+        }
+        button(quiz, `Remover opção ${index + 1}`, () => {
+          if (options.length <= 2) { announce('Mantenha ao menos duas opções.'); return; }
+          if (option.get?.('tagName') === 'option') option.remove?.();
+          else option.parent()?.remove?.();
+        }, { disabled: options.length <= 2 });
+      });
+      button(quiz, 'Adicionar opção', () => {
+        const name = String(options[0]?.getAttributes?.().name || `campo_${Math.random().toString(16).slice(2, 10)}`);
+        const number = options.length + 1;
+        if (quizType === 'select') model.append(`<option value="Opção ${number}">Opção ${number}</option>`);
+        else model.append(quizChoiceOptionMarkup({
+          type: quizType,
+          name,
+          label: `Opção ${number}`,
+          index: number,
+          required: quizType === 'multiple_choice'
+            ? attrs['data-quiz-required'] === 'true'
+            : Boolean(options[0]?.getAttributes?.().required),
+        }));
+      });
+    }
     const head = section('');
     head.classList.add('fe-element-control');
     const backToLibrary = button(head, '← Adicionar elementos', () => {
@@ -1531,6 +1799,7 @@ export function createFriendlyEditor({
       () => {
         const copy = model.clone();
         parent.append(copy, { at: model.index() + 1 });
+        normalizeQuizInsertedSubtree(copy, model);
         editor.select(copy);
       },
       { icon: 'duplicate' },
@@ -1546,6 +1815,11 @@ export function createFriendlyEditor({
       { className: 'fe-danger', icon: 'delete' },
     );
 
+    const textTags = /^(h[1-6]|p|span|small|strong|em|a|button|summary)$/;
+    const isIcon = isMaterialIcon(model);
+    const isHeading = /^h[1-6]$/.test(tag);
+    const hasStructure = model.find('img,form,input,textarea,select,div,section').length > 0;
+    if (!quizType) {
     const content = section('Conteúdo');
     if (isVsl) {
       const currentId = String(model.get('publicId') || attrs[VSL_ATTRIBUTE] || '').trim();
@@ -1573,10 +1847,6 @@ export function createFriendlyEditor({
         help(content, publishedVslById.size ? 'A prévia usa a versão publicada da VSL.' : 'Ainda não há VSLs publicadas neste projeto.');
       } else help(content, !canReadVsl() ? 'Você não tem permissão para visualizar VSLs.' : vslLoadError || 'Não foi possível carregar as VSLs. Tente novamente.');
     }
-    const textTags = /^(h[1-6]|p|span|small|strong|em|a|button|summary)$/;
-    const isIcon = isMaterialIcon(model);
-    const isHeading = /^h[1-6]$/.test(tag);
-    const hasStructure = model.find('img,form,input,textarea,select,div,section').length > 0;
     if (textTags.test(tag) && !hasStructure && !isIcon) {
       field(
         content,
@@ -1605,12 +1875,7 @@ export function createFriendlyEditor({
     }
     if (isIcon) {
       field(content, 'Escolha o ícone', model.get('content') || model.getEl()?.textContent || 'star', (value) => setComponentText(model, value), {
-        choices: [
-          ['star', 'Estrela'], ['check_circle', 'Confirmação'], ['arrow_forward', 'Seta'], ['person', 'Pessoa'],
-          ['phone', 'Telefone'], ['mail', 'E-mail'], ['location_on', 'Local'], ['calendar_month', 'Calendário'],
-          ['analytics', 'Gráfico'], ['monitoring', 'Resultados'], ['play_circle', 'Vídeo'], ['image', 'Imagem'],
-          ['cloud_upload', 'Enviar arquivo'], ['task_alt', 'Tarefa'], ['home', 'Início'], ['tune', 'Ajustes'],
-        ],
+        choices: materialIconChoicesFor(model.get('content') || model.getEl()?.textContent || 'star'),
       });
       help(content, 'Ícones fornecidos pelo Google Material Symbols.');
     }
@@ -1675,6 +1940,21 @@ export function createFriendlyEditor({
         },
       );
       styleNumber(content, model, 'Altura da imagem (px)', 'height', '', 2000);
+    }
+    const videoFrame = componentHasClass(model, 'alva-embed-video')
+      ? componentDescendants(model).find((node) => tagOf(node) === 'iframe')
+      : tag === 'iframe' && componentHasClass(model.parent?.(), 'alva-embed-video') ? model : null;
+    if (videoFrame) {
+      const videoAttrs = videoFrame.getAttributes?.() || {};
+      const videoWrapper = componentHasClass(model, 'alva-embed-video') ? model : videoFrame.parent?.();
+      const videoUrl = videoAttrs.src === 'about:blank' ? '' : videoAttrs.src || '';
+      field(content, 'Endereço do vídeo', videoUrl, (value) => {
+        const url = String(value || '').trim();
+        if (url && !/^https:\/\//i.test(url)) throw new Error('Use uma URL HTTPS para incorporar o vídeo.');
+        videoFrame.addAttributes({ src: url || 'about:blank' });
+        videoWrapper?.addAttributes({ 'data-alva-video-empty': String(!url) });
+      }, { placeholder: 'https://…/embed/…' });
+      field(content, 'Título do vídeo', videoAttrs.title || 'Vídeo incorporado', (value) => videoFrame.addAttributes({ title: value || 'Vídeo incorporado' }));
     }
     const fieldLabel = tag === 'label' ? model : tagOf(model.parent()) === 'label' ? model.parent() : null;
     if (fieldLabel) {
@@ -1787,6 +2067,7 @@ export function createFriendlyEditor({
     }
     if (content.children.length === 1)
       help(content, 'Selecione um elemento dentro deste grupo para editar seu conteúdo.');
+    }
     const hasTypography = (textTags.test(tag) && !isIcon) || ['input', 'textarea'].includes(tag);
     const appearance = section(hasTypography ? 'Tipografia' : 'Aparência');
     if (hasTypography) {

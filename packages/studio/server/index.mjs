@@ -382,6 +382,8 @@ export function createApp({
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],
     '/forms.js': ['public/forms.js', 'text/javascript'],
+    '/quiz-canvas-seed.js': ['public/quiz-canvas-seed.js', 'text/javascript'],
+    '/quiz-elements.js': ['public/quiz-elements.js', 'text/javascript'],
     '/editor-workspace.js': ['public/editor-workspace.js', 'text/javascript'],
     '/studio-shell.js': ['public/studio-shell.js', 'text/javascript'],
     '/studio-context-boundary.js': ['public/studio-context-boundary.js', 'text/javascript'],
@@ -390,6 +392,8 @@ export function createApp({
     '/forms.css': ['public/forms.css', 'text/css'],
     '/save-cycle.js': ['public/save-cycle.js', 'text/javascript'],
     '/styles.css': ['public/styles.css', 'text/css'],
+    '/material-symbols.css': ['public/material-symbols.css', 'text/css'],
+    '/material-symbols-outlined.woff2': ['public/material-symbols-outlined.woff2', 'font/woff2'],
     '/templates.js': ['public/templates.js', 'text/javascript'],
     '/vendor/grapes.min.js': ['node_modules/grapesjs/dist/grapes.min.js', 'text/javascript'],
     '/vendor/grapes.min.css': ['node_modules/grapesjs/dist/css/grapes.min.css', 'text/css'],
@@ -428,6 +432,7 @@ export function createApp({
         }
       }
       const publicVsl = req.method === 'GET' ? path.match(/^\/(embed\/)?v\/([^/]+)$/) : null;
+      const publicFontAsset = req.method === 'GET' && path === '/material-symbols-outlined.woff2';
       const effectiveHost = gatewayHost || req.headers.host;
       const studioHost = publicOrigin && effectiveHost === new URL(publicOrigin).host;
       const domainScope = Boolean(publicOrigin && !studioHost);
@@ -455,11 +460,11 @@ export function createApp({
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if ((publicMcp && origin && origin !== expectedOrigin) || (!publicMcp && !publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))))
+      if ((publicMcp && origin && origin !== expectedOrigin) || (!publicMcp && !publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))))
         throw error('Origem não permitida.', 403);
       // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
       const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
-      if (!publicMcp && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicMcp && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
@@ -805,7 +810,8 @@ export function createApp({
       }
       if (req.method === 'GET' && files[path]) {
         const [file, type] = files[path];
-        res.setHeader('Content-Type', type + '; charset=utf-8');
+        res.setHeader('Content-Type', type.startsWith('font/') ? type : type + '; charset=utf-8');
+        if (publicFontAsset) res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 'no-cache');
         const content = await readFile(join(root, file));
         return res.end(

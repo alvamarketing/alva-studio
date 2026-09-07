@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from './form-answer-validation.mjs';
+import { normalizeQuizCanvas } from './quiz-canvas.mjs';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const TYPES = new Set([
@@ -178,18 +179,24 @@ export function normalizeSteps(value) {
   return value.map((input, index) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw fail('Etapa inválida.');
     if (Array.isArray(input.elements)) {
+      const canvasResult = input.canvas === undefined ? null : normalizeQuizCanvas(input.canvas);
+      const canvas = canvasResult?.canvas;
       const id = text(input.id || randomUUID(), 80, 'Identificador da tela', true);
       if (!/^[a-zA-Z0-9_-]+$/.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id) || ids.has(`screen:${id}`))
         throw fail('Identificador de tela inválido ou repetido.');
       ids.add(`screen:${id}`);
-      if (!input.elements.length || input.elements.length > 30) throw fail('Adicione de 1 a 30 elementos por tela.');
+      const sourceElements = canvasResult
+        ? [...input.elements.filter((element) => INFORMATIONAL.has(element?.type) && canvasResult.elementIds.has(element.id)), ...canvasResult.fields]
+        : input.elements;
+      if ((!sourceElements.length && !canvas) || sourceElements.length > 30) throw fail('Adicione de 1 a 30 elementos por tela.');
       return {
         id,
         title: text(input.title || `Tela ${index + 1}`, 100, 'Nome da tela', true),
         motion: MOTIONS.has(input.motion) ? input.motion : 'fade-up',
         autoAdvance: Boolean(input.autoAdvance),
         timer: boundedNumber(input.timer, 0, 0, 15),
-        elements: input.elements.map((element) => normalizeElement(element, ids)),
+        elements: sourceElements.map((element) => normalizeElement(element, ids)),
+        ...(canvas ? { canvas } : {}),
       };
     }
     return { ...normalizeElement(input, ids), motion: MOTIONS.has(input.motion) ? input.motion : 'fade-up' };
@@ -198,11 +205,13 @@ export function normalizeSteps(value) {
 
 export function normalizeFormInput(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('Formulário inválido.');
+  const headerCanvas = value.headerCanvas === undefined ? undefined : normalizeQuizCanvas(value.headerCanvas, { header: true }).canvas;
   return {
     headerElements: normalizeHeaderElements(value.headerElements),
     steps: normalizeSteps(value.steps),
     completion: normalizeCompletion(value.completion),
     webhook: normalizeWebhook(value.webhook),
+    ...(headerCanvas ? { headerCanvas } : {}),
   };
 }
 
@@ -298,6 +307,7 @@ export class FormStore {
       if (patch.name !== undefined) form.name = text(patch.name, 100, 'Nome', true);
       Object.assign(form, normalizeFormInput({
         headerElements: patch.headerElements === undefined ? form.headerElements : patch.headerElements,
+        headerCanvas: patch.headerCanvas === undefined ? form.headerCanvas : patch.headerCanvas,
         steps: patch.steps === undefined ? form.steps : patch.steps,
         completion: patch.completion === undefined ? form.completion : patch.completion,
         webhook: patch.webhook === undefined ? form.webhook : patch.webhook,

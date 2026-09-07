@@ -3,12 +3,47 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FormStore } from '../server/form-store.mjs';
+import { FormStore, normalizeFormInput } from '../server/form-store.mjs';
 
 async function setup(t) {
   const dir = await mkdtemp(join(tmpdir(), 'alva-forms-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   return new FormStore(dir);
+}
+
+test('preserva snapshot opcional de canvas por topo e tela sem alterar schema semântico', () => {
+  const headerCanvas = { version: 1, editorState: { pages: [{ frames: [{ component: { tagName: 'section' } }] }] }, html: '<section>Topo</section>', css: '.topo{color:#111}' };
+  const canvas = quizCanvas();
+  const form = normalizeFormInput({ headerCanvas, steps: [{ id: 'tela', title: 'Tela', elements: [{ id: 'aviso', type: 'statement', title: 'Mantido' }, { id: 'forjado', type: 'short_text', title: 'Ignorado' }], canvas }] });
+  assert.deepEqual(form.headerCanvas, headerCanvas);
+  assert.match(form.steps[0].canvas.html, /data-answer=""/);
+  assert.deepEqual(form.steps[0].elements.map(({ id, type, required }) => ({ id, type, required })), [{ id: 'aviso', type: 'statement', required: false }, { id: 'email', type: 'email', required: true }]);
+});
+
+test('canvas de composição não aceita scripts, handlers ou formulário aninhado', () => {
+  const base = { version: 1, editorState: { pages: [{ frames: [{ component: { tagName: 'section' } }] }] }, html: '<section>Seguro</section>', css: '.seguro{color:#111}' };
+  for (const unsafe of [
+    { ...base, html: '<script>alert(1)</script>' },
+    { ...base, html: '<div onclick="alert(1)">x</div>' },
+    { ...base, html: '<form><input></form>' },
+    { ...base, css: '@import url(https://example.test/x.css)' },
+    { ...base, editorState: { pages: [{ component: { script: 'alert(1)' } }] } },
+    { ...base, editorState: { pages: [{ component: { attributes: { onclick: 'alert(1)' } } }] } },
+    { ...base, editorState: { pages: [{ component: { attributes: { src: 'data:image/svg+xml,%3Csvg%20onload%3Dalert(1)%3E' } } }] } },
+  ]) assert.throws(() => normalizeFormInput({ headerElements: [], steps: [{ id: 'tela', title: 'Tela', elements: [createField()], canvas: unsafe }] }), /Canvas da etapa contém conteúdo não permitido/);
+});
+
+function createField() {
+  return { id: 'email', type: 'email', title: 'E-mail', required: true };
+}
+
+function quizCanvas() {
+  return {
+    version: 1,
+    editorState: { pages: [{ frames: [{ component: { tagName: 'section', components: [{ tagName: 'div', attributes: { 'data-element-id': 'aviso' } }, { tagName: 'label', components: [{ type: 'textnode', content: 'E-mail' }, { tagName: 'input', attributes: { name: 'email', type: 'email', required: true } }] }] } }] }] },
+    html: '<section><div data-element-id="aviso"></div><label>E-mail<input name="email" type="email" required></label></section>',
+    css: '.campo{color:#111}',
+  };
 }
 
 test('cria, lista, edita, duplica e exclui formulários isolados', async (t) => {

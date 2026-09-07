@@ -703,7 +703,6 @@
 
 /* Formulário · Diagnóstico comercial — contrato visual do wireframe */
 .dynamic-form-header { min-height: 64px; height: 64px; gap: 14px; padding: 0 16px; font-family: Inter, var(--font-sans); }
-.dynamic-form-header::before { content: 'Formulário ·'; order: 1; color: #101828; font-size: 13px; font-weight: 700; white-space: nowrap; }
 .dynamic-form-header #form-back { order: 0; width: 36px; height: 36px; flex-basis: 36px; }
 .dynamic-form-header #dynamic-form-name { order: 2; width: min(300px, 24vw); min-width: 0; padding-left: 0; color: #101828; font-size: 13px; }
 .dynamic-form-header #form-save-state { order: 3; display: flex; align-items: center; gap: 5px; min-width: 0; margin-right: auto; overflow: hidden; color: #667085; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -832,4 +831,61 @@
     max-width: 100%;
     white-space: normal;
   }
+}
+
+/* The GrapesJS quiz shell owns its three regions; never inherit the legacy
+   semantic editor grid or its fixed inspector. */
+#dynamic-editor.dynamic-editor-grid.is-quiz-canvas { display: block; height: calc(100dvh - 64px); min-height: 0; background: transparent; }
+#dynamic-editor.is-quiz-canvas .quiz-canvas-editor { height: 100%; }
+#dynamic-editor.is-quiz-canvas .fe-sidebar { display: flex; flex-direction: column; }
+#dynamic-editor.is-quiz-canvas .fe-tree { margin-top: 8px; }
+#form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header::before,
+#form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header #form-save::after { content: none; }
+#form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header #form-save { font-size: 12px; }
+#form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header #form-save-state::before { content: none; }
+@media (min-width: 761px) and (max-width: 1050px) {
+  #dynamic-editor.dynamic-editor-grid.is-quiz-canvas { height: calc(100dvh - 112px); }
+  #dynamic-editor.is-quiz-canvas .fe-inspector { position: static; width: auto; height: auto; box-shadow: none; }
+  #form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header { min-height: 112px; height: auto; flex-wrap: wrap; align-content: center; padding-block: 8px; }
+  #form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header .editor-actions { width: 100%; min-width: 0; margin-left: 0; flex: 0 0 100%; }
+  #form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header #dynamic-form-name { width: auto; flex: 1 1 0; min-width: 0; }
+}
+@media (max-width: 760px) {
+  #dynamic-editor.dynamic-editor-grid.is-quiz-canvas { height: calc(100dvh - 112px); }
+  #form-editing:has(#dynamic-editor.is-quiz-canvas) .dynamic-form-header { min-height: 112px; height: auto; }
+}
+
+/* The form preview is created on demand, so it needs its own dialog sizing
+   instead of inheriting the generic 540px dialog dimensions. */
+#form-preview-dialog {
+  box-sizing: border-box;
+  width: min(1100px, calc(100vw - 32px));
+  max-width: none;
+  height: calc(100dvh - 48px);
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+}
+#form-preview-dialog[open] { display: flex; flex-direction: column; }
+#form-preview-dialog .preview-header {
+  flex: 0 0 52px;
+  min-height: 52px;
+  padding: 8px 14px;
+}
+#form-preview-dialog iframe {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+@media (max-width: 760px) {
+  #form-preview-dialog {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+    margin: 8px;
+  }
+  #form-preview-dialog .preview-header span { display: none; }
 }

@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { normalizeProjectSlug, normalizeRoute } from './domain/access.mjs';
 import { renderLeadsCsv } from './leads-csv.mjs';
 import { publicRuntimeCapabilities } from './runtime-flags.mjs';
+import { renderDynamicForm } from './dynamic-form.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -105,6 +107,7 @@ function legacyForm(form) {
     ...form,
     slug: form.route.replace(/^\//, ''),
     headerElements: schema.headerElements ?? [],
+    headerCanvas: schema.headerCanvas,
     steps: schema.steps ?? [],
     completion: schema.completion ?? initialLegacyForm().completion,
     webhook: schema.webhook ?? '',
@@ -116,7 +119,7 @@ function legacyForm(form) {
 
 function legacyFormPatch(input, form) {
   const schema = { ...(form.draftSchema ?? initialLegacyForm()), ...(input.draftSchema ?? {}) };
-  for (const key of ['headerElements', 'steps', 'completion', 'webhook']) {
+  for (const key of ['headerElements', 'headerCanvas', 'steps', 'completion', 'webhook']) {
     if (Object.hasOwn(input, key)) schema[key] = input[key];
   }
   return {
@@ -538,7 +541,7 @@ export function createProjectApi({
       }
     }
 
-    const legacy = path.match(/^\/api\/(pages|forms)(?:\/([^/]+)(?:\/(duplicate|publish|status|domain|submissions))?)?$/);
+    const legacy = path.match(/^\/api\/(pages|forms)(?:\/([^/]+)(?:\/(duplicate|preview|publish|status|domain|submissions))?)?$/);
     if (!legacy) throw fail('Não encontrado.', 404);
     const [, kind, id, action] = legacy;
     const projectId = context.currentProjectId;
@@ -589,6 +592,26 @@ export function createProjectApi({
           });
         return json(isPage ? legacyPage(record) : legacyForm(record), 201);
       }
+    }
+
+    if (!isPage && method === 'GET' && action === 'preview') {
+      // getForm is the existing read-scoped repository path; keep preview read-only.
+      await sessionService.authorize(context, null, projectId);
+      const record = await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
+      const previewFormat = new URL(req.url, 'http://studio.local').searchParams.get('format');
+      if (previewFormat === 'html') {
+        const nonce = randomUUID().replaceAll('-', '');
+        const html = renderDynamicForm(legacyForm(record), `/api/forms/${id}/preview`, { preview: true, nonce });
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Content-Security-Policy': `default-src 'none'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:; media-src https:; frame-src https:; connect-src 'none'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'`,
+        });
+        return res.end(html);
+      }
+      return json({ html: renderDynamicForm(legacyForm(record), `/api/forms/${id}/preview`, { preview: true }) });
     }
 
     if (!action) {

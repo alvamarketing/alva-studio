@@ -105,3 +105,33 @@ Pendências mantidas: não há certificação da Etapa 6 inteira nem da V1; a ca
 
 - A publicação agora registra `contentHash` editorial separado do `snapshotHash` de deploy. Preview e produção podem ter nonces e hashes de deploy diferentes sem invalidar uma prévia do mesmo conteúdo; alteração editorial ou prévia legada sem `contentHash` exige nova prévia.
 - A evidência cobre builder, persistência e fake publisher em banco descartável. Não houve publicação real na Vercel.
+
+---
+
+## Checkpoint delimitado — andamento 7 do editor compartilhado de quiz (2026-09-07)
+
+- O backend atual trabalha com `headerCanvas` e `steps[].canvas`: `form-store` preserva o schema legado, `quiz-canvas` deriva campos e `dynamic-form` renderiza as telas sem duplicar o renderer browser-safe.
+- O frontend atual (`forms.js`, `editor-shell.js`, `editor-workspace.js` e `quiz-canvas-seed.js`) reutiliza o canvas GrapesJS e a árvore Topo fixo/Tela, com snapshots e IDs preservados. A cópia usada pela QA do root não substitui os originais.
+- Correções reais verificadas: telas externas isoladas por `.screen.step`, wrapper único de cabeçalho/progresso, coleta de `select[multiple]`, grupo `data-quiz-required` aceitando uma opção, e allowlist HTTP explícita para `/quiz-canvas-seed.js` e `/quiz-elements.js`.
+- VSL permanece desligado neste caminho. Os helpers de branching e cálculos do bloco 8 ainda não foram integrados.
+- Os quatro motores/containers estão ativos no ambiente, mas o Studio ainda não está conectado a eles.
+- Validação focada: 18 testes `dynamic-form`, 14 testes de servidor/rotas e 5 testes de lifecycle aprovados. Ainda não houve suíte completa, revisão final, certificação de browser ou commit.
+
+Este checkpoint registra andamento e não conclui a integração do quiz compartilhado nem certifica V1. O próximo passo reversível permanece salvar e reabrir uma etapa no canvas GrapesJS, preservando o legado.
+
+---
+
+## Checkpoint de QA do andamento 7 — 2026-09-07
+
+- A QA no browser confirmou a cópia de trabalho do original preservado: **“Validação — quiz compartilhado”**, ID `3ae986b6-edd1-48f1-a66d-f93517ad76a9`. A pergunta “Como prefere conversar?” manteve WhatsApp, Ligação e E-mail, com ícones chat, phone e mail, depois de salvar e reabrir pela árvore.
+- A prévia autenticada abriu o dialog real, avançou e voltou preservando um telefone fictício e concluiu sem lead; o painel permaneceu em 0 respostas.
+- A fonte local e a sequência do head GrapesJS foram corrigidas. Vídeo incorporado simples segue em implementação.
+- `/tmp/alva-quiz-shared-editor-suite-final.log`: 632/632, 0 falhas e 0 skips em 59.349 ms, executada antes do último ajuste de markup inicial das escolhas. O delta posterior do inspector passou 7/7.
+- Helpers 8 de branching/cálculos ainda não integrados; motores ainda não ligados ao Studio. O andamento 7 e a V1 permanecem pendentes.
+
+### Checkpoint final funcional do andamento 7 — 2026-09-07
+
+- O P1 do título padrão foi corrigido no loading sem PUT; lifecycle focado 9/9. Browser confirmou pergunta em linha inteira após reload, sem dirty state só por abrir; salvar/reabrir preservou a cópia **“Validação — quiz compartilhado”**, escolhas e IDs.
+- Prévia autenticada abriu o dialog, avançou/voltou e concluiu sem lead; painel 0 respostas. GET real da fonte CORS e `/health/ready` responderam 200.
+- Revisão independente `/tmp/alva-quiz-embed-review.md` aprovou embed (about:blank, HTTPS, recusa javascript:, VSL separado e CSP restritiva). Suíte final do conjunto presente no momento: 637/637, 0 falhas, 0 skips, 57.168,614375 ms, comando `pnpm exec node --test --test-concurrency=4 test/*.test.mjs`, log `/tmp/alva-quiz-shared-editor-suite-closure.log`. O snapshot mudou apenas pela regra CSS exata de 48 bytes `.image-choices>:is(h1,h2,h3,p){grid-column:1/-1}`; bloco 8 permanece separado e não integrado ao Studio.
+- Checkpoint funcional pronto para commit; não é certificação visual exata. Comparação desktop/mobile com o wireframe segue pendente pela restrição da superfície browser, e screenshot 841 não prova mobile. Bloco 8 não integrado; V1 e conclusão visual da etapa 7 continuam pendentes.

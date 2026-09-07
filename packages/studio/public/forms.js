@@ -1,6 +1,8 @@
 import { createContextList } from './context-list.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 import { restoreVslOptionFocus, vslOptionKeyboardAction } from './editor-shell.js';
+import { createFriendlyEditor } from './editor-shell.js';
+import { canvasSnapshot, seedQuizCanvas } from './quiz-canvas-seed.js';
 
 const TYPES = {
   short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
@@ -98,6 +100,56 @@ export function createScreen(preset = 'blank', id = `tela-${Date.now()}-${Math.r
 
 function ensureScreens(steps) {
   return steps.map((step, index) => Array.isArray(step.elements) ? step : { id: `tela-${step.id}`, title: `Tela ${index + 1}`, motion: step.motion || 'fade-up', autoAdvance: step.type === 'single_choice', timer: 0, elements: [{ ...step }] });
+}
+
+export function cloneQuizStep(step, id = `tela-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`) {
+  const copy = structuredClone(step);
+  const suffix = Math.random().toString(16).slice(2, 10);
+  const ids = new Map();
+  const replace = (value, prefix) => {
+    const source = String(value || '');
+    if (!ids.has(source)) ids.set(source, `${prefix}-${suffix}-${ids.size + 1}`);
+    return ids.get(source);
+  };
+  copy.id = id;
+  copy.elements = (copy.elements || []).map((element) => ({ ...element, id: replace(element.id, 'elemento') }));
+  if (!copy.canvas?.editorState) return copy;
+  const names = new Map();
+  const elementIds = new Map();
+  const domIds = new Map();
+  const mapName = (value) => {
+    const source = String(value || '');
+    if (!names.has(source)) names.set(source, `campo-${suffix}-${names.size + 1}`);
+    return names.get(source);
+  };
+  const mapElement = (value) => ids.get(String(value || '')) || (() => {
+    const source = String(value || '');
+    if (!elementIds.has(source)) elementIds.set(source, `elemento-${suffix}-${elementIds.size + 1}`);
+    return elementIds.get(source);
+  })();
+  const mapDomId = (value) => {
+    const source = String(value || '');
+    if (!domIds.has(source)) domIds.set(source, `id-${suffix}-${domIds.size + 1}`);
+    return domIds.get(source);
+  };
+  copy.canvas.html = copy.canvas.html
+    .replace(/\b(name|data-element-id|id|for)="([^"]*)"/g, (_all, key, value) => `${key}="${key === 'name' ? mapName(value) : key === 'data-element-id' ? mapElement(value) : mapDomId(value)}"`)
+    .replace(/\bhref="#([^"]+)"/g, (_all, value) => `href="#${mapDomId(value)}"`);
+  copy.canvas.css = copy.canvas.css.replace(/#([a-zA-Z][\w-]*)\b/g, (all, value) => domIds.has(value) ? `#${mapDomId(value)}` : all);
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.attributes && typeof node.attributes === 'object') {
+      if (Object.hasOwn(node.attributes, 'name')) node.attributes.name = mapName(node.attributes.name);
+      if (Object.hasOwn(node.attributes, 'data-element-id')) node.attributes['data-element-id'] = mapElement(node.attributes['data-element-id']);
+      if (Object.hasOwn(node.attributes, 'id')) node.attributes.id = mapDomId(node.attributes.id);
+      if (Object.hasOwn(node.attributes, 'for')) node.attributes.for = mapDomId(node.attributes.for);
+      if (typeof node.attributes.href === 'string' && node.attributes.href.startsWith('#')) node.attributes.href = `#${mapDomId(node.attributes.href.slice(1))}`;
+    }
+    (node.components || []).forEach(visit);
+    (node.pages || []).forEach((page) => (page.frames || []).forEach((frame) => visit(frame.component)));
+  };
+  visit(copy.canvas.editorState);
+  return copy;
 }
 
 function boundedIndex(value, length) {
@@ -327,21 +379,51 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   let vslLoadError = '';
   const vslEmbedUrls = new Map();
   let pendingVslOptionFocusId = null;
+  let activeCanvasEditor = null;
+  let activeCanvasTarget = null;
+  const previewDelegates = new WeakSet();
   const workspaceId = `forms-workspace-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+  function formPreviewDialog() {
+    let dialog = document.querySelector('#form-preview-dialog');
+    if (dialog) return dialog;
+    dialog = document.createElement('dialog');
+    dialog.id = 'form-preview-dialog';
+    dialog.innerHTML = '<div class="preview-header"><strong>Prévia do formulário</strong><span>As respostas não são enviadas.</span><button type="button" data-form-preview-close>Fechar</button></div><iframe title="Prévia do formulário"></iframe>';
+    dialog.querySelector('[data-form-preview-close]').onclick = () => dialog.close?.();
+    document.body.append(dialog);
+    return dialog;
+  }
   function ensurePreviewControl() {
     const publish = $('#form-public-link');
-    if (!publish || $('#form-preview') || !document.createElement || !publish.parentElement) return;
+    if (!publish || !document.createElement || !publish.parentElement) return;
+    const actions = publish.parentElement;
+    const openPreview = () => {
+      run(async () => {
+        if (!current) return;
+        await save();
+        const dialog = formPreviewDialog();
+        const iframe = dialog.querySelector('iframe');
+        iframe.src = `/api/forms/${encodeURIComponent(current.id)}/preview?format=html`;
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        else dialog.open = true;
+      });
+    };
+    if (!previewDelegates.has(actions)) {
+      actions.addEventListener('click', (event) => {
+        const target = event.target?.closest?.('#form-preview');
+        if (!target) return;
+        event.preventDefault();
+        openPreview();
+      });
+      previewDelegates.add(actions);
+    }
+    if ($('#form-preview')) return;
     const preview = document.createElement('button');
     preview.type = 'button';
     preview.id = 'form-preview';
     preview.className = 'form-preview-control';
     preview.textContent = 'Prévia';
     preview.setAttribute('aria-label', 'Abrir prévia do formulário');
-    preview.onclick = () => {
-      if (!current?.publicPath) return toast('Publique o formulário para abrir a prévia pública.');
-      const opened = window.open(current.publicPath, '_blank');
-      if (opened) opened.opener = null;
-    };
     publish.parentElement.insertBefore(preview, publish);
   }
   function syncFormPublicationControl() {
@@ -496,11 +578,13 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   }
 
   async function open(id) {
+    destroyActiveCanvas();
     current = await api('/forms/' + id);
     current.steps = ensureScreens(current.steps);
     selected = 0;
     selectedElement = 0;
     editingHeader = false;
+    activeCanvasTarget = null;
     dirty = false;
     $('#dashboard').hidden = true;
     $('#form-editing').hidden = false;
@@ -519,12 +603,14 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
 
   async function save() {
     if (!current || !dirty) return current;
+    snapshotActiveCanvas();
     if (!can('form.write')) throw new Error('Você não tem permissão para editar formulários.');
     $('#form-save-state').textContent = 'Salvando…';
     current = await api('/forms/' + current.id, 'PUT', {
       revision: current.revision,
       name: current.name,
       headerElements: current.headerElements,
+      headerCanvas: current.headerCanvas,
       steps: current.steps,
       completion: current.completion,
       webhook: current.webhook,
@@ -534,7 +620,146 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     return current;
   }
 
+  function hasQuizCanvasRuntime() {
+    return Boolean(globalThis.window?.grapesjs && document?.createElement);
+  }
+
+  function activeCanvasValue() {
+    if (!current) return null;
+    const step = current.steps.find((candidate) => `step:${candidate.id}` === activeCanvasTarget);
+    return activeCanvasTarget === 'header' ? current.headerCanvas : step?.canvas;
+  }
+
+  function snapshotActiveCanvas() {
+    if (!activeCanvasEditor || !current || activeCanvasTarget === null) return;
+    const snapshot = canvasSnapshot(activeCanvasEditor);
+    if (activeCanvasTarget === 'header') current.headerCanvas = snapshot;
+    else {
+      const step = current.steps.find((candidate) => `step:${candidate.id}` === activeCanvasTarget);
+      if (step) step.canvas = snapshot;
+    }
+  }
+
+  function destroyActiveCanvas() {
+    snapshotActiveCanvas();
+    activeCanvasEditor?.destroy?.();
+    activeCanvasEditor = null;
+  }
+
+  function renderQuizCanvasEditor() {
+    $('#dynamic-editor').classList.add('is-quiz-canvas');
+    const target = editingHeader ? 'header' : `step:${current.steps[selected].id}`;
+    if (activeCanvasTarget === target && activeCanvasEditor) return;
+    if (activeCanvasTarget !== target) destroyActiveCanvas();
+    activeCanvasTarget = target;
+    const isHeader = target === 'header';
+    const source = activeCanvasValue() || seedQuizCanvas(isHeader ? current.headerElements : current.steps[selected].elements, { header: isHeader, vslEmbedUrls });
+    const root = $('#dynamic-editor');
+    const editable = can('form.write');
+    root.innerHTML = `<div class="quiz-canvas-editor"><aside class="quiz-canvas-journey"><div class="quiz-canvas-tree" role="tree"><button type="button" data-quiz-canvas-target="header" role="treeitem" aria-selected="${isHeader}">Topo fixo</button>${current.steps.map((step, index) => `<button type="button" data-quiz-canvas-target="${index}" role="treeitem" aria-selected="${!isHeader && index === selected}">Tela ${index + 1} · ${escape(step.title || 'Sem nome')}</button>`).join('')}</div>${editable ? `<div class="quiz-canvas-actions">${!isHeader ? '<button type="button" data-quiz-screen-move="-1" aria-label="Mover tela para cima">↑</button><button type="button" data-quiz-screen-move="1" aria-label="Mover tela para baixo">↓</button><button type="button" data-quiz-screen-duplicate aria-label="Duplicar tela">Duplicar</button><button type="button" data-quiz-screen-delete aria-label="Excluir tela">Excluir</button>' : ''}</div><button type="button" class="fe-tree-add" data-quiz-add-screen>+ Nova tela</button>` : '<p class="read-only">Somente leitura</p>'}</aside><div class="quiz-canvas-friendly"></div></div>`;
+    root.querySelectorAll('[data-quiz-canvas-target]').forEach((button) => {
+      button.onclick = () => {
+        snapshotActiveCanvas();
+        if (button.dataset.quizCanvasTarget === 'header') { editingHeader = true; selectedElement = 0; }
+        else { editingHeader = false; selected = Number(button.dataset.quizCanvasTarget); selectedElement = 0; }
+        renderEditor();
+      };
+    });
+    const addScreen = root.querySelector('[data-quiz-add-screen]');
+    if (addScreen) addScreen.onclick = () => {
+      if (!editable) return;
+      destroyActiveCanvas();
+      current.steps.push(createScreen('blank'));
+      selected = current.steps.length - 1;
+      editingHeader = false;
+      markDirty();
+      renderEditor();
+    };
+    root.querySelectorAll('[data-quiz-screen-move]').forEach((button) => { button.onclick = () => {
+      const direction = Number(button.dataset.quizScreenMove);
+      const next = selected + direction;
+      if (next < 0 || next >= current.steps.length) return;
+      destroyActiveCanvas();
+      current.steps = moveStep(current.steps, selected, direction);
+      selected = next;
+      markDirty();
+      renderEditor();
+    }; });
+    const duplicateScreen = root.querySelector('[data-quiz-screen-duplicate]');
+    if (duplicateScreen) duplicateScreen.onclick = () => {
+      destroyActiveCanvas();
+      current.steps.splice(selected + 1, 0, cloneQuizStep(current.steps[selected]));
+      selected += 1;
+      markDirty();
+      renderEditor();
+    };
+    const deleteScreen = root.querySelector('[data-quiz-screen-delete]');
+    if (deleteScreen) deleteScreen.onclick = () => {
+      if (current.steps.length === 1) return toast('O formulário precisa ter pelo menos uma tela.');
+      destroyActiveCanvas();
+      current.steps.splice(selected, 1);
+      selected = Math.min(selected, current.steps.length - 1);
+      markDirty();
+      renderEditor();
+    };
+    activeCanvasEditor = createFriendlyEditor({
+      container: root.querySelector('.quiz-canvas-friendly'),
+      project: source.editorState,
+      html: source.html,
+      css: source.css,
+      onChange: () => { snapshotActiveCanvas(); markDirty(); },
+      vslVideos,
+      vslLoadError,
+      mediaEnabled,
+      publicOrigin,
+      can: (permission) => permission === 'page.write' ? can('form.write') : can(permission),
+      decorateHeader: false,
+      headerSelector: '',
+      headerContext: 'Formulário',
+      quizCanvas: true,
+      quizHeader: isHeader,
+    });
+    const sidebar = root.querySelector('.fe-sidebar');
+    const journey = root.querySelector('.quiz-canvas-journey');
+    const editorHeading = sidebar?.querySelector('.fe-panel-heading');
+    if (editorHeading) editorHeading.innerHTML = '<span class="fe-eyebrow">JORNADA</span><h2>Estrutura</h2><p>Topo fixo e telas na mesma árvore.</p>';
+    if (sidebar && journey) {
+      const canvasTree = sidebar.querySelector('.fe-tree');
+      const journeyTree = journey.querySelector('.quiz-canvas-tree');
+      const activeJourney = journeyTree?.querySelector('[aria-selected="true"]');
+      if (canvasTree && activeJourney) activeJourney.after(canvasTree);
+      const library = sidebar.querySelector('.fe-library');
+      sidebar.insertBefore(journey, library || null);
+      root.querySelector('.quiz-canvas-editor')?.classList.add('is-mounted');
+    }
+    const meta = document.createElement('div');
+    meta.className = 'quiz-screen-settings';
+    if (isHeader) {
+      const progress = current.headerElements.find((element) => element.type === 'progress');
+      meta.innerHTML = `<label><input type="checkbox" data-quiz-progress-value ${progress?.showValue ? 'checked' : ''}> Exibir valor do progresso</label>`;
+      const value = meta.querySelector('[data-quiz-progress-value]');
+      if (value) value.onchange = () => { if (progress) { progress.showValue = value.checked; markDirty(); } };
+      const runtimeProgress = document.createElement('div');
+      runtimeProgress.className = 'quiz-runtime-progress';
+      runtimeProgress.innerHTML = `<span>PROGRESSO DA JORNADA</span><i><b></b></i>${progress?.showValue ? '<small>1/1</small>' : ''}`;
+      root.querySelector('.fe-canvas-frame')?.prepend(runtimeProgress);
+    } else {
+      const step = current.steps[selected];
+      meta.innerHTML = `<label>Nome da tela<input data-quiz-screen-title maxlength="100" value="${escape(step.title || '')}"></label><label>Movimento<select data-quiz-screen-motion>${MOTIONS.map(([value, label]) => `<option value="${value}"${value === step.motion ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label><input type="checkbox" data-quiz-screen-auto ${step.autoAdvance ? 'checked' : ''}> Avançar automaticamente</label><label>Timer (segundos)<input data-quiz-screen-timer type="number" min="0" max="15" value="${Number(step.timer) || 0}"></label>`;
+      meta.querySelector('[data-quiz-screen-title]').oninput = (event) => { step.title = event.target.value; markDirty(); };
+      meta.querySelector('[data-quiz-screen-motion]').onchange = (event) => { step.motion = event.target.value; markDirty(); };
+      meta.querySelector('[data-quiz-screen-auto]').onchange = (event) => { step.autoAdvance = event.target.checked; markDirty(); };
+      meta.querySelector('[data-quiz-screen-timer]').onchange = (event) => { step.timer = Math.max(0, Math.min(15, Number(event.target.value) || 0)); markDirty(); };
+    }
+    sidebar?.append(meta);
+  }
+
   function renderEditor({ focusWorkspaceTab = false, focusTreeNodeId = null, activeTreeItem = null } = {}) {
+    if (hasQuizCanvasRuntime()) {
+      renderQuizCanvasEditor();
+      return;
+    }
+    $('#dynamic-editor').classList?.remove?.('is-quiz-canvas');
     selected = Math.max(0, Math.min(selected, current.steps.length - 1));
     const screen = current.steps[selected];
     current.headerElements ||= [createStep('logo', 'logo'), createStep('progress', 'progresso')];
@@ -736,6 +961,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   $('#form-back').onclick = () => run(async () => {
     const projectId = current?.projectId;
     await save();
+    destroyActiveCanvas();
     current = null;
     $('#form-editing').hidden = true;
     $('#dashboard').hidden = false;
@@ -762,11 +988,13 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
     loadList,
     async closeEditor() {
       await save();
+      destroyActiveCanvas();
       current = null;
       dirty = false;
       $('#form-editing').hidden = true;
     },
     reset() {
+      destroyActiveCanvas();
       formList.invalidate();
       forms = [];
       current = null;

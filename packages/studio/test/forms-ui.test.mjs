@@ -5,12 +5,14 @@ import {
   createFormsUI,
   createStep,
   createScreen,
+  cloneQuizStep,
   formTreeNodes,
   formTreeSelection,
   moveStep,
   parseOptions,
 } from '../public/forms.js';
 import * as FormsModule from '../public/forms.js';
+import { normalizeQuizCanvas } from '../server/quiz-canvas.mjs';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const cssPath = new URL('../public/forms.css', import.meta.url);
@@ -37,6 +39,27 @@ test('editor cria e reordena etapas sem alterar o array original', () => {
   assert.deepEqual(moveStep(rows, 1, -1).map((row) => row.id), ['b', 'a', 'c']);
   assert.deepEqual(rows.map((row) => row.id), ['a', 'b', 'c']);
   assert.deepEqual(moveStep(rows, 0, -1), rows);
+});
+
+test('duplicar tela de canvas regenera ids de elementos e nomes de respostas', () => {
+  const step = {
+    id: 'tela-original', title: 'Diagnóstico', elements: [{ id: 'nome', type: 'short_text' }, { id: 'perfil', type: 'single_choice' }],
+    canvas: {
+      version: 1,
+      html: '<section><div data-element-id="nome"><input name="nome" type="text"></div><div data-element-id="perfil"><input name="perfil" type="radio" value="A"><input name="perfil" type="radio" value="B"></div></section>',
+      css: '',
+      editorState: { pages: [{ frames: [{ component: { tagName: 'section', components: [{ tagName: 'div', attributes: { 'data-element-id': 'nome' }, components: [{ tagName: 'input', attributes: { name: 'nome', type: 'text' } }] }, { tagName: 'div', attributes: { 'data-element-id': 'perfil' }, components: [{ tagName: 'input', attributes: { name: 'perfil', type: 'radio', value: 'A' } }, { tagName: 'input', attributes: { name: 'perfil', type: 'radio', value: 'B' } }] }] } }] }] },
+    },
+  };
+  const copy = cloneQuizStep(step, 'tela-copia');
+  assert.equal(copy.id, 'tela-copia');
+  assert.notEqual(copy.elements[0].id, step.elements[0].id);
+  assert.notEqual(copy.elements[1].id, step.elements[1].id);
+  assert.doesNotMatch(copy.canvas.html, /name="nome"|name="perfil"/);
+  const names = [...copy.canvas.html.matchAll(/name="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(new Set(names).size, 2);
+  assert.equal(names[1], names[2]);
+  assert.deepEqual(normalizeQuizCanvas(copy.canvas).fields.map((field) => field.type), ['short_text', 'single_choice']);
 });
 
 test('árvore do formulário preserva topo, telas, elementos e a seleção compartilhada', () => {
@@ -335,4 +358,26 @@ test('resposta de formulário iniciada antes do reset não recompõe cartões an
   } finally {
     globalThis.document = previousDocument;
   }
+});
+
+test('layout do quiz preserva itens da árvore e quebra o cabeçalho somente no modo quiz', async () => {
+  const [formsCss, shellCss] = await Promise.all([readFile(cssPath, 'utf8'), readFile(new URL('../public/editor-shell.css', import.meta.url), 'utf8')]);
+  assert.match(shellCss, /\.quiz-canvas-tree > button\s*\{/);
+  assert.doesNotMatch(shellCss, /\.quiz-canvas-tree button\s*\{/);
+  assert.match(shellCss, /\.quiz-canvas-journey \.fe-tree \{ padding: 0 0 12px; \}/);
+  assert.match(shellCss, /\.quiz-canvas-journey \.fe-tree-item \{ grid-template-columns: 14px 18px minmax\(0, 1fr\) auto; gap: 4px; padding: 5px 5px 5px calc\(5px \+ \(var\(--fe-tree-level\) - 1\) \* 10px\); \}/);
+  assert.match(shellCss, /@media \(max-width: 760px\)/);
+  assert.match(shellCss, /\.quiz-canvas-tree \{ grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible;/);
+  assert.match(formsCss, /#form-editing:has\(#dynamic-editor\.is-quiz-canvas\) \.dynamic-form-header \{ min-height: 112px; height: auto; flex-wrap: wrap;/);
+  assert.match(formsCss, /#dynamic-editor\.dynamic-editor-grid\.is-quiz-canvas \{ height: calc\(100dvh - 112px\); \}/);
+  assert.doesNotMatch(formsCss, /\.dynamic-form-header::before, \.dynamic-form-header #form-save::after \{ content: none;/);
+});
+
+test('prévia de formulário ocupa o diálogo sem alterar a prévia de landing', async () => {
+  const css = await readFile(cssPath, 'utf8');
+  assert.match(css, /#form-preview-dialog\s*\{[\s\S]*width: min\(1100px, calc\(100vw - 32px\)\);[\s\S]*height: calc\(100dvh - 48px\);/);
+  assert.match(css, /#form-preview-dialog\[open\] \{ display: flex; flex-direction: column; \}/);
+  assert.match(css, /#form-preview-dialog iframe\s*\{[\s\S]*flex: 1 1 auto;[\s\S]*min-height: 0;[\s\S]*height: 100%;/);
+  assert.match(css, /@media \(max-width: 760px\) \{[\s\S]*#form-preview-dialog \{[\s\S]*margin: 8px;/);
+  assert.doesNotMatch(css, /#preview-dialog\s*\{/);
 });

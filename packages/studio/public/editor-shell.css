@@ -1028,3 +1028,67 @@
 .fe-motion-option[aria-selected='true'] { background: var(--alva-surface-alt); color: var(--alva-blue); }
 .fe-motion-option:focus-visible, .fe-motion-trigger:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
 .fe-motion-trigger:disabled, .fe-motion-option:disabled { cursor: default; opacity: .58; }
+
+/* Quiz canvases reuse the Landing editor; only the outer journey selector is
+   different, so its rules stay scoped and cannot alter Landing layout. */
+.quiz-canvas-editor { display: grid; grid-template-columns: minmax(190px, 260px) minmax(0, 1fr); min-height: calc(100dvh - 112px); background: var(--alva-surface-alt); }
+.quiz-canvas-editor.is-mounted { display: block; min-height: 0; background: transparent; }
+.quiz-canvas-journey { display: grid; align-content: start; gap: 12px; padding: 18px 14px; border-right: 1px solid var(--alva-line); background: var(--alva-white); }
+.quiz-canvas-tree { display: grid; gap: 4px; }
+.quiz-canvas-tree > button { display: block; width: 100%; padding: 10px; border: 0; border-radius: var(--radius-field); background: transparent; color: var(--alva-ink); font: 600 12px/1.3 inherit; text-align: left; cursor: pointer; }
+.quiz-canvas-tree > button[aria-selected='true'] { background: var(--alva-surface-alt); color: var(--alva-blue); }
+.quiz-canvas-tree > button:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
+.quiz-canvas-journey .fe-tree { padding: 0 0 12px; }
+.quiz-canvas-journey .fe-tree-item { grid-template-columns: 14px 18px minmax(0, 1fr) auto; gap: 4px; padding: 5px 5px 5px calc(5px + (var(--fe-tree-level) - 1) * 10px); }
+.quiz-canvas-friendly { min-width: 0; }
+.quiz-screen-settings { display: grid; gap: 8px; margin-top: 12px; font-size: 12px; }
+.quiz-screen-settings label { display: grid; gap: 4px; color: var(--alva-ink); }
+.quiz-screen-settings input, .quiz-screen-settings select { width: 100%; min-height: 32px; border: 1px solid var(--alva-line); border-radius: var(--radius-field); font: inherit; }
+.quiz-screen-settings input[type='checkbox'] { width: auto; min-height: 0; }
+.quiz-runtime-progress { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-bottom: 1px solid var(--alva-line); color: var(--alva-muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.quiz-runtime-progress i { display: block; flex: 1; height: 5px; overflow: hidden; border-radius: 99px; background: var(--alva-surface-alt); }.quiz-runtime-progress b { display: block; width: 35%; height: 100%; background: var(--alva-blue); }
+@media (max-width: 760px) { .quiz-canvas-editor { grid-template-columns: 1fr; } .quiz-canvas-journey { border-right: 0; border-bottom: 1px solid var(--alva-line); } .quiz-canvas-tree { grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible; } }
+
+
+/* Quiz canvas keeps the three editor regions visible until the mobile workspace
+   tabs take over. These rules are scoped so the Landing editor keeps its own
+   responsive behavior. */
+@media (min-width: 1051px) {
+  #dynamic-editor.is-quiz-canvas .friendly-editor {
+    grid-template-columns: minmax(200px, 270px) minmax(0, 1fr) minmax(260px, 320px);
+  }
+}
+@media (min-width: 761px) and (max-width: 1050px) {
+  #dynamic-editor.is-quiz-canvas .friendly-editor {
+    grid-template-columns: 180px minmax(0, 1fr) 260px;
+    height: calc(100dvh - 64px);
+  }
+  #dynamic-editor.is-quiz-canvas .friendly-editor .fe-inspector {
+    position: static;
+    width: auto;
+    height: auto;
+    box-shadow: none;
+  }
+  #dynamic-editor.is-quiz-canvas .friendly-editor .fe-sidebar,
+  #dynamic-editor.is-quiz-canvas .friendly-editor .fe-inspector {
+    min-width: 0;
+  }
+  #dynamic-editor.is-quiz-canvas .friendly-editor > * { min-width: 0; }
+  #dynamic-editor.is-quiz-canvas .friendly-editor .fe-inspector * { min-width: 0; overflow-wrap: anywhere; }
+}
+@media (max-width: 760px) {
+  #dynamic-editor.is-quiz-canvas .friendly-editor .editor-workspace-tabs {
+    display: flex;
+  }
+  #dynamic-editor.is-quiz-canvas .friendly-editor .editor-workspace-tabs [role='tab'] {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  #dynamic-editor.is-quiz-canvas .friendly-editor .editor-workspace-tabs [data-workspace-tab='structure'] {
+    display: block;
+  }
+  #dynamic-editor.is-quiz-canvas .friendly-editor [data-editor-panel][hidden] {
+    display: none;
+  }
+}

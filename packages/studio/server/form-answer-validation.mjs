@@ -16,7 +16,11 @@ export function validateFormAnswers(schema, input) {
   const fields = Array.isArray(schema?.steps)
     ? schema.steps.flatMap((step) => Array.isArray(step?.elements) ? step.elements : [step])
     : [];
+  const canvasOnly = Array.isArray(schema?.steps) && schema.steps.length > 0
+    && schema.steps.every((step) => Array.isArray(step?.elements) && step.canvas && !step.elements.some((element) => !INFORMATIONAL.has(element?.type)));
+  if (!fields.length && canvasOnly) return {};
   if (!fields.length) throw fail('Formulário publicado inválido.', 409);
+  if (canvasOnly) return {};
   for (const step of fields) {
     if (!step || typeof step !== 'object' || typeof step.id !== 'string') throw fail('Formulário publicado inválido.', 409);
     if (INFORMATIONAL.has(step.type)) {

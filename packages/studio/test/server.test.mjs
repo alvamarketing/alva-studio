@@ -172,6 +172,9 @@ test('servidor entrega todo o grafo de módulos importado pelo app', async (t) =
   };
 
   await visit('/app.js');
+  await Promise.all(['/quiz-canvas-seed.js', '/quiz-elements.js'].map(visit));
+  assert.ok(seen.has('/quiz-canvas-seed.js'));
+  assert.ok(seen.has('/quiz-elements.js'));
   assert.ok(seen.has('/studio-shell.js'));
   assert.ok(seen.has('/studio-dashboard.js'));
   assert.ok(seen.has('/leads-ui.js'));

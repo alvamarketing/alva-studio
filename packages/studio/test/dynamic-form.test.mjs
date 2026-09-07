@@ -54,7 +54,8 @@ test('renderiza mídia, múltipla escolha, escala, arquivo, CTA, gráfico, ícon
     { id: 'acao', type: 'cta', title: 'Vamos?', description: '', required: false, buttonLabel: 'Conversar', buttonUrl: 'https://example.com', icon: 'arrow_forward', motion: 'fade-up' },
   ];
   const html = renderDynamicForm(rich, '/api/public/forms/123/submit');
-  assert.match(html, /Material\+Symbols\+Outlined/);
+  assert.match(html, /material-symbols-outlined\.woff2/);
+  assert.doesNotMatch(html, /fonts\.googleapis|fonts\.gstatic/);
   assert.match(html, /data-motion="slide-left"/);
   assert.match(html, /type="checkbox" name="interesses"/);
   assert.match(html, /type="range"/);
@@ -199,14 +200,14 @@ test('renderiza VSL com embed absoluto resolvido e fallback acessível sem expor
 
 test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte', () => {
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 18689);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '160435ef31bc85536d494d8376820fb42ebfca9cd9180ed415544bb5de259f45');
+  assert.equal(html.length, 20615);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '400ae9782d1dbb25309d232f32e438d8513444f98a6ea933544ca2fa128bb99e');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
   const html = renderCompletion('Tudo certo!', 'Recebemos suas respostas.');
-  assert.equal(html.length, 1240);
-  assert.equal(createHash('sha256').update(html).digest('hex'), 'dc2ba647ceced6df839ddd2ecee6ad370ee6b30659bc24cebb6d6b17d98e21ca');
+  assert.equal(html.length, 1470);
+  assert.equal(createHash('sha256').update(html).digest('hex'), 'cc03247637c124585db1d309ddc742769d6845ef37c0f9f2aaaa98239ac96bb9');
 });
 
 test('nonce aparece no script do runner e no script do tracker público', () => {
@@ -272,5 +273,92 @@ test('sem trackerPublicId, o runner não ganha instrumentação de eventos', () 
 
 test('renderCompletion também aceita nonce sem alterar a saída atual', () => {
   const html = renderCompletion('Tudo certo!', 'Recebemos suas respostas.', { nonce: 'zzz' });
-  assert.equal(createHash('sha256').update(html).digest('hex'), 'dc2ba647ceced6df839ddd2ecee6ad370ee6b30659bc24cebb6d6b17d98e21ca');
+  assert.equal(createHash('sha256').update(html).digest('hex'), 'cc03247637c124585db1d309ddc742769d6845ef37c0f9f2aaaa98239ac96bb9');
+});
+
+test('runner isola telas externas do canvas, coleta select múltiplo e mantém um cabeçalho canvas', () => {
+  const withHeaderCanvas = {
+    ...form,
+    headerCanvas: {
+      version: 1,
+      editorState: { components: [{ tagName: 'header', components: [{ tagName: 'h1', content: 'Topo' }] }] },
+      html: '<header class="funnel-header"><h1>Topo</h1></header>',
+      css: '',
+    },
+  };
+  const html = renderDynamicForm(withHeaderCanvas, '/submit');
+  assert.equal((html.match(/class="funnel-header"/g) || []).length, 1);
+  assert.match(html, /querySelectorAll\('\.screen\.step'\)/);
+  assert.match(html, /select\[required\]/);
+  assert.match(html, /fields\[0\]\.tagName==='SELECT'&&fields\[0\]\.multiple/);
+  assert.match(html, /selectedOptions/);
+});
+
+test('runner real em DOM navega duas telas canvas e envia select múltiplo', async () => {
+  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const canvas = (id, html, editorState) => ({ id, version: 1, html, css: '', editorState });
+  const optionNodes = [{ tagName: 'option', attributes: { value: 'A' } }, { tagName: 'option', attributes: { value: 'B' } }];
+  const selectHtml = '<section class="screen"><select name="interesses" multiple><option value="A">A</option><option value="B">B</option></select></section>';
+  const selectModel = { components: [{ tagName: 'section', components: [{ tagName: 'select', attributes: { name: 'interesses', multiple: true }, components: optionNodes }] }] };
+  const formHtml = renderDynamicForm({
+    ...form,
+    headerCanvas: canvas('header', '<div class="canvas-header">Topo</div>', { components: [{ tagName: 'div', components: [{ type: 'textnode', content: 'Topo' }] }] }),
+    steps: [
+      { id: 'primeira', title: 'Primeira', elements: [], canvas: canvas('primeira', selectHtml, selectModel) },
+      { id: 'segunda', title: 'Segunda', elements: [], canvas: canvas('segunda', '<section class="screen"><p>Oferta</p></section>', { components: [{ tagName: 'section', components: [{ tagName: 'p', components: [{ type: 'textnode', content: 'Oferta' }] }] }] }) },
+    ],
+  }, '/submit');
+  const requests = [];
+  const dom = new JSDOM(formHtml, {
+    runScripts: 'dangerously',
+    url: 'https://studio.test/quiz',
+    beforeParse(window) {
+      window.CSS = { escape: (value) => String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&') };
+      window.fetch = async (_url, options) => { requests.push(JSON.parse(options.body)); return { ok: false, text: async () => '' }; };
+    },
+  });
+  const { document } = dom.window;
+  assert.equal(document.querySelectorAll('section.screen.step').length, 2);
+  assert.equal(document.querySelectorAll('.funnel-header').length, 1);
+  const select = document.querySelector('select[multiple]');
+  select.options[0].selected = true; select.options[1].selected = true;
+  document.querySelector('section.screen.step[data-step="0"] .next').click();
+  assert.equal(document.querySelector('section.screen.step[data-step="0"]').hidden, true);
+  document.querySelector('section.screen.step[data-step="1"] .back').click();
+  assert.equal(document.querySelector('section.screen.step[data-step="0"]').hidden, false);
+  document.querySelector('section.screen.step[data-step="0"] .next').click();
+  document.querySelector('section.screen.step[data-step="1"] .next').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(requests, [{ answers: { interesses: ['A', 'B'] } }]);
+  dom.window.close();
+});
+
+test('runner valida grupo data-quiz-required com qualquer checkbox selecionado', async () => {
+  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const html = renderDynamicForm({
+    ...form,
+    steps: [{ id: 'perfil', type: 'multiple_choice', title: 'Perfil', required: false, options: ['A', 'B'] }],
+  }, '/submit');
+  const requests = [];
+  const dom = new JSDOM(html, {
+    runScripts: 'dangerously',
+    url: 'https://studio.test/quiz',
+    beforeParse(window) {
+      window.CSS = { escape: (value) => String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&') };
+      window.fetch = async (_url, options) => { requests.push(JSON.parse(options.body)); return { ok: false, text: async () => '' }; };
+    },
+  });
+  const { document } = dom.window;
+  const group = document.querySelector('.choices');
+  assert.ok(group);
+  group.setAttribute('data-quiz-required', 'true');
+  document.querySelector('.next').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(requests, []);
+  const checkbox = document.querySelector('input[type="checkbox"]');
+  checkbox.checked = true;
+  document.querySelector('.next').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(requests, [{ answers: { perfil: ['A'] } }]);
+  dom.window.close();
 });

@@ -127,6 +127,29 @@ test('árvore trata gráficos como um único item atômico', () => {
   editor.destroy();
 });
 
+test('árvore trata grupos de escolha do quiz como itens semânticos únicos', () => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  const section = editor.getWrapper().append({
+    tagName: 'section',
+    components: [
+      { tagName: 'div', attributes: { 'data-quiz-type': 'single_choice' }, components: [{ tagName: 'p', components: [{ type: 'textnode', content: 'Canal' }] }, { tagName: 'label', components: [{ tagName: 'input', attributes: { type: 'radio', name: 'canal' } }] }] },
+      { tagName: 'div', attributes: { 'data-quiz-type': 'multiple_choice' }, components: [{ tagName: 'p', components: [{ type: 'textnode', content: 'Interesses' }] }, { tagName: 'label', components: [{ tagName: 'input', attributes: { type: 'checkbox', name: 'interesses' } }] }] },
+      { tagName: 'div', attributes: { 'data-quiz-type': 'image_choice' }, components: [{ tagName: 'p', components: [{ type: 'textnode', content: 'Formato' }] }, { tagName: 'label', components: [{ tagName: 'input', attributes: { type: 'radio', name: 'formato' } }] }] },
+    ],
+  })[0];
+  const groups = section.components().models;
+  const entries = editorialTreeEntries(editor.getWrapper(), groups[2]);
+  const quizEntries = entries.flatMap((entry) => entry.elements).filter((entry) => entry.component.getAttributes?.()['data-quiz-type']);
+  assert.deepEqual(quizEntries.map((entry) => entry.label), ['Escolha única', 'Múltipla escolha', 'Escolha visual']);
+  assert.deepEqual(quizEntries.map((entry) => entry.component), groups);
+  assert.equal(quizEntries.find((entry) => entry.component === groups[2])?.selected, true);
+  assert.equal(entries.flatMap((entry) => entry.elements).some((entry) => ['Texto', 'Campo'].includes(entry.label)), false);
+  assert.equal(editorialElementLabel(groups[0]), 'Escolha única');
+  assert.equal(editorialElementLabel(groups[1]), 'Múltipla escolha');
+  assert.equal(editorialElementLabel(groups[2]), 'Escolha visual');
+  editor.destroy();
+});
+
 test('árvore inclui gráficos irmãos após main com seções internas', async () => {
   const editor = grapesjs.init({ headless: true, storageManager: false });
   const wrapper = editor.getWrapper();
