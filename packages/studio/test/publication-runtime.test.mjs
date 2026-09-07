@@ -11,14 +11,22 @@ test('manifesto de runtime é público, estável e só aceita produção para co
     publicationId: 'pub-1', snapshotHash: 'a'.repeat(64), version: 3, policyVersion: 2, origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production',
     consent: { required: true, scope: 'publication' },
     providers: [{ provider: 'ga4', id: 'G-ABCD1234' }, { provider: 'meta', id: '123' }],
+    contents: [],
   });
-  assert.throws(() => buildRuntimeManifest({ publicationId: 'pub-1', snapshotHash: 'a'.repeat(64), origin: 'https://preview.example.test', environment: 'preview', providers: ['meta'] }), /produção/);
+  assert.throws(() => buildRuntimeManifest({ publicationId: 'pub-1', snapshotHash: 'a'.repeat(64), origin: 'https://preview.example.test', domain: 'preview.example.test', environment: 'preview', providers: [{ provider: 'meta', id: '123' }] }), /prévia/i);
   const variants = [
     { ...manifest, publicationId: 'pub-2' }, { ...manifest, snapshotHash: 'b'.repeat(64) },
     { ...manifest, policyVersion: 3 }, { ...manifest, origin: 'https://other.example.test', domain: 'other.example.test' },
     { ...manifest, domain: 'other.example.test' }, { ...manifest, environment: 'preview' },
   ];
   for (const variant of variants) assert.notEqual(consentKey(manifest), consentKey(variant));
+});
+
+test('manifesto de runtime expõe somente o mapa imutável do snapshot', () => {
+  const contents = [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'page-version-a', captureIds: ['11111111-1111-4111-8111-111111111111'] }, { path: '/contato', type: 'form', contentId: 'form-1', versionId: 'form-version-a', captureIds: [] }];
+  const manifest = buildRuntimeManifest({ publicationId: 'pub-contents', snapshotHash: 'a'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', contents });
+  assert.deepEqual(manifest.contents, contents);
+  assert.throws(() => buildRuntimeManifest({ publicationId: 'pub-contents', snapshotHash: 'a'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', contents: [{ ...contents[0], captureIds: ['not-a-uuid'] }] }), /conteúdo do manifesto/i);
 });
 
 test('assinatura exige timestamp/nonce, rejeita replay e não expõe segredo', async () => {
@@ -114,7 +122,15 @@ test('repositório isola manifesto por empresa/projeto/ambiente e revoga publica
     const project = (await database.query("INSERT INTO projects (company_id, name, slug, created_by) VALUES ($1,'Projeto','runtime',$2) RETURNING id", [company.id, user.id])).rows[0];
     const { PublicationRuntimeRepository } = await import('../server/repositories/publication-runtime-repository.mjs');
     const repository = new PublicationRuntimeRepository(database);
-    const manifest = buildRuntimeManifest({ publicationId: 'pub-1', snapshotHash: 'b'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', providers: [{ provider: 'meta', id: '123' }] });
+    await database.query(
+      `INSERT INTO publication_runtime_manifests
+        (company_id, project_id, environment, publication_id, snapshot_hash, version, origin, domain)
+       VALUES ($1,$2,'production','pub-default',$3,0,'https://default.example.test','default.example.test')`,
+      [company.id, project.id, 'c'.repeat(64)],
+    );
+    assert.deepEqual((await database.query("SELECT contents FROM publication_runtime_manifests WHERE publication_id='pub-default' ")).rows[0].contents, []);
+    await database.query("DELETE FROM publication_runtime_manifests WHERE publication_id='pub-default'");
+    const manifest = buildRuntimeManifest({ publicationId: 'pub-1', snapshotHash: 'b'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', providers: [{ provider: 'meta', id: '123' }], contents: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'] }] });
     await repository.saveManifest({ companyId: company.id, projectId: project.id, manifest });
     const projectTwo = (await database.query("INSERT INTO projects (company_id, name, slug, created_by) VALUES ($1,'Projeto dois','runtime-dois',$2) RETURNING id", [company.id, user.id])).rows[0];
     await assert.rejects(() => repository.saveManifest({ companyId: company.id, projectId: projectTwo.id, manifest }), /duplicate|unique|constraint/i);
@@ -122,6 +138,7 @@ test('repositório isola manifesto por empresa/projeto/ambiente e revoga publica
     assert.equal(stored.publication_id, 'pub-1');
     assert.equal(stored.policy_version, 1);
     assert.equal(stored.domain, 'lp.example.test');
+    assert.deepEqual(stored.contents, manifest.contents);
     assert.equal((await repository.currentForOrigin({ publicationId: 'pub-1', origin: 'https://lp.example.test' })).publication_id, 'pub-1');
     assert.equal(await repository.currentForOrigin({ publicationId: 'pub-1', origin: 'https://other.example.test' }), null);
     await repository.recordConsent({ manifest: { ...manifest, companyId: company.id, projectId: project.id }, subjectId: 'visitor-opaque-1', state: 'granted' });

@@ -186,7 +186,7 @@
                 </nav>
               </div>
               <div id="project-leads-controls" class="project-leads-controls" hidden>
-                <label>Formulário <select id="project-leads-form" aria-label="Filtrar leads por formulário"><option value="">Todos os formulários</option></select></label>
+                <label>Origem <select id="project-leads-form" aria-label="Filtrar leads por origem"><option value="">Todas as origens</option></select></label>
                 <a id="project-leads-export" download hidden>Exportar CSV</a>
                 <button type="button" id="project-leads-next" hidden>Carregar mais</button>
               </div>
@@ -438,11 +438,10 @@
         <div class="eyebrow">CONFIGURAÇÕES DA PÁGINA</div>
         <h2>Do editor para o mundo.</h2>
         <label
-          >Destino do formulário<input name="webhook" type="url" placeholder="https://seu-sistema.com/formulario"
+          >Webhook (opcional)<input name="webhook" type="url" placeholder="https://seu-sistema.com/formulario"
         /></label>
         <p class="help">
-          O destino deve aceitar POST de formulário (application/x-www-form-urlencoded) e mostrar uma confirmação. Os
-          contatos são enviados diretamente para ele.
+          As respostas ficam disponíveis no Studio. Opcionalmente, envie uma cópia em JSON para seu CRM ou automação.
         </p>
         <label>Domínio ou subdomínio<input name="domain" placeholder="lp.suaempresa.com.br" /></label>
         <p class="help">Após publicar, conecte o domínio. O apontamento DNS é configurado no provedor do domínio.</p>

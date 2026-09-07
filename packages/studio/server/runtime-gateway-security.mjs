@@ -24,6 +24,7 @@ export function runtimeManifest(row) {
     environment: row.environment,
     consent: row.consent ?? row.policy ?? {},
     providers: row.providers ?? [],
+    contents: row.contents ?? [],
     revokedAt: row.revokedAt ?? row.revoked_at ?? null,
   };
 }

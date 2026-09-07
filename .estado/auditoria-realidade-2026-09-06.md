@@ -175,3 +175,18 @@ Este bloco é uma atualização localizada da auditoria. Preserva a conclusão e
 - A revisão independente `/tmp/alva-catalog-review.md` foi atualizada e aprovada funcionalmente após a QA limpa. A suíte release final, executada com Node 24.17.0, concluiu 553 testes, 553 aprovados, 0 falhas, 0 cancelados, 0 skips e 0 todo, em 50.592,41825 ms (~50,6 s); `/tmp/alva-catalog-suite-release.exit` registra exit 0 e o log está em `/tmp/alva-catalog-suite-release.log`.
 
 Limites desta atualização: não certifica a Etapa 6 inteira nem a V1; não há captura local da landing com conteúdo (somente webhook externo), nem certificação de upload/publicação, E2E integral do catálogo ou QA de navegador para todos os 14 IDs. Screenshots lado a lado arquivadas e URL policy continuam pendentes. Cálculos do quiz, Analytics e demais etapas permanecem fora do escopo. As seções `Estrutura`, `Conteúdo` e `Biblioteca visual` foram preservadas, sem redesenho.
+
+---
+
+## Estado atual — captura de Landing e Leads (2026-09-06)
+
+Esta seção atualiza somente o estado correspondente; o histórico e as conclusões anteriores deste documento permanecem identificados acima.
+
+- O backend agora cobre UUID estável, snapshot por versão, `page_submissions`, outbox/webhook e resolução no mapa de conteúdos/gateway HTTP. A captura é independente dos pixels e demais destinos de tracking.
+- Leads e CSV usam `sourceKind`, `sourceId`, `sourceVersionId` e `captureId`, com rótulos de campos históricos; nomes de conteúdo usam o valor atual quando a versão não tem nome. O frontend filtra origens no bloco existente **“Conteúdos do projeto”**, sem redesenho.
+- O teste integrado banco + HTTP passou e quatro UUIDs permaneceram persistidos após salvar/reabrir. A suíte full com Node 24.17.0 concluiu 574 testes aprovados, 0 falhas e 0 skips em 42.602,97325 ms; log em `/tmp/alva-capture-suite-release.log` e exit 0. Esse run ocorreu antes dos últimos ajustes de acesso/modo Leads; depois deles, os testes focados passaram 6/6, o `node --check` passou e a QA manual confirmou o fluxo.
+- A revisão independente `/tmp/alva-capture-final-review.md` aprovou o bloco e o status do webhook foi corrigido com consulta à fila. Isso não afirma idempotência de POST repetido pelo usuário.
+- O servidor do Studio foi reiniciado na sessão 51020, as migrações aditivas 019/020 foram aplicadas e `/health/ready` respondeu 200. O banco local não foi reiniciado.
+- A QA no navegador confirmou clique em LEADS → lista, título/origem, seleção de quiz, CSV e retorno para “Conteúdos do projeto”. O ambiente do usuário tem 0 leads; dados fictícios foram validados em banco descartável + HTTP.
+- Publicação na Vercel e egress real não foram feitos. Quiz compartilhado e etapas 7–18 continuam pendentes. Não há certificação V1, produção externa ou comparação de screenshots arquivada.
+- Pendência técnica para o deploy: `PublicationService.production` compara `preview.snapshotHash` com o hash de produção, mas os testes read-only confirmaram que a mesma fórmula com nonce HTML por ambiente gera hashes diferentes. É preciso separar a impressão de conteúdo comparável do `snapshotHash` de deploy antes da Vercel; o isolamento do `SnapshotHMAC` deve permanecer. Esta correção não foi feita neste bloco.

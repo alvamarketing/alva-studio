@@ -34,6 +34,61 @@ test('snapshot inclui todas as páginas e formulários publicados em ordem está
   assert.deepEqual(repeat.files, snapshot.files);
 });
 
+test('snapshot reescreve cada captura pelo UUID canônico e registra seus IDs', async () => {
+  const first = '11111111-1111-4111-8111-111111111111';
+  const second = '22222222-2222-4222-8222-222222222222';
+  const rows = [{
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-1', version_id: 'page-version-a', version_number: 3, path: '/',
+    capture_schema: { forms: [{ captureId: first }, { captureId: second }] },
+    rendered_html: `<main><!-- <form data-alva-capture-id="${first}"> --><script>const example='<form data-alva-capture-id="${first}">';</script><textarea><form data-alva-capture-id="${first}"></textarea><form title="action='falsa' data-alva-capture-id='${first}'" data-alva-capture-id="${second}" action="#two" onsubmit="return false"><input data-note="a > b" name="email"></form><form action="#one" data-alva-capture-id="${first}"><input name="nome"></form></main>`,
+  }];
+  const snapshot = await buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' });
+  assert.deepEqual(snapshot.manifest[0].captureIds, [first, second]);
+  assert.match(snapshot.files[0].data, new RegExp(`/api/public/pages/alva/campanha/captures/${second}/submissions`));
+  assert.match(snapshot.files[0].data, new RegExp(`/api/public/pages/alva/campanha/captures/${first}/submissions`));
+  assert.match(snapshot.files[0].data, /<input data-note="a > b" name="email">/);
+  assert.match(snapshot.files[0].data, /<!-- <form data-alva-capture-id/);
+  assert.match(snapshot.files[0].data, /const example='<form data-alva-capture-id/);
+  assert.match(snapshot.files[0].data, /<textarea><form data-alva-capture-id/);
+  assert.match(snapshot.files[0].data, /title="action='falsa' data-alva-capture-id='11111111-1111-4111-8111-111111111111'"/);
+  assert.match(snapshot.files[0].data, /method="post"/);
+  assert.doesNotMatch(snapshot.files[0].data, /onsubmit="return false"/);
+});
+
+test('snapshot bloqueia captura sem UUID no HTML ou divergente da versão salva', async () => {
+  const captureId = '11111111-1111-4111-8111-111111111111';
+  const base = {
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-1', version_id: 'page-version-a', version_number: 3, path: '/oferta',
+    capture_schema: { forms: [{ captureId }] },
+  };
+  for (const rendered_html of ['<form action="#"><input name="email"></form>', '<form data-alva-capture-id="22222222-2222-4222-8222-222222222222"></form>']) {
+    await assert.rejects(
+      () => buildPublishableSnapshot({ database: database([{ ...base, rendered_html }]), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
+      /salve e publique a página novamente/i,
+    );
+  }
+});
+
+test('versões diferentes mantêm o endpoint da captura que pertence a cada snapshot', async () => {
+  const versionA = '11111111-1111-4111-8111-111111111111';
+  const versionB = '22222222-2222-4222-8222-222222222222';
+  const base = {
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-1', version_number: 1, path: '/oferta',
+  };
+  const build = (versionId, captureId) => buildPublishableSnapshot({
+    database: database([{ ...base, version_id: versionId, capture_schema: { forms: [{ captureId }] }, rendered_html: `<form data-alva-capture-id="${captureId}"></form>` }]),
+    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+  });
+  const [a, b] = await Promise.all([build('version-a', versionA), build('version-b', versionB)]);
+  assert.match(a.files[0].data, new RegExp(`/oferta/captures/${versionA}/submissions`));
+  assert.doesNotMatch(a.files[0].data, new RegExp(versionB));
+  assert.match(b.files[0].data, new RegExp(`/oferta/captures/${versionB}/submissions`));
+  assert.notEqual(a.hash, b.hash);
+});
+
 test('snapshot rejeita vazio, rota duplicada e registros de outra empresa', async () => {
   await assert.rejects(
     () => buildPublishableSnapshot({ database: database([]), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),

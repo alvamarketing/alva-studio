@@ -45,10 +45,12 @@ export class PublicationService {
     const claim = this.deployments.claim ? await this.deployments.claim({ companyId, projectId, runId: run.id }) : { claimed: true, run };
     if (!claim.claimed) return publicRun(claim.run || run, snapshot);
     try {
-      const runtimeActive = this.runtimeEnabled && environment === 'production';
-      const publicProviders = runtimeActive && this.tracking?.publicProviders ? await this.tracking.publicProviders({ companyId, projectId, environment }) : [];
+      const hasPageCapture = snapshot.manifest.some((content) => content.type === 'page' && Array.isArray(content.captureIds) && content.captureIds.length > 0);
+      const runtimeActive = (this.runtimeEnabled && environment === 'production') || hasPageCapture;
+      const runtimeBootstrap = this.runtimeEnabled && environment === 'production';
+      const publicProviders = runtimeBootstrap && this.tracking?.publicProviders ? await this.tracking.publicProviders({ companyId, projectId, environment }) : [];
       const runtime = runtimeActive
-        ? runtimeGatewayArtifacts(snapshot.files, { publicationId: run.id, snapshotHash: snapshot.hash, environment, runtimeOrigin: this.runtimeOrigin, runtimeHmacSecret: this.runtimeHmacSecret, providers: publicProviders })
+        ? runtimeGatewayArtifacts(snapshot.files, { publicationId: run.id, snapshotHash: snapshot.hash, environment, runtimeOrigin: this.runtimeOrigin, runtimeHmacSecret: this.runtimeHmacSecret, providers: publicProviders, runtimeBootstrap })
         : { files: snapshot.files, runtimeEnv: undefined };
       const result = await publisher.publish({
         projectId: credentials.vercelProjectId,
@@ -71,7 +73,7 @@ export class PublicationService {
       if (!persisted) return publicRun((await this.deployments.find({ companyId, projectId, runId: run.id })) || run, snapshot);
       if (runtimeActive && this.runtimeManifests && result.url) {
         const origin = new URL(/^https:\/\//i.test(result.url) ? result.url : `https://${result.url}`).origin;
-        await this.runtimeManifests.saveManifest({ companyId, projectId, manifest: { publicationId: run.id, snapshotHash: snapshot.hash, version: expectedRevision, policyVersion: 1, origin, domain: new URL(origin).hostname, environment, consent: { required: true, scope: 'publication' }, providers: publicProviders } });
+        await this.runtimeManifests.saveManifest({ companyId, projectId, manifest: buildRuntimeManifest({ publicationId: run.id, snapshotHash: snapshot.hash, version: expectedRevision, policyVersion: 1, origin, domain: new URL(origin).hostname, environment, providers: publicProviders, contents: snapshot.manifest.map(({ path, type, contentId, versionId, captureIds }) => ({ path, type, contentId, versionId, captureIds: captureIds || [] })) }) });
       }
       await this.audit.record({ companyId, projectId, actorUserId: requestedBy, action: `deployment.${environment}.success`, resourceType: 'deployment_run', resourceId: run.id, revision: expectedRevision, result: 'success', metadata: { snapshotHash: snapshot.hash } });
       return publicRun({ ...persisted, url: result.url || persisted.url }, snapshot);
@@ -141,7 +143,7 @@ export class PublicationService {
       const current = await this.runtimeManifests.current({ companyId, projectId, environment: 'production', publicationId: run.id });
       if (current) {
         const origin = `https://${result.name || domain}`;
-        await this.runtimeManifests.saveManifest({ companyId, projectId, manifest: buildRuntimeManifest({ publicationId: current.publication_id, snapshotHash: current.snapshot_hash, version: current.version, policyVersion: current.policy_version, origin, domain: new URL(origin).hostname, environment: current.environment, providers: current.providers }) });
+        await this.runtimeManifests.saveManifest({ companyId, projectId, manifest: buildRuntimeManifest({ publicationId: current.publication_id, snapshotHash: current.snapshot_hash, version: current.version, policyVersion: current.policy_version, origin, domain: new URL(origin).hostname, environment: current.environment, providers: current.providers, contents: current.contents || [] }) });
       }
     }
     await this.audit.record({ companyId, projectId, actorUserId: requestedBy, action: 'domain.configure.success', resourceType: 'deployment_run', resourceId: run.id, result: 'success', metadata: { domain: result.name || domain } });

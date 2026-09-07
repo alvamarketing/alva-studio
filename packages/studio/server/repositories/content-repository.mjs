@@ -7,6 +7,7 @@ import { allowedPublicationOrigin } from '../publication-cors.mjs';
 import { extractVslReferences } from '../publication-snapshot.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from '../vsl-reference.mjs';
 import { WebhookDeliveryRepository } from './webhook-repository.mjs';
+import { extractPageCaptureSchema, normalizePageCaptureIds, validatePageCaptureAnswers } from '../page-capture-schema.mjs';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -167,6 +168,20 @@ function formVersionRecord(row) {
   };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function uuid(value, label) {
+  if (typeof value !== 'string' || !UUID.test(value)) throw fail(`${label} inválido.`, 400);
+  return value;
+}
+
+function versionFields(schema) {
+  const steps = Array.isArray(schema?.steps) ? schema.steps : [];
+  return steps.flatMap((step) => Array.isArray(step?.elements) ? step.elements : [step])
+    .filter((field) => field && typeof field.id === 'string')
+    .map((field) => ({ id: field.id, title: String(field.title ?? field.id) }));
+}
+
 function leadCursor(value) {
   if (value === undefined || value === null || value === '') return null;
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) throw fail('Cursor inválido.', 400);
@@ -177,15 +192,15 @@ function leadCursor(value) {
     throw fail('Cursor inválido.', 400);
   }
   if (Buffer.from(decoded).toString('base64url') !== value) throw fail('Cursor inválido.', 400);
-  const [submittedAt, id, ...extra] = decoded.split('|');
-  if (extra.length || !submittedAt || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id ?? '') || Number.isNaN(Date.parse(submittedAt)))
+  const [submittedAt, id, sourceKind, ...extra] = decoded.split('|');
+  if (extra.length || !submittedAt || !UUID.test(id ?? '') || (sourceKind && !['form', 'page'].includes(sourceKind)) || Number.isNaN(Date.parse(submittedAt)))
     throw fail('Cursor inválido.', 400);
-  return { submittedAt, id };
+  return { submittedAt, id, sourceKind: sourceKind || 'form' };
 }
 
-function encodedLeadCursor(submittedAt, id) {
+function encodedLeadCursor(submittedAt, id, sourceKind) {
   const timestamp = submittedAt instanceof Date ? submittedAt.toISOString() : new Date(submittedAt).toISOString();
-  return Buffer.from(`${timestamp}|${id}`).toString('base64url');
+  return Buffer.from(`${timestamp}|${id}|${sourceKind}`).toString('base64url');
 }
 
 async function authorizedProject(client, { companyId, projectId, actorId, capability }) {
@@ -330,7 +345,7 @@ export class ContentRepository {
   async createPage({ companyId, projectId, actorId, name, route: routeValue, template, editorState = {}, renderedHtml = '', client: suppliedClient = null }) {
     const pageName = requiredName(name, 'Nome da página');
     const pageRoute = route(routeValue);
-    const state = json(editorState, 'Estado do editor');
+    const state = normalizePageCaptureIds(json(editorState, 'Estado do editor'));
     const html = validRenderedHtml(renderedHtml);
     const pageTemplate = optionalTemplate(template);
     try {
@@ -430,7 +445,7 @@ export class ContentRepository {
           name: patch.name === undefined ? current.name : requiredName(patch.name, 'Nome da página'),
           route: patch.route === undefined ? current.route : route(patch.route),
           template: patch.template === undefined ? current.template : optionalTemplate(patch.template),
-          editorState: patch.editorState === undefined ? current.editor_state : json(patch.editorState, 'Estado do editor'),
+          editorState: normalizePageCaptureIds(patch.editorState === undefined ? current.editor_state : json(patch.editorState, 'Estado do editor')),
           renderedHtml: patch.renderedHtml === undefined ? current.rendered_html : validRenderedHtml(patch.renderedHtml),
         };
         const { rows } = await client.query(
@@ -597,39 +612,112 @@ export class ContentRepository {
     return rows.map((row) => ({ id: row.id, formId, answers: row.answers, submittedAt: row.submitted_at }));
   }
 
-  async projectSubmissions({ companyId, projectId, actorId, formId, limit = 50, cursor }) {
+  async projectSubmissions({ companyId, projectId, actorId, formId, sourceKind, sourceId, captureId, limit = 50, cursor }) {
     await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'submission.read' });
-    if (formId) await scopedForm(this.database, { companyId, projectId, formId });
+    if (formId) {
+      uuid(formId, 'Formulário');
+      await scopedForm(this.database, { companyId, projectId, formId });
+      if (sourceKind && (sourceKind !== 'form' || sourceId !== formId)) throw fail('Filtros de origem conflitantes.', 400);
+      sourceKind = 'form';
+      sourceId = formId;
+    }
+    if (sourceKind !== undefined && !['form', 'page'].includes(sourceKind)) throw fail('Tipo de origem inválido.', 400);
+    if (sourceId !== undefined) uuid(sourceId, 'Origem');
+    if (captureId !== undefined) uuid(captureId, 'Captura');
+    if (sourceKind && !sourceId) throw fail('Informe a origem.', 400);
+    if (captureId && sourceKind !== 'page') throw fail('Captura requer uma página.', 400);
+    if (sourceKind === 'form') await scopedForm(this.database, { companyId, projectId, formId: sourceId });
+    if (sourceKind === 'page') {
+      await scopedPage(this.database, { companyId, projectId, pageId: sourceId });
+      if (captureId) {
+        const capture = await this.database.query(
+          `SELECT 1 FROM page_versions version
+           WHERE version.company_id = $1 AND version.project_id = $2 AND version.page_id = $3
+             AND jsonb_path_exists(version.capture_schema, '$.forms[*] ? (@.captureId == $captureId)', jsonb_build_object('captureId', to_jsonb($4::text)))
+           LIMIT 1`,
+          [companyId, projectId, sourceId, captureId],
+        );
+        if (!capture.rows.length) throw fail('Captura não encontrada.', 404);
+      }
+    }
     const pageSize = Math.min(100, Math.max(1, Number.isInteger(limit) ? limit : 50));
     const after = leadCursor(cursor);
     const { rows } = await this.database.query(
-      `SELECT submission.id, submission.form_id, form.name AS form_name, submission.answers,
-              submission.submitted_at, submission.tracking_status
-       FROM form_submissions submission
-       JOIN forms form
-         ON form.id = submission.form_id
-        AND form.company_id = submission.company_id
-        AND form.project_id = submission.project_id
-        AND form.deleted_at IS NULL
-       WHERE submission.company_id = $1
-         AND submission.project_id = $2
-         AND ($3::uuid IS NULL OR submission.form_id = $3)
-         AND ($4::timestamptz IS NULL OR (submission.submitted_at, submission.id) < ($4::timestamptz, $5::uuid))
-       ORDER BY submission.submitted_at DESC, submission.id DESC
-       LIMIT $6`,
-      [companyId, projectId, formId ?? null, after?.submittedAt ?? null, after?.id ?? null, pageSize + 1],
+      `WITH all_submissions AS (
+         SELECT submission.id, 'form'::text AS source_kind, submission.form_id AS source_id,
+                submission.form_version_id AS source_version_id, form.name AS source_name,
+                version.published_path AS source_path, NULL::uuid AS capture_id, NULL::text AS capture_name,
+                version.schema AS source_schema, submission.answers, submission.submitted_at, delivery.status AS webhook_status
+         FROM form_submissions submission
+         JOIN forms form ON form.id = submission.form_id AND form.company_id = submission.company_id AND form.project_id = submission.project_id AND form.deleted_at IS NULL
+         JOIN form_versions version ON version.id = submission.form_version_id AND version.form_id = form.id
+         LEFT JOIN webhook_deliveries delivery ON delivery.company_id = submission.company_id AND delivery.project_id = submission.project_id
+           AND delivery.source_kind = 'form' AND delivery.submission_id = submission.id
+         WHERE submission.company_id = $1 AND submission.project_id = $2
+         UNION ALL
+         SELECT submission.id, 'page'::text AS source_kind, submission.page_id AS source_id,
+                submission.page_version_id AS source_version_id, page.name AS source_name,
+                version.published_path AS source_path, submission.capture_id, NULL::text AS capture_name,
+                version.capture_schema AS source_schema, submission.answers, submission.submitted_at, delivery.status AS webhook_status
+         FROM page_submissions submission
+         JOIN pages page ON page.id = submission.page_id AND page.company_id = submission.company_id AND page.project_id = submission.project_id AND page.deleted_at IS NULL
+         JOIN page_versions version ON version.id = submission.page_version_id AND version.page_id = page.id
+         LEFT JOIN webhook_deliveries delivery ON delivery.company_id = submission.company_id AND delivery.project_id = submission.project_id
+           AND delivery.source_kind = 'page' AND delivery.page_submission_id = submission.id
+         WHERE submission.company_id = $1 AND submission.project_id = $2
+       )
+       SELECT * FROM all_submissions
+       WHERE ($3::text IS NULL OR source_kind = $3)
+         AND ($4::uuid IS NULL OR source_id = $4)
+         AND ($5::uuid IS NULL OR capture_id = $5)
+         AND ($6::timestamptz IS NULL OR (submitted_at, source_kind, id) < ($6::timestamptz, $7::text, $8::uuid))
+       ORDER BY submitted_at DESC, source_kind DESC, id DESC
+       LIMIT $9`,
+      [companyId, projectId, sourceKind ?? null, sourceId ?? null, captureId ?? null, after?.submittedAt ?? null, after?.sourceKind ?? null, after?.id ?? null, pageSize + 1],
     );
     const hasNext = rows.length > pageSize;
-    const items = rows.slice(0, pageSize).map((row) => ({
-      id: row.id,
-      formId: row.form_id,
-      formName: row.form_name,
-      answers: row.answers,
-      submittedAt: row.submitted_at,
-      webhookStatus: row.tracking_status,
-    }));
+    const items = rows.slice(0, pageSize).map((row) => {
+      const capture = row.source_kind === 'page'
+        ? row.source_schema?.forms?.find((item) => item?.captureId === row.capture_id)
+        : null;
+      return {
+        id: row.id, sourceKind: row.source_kind, sourceId: row.source_id, sourceVersionId: row.source_version_id,
+        sourceName: row.source_name || '', sourcePath: row.source_path || '', captureId: row.capture_id || '',
+        captureName: capture?.name || row.capture_name || '', fields: row.source_kind === 'page' ? (capture?.fields ?? []) : versionFields(row.source_schema),
+        ...(row.source_kind === 'form' ? { formId: row.source_id, formName: row.source_name || '' } : {}),
+        answers: row.answers, submittedAt: row.submitted_at,
+        webhookStatus: row.webhook_status === 'dead' ? 'failed' : (row.webhook_status || ''),
+      };
+    });
     const last = items.at(-1);
-    return { items, nextCursor: hasNext ? encodedLeadCursor(last.submittedAt, last.id) : null };
+    const sources = await this.projectSubmissionSources({ companyId, projectId });
+    return { items, nextCursor: hasNext ? encodedLeadCursor(last.submittedAt, last.id, last.sourceKind) : null, sources };
+  }
+
+  async projectSubmissionSources({ companyId, projectId }) {
+    const { rows } = await this.database.query(
+      `SELECT 'form'::text AS source_kind, form.id AS source_id, form.name AS source_name, version.id AS source_version_id,
+              version.published_path AS source_path, NULL::uuid AS capture_id, NULL::jsonb AS capture
+       FROM forms form LEFT JOIN form_versions version ON version.form_id = form.id
+       WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL
+       UNION ALL
+       SELECT 'page'::text, page.id, page.name, version.id, version.published_path, (capture->>'captureId')::uuid, capture
+       FROM pages page JOIN page_versions version ON version.page_id = page.id
+       CROSS JOIN LATERAL jsonb_array_elements(version.capture_schema->'forms') capture
+       WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL
+       ORDER BY source_kind, source_name, source_id, source_version_id`,
+      [companyId, projectId],
+    );
+    const unique = new Map();
+    for (const row of rows) {
+      const source = {
+        sourceKind: row.source_kind, sourceId: row.source_id, sourceName: row.source_name || '',
+        sourcePath: row.source_path || '', captureId: row.capture_id || '', captureName: row.capture?.name || '',
+      };
+      const key = `${source.sourceKind}:${source.sourceId}:${source.captureId}`;
+      if (!unique.has(key)) unique.set(key, source);
+    }
+    return [...unique.values()];
   }
 
   async pageSettings({ companyId, projectId, actorId, pageId }) {
@@ -844,6 +932,36 @@ export class ContentRepository {
     });
   }
 
+  async submitPublishedPageCapture({ companyId, projectId, pageId, pageVersionId, captureId, input, origin, attribution, publicationId, subjectId }) {
+    return withTransaction(this.database, async (client) => {
+      const { rows } = await client.query(
+        `SELECT page.id AS page_id, version.id AS version_id, version.capture_schema
+         FROM pages page JOIN page_versions version
+           ON version.page_id = page.id AND version.company_id = page.company_id AND version.project_id = page.project_id
+         WHERE page.company_id = $1 AND page.project_id = $2 AND page.id = $3 AND version.id = $4 AND page.deleted_at IS NULL`,
+        [companyId, projectId, pageId, pageVersionId],
+      );
+      if (rows.length !== 1) throw fail('Captura publicada não encontrada.', 404);
+      const capture = rows[0].capture_schema?.forms?.find((item) => item?.captureId === captureId);
+      if (!capture) throw fail('Captura publicada não encontrada.', 404);
+      const answers = validatePageCaptureAnswers(capture, input);
+      const inserted = await client.query(
+        `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id, tracking_event_id, submitted_at`,
+        [companyId, projectId, pageId, pageVersionId, captureId, JSON.stringify(answers)],
+      );
+      const submission = inserted.rows[0];
+      const environment = await this.publicationEnvironment(client, { companyId, projectId, origin });
+      if (!environment) throw fail('Origem publicada obrigatória para conversões.', 403);
+      if (this.commercialOutbox) {
+        const consentState = this.commercialConsentResolver ? await this.commercialConsentResolver({ companyId, projectId, environment, origin, publicationId, subjectId }) : 'pending';
+        await this.commercialOutbox.enqueue(client, { companyId, projectId, environment, trackingEventId: submission.tracking_event_id, eventName: 'lead', consentState, answers, attribution, at: submission.submitted_at });
+      }
+      if (capture.webhook) await this.webhookDeliveries.enqueue(client, { companyId, projectId, pageId, pageSubmissionId: submission.id, url: capture.webhook, event: { eventId: submission.tracking_event_id, event: 'page.submitted', companyId, projectId, pageId, pageVersionId, captureId, submittedAt: submission.submitted_at, answers } });
+      return { id: submission.id, eventId: submission.tracking_event_id, answers, submittedAt: submission.submitted_at };
+    });
+  }
+
   async submitPublishedForm({ resolve, route: routeValue, input, origin, attribution, publicationId, subjectId }) {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
@@ -928,6 +1046,20 @@ export class ContentRepository {
         throw fail('A página mudou em outra aba. Reabra antes de publicar.', 409);
       const resolvedVsl = await this.assertPublishedVslReferences(client, { companyId, projectId, editorState: page.editor_state });
       const renderedHtml = renderPublishedVslReferences(page.rendered_html, { vslEmbedUrls: resolvedVsl });
+      const setting = await client.query(
+        `SELECT configuration FROM project_integrations WHERE company_id = $1 AND project_id = $2 AND provider = 'studio-page-settings' AND environment = 'production' LIMIT 1`,
+        [companyId, projectId],
+      );
+      const pageWebhook = webhook(setting.rows[0]?.configuration?.pageWebhooks?.[pageId] || '');
+      const normalizedEditorState = normalizePageCaptureIds(page.editor_state);
+      const captureSchema = extractPageCaptureSchema(normalizedEditorState, { webhook: pageWebhook });
+      if (JSON.stringify(normalizedEditorState) !== JSON.stringify(page.editor_state)) {
+        await client.query(
+          `UPDATE pages SET editor_state = $4::jsonb, updated_at = now()
+           WHERE company_id = $1 AND project_id = $2 AND id = $3`,
+          [companyId, projectId, pageId, JSON.stringify(normalizedEditorState)],
+        );
+      }
       await assertPublishedPathAvailable(client, {
         companyId, projectId, path: page.route, contentId: pageId, contentType: 'page',
       });
@@ -936,10 +1068,10 @@ export class ContentRepository {
         [pageId],
       );
       const { rows } = await client.query(
-        `INSERT INTO page_versions (company_id, project_id, page_id, version_number, published_path, editor_state, rendered_html, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+        `INSERT INTO page_versions (company_id, project_id, page_id, version_number, published_path, editor_state, rendered_html, capture_schema, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9)
          RETURNING *`,
-        [companyId, projectId, pageId, number.rows[0].version_number, page.route, JSON.stringify(page.editor_state), renderedHtml, actorId],
+        [companyId, projectId, pageId, number.rows[0].version_number, page.route, JSON.stringify(normalizedEditorState), renderedHtml, JSON.stringify(captureSchema), actorId],
       );
       await client.query(
         `UPDATE pages

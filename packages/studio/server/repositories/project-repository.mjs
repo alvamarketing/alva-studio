@@ -125,9 +125,13 @@ export class ProjectRepository {
            (SELECT count(*)::int FROM forms form
             WHERE form.company_id = $1 AND form.project_id = $2
               AND form.deleted_at IS NULL AND form.published_version_id IS NOT NULL) AS "publishedForms",
-           (SELECT count(*)::int FROM form_submissions submission
-            JOIN forms form ON form.id = submission.form_id
-            WHERE submission.company_id = $1 AND submission.project_id = $2 AND form.deleted_at IS NULL) AS submissions,
+           ((SELECT count(*)::int FROM form_submissions submission
+             JOIN forms form ON form.id = submission.form_id
+             WHERE submission.company_id = $1 AND submission.project_id = $2 AND form.deleted_at IS NULL)
+            +
+            (SELECT count(*)::int FROM page_submissions submission
+             JOIN pages page ON page.id = submission.page_id
+             WHERE submission.company_id = $1 AND submission.project_id = $2 AND page.deleted_at IS NULL)) AS submissions,
            (SELECT count(*)::int FROM videos video
             WHERE video.company_id = $1 AND video.project_id = $2 AND video.deleted_at IS NULL) AS videos,
            (SELECT count(*)::int FROM videos video
@@ -139,7 +143,7 @@ export class ProjectRepository {
         `SELECT * FROM (
            SELECT page.id, 'page' AS kind, page.name, route.path AS route,
                   (page.published_version_id IS NOT NULL) AS published, page.updated_at,
-                  0::int AS submission_count
+                  (SELECT count(*)::int FROM page_submissions submission WHERE submission.page_id = page.id) AS submission_count
            FROM pages page
            JOIN project_routes route
              ON route.id = page.route_id

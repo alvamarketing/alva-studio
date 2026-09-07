@@ -29,15 +29,31 @@ function providerConfig(provider) {
   return { provider: provider.provider, id: provider.id };
 }
 
-export function buildRuntimeManifest({ publicationId, snapshotHash, version = 0, policyVersion = 1, origin: publicOrigin, domain, environment, providers = [] }) {
+function runtimeContents(contents = []) {
+  if (!Array.isArray(contents)) throw fail('Conteúdo do manifesto inválido.');
+  return contents.map((content) => {
+    if (!content || typeof content !== 'object' || Array.isArray(content) || typeof content.path !== 'string' || !content.path.startsWith('/') || !['page', 'form'].includes(content.type) || typeof content.contentId !== 'string' || !content.contentId || typeof content.versionId !== 'string' || !content.versionId)
+      throw fail('Conteúdo do manifesto inválido.');
+    const captureIds = content.captureIds === undefined ? [] : content.captureIds;
+    if (!Array.isArray(captureIds) || captureIds.some((captureId) => typeof captureId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(captureId)) || new Set(captureIds).size !== captureIds.length)
+      throw fail('Conteúdo do manifesto inválido.');
+    return { path: content.path, type: content.type, contentId: content.contentId, versionId: content.versionId, captureIds: [...captureIds] };
+  });
+}
+
+export function buildRuntimeManifest({ publicationId, snapshotHash, version = 0, policyVersion = 1, origin: publicOrigin, domain, environment, providers = [], contents = [] }) {
   if (!publicationId || !/^[A-Za-z0-9._:-]{1,120}$/.test(publicationId)) throw fail('Identificador de publicação inválido.');
   if (!/^[a-f0-9]{64}$/i.test(snapshotHash || '')) throw fail('Snapshot da publicação inválido.');
-  if (environment !== 'production') throw fail('Consentimento de runtime só existe em produção.', 409);
+  if (!ENVIRONMENTS.has(environment)) throw fail('Ambiente de runtime inválido.', 409);
   const cleanOrigin = origin(publicOrigin);
   if (typeof domain !== 'string' || domain !== new URL(cleanOrigin).hostname) throw fail('Domínio da publicação inválido.');
   if (!Number.isInteger(policyVersion) || policyVersion < 1) throw fail('Versão da policy inválida.');
   const cleanProviders = providers.map(providerConfig).sort((a, b) => a.provider.localeCompare(b.provider));
-  return Object.freeze({ publicationId, snapshotHash: snapshotHash.toLowerCase(), version, policyVersion, origin: cleanOrigin, domain, environment, consent: { required: true, scope: 'publication' }, providers: cleanProviders });
+  const cleanContents = runtimeContents(contents);
+  if (environment === 'preview' && (!cleanContents.some((content) => content.type === 'page' && content.captureIds.length) || cleanProviders.length))
+    throw fail('Prévia de runtime exige captura publicada e não aceita providers.', 409);
+  const consent = environment === 'production' ? { required: true, scope: 'publication' } : { required: false, scope: 'none' };
+  return Object.freeze({ publicationId, snapshotHash: snapshotHash.toLowerCase(), version, policyVersion, origin: cleanOrigin, domain, environment, consent, providers: cleanProviders, contents: cleanContents });
 }
 
 export function consentKey(manifest) {

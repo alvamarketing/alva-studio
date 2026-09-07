@@ -119,6 +119,35 @@ function parsePublicFormRequest(path, method, domainScope) {
     return null;
   }
 }
+export function parsePageCaptureRequest(path, method, domainScope) {
+  if (!['POST', 'OPTIONS'].includes(method)) return null;
+  const prefix = '/api/public/pages';
+  const match = path.match(/^\/api\/public\/pages(?:\/(.*))?\/captures\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/submissions$/i);
+  if (!match) return null;
+  try {
+    const segments = match[1] ? match[1].split('/').map(decodedSegment) : [];
+    let companySlug; let projectSlug; let routeSegments = segments;
+    if (!domainScope) {
+      if (segments.length < 2 || !segments.slice(0, 2).every((segment) => /^[a-z0-9-]{1,80}$/.test(segment))) return null;
+      [companySlug, projectSlug] = segments;
+      routeSegments = segments.slice(2);
+    }
+    return { companySlug, projectSlug, route: normalizeRoute(routeSegments.length ? `/${routeSegments.join('/')}` : '/'), captureId: match[2] };
+  } catch { return null; }
+}
+async function runtimeNamespaceMatches(database, manifest, companySlug, projectSlug) {
+  if (!companySlug || !projectSlug) return true;
+  if (!database || !manifest?.companyId || !manifest?.projectId) return false;
+  const { rows } = await database.query(
+    `SELECT company.slug AS company_slug, project.slug AS project_slug
+       FROM projects project
+       JOIN companies company ON company.id = project.company_id
+      WHERE company.id = $1 AND project.id = $2 AND project.company_id = $1
+      LIMIT 1`,
+    [manifest.companyId, manifest.projectId],
+  );
+  return rows.length === 1 && rows[0].company_slug === companySlug && rows[0].project_slug === projectSlug;
+}
 function runtimeAttribution(cookie, gateway, rootSecret) {
   const value = String(cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_attribution='))?.slice('alva_runtime_attribution='.length);
   return gateway ? verifiedRuntimeAttribution(value, gateway.manifest, rootSecret) : {};
@@ -152,7 +181,9 @@ async function publicAnswers(req) {
     try { return JSON.parse(raw || '{}'); } catch { throw error('Resposta inválida.', 400); }
   }
   if (!req.headers['content-type']?.startsWith('application/x-www-form-urlencoded')) throw error('Envie o formulário no formato esperado.', 415);
-  return { answers: Object.fromEntries(new URLSearchParams(raw)) };
+  const answers = {};
+  for (const [key, value] of new URLSearchParams(raw)) answers[key] = Object.hasOwn(answers, key) ? [].concat(answers[key], value) : value;
+  return { answers };
 }
 async function collectBody(req) {
   let size = 0;
@@ -258,7 +289,10 @@ export function createApp({
   const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
   const commercialOutbox = runtimeFlags.nvsRuntime && database && process.env.TRACKING_MASTER_KEY
     ? new NvsCommercialOutboxRepository(database) : null;
-  const runtimeConsents = runtimeFlags.pixels && database ? new PublicationRuntimeRepository(database) : null;
+  // Capturas publicadas precisam do manifesto e do envelope assinado mesmo sem pixels.
+  // Consentimento e loader continuam sendo uma capacidade opt-in de pixels.
+  const runtimeManifests = database ? new PublicationRuntimeRepository(database) : null;
+  const runtimeConsents = runtimeFlags.pixels ? runtimeManifests : null;
   const runtimeConsentGateway = runtimeConsents ? new RuntimeConsentGateway({ repository: runtimeConsents }) : null;
   const billingEnvironment = billingOptions.environment || billingRuntimeEnvironment();
   const billingRepository = database ? new BillingRepository(database) : null;
@@ -294,7 +328,7 @@ export function createApp({
       audit: new AuditRepository(database),
       domains: new ProjectDomainRepository(database, { billingPolicy }),
       tracking,
-      runtimeManifests: runtimeConsents,
+      runtimeManifests,
       runtimeEnabled: runtimeFlags.pixels === true,
       runtimeOrigin: publicOrigin || 'http://127.0.0.1',
       runtimeHmacSecret,
@@ -398,20 +432,24 @@ export function createApp({
       const studioHost = publicOrigin && effectiveHost === new URL(publicOrigin).host;
       const domainScope = Boolean(publicOrigin && !studioHost);
       const publicFormRequest = content ? parsePublicFormRequest(path, req.method, domainScope) : null;
+      const pageCaptureRequest = content ? parsePageCaptureRequest(path, req.method, domainScope) : null;
       const legacyPublicSubmission = !content && req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/submit$/.test(path);
-      const publicSubmission = legacyPublicSubmission || Boolean(publicFormRequest && req.method === 'POST');
+      const publicSubmission = legacyPublicSubmission || Boolean((publicFormRequest || pageCaptureRequest) && req.method === 'POST');
       const publicDomainRead = Boolean(publicFormRequest && domainScope && req.method === 'GET');
-      const publicDomainRequest = Boolean(publicFormRequest && domainScope);
-      const publicProjectSubmission = Boolean(publicFormRequest && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
+      const publicDomainRequest = Boolean((publicFormRequest || pageCaptureRequest) && domainScope);
+      const publicProjectSubmission = Boolean((publicFormRequest || pageCaptureRequest) && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
       const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
       const publicUmami = path === '/api/public/umami/send' && req.method === 'POST';
       const publicBillingWebhook = Boolean(billingRepository && path === '/api/billing/webhook/asaas');
       const publicMcp = Boolean(mcp && path === '/mcp');
       const publicRuntimeConsent = runtimeConsentGateway && path === '/_alva/consent' && ['GET', 'POST'].includes(req.method);
       const publicRuntimeLoader = runtimeConsents && path === '/_alva/runtime.js' && req.method === 'GET';
-      const runtimeGatewayProtected = Boolean(runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || (publicFormRequest && ['POST', 'OPTIONS'].includes(req.method))));
+      const runtimeGatewayProtected = Boolean(
+        (runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || (publicFormRequest && ['POST', 'OPTIONS'].includes(req.method))))
+        || (runtimeManifests && pageCaptureRequest && ['POST', 'OPTIONS'].includes(req.method)),
+      );
       const runtimeGateway = runtimeGatewayProtected
-        ? await verifyRuntimeGatewayEnvelope({ repository: runtimeConsents, rootSecret: runtimeHmacSecret, method: req.method, path, headers: req.headers, body: await rawBody(req), now: Math.floor(Date.now() / 1000) })
+        ? await verifyRuntimeGatewayEnvelope({ repository: pageCaptureRequest ? runtimeManifests : runtimeConsents, rootSecret: runtimeHmacSecret, method: req.method, path, headers: req.headers, body: await rawBody(req), now: Math.floor(Date.now() / 1000) })
         : null;
       if (publicOrigin ? (!studioHost && !publicDomainRequest && !publicRuntimeConsent && !publicRuntimeLoader) : !localHost)
         throw error('Endereço não permitido.', 403);
@@ -470,7 +508,7 @@ export function createApp({
       if (content && publicProjectSubmission) {
         const requestOrigin = req.headers.origin;
         const allowedOrigins = requestOrigin && requestOrigin !== expectedOrigin
-          ? await content.publicationOrigins({ companySlug: publicFormRequest.companySlug, projectSlug: publicFormRequest.projectSlug })
+          ? await content.publicationOrigins({ companySlug: (publicFormRequest || pageCaptureRequest).companySlug, projectSlug: (publicFormRequest || pageCaptureRequest).projectSlug })
           : [];
         const cors = publicSubmissionCors({ method: req.method, origin: requestOrigin, expectedOrigin, allowedOrigins });
         if (!cors.allowed) throw error('Origem não autorizada para este projeto.', 403);
@@ -617,6 +655,20 @@ export function createApp({
         return res.end(renderDynamicForm(form, action, { nonce }));
       }
       const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
+      if (req.method === 'POST' && content && pageCaptureRequest) {
+        if (!runtimeGateway) throw error('Captura publicada não encontrada.', 404);
+        const manifest = runtimeGateway.manifest;
+        const entry = Array.isArray(manifest.contents) && manifest.contents.find((item) => item?.type === 'page' && item.path === pageCaptureRequest.route && Array.isArray(item.captureIds) && item.captureIds.includes(pageCaptureRequest.captureId));
+        if (!entry || !await runtimeNamespaceMatches(database, manifest, pageCaptureRequest.companySlug, pageCaptureRequest.projectSlug)) throw error('Captura publicada não encontrada.', 404);
+        if (origin !== runtimeGateway.origin) throw error('Origem publicada obrigatória para conversões.', 403);
+        const input = await publicAnswers(req);
+        const subjectId = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length);
+        await content.submitPublishedPageCapture({ companyId: manifest.companyId, projectId: manifest.projectId, pageId: entry.contentId, pageVersionId: entry.versionId, captureId: pageCaptureRequest.captureId, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), publicationId: runtimeGateway.publicationId, subjectId });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${path}`);
+        return res.end(renderCompletion('Obrigado!', 'Recebemos suas respostas.', { nonce }));
+      }
       if (req.method === 'POST' && content && publicFormRequest) {
         if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);

@@ -37,7 +37,7 @@ test('gateway da Vercel preserva corpo e cookie, assina o request e não recebe 
 });
 
 test('artefatos da Function roteiam runtime e formulários por uma única fronteira e não alteram o snapshot', () => {
-  const snapshotFiles = [{ file: 'index.html', data: '<html><head></head><body>Olá</body></html>' }, { file: 'contato/index.html', data: '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'; connect-src \'self\'; form-action https://studio.example.test"><body>Contato</body>' }];
+  const snapshotFiles = [{ file: 'index.html', data: '<html><head></head><body><form action="https://studio.example.test/api/public/pages/acme/campanha/captures/11111111-1111-4111-8111-111111111111/submissions"></form>Olá</body></html>' }, { file: 'contato/index.html', data: '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'; connect-src \'self\'; form-action https://studio.example.test"><body>Contato</body>' }];
   const artifacts = runtimeGatewayArtifacts(snapshotFiles, {
     publicationId: scope.publicationId,
     snapshotHash: scope.snapshotHash,
@@ -46,11 +46,11 @@ test('artefatos da Function roteiam runtime e formulários por uma única fronte
     runtimeHmacSecret: 'root-secret-only-at-studio',
     providers: [{ provider: 'meta', id: '123' }],
   });
-  assert.deepEqual(snapshotFiles, [{ file: 'index.html', data: '<html><head></head><body>Olá</body></html>' }, { file: 'contato/index.html', data: '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'; connect-src \'self\'; form-action https://studio.example.test"><body>Contato</body>' }]);
+  assert.deepEqual(snapshotFiles, [{ file: 'index.html', data: '<html><head></head><body><form action="https://studio.example.test/api/public/pages/acme/campanha/captures/11111111-1111-4111-8111-111111111111/submissions"></form>Olá</body></html>' }, { file: 'contato/index.html', data: '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'; connect-src \'self\'; form-action https://studio.example.test"><body>Contato</body>' }]);
   const names = artifacts.files.map((file) => file.file).sort();
   assert.deepEqual(names, ['api/_alva/[...path].js', 'api/_alva/gateway.cjs', 'contato/index.html', 'index.html', 'vercel.json']);
   const config = JSON.parse(artifacts.files.find((file) => file.file === 'vercel.json').data);
-  assert.deepEqual(config.rewrites.map((rewrite) => rewrite.destination), ['/api/_alva/runtime/:path*', '/api/_alva/forms/:path*']);
+  assert.deepEqual(config.rewrites.map((rewrite) => rewrite.destination), ['/api/_alva/runtime/:path*', '/api/_alva/forms/:path*', '/api/_alva/pages/:path*']);
   const source = artifacts.files.find((file) => file.file === 'api/_alva/gateway.cjs').data;
   assert.match(source, /PUBLICATION_RUNTIME_DERIVED_KEY/);
   assert.match(source, /ALVA_RUNTIME_GATEWAY_ORIGIN/);
@@ -62,6 +62,8 @@ test('artefatos da Function roteiam runtime e formulários por uma única fronte
   const form = artifacts.files.find((file) => file.file === 'contato/index.html').data;
   assert.match(page, /Content-Security-Policy/); assert.match(page, /nonce="[A-Za-z0-9_-]+"/); assert.match(page, /connect\.facebook\.net/);
   assert.match(form, /form-action 'self'/); assert.match(form, /connect\.facebook\.net/);
+  assert.match(page, /action="\/api\/public\/pages\/captures\/11111111-1111-4111-8111-111111111111\/submissions"/);
+  assert.doesNotMatch(page, /pages\/acme\/campanha/);
 });
 
 test('CSP separa script e coleta por provider e preserva contratos de landing e formulário', () => {

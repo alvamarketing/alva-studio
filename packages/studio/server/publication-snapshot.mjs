@@ -61,6 +61,118 @@ function publicFormAction(publicOrigin, companySlug, projectSlug, path) {
   return origin.toString();
 }
 
+const CAPTURE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function pageCaptureAction(publicOrigin, companySlug, projectSlug, path, captureId) {
+  const origin = new URL(publicOrigin);
+  const route = path === '/' ? '' : `/${path.slice(1).split('/').map((segment) => encodeURIComponent(segment)).join('/')}`;
+  origin.pathname = `/api/public/pages/${encodeURIComponent(companySlug)}/${encodeURIComponent(projectSlug)}${route}/captures/${encodeURIComponent(captureId)}/submissions`;
+  origin.search = '';
+  origin.hash = '';
+  return origin.toString();
+}
+
+function captureIdsForPage(schema) {
+  if (schema === null || schema === undefined) return [];
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema) || !Array.isArray(schema.forms))
+    throw fail('A captura da página está inválida. Salve e publique a página novamente.', 409);
+  const captureIds = schema.forms.map((capture) => String(capture?.captureId || '').trim());
+  if (captureIds.some((captureId) => !CAPTURE_ID.test(captureId)) || new Set(captureIds).size !== captureIds.length)
+    throw fail('A captura da página está inválida. Salve e publique a página novamente.', 409);
+  return captureIds;
+}
+
+function formAttributes(tag) {
+  const name = /^<form\b/i.exec(tag);
+  if (!name) return [];
+  const attributes = [];
+  let index = name[0].length;
+  while (index < tag.length - 1) {
+    const start = index;
+    while (/\s/.test(tag[index] || '')) index += 1;
+    if (index >= tag.length - 1 || tag[index] === '/' || tag[index] === '>') break;
+    const keyStart = index;
+    while (index < tag.length - 1 && !/[\s=/>]/.test(tag[index])) index += 1;
+    const key = tag.slice(keyStart, index);
+    while (/\s/.test(tag[index] || '')) index += 1;
+    let value = '';
+    if (tag[index] === '=') {
+      index += 1; while (/\s/.test(tag[index] || '')) index += 1;
+      const quote = tag[index] === '"' || tag[index] === "'" ? tag[index++] : '';
+      const valueStart = index;
+      while (index < tag.length - 1 && (quote ? tag[index] !== quote : !/[\s>]/.test(tag[index]))) index += 1;
+      value = tag.slice(valueStart, index);
+      if (quote && tag[index] === quote) index += 1;
+    }
+    attributes.push({ name: key.toLowerCase(), value, start, end: index });
+  }
+  return attributes;
+}
+
+function captureIdFromFormTag(tag) {
+  return String(formAttributes(tag).find((attribute) => attribute.name === 'data-alva-capture-id')?.value || '').trim();
+}
+
+function withFormAction(tag, action) {
+  const escaped = escapeAttribute(action);
+  const attributes = formAttributes(tag);
+  const replacements = [];
+  const actionAttribute = attributes.find((attribute) => attribute.name === 'action');
+  const methodAttribute = attributes.find((attribute) => attribute.name === 'method');
+  const submitAttribute = attributes.find((attribute) => attribute.name === 'onsubmit');
+  if (actionAttribute) replacements.push({ ...actionAttribute, value: ` action="${escaped}"` });
+  if (methodAttribute) replacements.push({ ...methodAttribute, value: ' method="post"' });
+  if (submitAttribute && /^\s*return\s+false\s*;?\s*$/i.test(submitAttribute.value)) replacements.push({ ...submitAttribute, value: '' });
+  let next = tag;
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) next = next.slice(0, replacement.start) + replacement.value + next.slice(replacement.end);
+  const suffix = `${actionAttribute ? '' : ` action="${escaped}"`}${methodAttribute ? '' : ' method="post"'}`;
+  return suffix ? next.replace(/>$/, `${suffix}>`) : next;
+}
+
+function rewritePageCaptureActions(html, { publicOrigin, companySlug, projectSlug, path, captureIds }) {
+  if (!captureIds.length) return html;
+  const expected = new Set(captureIds);
+  const found = new Set();
+  let cursor = 0;
+  let rewritten = '';
+  while (cursor < html.length) {
+    const open = html.indexOf('<', cursor);
+    if (open < 0) { rewritten += html.slice(cursor); break; }
+    rewritten += html.slice(cursor, open);
+    if (html.startsWith('<!--', open)) {
+      const close = html.indexOf('-->', open + 4);
+      const end = close < 0 ? html.length : close + 3;
+      rewritten += html.slice(open, end); cursor = end; continue;
+    }
+    const raw = /^<(script|style|textarea)\b/i.exec(html.slice(open));
+    if (raw) {
+      const closing = new RegExp(`</${raw[1]}\\s*>`, 'ig'); closing.lastIndex = open;
+      const match = closing.exec(html);
+      const end = match ? match.index + match[0].length : html.length;
+      rewritten += html.slice(open, end); cursor = end; continue;
+    }
+    let quote = ''; let end = open + 1;
+    for (; end < html.length; end += 1) {
+      const character = html[end];
+      if (quote) { if (character === quote) quote = ''; }
+      else if (character === '"' || character === "'") quote = character;
+      else if (character === '>') { end += 1; break; }
+    }
+    const tag = html.slice(open, end);
+    if (/^<form\b/i.test(tag)) {
+      const captureId = captureIdFromFormTag(tag);
+      if (!CAPTURE_ID.test(captureId) || !expected.has(captureId) || found.has(captureId))
+        throw fail('Os formulários publicados divergem da captura salva. Salve e publique a página novamente.', 409);
+      found.add(captureId);
+      rewritten += withFormAction(tag, pageCaptureAction(publicOrigin, companySlug, projectSlug, path, captureId));
+    } else rewritten += tag;
+    cursor = end;
+  }
+  if (found.size !== expected.size)
+    throw fail('Os formulários publicados divergem da captura salva. Salve e publique a página novamente.', 409);
+  return rewritten;
+}
+
 const VSL_COMPONENT_KEYS = new Set([
   'id', 'type', 'publicId', 'title', 'description', 'required', 'motion', 'advanceAfterCta', 'tagName', 'attributes', 'components', 'style', 'classes', 'droppable',
 ]);
@@ -119,13 +231,17 @@ function recordForRow(row, publicOrigin, vslEmbedUrls = new Map(), { nonce, trac
   if (!row.company_id || !row.project_id || !row.content_id || !row.version_id) throw fail('A publicação contém uma versão inválida.', 409);
   if (row.kind === 'page') {
     if (typeof row.rendered_html !== 'string' || !row.rendered_html.trim()) throw fail('A publicação contém uma página vazia.', 409);
-    const pageHtml = renderPublishedVslReferences(row.rendered_html, { vslEmbedUrls });
+    const captureIds = captureIdsForPage(row.capture_schema);
+    const pageHtml = rewritePageCaptureActions(renderPublishedVslReferences(row.rendered_html, { vslEmbedUrls }), {
+      publicOrigin, companySlug: row.company_slug, projectSlug: row.project_slug, path, captureIds,
+    });
     return {
       path,
       type: 'page',
       contentId: row.content_id,
       versionId: row.version_id,
       versionNumber: row.version_number,
+      captureIds,
       file: pathFile(path),
       data: injectPageTracker(pageHtml, { nonce, trackerPublicId, trackerHostUrl: publicOrigin }),
     };
@@ -161,7 +277,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     `SELECT 'page' AS kind, page.company_id, page.project_id, company.slug AS company_slug,
             project.slug AS project_slug, page.id AS content_id, version.id AS version_id,
             version.version_number, version.published_path AS path, version.rendered_html,
-            version.editor_state,
+            version.editor_state, version.capture_schema,
             NULL::jsonb AS schema, page.name
        FROM pages page
        JOIN companies company ON company.id = page.company_id
@@ -172,7 +288,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
      SELECT 'form' AS kind, form.company_id, form.project_id, company.slug AS company_slug,
             project.slug AS project_slug, form.id AS content_id, version.id AS version_id,
             version.version_number, version.published_path AS path, NULL::text AS rendered_html,
-            NULL::jsonb AS editor_state,
+            NULL::jsonb AS editor_state, NULL::jsonb AS capture_schema,
             version.schema, form.name
        FROM forms form
        JOIN companies company ON company.id = form.company_id
@@ -197,7 +313,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
   const trackerPublicId = await resolveAnalyticsTrackerPublicId(database, companyId, projectId, environment);
   const fingerprint = createHash('sha256').update(JSON.stringify(canonical({
     rows: rows
-      .map((row) => ({ path: row.path, rendered_html: row.rendered_html, schema: row.schema, editor_state: row.editor_state, version_id: row.version_id }))
+      .map((row) => ({ path: row.path, rendered_html: row.rendered_html, schema: row.schema, capture_schema: row.capture_schema, editor_state: row.editor_state, version_id: row.version_id }))
       .sort((left, right) => left.version_id.localeCompare(right.version_id)),
     vslEmbedUrls: [...vslEmbedUrls],
     trackerPublicId,
@@ -214,7 +330,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     if (seen.has(key)) throw fail('A publicação contém uma rota duplicada.', 409);
     seen.add(key);
   }
-  const manifest = records.map(({ path, type, contentId, versionId, versionNumber, file }) => ({ path, type, contentId, versionId, versionNumber, file }));
+  const manifest = records.map(({ path, type, contentId, versionId, versionNumber, file, captureIds }) => ({ path, type, contentId, versionId, versionNumber, file, ...(type === 'page' ? { captureIds } : {}) }));
   const files = records.map(({ file, data }) => ({ file, data }));
   const hash = createHash('sha256').update(JSON.stringify(canonical({ manifest, files }))).digest('hex');
   return { manifest, files, hash };

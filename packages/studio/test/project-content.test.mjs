@@ -6,6 +6,8 @@ import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { CompanyRepository } from '../server/repositories/company-repository.mjs';
 import { ProjectRepository } from '../server/repositories/project-repository.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
+import { NvsCommercialOutboxRepository } from '../server/repositories/nvs-commercial-outbox-repository.mjs';
+import { SecretVault } from '../server/repositories/publication-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
 async function createUser(database, { email, name }) {
@@ -56,6 +58,10 @@ async function projectFor(companies, projects, owner, suffix) {
 
 function assertStatus(statusCode) {
   return (error) => error?.statusCode === statusCode;
+}
+
+function trackingBindingScope({ companyId, projectId, environment }) {
+  return `tracking-binding:${companyId}:${projectId}:${environment}:nvs`;
 }
 
 function formSchema(id, title) {
@@ -317,5 +323,62 @@ test('estado da página preserva a referência pública da VSL sem configuraçã
     const loaded = await content.getPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
     assert.deepEqual(loaded.editorState, editorState);
     assert.doesNotMatch(JSON.stringify(loaded.editorState), /sourceUrl|cta|version/i);
+  });
+});
+
+test('captura Landing congela schema por versão e mantém isolamento', async (t) => {
+  await withHarness(t, async ({ database, companies, projects, content }) => {
+    const owner = await createUser(database, { email: 'capture@alva.test', name: 'Capture' });
+    const { company, project } = await projectFor(companies, projects, owner, 'capture');
+    const state = { components: [{ tagName: 'form', components: [{ tagName: 'h3', components: [{ type: 'textnode', content: 'Contato' }] }, { tagName: 'label', components: [{ type: 'textnode', content: 'E-mail' }, { type: 'alva-field', attributes: { name: 'email', type: 'email', required: '' } }] }] }] };
+    const page = await content.createPage({ companyId: company.id, projectId: project.id, actorId: owner.id, name: 'Landing', route: '/landing', editorState: state, renderedHtml: '<form></form>' });
+    const a = await content.publishPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, lockVersion: page.lockVersion });
+    const captureId = a.editorState.components[0].attributes['data-alva-capture-id'];
+    const changed = await content.updatePage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, lockVersion: page.lockVersion, editorState: { ...a.editorState, components: [{ ...a.editorState.components[0], components: [...a.editorState.components[0].components, { tagName: 'label', components: [{ type: 'textnode', content: 'Nome' }, { type: 'alva-field', attributes: { name: 'nome', type: 'text', required: '' } }] }] }] } });
+    const b = await content.publishPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, lockVersion: changed.lockVersion });
+    const domain = 'landing.alva.test';
+    await database.query("INSERT INTO project_domains (company_id, project_id, domain, environment, verification_status, is_canonical) VALUES ($1,$2,$3,'production','verified',true)", [company.id, project.id, domain]);
+    const lead = await content.submitPublishedPageCapture({ companyId: company.id, projectId: project.id, pageId: page.id, pageVersionId: a.id, captureId, input: { answers: { email: 'lead@alva.test' } }, origin: `https://${domain}` });
+    assert.ok(lead.id);
+    await assert.rejects(() => content.submitPublishedPageCapture({ companyId: company.id, projectId: project.id, pageId: page.id, pageVersionId: a.id, captureId, input: { answers: { email: 'lead@alva.test', nome: 'não cabe em A' } }, origin: `https://${domain}` }), /Campo de resposta inválido/);
+    assert.notEqual(a.id, b.id);
+  });
+});
+
+test('capture Landing faz rollback de outbox/webhook e preserva eventId na entrega', async (t) => {
+  await withHarness(t, async ({ database, companies, projects, content }) => {
+    const owner = await createUser(database, { email: 'atomic@alva.test', name: 'Atomic' });
+    const { company, project } = await projectFor(companies, projects, owner, 'atomic');
+    const state = { components: [{ tagName: 'form', components: [{ tagName: 'h3', components: [{ type: 'textnode', content: 'Contato' }] }, { tagName: 'label', components: [{ type: 'textnode', content: 'E-mail' }, { type: 'alva-field', attributes: { name: 'email', type: 'email', required: '' } }] }] }] };
+    let page = await content.createPage({ companyId: company.id, projectId: project.id, actorId: owner.id, name: 'Landing', route: '/atomic', editorState: state, renderedHtml: '<form></form>' });
+    await content.updatePageSettings({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, webhook: 'https://hooks.example.test/lead' });
+    page = await content.getPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id });
+    const version = await content.publishPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, lockVersion: page.lockVersion });
+    const captureId = version.editorState.components[0].attributes['data-alva-capture-id'];
+    const domain = 'atomic.alva.test';
+    await database.query("INSERT INTO project_domains (company_id, project_id, domain, environment, verification_status, is_canonical) VALUES ($1,$2,$3,'production','verified',true)", [company.id, project.id, domain]);
+    const args = { companyId: company.id, projectId: project.id, pageId: page.id, pageVersionId: version.id, captureId, input: { answers: { email: 'lead@alva.test' } }, origin: `https://${domain}` };
+    content.commercialOutbox = { enqueue: async () => { throw new Error('outbox'); } };
+    await assert.rejects(() => content.submitPublishedPageCapture(args), /outbox/);
+    assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 0);
+    const vault = new SecretVault({ masterKey: 'page-capture-rollback-test-key' });
+    await database.query(
+      `UPDATE tracking_bindings SET status = 'ready', encrypted_remote_reference = $4
+       WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'nvs'`,
+      [company.id, project.id, 'production', vault.encrypt('page_capture_property', trackingBindingScope({ companyId: company.id, projectId: project.id, environment: 'production' }))],
+    );
+    content.commercialOutbox = new NvsCommercialOutboxRepository(database, { vault });
+    const original = content.webhookDeliveries.enqueue.bind(content.webhookDeliveries);
+    content.webhookDeliveries.enqueue = async () => { throw new Error('webhook'); };
+    await assert.rejects(() => content.submitPublishedPageCapture(args), /webhook/);
+    assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 0);
+    assert.equal((await database.query('SELECT count(*)::int AS n FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0].n, 0);
+    content.webhookDeliveries.enqueue = original;
+    const submitted = await content.submitPublishedPageCapture(args);
+    const delivery = (await database.query("SELECT source_kind, page_id, page_submission_id, event FROM webhook_deliveries WHERE source_kind = 'page'")).rows[0];
+    assert.equal(delivery.source_kind, 'page'); assert.equal(delivery.page_id, page.id);
+    assert.equal(delivery.event.eventId, submitted.eventId);
+    assert.equal((await database.query('SELECT tracking_event_id FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0].tracking_event_id, submitted.eventId);
+    assert.equal((await content.webhookDeliveries.claimNextDue()).delivery.sourceKind, 'page');
   });
 });

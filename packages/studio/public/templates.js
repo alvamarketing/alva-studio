@@ -20,7 +20,7 @@ export const formCss = `
 `;
 
 /** Add only a class; never rebuild imported forms or their fields. Safe to call after load/drop. */
-export function normalizeForms(editor) {
+export function normalizeForms(editor, uuid = () => globalThis.crypto?.randomUUID?.()) {
   const wrapper = editor?.getWrapper?.();
   if (!wrapper) return 0;
   const forms = [];
@@ -37,10 +37,21 @@ export function normalizeForms(editor) {
     if (!seen.has(form)) { seen.add(form); forms.push(form); }
   });
   addForm(wrapper);
+  const captureIds = new Set();
   for (const form of forms) {
     const attrs = form.getAttributes?.() || {};
     const classes = String(attrs.class || '').split(/\s+/).filter(Boolean);
-    if (!classes.includes('alva-form')) form.addAttributes?.({ class: [...classes, 'alva-form'].join(' ') });
+    const captureId = String(attrs['data-alva-capture-id'] || '').trim();
+    const validCaptureId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(captureId);
+    const next = {};
+    if (!classes.includes('alva-form')) next.class = [...classes, 'alva-form'].join(' ');
+    if (!validCaptureId || captureIds.has(captureId)) {
+      const generated = uuid();
+      if (!generated) throw new Error('Não foi possível identificar o formulário.');
+      next['data-alva-capture-id'] = generated;
+      captureIds.add(generated);
+    } else captureIds.add(captureId);
+    if (Object.keys(next).length) form.addAttributes?.(next);
   }
   // Inspect the project rather than caching editor identity: loading a different project resets CSS.
   const css = editor.getCss?.() || '';

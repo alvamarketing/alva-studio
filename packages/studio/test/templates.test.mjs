@@ -238,3 +238,51 @@ test('CSS personalizado do formulário prevalece quando GrapesJS mescla seletore
   });
   assert.deepEqual(style, { padding: '71px', color: 'purple', display: 'block' });
 });
+
+test('normalização preserva captureIds após salvar, reabrir, clonar e reordenar formulários', () => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  const ids = [
+    '11111111-1111-4111-8111-111111111111',
+    '33333333-3333-4333-8333-333333333333',
+  ];
+  try {
+    const wrapper = editor.getWrapper();
+    wrapper.append({ tagName: 'form', attributes: { 'data-alva-capture-id': ids[0] } });
+    wrapper.append({ tagName: 'form', attributes: { 'data-alva-capture-id': ids[1] } });
+    const formsIn = (instance) => instance.getWrapper().components().models.filter((form) => form.get('tagName') === 'form');
+    normalizeForms(editor);
+
+    assert.deepEqual(
+      formsIn(editor).map((form) => form.getAttributes()['data-alva-capture-id']),
+      ids,
+    );
+    assert.match(editor.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[0]}["']`));
+    assert.match(editor.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[1]}["']`));
+
+    const saved = editor.getProjectData();
+    const reopened = grapesjs.init({ headless: true, storageManager: false });
+    try {
+      reopened.loadProjectData(saved);
+      normalizeForms(reopened);
+      assert.deepEqual(
+        formsIn(reopened).map((form) => form.getAttributes()['data-alva-capture-id']),
+        ids,
+      );
+      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[0]}["']`));
+      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[1]}["']`));
+
+      const reopenedForms = formsIn(reopened);
+      const clone = reopenedForms[0].clone();
+      reopened.getWrapper().append(clone);
+      const reordered = reopened.getWrapper().components().models;
+      reordered.splice(0, reordered.length, reordered[1], reordered[0], reordered[2]);
+      normalizeForms(reopened, () => '22222222-2222-4222-8222-222222222222');
+
+      assert.equal(reopenedForms[0].getAttributes()['data-alva-capture-id'], ids[0]);
+      assert.equal(reopenedForms[1].getAttributes()['data-alva-capture-id'], ids[1]);
+      assert.equal(clone.getAttributes()['data-alva-capture-id'], '22222222-2222-4222-8222-222222222222');
+      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[0]}["']`));
+      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[1]}["']`));
+    } finally { reopened.destroy(); }
+  } finally { editor.destroy(); }
+});

@@ -21,6 +21,26 @@ test('preview publica o snapshot inteiro e repetição não cria deploy externo'
   assert.equal(calls.find((call) => call[0] === 'publish')[2].environment, 'preview');
 });
 
+test('captura publicada instala gateway e manifesto na prévia sem pixels ou bootstrap', async () => {
+  const snapshot = { hash: 'a'.repeat(64), manifest: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-1', captureIds: ['11111111-1111-4111-8111-111111111111'] }], files: [{ file: 'index.html', data: '<form action="https://studio.example.test/api/public/pages/acme/campanha/captures/11111111-1111-4111-8111-111111111111/submissions"></form>' }] };
+  let published; let saved;
+  const service = new PublicationService({
+    snapshotBuilder: { build: async () => snapshot },
+    integrations: { credentials: async () => ({ vercelProjectId: 'project' }) },
+    deployments: { createOrGet: async (input) => ({ id: 'preview-capture', ...input, status: 'queued' }), updateExternal: async (input) => ({ id: 'preview-capture', ...input, externalDeploymentId: 'deployment' }) },
+    publisherFactory: () => ({ publish: async (input) => { published = input; return { id: 'deployment', projectId: 'project', url: 'preview.example.test' }; } }),
+    runtimeEnabled: false, runtimeOrigin: 'https://studio.example.test', runtimeHmacSecret: 'root-secret-only-at-studio', runtimeManifests: { saveManifest: async (input) => { saved = input; } }, audit: { record: async () => {} },
+  });
+  await service.preview({ companyId: 'company', projectId: 'project', requestedBy: 'user', expectedRevision: 1 });
+  assert.ok(published.files.some((file) => file.file === 'api/_alva/gateway.cjs'));
+  assert.doesNotMatch(published.files.find((file) => file.file === 'index.html').data, /_alva\/runtime\.js/);
+  assert.match(published.files.find((file) => file.file === 'index.html').data, /\/api\/public\/pages\/captures\/11111111-1111-4111-8111-111111111111\/submissions/);
+  assert.equal(saved.manifest.environment, 'preview');
+  assert.deepEqual(saved.manifest.providers, []);
+  assert.deepEqual(saved.manifest.consent, { required: false, scope: 'none' });
+  assert.deepEqual(saved.manifest.contents, snapshot.manifest);
+});
+
 test('produção exige confirmação e preview READY do mesmo snapshot', async () => {
   const service = new PublicationService({
     snapshotBuilder: { build: async () => ({ hash: 'a'.repeat(64), manifest: [], files: [{ file: 'index.html', data: 'home' }] }) },
@@ -108,7 +128,7 @@ test('overview mantém a prévia READY separada da última produção', async ()
 });
 
 test('produção adiciona Function ao payload da Vercel sem alterar snapshot e registra o manifesto pelo host retornado', async () => {
-  const snapshot = { hash: 'a'.repeat(64), manifest: [], files: [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }] };
+  const snapshot = { hash: 'a'.repeat(64), manifest: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'], versionNumber: 1, file: 'index.html' }], files: [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }] };
   const calls = []; let savedManifest;
   const service = new PublicationService({
     snapshotBuilder: { build: async () => snapshot },
@@ -132,11 +152,12 @@ test('produção adiciona Function ao payload da Vercel sem alterar snapshot e r
   assert.equal(calls[0].runtimeEnv.PUBLICATION_RUNTIME_HMAC_SECRET, undefined);
   assert.equal(savedManifest.manifest.publicationId, 'run-production');
   assert.equal(savedManifest.manifest.origin, 'https://lp.example.test');
+  assert.deepEqual(savedManifest.manifest.contents, [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'] }]);
 });
 
 test('domínio verificado move o manifesto ao host canônico e preserva publicação, snapshot e providers', async () => {
   let saved;
-  const current = { publication_id: 'run-1', snapshot_hash: 'a'.repeat(64), version: 3, policy_version: 1, environment: 'production', providers: [{ provider: 'meta', id: '123' }] };
+  const current = { publication_id: 'run-1', snapshot_hash: 'a'.repeat(64), version: 3, policy_version: 1, environment: 'production', providers: [{ provider: 'meta', id: '123' }], contents: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'] }] };
   const service = new PublicationService({
     integrations: { credentials: async () => ({ vercelProjectId: 'project' }) },
     deployments: { find: async () => ({ id: 'run-1', environment: 'production', status: 'READY' }) },
@@ -149,6 +170,7 @@ test('domínio verificado move o manifesto ao host canônico e preserva publica�
   assert.equal(saved.manifest.publicationId, 'run-1');
   assert.equal(saved.manifest.snapshotHash, current.snapshot_hash);
   assert.equal(saved.manifest.origin, 'https://lp.example.test');
+  assert.deepEqual(saved.manifest.contents, current.contents);
 });
 
 test('pixels habilitados falham fechados sem a raiz HMAC de runtime', async () => {

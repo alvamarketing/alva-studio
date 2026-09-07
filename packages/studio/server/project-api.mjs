@@ -320,25 +320,27 @@ export function createProjectApi({
       const [, projectId, format] = leads;
       const search = new URL(req.url, 'http://localhost').searchParams;
       const formId = search.get('formId') || undefined;
+      const sourceKind = search.get('sourceKind') || undefined;
+      const sourceId = search.get('sourceId') || undefined;
+      const captureId = search.get('captureId') || undefined;
       const limitValue = queryLimit(search.get('limit'));
       if (format === 'leads') {
         return json(await content.projectSubmissions({
-          companyId: context.companyId, projectId, actorId: context.user.id, formId,
+          companyId: context.companyId, projectId, actorId: context.user.id, formId, sourceKind, sourceId, captureId,
           limit: limitValue, cursor: search.get('cursor') || undefined,
         }));
       }
-      if (!formId) throw fail('Informe o formulário para exportar leads.', 400);
-      const form = await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId });
+      if (!formId && !(sourceKind && sourceId)) throw fail('Informe a origem para exportar leads.', 400);
       const submissions = [];
       let cursor;
       do {
         const page = await content.projectSubmissions({
-          companyId: context.companyId, projectId, actorId: context.user.id, formId, limit: 100, cursor,
+          companyId: context.companyId, projectId, actorId: context.user.id, formId, sourceKind, sourceId, captureId, limit: 100, cursor,
         });
         submissions.push(...page.items);
         cursor = page.nextCursor;
       } while (cursor);
-      return sendCsv(res, renderLeadsCsv({ formName: form.name, fields: formFields(form.draftSchema), submissions }));
+      return sendCsv(res, renderLeadsCsv({ submissions }));
     }
 
     const conversions = path.match(/^\/api\/projects\/([^/]+)\/conversions$/);

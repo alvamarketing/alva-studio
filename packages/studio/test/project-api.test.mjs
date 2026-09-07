@@ -226,6 +226,32 @@ test('leads do projeto paginam, isolam formulários e exportam CSV', async (t) =
       JSON.stringify({ nome: 'Primeira', email: 'primeira@alva.test', legado: '=1+1' }),
       JSON.stringify({ nome: 'Segunda', email: 'segunda@alva.test' })],
   );
+  const captureId = '00000000-0000-4000-8000-000000000099';
+  const capturePage = await content.createPage({
+    companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id,
+    name: 'Landing de captura', route: '/captura', renderedHtml: '<main>captura</main>',
+    editorState: { components: [{ tagName: 'form', attributes: { 'data-alva-capture-id': captureId, 'data-alva-capture-name': 'Diagnóstico' }, components: [
+      { tagName: 'label', components: [{ content: 'E-mail antigo' }, { tagName: 'input', attributes: { name: 'email', type: 'email', required: true } }] },
+    ] }] },
+  });
+  const pageVersion = await content.publishPage({
+    companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.alice.id, pageId: capturePage.id,
+  });
+  await database.query(
+    `INSERT INTO page_submissions (id, company_id, project_id, page_id, page_version_id, capture_id, answers, submitted_at)
+     VALUES ('00000000-0000-4000-8000-000000000003', $1, $2, $3, $4, $5, $6::jsonb, '2026-09-05T12:00:00.000Z')`,
+    [records.companyA.id, records.projectA.id, capturePage.id, pageVersion.id, captureId, JSON.stringify({ email: '=captura' })],
+  );
+  await database.query(
+    `INSERT INTO webhook_deliveries (company_id, project_id, source_kind, form_id, submission_id, url, event, status)
+     VALUES ($1, $2, 'form', $3, '00000000-0000-4000-8000-000000000002', 'https://hooks.example.test/lead', '{}'::jsonb, 'delivered')`,
+    [records.companyA.id, records.projectA.id, form.id],
+  );
+  await database.query(
+    `INSERT INTO webhook_deliveries (company_id, project_id, source_kind, form_id, submission_id, url, event, status)
+     VALUES ($1, $2, 'form', $3, '00000000-0000-4000-8000-000000000001', 'https://hooks.example.test/lead', '{}'::jsonb, 'dead')`,
+    [records.companyA.id, records.projectA.id, form.id],
+  );
   const app = await start(t, database);
   const analyst = client(app.base);
   const alice = client(app.base);
@@ -236,15 +262,22 @@ test('leads do projeto paginam, isolam formulários e exportam CSV', async (t) =
   const firstText = await first.text();
   assert.equal(first.status, 200, firstText);
   const page = JSON.parse(firstText);
-  assert.deepEqual(page.items.map((item) => ({ formId: item.formId, formName: item.formName, answers: item.answers, webhookStatus: item.webhookStatus })), [{
-    formId: form.id, formName: 'Contato', answers: { nome: 'Segunda', email: 'segunda@alva.test' }, webhookStatus: 'pending',
+  assert.deepEqual(page.items.map((item) => ({ sourceKind: item.sourceKind, sourceId: item.sourceId, captureId: item.captureId, answers: item.answers })), [{
+    sourceKind: 'page', sourceId: capturePage.id, captureId, answers: { email: '=captura' },
   }]);
-  assert.equal(page.items[0].submittedAt, '2026-09-05T11:00:00.000Z');
+  assert.deepEqual(page.items[0].fields, [{ id: 'email', type: 'email', title: 'E-mail antigo', required: true }]);
+  assert.equal(page.items[0].submittedAt, '2026-09-05T12:00:00.000Z');
+  assert.ok(page.sources.some((source) => source.sourceKind === 'page' && source.sourceId === capturePage.id && source.captureId === captureId));
+  assert.ok(page.sources.every((source) => Object.keys(source).sort().join(',') === 'captureId,captureName,sourceId,sourceKind,sourceName,sourcePath'));
   assert.match(page.nextCursor, /^[A-Za-z0-9_-]+$/);
   const second = await analyst.request(`/api/projects/${records.projectA.id}/leads?cursor=${encodeURIComponent(page.nextCursor)}&limit=100`);
   const secondText = await second.text();
   assert.equal(second.status, 200, secondText);
-  assert.deepEqual(JSON.parse(secondText).items.map((item) => item.answers.nome), ['Primeira']);
+  assert.deepEqual(JSON.parse(secondText).items.map((item) => item.answers.nome), ['Segunda', 'Primeira']);
+  assert.deepEqual(JSON.parse(secondText).items.map((item) => item.webhookStatus), ['delivered', 'failed']);
+  const captureLeads = await analyst.request(`/api/projects/${records.projectA.id}/leads?sourceKind=page&sourceId=${capturePage.id}&captureId=${captureId}`);
+  assert.deepEqual((await captureLeads.json()).items.map((item) => ({ id: item.id, webhookStatus: item.webhookStatus })), [{ id: '00000000-0000-4000-8000-000000000003', webhookStatus: '' }]);
+  assert.equal((await analyst.request(`/api/projects/${records.projectA.id}/leads?sourceKind=page&sourceId=${capturePage.id}&captureId=${otherForm.id}`)).status, 404);
   assert.equal((await analyst.request(`/api/projects/${records.projectA.id}/leads?cursor=invalido`)).status, 400);
   assert.equal((await alice.request(`/api/projects/${records.projectA.id}/leads?formId=${otherForm.id}`)).status, 404);
 
@@ -257,6 +290,8 @@ test('leads do projeto paginam, isolam formulários e exportam CSV', async (t) =
   assert.match(csvText, /^\uFEFFRecebida em,Formulário,Nome,E-mail,legado\r\n/m);
   assert.match(csvText, /\r\n2026-09-05T11:00:00.000Z,Contato,Segunda/);
   assert.match(await (await analyst.request(`/api/projects/${records.projectA.id}/leads.csv?formId=${form.id}`)).text(), /'=1\+1/);
+  const pageCsv = await analyst.request(`/api/projects/${records.projectA.id}/leads.csv?sourceKind=page&sourceId=${capturePage.id}&captureId=${captureId}`);
+  assert.match(await pageCsv.text(), /E-mail antigo[\s\S]*'=captura/);
   await database.close();
 });
 

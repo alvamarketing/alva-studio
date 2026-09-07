@@ -1638,3 +1638,17 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   .project-columns > #project-publication,
   .project-columns > #project-agent-keys { grid-column:auto; }
 }
+
+#project-view[data-content-view='leads'] .project-columns {
+  grid-template-columns: 1fr;
+}
+#project-view[data-content-view='leads'] .project-columns > [aria-labelledby='project-content-title'] {
+  grid-column: 1 / -1;
+}
+#project-view[data-content-view='leads'] .project-structure,
+#project-view[data-content-view='leads'] .project-rule,
+#project-view[data-content-view='leads'] #project-agent-keys,
+#project-view[data-content-view='leads'] #project-publication,
+#project-view[data-content-view='leads'] #analytics-panel {
+  display: none !important;
+}
