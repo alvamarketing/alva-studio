@@ -310,6 +310,10 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
   }
   const vslEmbedUrls = new Map([...resolvedVsl].map(([publicId, value]) => [publicId, value.embedUrl]));
   if (!['preview', 'production'].includes(environment)) throw fail('Ambiente de publicação inválido.', 400);
+  const contentRows = rows
+    .map((row) => ({ kind: row.kind, company_slug: row.company_slug, project_slug: row.project_slug, path: row.path, content_id: row.content_id, version_id: row.version_id, version_number: row.version_number, name: row.name, rendered_html: row.rendered_html, schema: row.schema, capture_schema: row.capture_schema, editor_state: row.editor_state }))
+    .sort((left, right) => left.version_id.localeCompare(right.version_id));
+  const contentHash = createHash('sha256').update(JSON.stringify(canonical({ rows: contentRows }))).digest('hex');
   const trackerPublicId = await resolveAnalyticsTrackerPublicId(database, companyId, projectId, environment);
   const fingerprint = createHash('sha256').update(JSON.stringify(canonical({
     rows: rows
@@ -333,7 +337,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
   const manifest = records.map(({ path, type, contentId, versionId, versionNumber, file, captureIds }) => ({ path, type, contentId, versionId, versionNumber, file, ...(type === 'page' ? { captureIds } : {}) }));
   const files = records.map(({ file, data }) => ({ file, data }));
   const hash = createHash('sha256').update(JSON.stringify(canonical({ manifest, files }))).digest('hex');
-  return { manifest, files, hash };
+  return { manifest, files, hash, contentHash };
 }
 
 export class PublicationSnapshotBuilder {

@@ -156,6 +156,7 @@ function runRecord(row) {
     projectId: row.project_id,
     environment: row.environment,
     snapshotHash: row.snapshot_hash,
+    contentHash: row.content_hash || null,
     idempotencyKey: row.idempotency_key,
     expectedRevision: row.expected_revision,
     status: row.status,
@@ -169,9 +170,10 @@ function runRecord(row) {
   };
 }
 
-function deploymentInput({ environment, snapshotHash, expectedRevision }) {
+function deploymentInput({ environment, snapshotHash, contentHash, expectedRevision }) {
   if (!['preview', 'production'].includes(environment)) throw fail('Ambiente de publicação inválido.', 400);
   if (!/^[a-f0-9]{64}$/i.test(snapshotHash)) throw fail('Snapshot inválido.', 400);
+  if (!/^[a-f0-9]{64}$/i.test(contentHash || '')) throw fail('Conteúdo da publicação inválido.', 400);
   if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw fail('Revisão inválida.', 400);
 }
 
@@ -209,27 +211,29 @@ export class DeploymentRepository {
     return runRecord(rows[0]);
   }
 
-  async createOrGet({ companyId, projectId, environment, snapshotHash, expectedRevision, requestedBy, idempotencyKey }) {
-    deploymentInput({ environment, snapshotHash, expectedRevision });
+  async createOrGet({ companyId, projectId, environment, snapshotHash, contentHash, expectedRevision, requestedBy, idempotencyKey }) {
+    deploymentInput({ environment, snapshotHash, contentHash, expectedRevision });
     const key = String(idempotencyKey || `${environment}:${snapshotHash}`);
     if (key.length > 120) throw fail('Chave de idempotência inválida.', 400);
     const existing = await this.find({ projectId, environment, idempotencyKey: key });
     if (existing) {
       if (existing.snapshotHash.toLowerCase() !== snapshotHash.toLowerCase()) throw fail('A chave de idempotência já pertence a outro conteúdo.', 409);
+      if (existing.contentHash !== contentHash.toLowerCase()) throw fail('A chave de idempotência já pertence a outro conteúdo.', 409);
       return existing;
     }
     const { rows } = await this.database.query(
       `INSERT INTO deployment_runs
-         (company_id, project_id, environment, snapshot_hash, idempotency_key, expected_revision, requested_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (company_id, project_id, environment, snapshot_hash, content_hash, idempotency_key, expected_revision, requested_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (project_id, environment, idempotency_key) DO NOTHING
        RETURNING *`,
-      [companyId, projectId, environment, snapshotHash, key, expectedRevision, requestedBy || null],
+      [companyId, projectId, environment, snapshotHash, contentHash.toLowerCase(), key, expectedRevision, requestedBy || null],
     );
     if (rows[0]) return runRecord(rows[0]);
     const concurrent = await this.find({ projectId, environment, idempotencyKey: key });
     if (!concurrent) throw fail('Não foi possível criar a execução de publicação.', 503);
     if (concurrent.snapshotHash.toLowerCase() !== snapshotHash.toLowerCase()) throw fail('A chave de idempotência já pertence a outro conteúdo.', 409);
+    if (concurrent.contentHash !== contentHash.toLowerCase()) throw fail('A chave de idempotência já pertence a outro conteúdo.', 409);
     return concurrent;
   }
 

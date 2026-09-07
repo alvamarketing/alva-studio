@@ -11,9 +11,9 @@ class DeploymentDatabase {
       return { rows: row ? [row] : [] };
     }
     if (sql.includes('INSERT INTO deployment_runs')) {
-      const existing = this.rows.find((item) => item.project_id === params[1] && item.environment === params[2] && item.idempotency_key === params[4]);
+      const existing = this.rows.find((item) => item.project_id === params[1] && item.environment === params[2] && item.idempotency_key === params[5]);
       if (existing) return { rows: [] };
-      const row = { id: `run-${this.rows.length + 1}`, company_id: params[0], project_id: params[1], environment: params[2], snapshot_hash: params[3], idempotency_key: params[4], expected_revision: params[5], status: 'queued' };
+      const row = { id: `run-${this.rows.length + 1}`, company_id: params[0], project_id: params[1], environment: params[2], snapshot_hash: params[3], content_hash: params[4], idempotency_key: params[5], expected_revision: params[6], status: 'queued' };
       this.rows.push(row);
       return { rows: [row] };
     }
@@ -79,11 +79,11 @@ class FencedDatabase {
 
 test('execução combina ambiente e hash e repete sem criar novo deploy', async () => {
   const repository = new DeploymentRepository(new DeploymentDatabase());
-  const first = await repository.createOrGet({ companyId: 'company-a', projectId: 'project-a', environment: 'preview', snapshotHash: 'a'.repeat(64), expectedRevision: 2, requestedBy: 'user-a' });
-  const repeated = await repository.createOrGet({ companyId: 'company-a', projectId: 'project-a', environment: 'preview', snapshotHash: 'a'.repeat(64), expectedRevision: 2, requestedBy: 'user-a' });
+  const first = await repository.createOrGet({ companyId: 'company-a', projectId: 'project-a', environment: 'preview', snapshotHash: 'a'.repeat(64), contentHash: 'c'.repeat(64), expectedRevision: 2, requestedBy: 'user-a' });
+  const repeated = await repository.createOrGet({ companyId: 'company-a', projectId: 'project-a', environment: 'preview', snapshotHash: 'a'.repeat(64), contentHash: 'c'.repeat(64), expectedRevision: 2, requestedBy: 'user-a' });
   assert.equal(repeated.id, first.id);
   await assert.rejects(
-    () => repository.createOrGet({ companyId: 'company-a', projectId: 'project-a', environment: 'preview', snapshotHash: 'b'.repeat(64), expectedRevision: 2, requestedBy: 'user-a', idempotencyKey: first.idempotencyKey }),
+    () => repository.createOrGet({ companyId: 'company-a', projectId: 'project-a', environment: 'preview', snapshotHash: 'b'.repeat(64), contentHash: 'c'.repeat(64), expectedRevision: 2, requestedBy: 'user-a', idempotencyKey: first.idempotencyKey }),
     /idempotência|conteúdo/i,
   );
 });

@@ -139,7 +139,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         await integrations.save({ companyId: records.companyB.id, projectId: records.projectB.id, teamId: 'team_localb', vercelProjectId: 'project_local_b', token: 'fake-local-publication-token-b' });
         const deployments = new DeploymentRepository(database);
         const service = new PublicationService({
-          snapshotBuilder: { build: async ({ expectedRevision }) => ({ hash: String(expectedRevision === 1 ? 'a' : 'b').repeat(64), manifest: [], files: [{ file: 'index.html', data: '<main>local</main>' }] }) },
+          snapshotBuilder: { build: async ({ expectedRevision }) => ({ hash: String(expectedRevision === 1 ? 'a' : 'b').repeat(64), contentHash: 'c'.repeat(64), manifest: [], files: [{ file: 'index.html', data: '<main>local</main>' }] }) },
           integrations,
           deployments,
           audit: new AuditRepository(database),

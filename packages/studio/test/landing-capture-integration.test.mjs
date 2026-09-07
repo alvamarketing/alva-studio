@@ -6,10 +6,11 @@ import { createApp } from '../server/index.mjs';
 import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
 import { PublicationRuntimeRepository } from '../server/repositories/publication-runtime-repository.mjs';
+import { DeploymentRepository } from '../server/repositories/publication-repository.mjs';
+import { PublicationService } from '../server/publication-service.mjs';
 import { buildPublishableSnapshot } from '../server/publication-snapshot.mjs';
 import { buildRuntimeManifest, signRuntimeRequest } from '../server/publication-runtime.mjs';
 import { derivePublicationRuntimeKey, runtimeGatewayArtifacts } from '../server/vercel-runtime-gateway.mjs';
-import { PublicationService } from '../server/publication-service.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
 function http(base, path, { headers = {}, body } = {}) {
@@ -69,4 +70,28 @@ test('prévia sem captura mantém o fluxo anterior mesmo com pixels habilitados'
   await service.preview({ companyId: 'company', projectId: 'project', requestedBy: 'owner', expectedRevision: 1 });
   assert.deepEqual(payload.files, [{ file: 'index.html', data: '<main>sem captura</main>' }]);
   assert.equal(payload.runtimeEnv, undefined);
+});
+
+test('prévia real promove produção por contentHash e bloqueia conteúdo alterado ou legado', async (t) => {
+  const { connectionString } = await postgresFixture(t); const database = createDatabase({ connectionString }); await migrate(database);
+  const user = (await database.query("INSERT INTO users (email,password_hash,display_name) VALUES ('parity@alva.test','hash','Owner') RETURNING id")).rows[0];
+  const company = (await database.query("INSERT INTO companies (name,slug) VALUES ('Parity','parity') RETURNING id")).rows[0];
+  const project = (await database.query("INSERT INTO projects (company_id,name,slug,created_by) VALUES ($1,'Projeto','projeto',$2) RETURNING id", [company.id, user.id])).rows[0];
+  await database.query("INSERT INTO company_memberships (company_id,user_id,role,joined_at) VALUES ($1,$2,'owner',now())", [company.id, user.id]);
+  t.after(async () => database.close());
+  const content = new ContentRepository(database, { publicOrigin: 'https://studio.example.test' });
+  const page = await content.createPage({ companyId: company.id, projectId: project.id, actorId: user.id, name: 'Página', route: '/', editorState: {}, renderedHtml: '<main>versão A</main>' });
+  await content.publishPage({ companyId: company.id, projectId: project.id, actorId: user.id, pageId: page.id, lockVersion: page.lockVersion });
+  let publishes = 0;
+  const service = new PublicationService({ snapshotBuilder: { build: (input) => buildPublishableSnapshot({ database, publicOrigin: 'https://studio.example.test', ...input }) }, deployments: new DeploymentRepository(database), integrations: { credentials: async () => ({ vercelProjectId: 'project-ext' }) }, publisherFactory: () => ({ publish: async () => ({ id: `deploy-${++publishes}`, projectId: 'project-ext', state: 'READY', url: 'lp.example.test' }) }), audit: { record: async () => {} } });
+  const preview = await service.preview({ companyId: company.id, projectId: project.id, requestedBy: user.id, expectedRevision: 1 });
+  const before = await buildPublishableSnapshot({ database, companyId: company.id, projectId: project.id, publicOrigin: 'https://studio.example.test', environment: 'production' });
+  assert.notEqual(preview.snapshotHash, before.hash); assert.equal((await new DeploymentRepository(database).find({ companyId: company.id, projectId: project.id, runId: preview.id })).contentHash, before.contentHash);
+  await service.production({ companyId: company.id, projectId: project.id, requestedBy: user.id, expectedRevision: 1, confirmed: true, previewRunId: preview.id });
+  await database.query('UPDATE deployment_runs SET content_hash=NULL WHERE id=$1', [preview.id]);
+  await assert.rejects(() => service.production({ companyId: company.id, projectId: project.id, requestedBy: user.id, expectedRevision: 1, confirmed: true, previewRunId: preview.id }), /nova prévia/i);
+  await database.query('UPDATE deployment_runs SET content_hash=$2 WHERE id=$1', [preview.id, before.contentHash]);
+  const changed = await content.updatePage({ companyId: company.id, projectId: project.id, actorId: user.id, pageId: page.id, lockVersion: page.lockVersion, renderedHtml: '<main>versão B</main>' });
+  await content.publishPage({ companyId: company.id, projectId: project.id, actorId: user.id, pageId: page.id, lockVersion: changed.lockVersion });
+  await assert.rejects(() => service.production({ companyId: company.id, projectId: project.id, requestedBy: user.id, expectedRevision: 2, confirmed: true, previewRunId: preview.id }), /nova prévia/i);
 });

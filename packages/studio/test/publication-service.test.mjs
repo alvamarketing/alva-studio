@@ -43,10 +43,10 @@ test('captura publicada instala gateway e manifesto na prévia sem pixels ou boo
 
 test('produção exige confirmação e preview READY do mesmo snapshot', async () => {
   const service = new PublicationService({
-    snapshotBuilder: { build: async () => ({ hash: 'a'.repeat(64), manifest: [], files: [{ file: 'index.html', data: 'home' }] }) },
+    snapshotBuilder: { build: async () => ({ hash: 'a'.repeat(64), contentHash: 'c'.repeat(64), manifest: [], files: [{ file: 'index.html', data: 'home' }] }) },
     integrations: { credentials: async () => ({ token: 'token', vercelProjectId: 'prj_1' }) },
     deployments: {
-      async find() { return { id: 'preview-1', environment: 'preview', status: 'READY', snapshotHash: 'a'.repeat(64), externalProjectId: 'prj_1' }; },
+      async find() { return { id: 'preview-1', environment: 'preview', status: 'READY', snapshotHash: 'different'.padEnd(64, '0'), contentHash: 'c'.repeat(64), externalProjectId: 'prj_1' }; },
       async createOrGet(input) { return { id: 'production-1', ...input, externalDeploymentId: null, status: 'queued' }; },
       async updateExternal(input) { return { id: 'production-1', ...input, status: 'READY', externalDeploymentId: 'dpl-2' }; },
     },
@@ -128,13 +128,13 @@ test('overview mantém a prévia READY separada da última produção', async ()
 });
 
 test('produção adiciona Function ao payload da Vercel sem alterar snapshot e registra o manifesto pelo host retornado', async () => {
-  const snapshot = { hash: 'a'.repeat(64), manifest: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'], versionNumber: 1, file: 'index.html' }], files: [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }] };
+  const snapshot = { hash: 'a'.repeat(64), contentHash: 'c'.repeat(64), manifest: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'], versionNumber: 1, file: 'index.html' }], files: [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }] };
   const calls = []; let savedManifest;
   const service = new PublicationService({
     snapshotBuilder: { build: async () => snapshot },
     integrations: { credentials: async () => ({ token: 'token', vercelProjectId: 'prj_1' }) },
     deployments: {
-      async find() { return { id: 'preview-1', environment: 'preview', status: 'READY', snapshotHash: snapshot.hash, externalProjectId: 'prj_1' }; },
+      async find() { return { id: 'preview-1', environment: 'preview', status: 'READY', snapshotHash: 'b'.repeat(64), contentHash: snapshot.contentHash, externalProjectId: 'prj_1' }; },
       async createOrGet(input) { return { id: 'run-production', ...input, externalDeploymentId: null, status: 'queued' }; },
       async updateExternal(input) { return { id: 'run-production', ...input, externalDeploymentId: 'dpl-1', status: 'READY' }; },
     },

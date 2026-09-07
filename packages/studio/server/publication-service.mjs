@@ -39,7 +39,7 @@ export class PublicationService {
   async send({ companyId, projectId, requestedBy, environment, expectedRevision, idempotencyKey, snapshot }) {
     const scope = { companyId, projectId };
     const { credentials, publisher } = await this.publisher(scope);
-    const run = await this.deployments.createOrGet({ companyId, projectId, environment, snapshotHash: snapshot.hash, expectedRevision, requestedBy, idempotencyKey });
+    const run = await this.deployments.createOrGet({ companyId, projectId, environment, snapshotHash: snapshot.hash, contentHash: snapshot.contentHash, expectedRevision, requestedBy, idempotencyKey });
     if (run.externalDeploymentId) return publicRun(run, snapshot);
     if (String(run.status).toUpperCase() === 'ERROR') return publicRun(run, snapshot);
     const claim = this.deployments.claim ? await this.deployments.claim({ companyId, projectId, runId: run.id }) : { claimed: true, run };
@@ -115,7 +115,7 @@ export class PublicationService {
     const snapshot = await this.snapshotBuilder.build({ ...input, environment: 'production' });
     const preview = await this.deployments.find({ companyId: input.companyId, projectId: input.projectId, runId: input.previewRunId });
     const credentials = await this.integrations.credentials({ companyId: input.companyId, projectId: input.projectId });
-    if (!preview || preview.environment !== 'preview' || String(preview.status).toUpperCase() !== 'READY' || preview.snapshotHash.toLowerCase() !== snapshot.hash.toLowerCase() || preview.externalProjectId !== credentials?.vercelProjectId) throw fail('A prévia validada não corresponde ao snapshot atual.', 409);
+    if (!preview || preview.environment !== 'preview' || String(preview.status).toUpperCase() !== 'READY' || !preview.contentHash || preview.contentHash.toLowerCase() !== snapshot.contentHash.toLowerCase() || preview.externalProjectId !== credentials?.vercelProjectId) throw fail('A prévia validada não corresponde ao conteúdo atual. Gere uma nova prévia.', 409);
     await this.audit.record({ companyId: input.companyId, projectId: input.projectId, actorUserId: input.requestedBy, action: 'deployment.production.request', resourceType: 'project', resourceId: input.projectId, revision: input.expectedRevision, result: 'requested', metadata: { snapshotHash: snapshot.hash, previewRunId: input.previewRunId } });
     return this.send({ ...input, environment: 'production', snapshot });
   }

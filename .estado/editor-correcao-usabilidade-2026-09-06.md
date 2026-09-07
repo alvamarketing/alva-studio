@@ -99,3 +99,9 @@ Pendências mantidas: não há certificação da Etapa 6 inteira nem da V1; a ca
 - A QA no navegador confirmou LEADS → lista, título/origem, seleção de quiz, CSV e retorno para “Conteúdos do projeto”. O ambiente do usuário tem 0 leads; os dados fictícios foram validados em banco descartável + HTTP.
 - Publicação na Vercel, egress real, quiz compartilhado e etapas 7–18 continuam fora do fechamento. Não há certificação V1, produção externa ou comparação de screenshots arquivada.
 - Pendência técnica para o deploy: `PublicationService.production` compara `preview.snapshotHash` com o hash de produção, mas os testes read-only confirmaram que a mesma fórmula com nonce HTML por ambiente gera hashes diferentes. É preciso separar a impressão de conteúdo comparável do `snapshotHash` de deploy antes da Vercel; o isolamento do `SnapshotHMAC` deve permanecer. Esta correção não foi feita neste bloco.
+- Fechamento local de paridade em 2026-09-07: a suíte final `/tmp/alva-publication-parity-suite-final.log` concluiu 577/577 testes, 0 falhas; a revisão independente `/tmp/alva-publication-parity-review.md` aprovou o bloco após a atualização do fixture `contentHash`. Isso não cobre publicação real na Vercel nem certifica a V1.
+
+### Checkpoint de paridade de publicação — 2026-09-07
+
+- A publicação agora registra `contentHash` editorial separado do `snapshotHash` de deploy. Preview e produção podem ter nonces e hashes de deploy diferentes sem invalidar uma prévia do mesmo conteúdo; alteração editorial ou prévia legada sem `contentHash` exige nova prévia.
+- A evidência cobre builder, persistência e fake publisher em banco descartável. Não houve publicação real na Vercel.

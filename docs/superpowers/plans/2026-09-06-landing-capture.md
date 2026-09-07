@@ -15,10 +15,11 @@
 - O servidor do Studio foi reiniciado na sessão 51020, as migrações aditivas 019/020 foram aplicadas e `/health/ready` respondeu 200. O banco local não foi reiniciado.
 - A QA no navegador confirmou o clique em LEADS → lista, título e origem, seleção de quiz, link CSV e retorno para “Conteúdos do projeto”. Quatro UUIDs de captura permaneceram após salvar/reabrir.
 - O ambiente do usuário tem 0 leads; dados fictícios foram validados em banco descartável + HTTP.
+- A paridade de publicação foi resolvida localmente: a suíte final `/tmp/alva-publication-parity-suite-final.log` concluiu 577/577 testes, 0 falhas, e a revisão independente `/tmp/alva-publication-parity-review.md` aprovou o bloco após o fixture `contentHash`.
 
 ## Trabalho restante
 
-- Publicar na Vercel e validar egress real. Antes do deploy, separar a impressão de conteúdo comparável do `snapshotHash` de deploy: `PublicationService.production` compara `preview.snapshotHash` com o hash de produção, e os testes read-only confirmaram que a mesma fórmula com nonce HTML por ambiente gera hashes diferentes. O isolamento do `SnapshotHMAC` deve permanecer.
+- Publicar na Vercel e validar egress real; essa etapa continua pendente.
 - Fechar o quiz compartilhando o editor e continuar as etapas 7–18.
 - Não há afirmação de produção externa, V1 certificada ou comparação de screenshots arquivada.
 

@@ -34,6 +34,23 @@ test('snapshot inclui todas as páginas e formulários publicados em ordem está
   assert.deepEqual(repeat.files, snapshot.files);
 });
 
+test('conteúdo imutável mantém contentHash entre prévia e produção, embora o deployHash varie', async () => {
+  const rows = [{ kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'form-1', version_id: 'version-1', version_number: 1, path: '/contato', schema: { steps: [{ id: 'email', elements: [{ id: 'email', type: 'email', title: 'E-mail', required: true }] }] } }];
+  const input = { database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' };
+  const [preview, production] = await Promise.all([buildPublishableSnapshot({ ...input, environment: 'preview' }), buildPublishableSnapshot({ ...input, environment: 'production' })]);
+  assert.notEqual(preview.hash, production.hash);
+  assert.equal(preview.contentHash, production.contentHash);
+  assert.match(preview.contentHash, /^[a-f0-9]{64}$/);
+});
+
+test('contentHash muda com cada campo editorial publicado e não com a ordem das rows', async () => {
+  const base = { kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'form-1', version_id: 'version-1', version_number: 1, name: 'Contato', path: '/contato', editor_state: { title: 'A' }, capture_schema: { forms: [] }, schema: { steps: [{ id: 'email', elements: [{ id: 'email', type: 'email', title: 'E-mail' }] }] } };
+  const build = async (rows) => (await buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' })).contentHash;
+  const original = await build([base]);
+  for (const patch of [{ name: 'Novo nome' }, { path: '/nova-rota' }, { schema: { steps: [{ id: 'nome', elements: [{ id: 'nome', type: 'text', title: 'Nome' }] }] } }, { capture_schema: { forms: [{ captureId: '11111111-1111-4111-8111-111111111111' }] } }, { editor_state: { title: 'B' } }, { company_slug: 'outra' }]) assert.notEqual(await build([{ ...base, ...patch }]), original);
+  assert.equal(await build([base, { ...base, content_id: 'form-2', version_id: 'version-2', path: '/dois' }]), await build([{ ...base, content_id: 'form-2', version_id: 'version-2', path: '/dois' }, base]));
+});
+
 test('snapshot reescreve cada captura pelo UUID canônico e registra seus IDs', async () => {
   const first = '11111111-1111-4111-8111-111111111111';
   const second = '22222222-2222-4222-8222-222222222222';
