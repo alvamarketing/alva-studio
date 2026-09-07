@@ -4,6 +4,13 @@ import { readFile } from 'node:fs/promises';
 import grapesjs from 'grapesjs';
 import {
   safeDestination,
+  chartAncestor,
+  chartBlockContainer,
+  chartInsertionTarget,
+  chartRows,
+  donutSegments,
+  updateChartRow,
+  removeChartRow,
   componentLabel,
   editorialLabel,
   panelMode,
@@ -426,7 +433,63 @@ test('landing pages oferecem ícones, gráficos e movimento por elemento', async
   assert.match(source, /Movimento/);
   assert.match(source, /data-alva-motion/);
   assert.match(source, /Subir suavemente/);
-  assert.match(source, /Dados do gráfico/);
+  assert.match(source, /\+ Adicionar barra/);
+  assert.match(source, /\+ Adicionar fatia/);
+});
+
+test('um filho selecionado resolve o gráfico ancestral, valida dados e persiste a edição GrapesJS', () => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  try {
+  const bars = editor.getWrapper().append({
+    tagName: 'div',
+    classes: ['alva-chart-bars'],
+    components: [{ tagName: 'div', components: [{ tagName: 'i' }, { tagName: 'small', components: [{ type: 'textnode', content: 'Visitas' }] }] }],
+  })[0];
+  const circularFrame = editor.getWrapper().append({
+    tagName: 'div',
+    classes: ['alva-chart'],
+    components: [{
+      tagName: 'div',
+      classes: ['alva-donut'],
+      components: [{ tagName: 'strong', components: [{ type: 'textnode', content: 'Resultados' }] }],
+    }],
+  })[0];
+  const circular = circularFrame.components().at(0);
+  const barLabel = bars.components().at(0).components().at(1);
+  const circularTitle = circular.components().at(0);
+  editor.select(barLabel);
+  assert.equal(chartAncestor(editor.getSelected()), bars);
+  assert.equal(chartBlockContainer(editor.getSelected()), bars);
+  assert.deepEqual(chartInsertionTarget(editor.getSelected(), editor.getWrapper()), { target: editor.getWrapper(), at: 1 });
+  assert.equal(editorialLabel(editor.getSelected()), 'Gráfico de barras');
+  editor.select(circularTitle);
+  assert.equal(chartAncestor(editor.getSelected()), circular);
+  assert.equal(chartBlockContainer(editor.getSelected()), circular.parent());
+  assert.deepEqual(chartInsertionTarget(editor.getSelected(), editor.getWrapper()), { target: editor.getWrapper(), at: 2 });
+  assert.equal(editorialLabel(editor.getSelected()), 'Gráfico circular');
+  assert.equal(chartInsertionTarget(editor.getWrapper(), editor.getWrapper()), null);
+  assert.equal(chartInsertionTarget(circularFrame.parent(), editor.getWrapper()), null);
+  assert.throws(() => chartRows(`Visitas: ${'9'.repeat(400)}\nVendas: 1`), /finito/i);
+  assert.throws(() => donutSegments([['Visitas', Infinity], ['Vendas', 1]]), /finito/i);
+  const rows = chartRows('Leads: 300\nVendas: 500');
+  assert.match(donutSegments(rows), /37\.5%/);
+  const renamed = updateChartRow([['Visitas', 52], ['Contatos', 26], ['Vendas', 22]], 0, { name: 'Concluído' });
+  const changed = updateChartRow(renamed, 0, { value: 30 });
+  assert.deepEqual(changed[0], ['Concluído', 30]);
+  assert.deepEqual(removeChartRow(changed, 1), [['Concluído', 30], ['Vendas', 22]]);
+  circular.addAttributes({ 'data-alva-chart-data': JSON.stringify(rows) });
+  circular.addStyle({ '--alva-chart-segments': donutSegments(rows) });
+  circularTitle.components([{ type: 'textnode', content: 'Conversões' }]);
+  const snapshot = editor.getProjectData();
+  const html = editor.getHtml();
+  const css = editor.getCss();
+  assert.match(html, /data-alva-chart-data/);
+  assert.match(html, /Conversões/);
+  assert.match(css, /--alva-chart-segments/);
+  assert.match(JSON.stringify(snapshot), /Leads/);
+  } finally {
+    editor.destroy();
+  }
 });
 
 test('Escape limpa a seleção e Delete remove o elemento fora de campos editáveis', () => {

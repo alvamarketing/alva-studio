@@ -1,4 +1,4 @@
-import { blocks, normalizeForms, templateCss } from './templates.js';
+import { blocks, normalizeCharts, normalizeForms, templateCss } from './templates.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 
 const svg = (body) =>
@@ -291,6 +291,76 @@ const escapeText = (value) =>
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
   );
 const tagOf = (model) => String(model?.get('tagName') || '').toLowerCase();
+const componentHasClass = (model, className) =>
+  (model?.getClasses?.() || []).includes(className) ||
+  String(model?.getAttributes?.().class || '').split(/\s+/).includes(className);
+const componentDescendants = (model) => {
+  const children = model?.components?.().models || [];
+  return children.flatMap((child) => [child, ...componentDescendants(child)]);
+};
+export const chartAncestor = (model) => {
+  let current = model;
+  while (current) {
+    if (componentHasClass(current, 'alva-chart-bars') || componentHasClass(current, 'alva-donut')) return current;
+    current = current.parent?.();
+  }
+};
+const componentWithClass = (model, className) => {
+  const ancestor = chartAncestor(model);
+  return componentHasClass(ancestor, className) ? ancestor : componentDescendants(model).find((child) => componentHasClass(child, className));
+};
+export const chartBlockContainer = (model) => {
+  const bars = componentWithClass(model, 'alva-chart-bars');
+  if (bars) return bars;
+  const donut = componentWithClass(model, 'alva-donut');
+  return componentHasClass(donut?.parent?.(), 'alva-chart') ? donut.parent() : donut;
+};
+export const chartInsertionTarget = (selected, wrapper) => {
+  const chart = chartAncestor(selected);
+  if (!chart) return null;
+  const container = componentHasClass(chart, 'alva-donut') && componentHasClass(chart.parent?.(), 'alva-chart') ? chart.parent() : chart;
+  return { target: container.parent() || wrapper, at: container.index() + 1 };
+};
+const componentsByTag = (model, tagName) =>
+  componentDescendants(model).filter((child) => tagOf(child) === tagName);
+export const chartRows = (value, max = Infinity) => {
+  const rows = String(value || '')
+    .split('\n')
+    .map((row) => row.match(/^\s*(.+?)\s*:\s*(\d+(?:\.\d+)?)\s*$/))
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((row) => [row[1].trim(), Number(row[2])]);
+  return validateChartRows(rows, max);
+};
+export const validateChartRows = (rows, max = Infinity) => {
+  const normalized = Array.from(rows || []).slice(0, 8).map(([name, value]) => [String(name ?? '').trim(), Number(value)]);
+  if (normalized.length < 2) throw new Error('Mantenha ao menos duas opções no gráfico.');
+  if (normalized.some(([name, number]) => !name || !Number.isFinite(number) || number < 0 || number > max))
+    throw new Error(max === Infinity ? 'Use valores finitos maiores ou iguais a zero.' : `Use valores finitos entre 0 e ${max}.`);
+  return normalized;
+};
+export const updateChartRow = (rows, index, patch, max = Infinity) =>
+  validateChartRows(rows.map((row, rowIndex) => rowIndex === index ? [patch.name ?? row[0], patch.value ?? row[1]] : row), max);
+export const removeChartRow = (rows, index, max = Infinity) => {
+  const current = validateChartRows(rows, max);
+  if (current.length < 3) throw new Error('Mantenha ao menos duas opções no gráfico.');
+  return validateChartRows(current.filter((_, rowIndex) => rowIndex !== index), max);
+};
+export const donutSegments = (rows) => {
+  const colors = ['#286eea', '#80d6c2', '#ffc76b', '#8f7ee8', '#ed8bb3', '#66b9e8', '#9ac85c', '#dca768'];
+  const values = rows.map(([, value]) => Number(value));
+  if (values.some((value) => !Number.isFinite(value) || value < 0))
+    throw new Error('Use valores finitos maiores ou iguais a zero.');
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (!Number.isFinite(total) || total <= 0) throw new Error('Informe ao menos um valor maior que zero.');
+  let start = 0;
+  return values.map((value, index) => {
+    const end = start + (value / total) * 100;
+    const segment = `${colors[index]} ${start}% ${end}%`;
+    start = end;
+    return segment;
+  }).join(',');
+};
 
 export function safeDestination(value, image = false) {
   const text = String(value || '').trim();
@@ -377,6 +447,96 @@ export function bindTreeItemActivation(item, onActivate, activeElement = () => d
   item.onclick = (event) => onActivate(event?.type === 'click' && activeElement() === item ? item : null);
 }
 
+export function scrollTreeComponent(editor, component) {
+  editor?.Canvas?.scrollTo?.(component, { behavior: 'smooth', block: 'nearest' });
+}
+
+export function restoreTreeSelection(editor, id, components) {
+  const component = components?.get?.(id);
+  if (!component) return false;
+  editor.select(component, { scroll: false });
+  return true;
+}
+
+export function isHexColor(value) {
+  return /^#[a-f\d]{6}$/i.test(String(value || '').trim());
+}
+
+export function colorToHex(value) {
+  const text = String(value || '').trim();
+  const hex = text.match(/^#([a-f\d]{3}|[a-f\d]{6})$/i)?.[1];
+  if (hex) {
+    const expanded = hex.length === 3 ? hex.split('').map((part) => part + part).join('') : hex;
+    return `#${expanded.toLowerCase()}`;
+  }
+  const rgb = text.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)$/i);
+  if (!rgb) return null;
+  const channels = rgb.slice(1, 4).map(Number);
+  if (channels.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)) return null;
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function treeDragSourceId(localId, dataTransfer) {
+  return localId || dataTransfer?.getData?.('text/plain') || '';
+}
+
+export function treeDropPosition(event, rect) {
+  return Number(event?.clientY) < Number(rect?.top || 0) + Number(rect?.height || 0) / 2 ? 'before' : 'after';
+}
+
+export function bindTreeDragInteraction(item, { id, component, canReorder, getSource, canMove, reorder, dragState } = {}) {
+  item.draggable = Boolean(canReorder);
+  const clearDropIndicator = () => {
+    item.classList.remove('fe-tree-drop-before', 'fe-tree-drop-after');
+    item.style.removeProperty('border-top');
+    item.style.removeProperty('border-bottom');
+  };
+  item.ondragstart = (event) => {
+    if (!canReorder) return;
+    dragState.sourceId = id;
+    event.dataTransfer?.setData('text/plain', id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+    item.classList.add('fe-tree-dragging');
+  };
+  item.ondragover = (event) => {
+    const source = getSource(treeDragSourceId(dragState.sourceId, event.dataTransfer));
+    if (!source || source === component || source.parent?.() !== component.parent?.()) return;
+    const position = treeDropPosition(event, item.getBoundingClientRect());
+    if (!canMove(source, component, position)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    clearDropIndicator();
+    item.classList.add(`fe-tree-drop-${position}`);
+    item.style.setProperty(position === 'before' ? 'border-top' : 'border-bottom', '2px solid var(--alva-blue, #286eea)');
+  };
+  item.ondragleave = (event) => {
+    if (!item.contains(event.relatedTarget)) clearDropIndicator();
+  };
+  item.ondrop = (event) => {
+    event.preventDefault();
+    const source = getSource(treeDragSourceId(dragState.sourceId, event.dataTransfer));
+    const position = treeDropPosition(event, item.getBoundingClientRect());
+    clearDropIndicator();
+    dragState.sourceId = null;
+    if (source && canMove(source, component, position)) reorder(source, component, position);
+  };
+  item.ondragend = () => {
+    item.classList.remove('fe-tree-dragging');
+    clearDropIndicator();
+    dragState.sourceId = null;
+  };
+}
+
+export function reorderTreeComponent({ source, target, position = 'after', canReorder = false, components } = {}) {
+  if (!canReorder || !source || !target || source === target) return false;
+  const parent = source.parent?.();
+  if (!parent || parent !== target.parent?.()) return false;
+  const at = target.index() + (position === 'after' ? 1 : 0);
+  if (!components?.canMove?.(parent, source, at)?.result) return false;
+  source.move(parent, { at });
+  return true;
+}
+
 function editorTreeIcon(component) {
   const tag = tagOf(component);
   if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'play_circle';
@@ -411,8 +571,14 @@ function editorialSectionLabel(component, index) {
   return index ? `Seção ${index + 1}` : 'Abertura';
 }
 
-function editorialElementLabel(component, { inNav = false } = {}) {
+export function editorialElementLabel(component, { inNav = false } = {}) {
   const tag = tagOf(component);
+  const chart = chartBlockContainer(component);
+  if (chart === component) {
+    const donut = componentHasClass(component, 'alva-donut') || componentDescendants(component).some((child) => componentHasClass(child, 'alva-donut'));
+    if (componentHasClass(component, 'alva-chart-bars')) return 'Gráfico de barras';
+    if (donut) return 'Gráfico circular';
+  }
   if (component?.is?.('vsl') || component?.get?.('type') === 'vsl') return 'VSL';
   if (/^h1$/.test(tag)) return 'Título principal';
   if (/^h[2-6]$/.test(tag)) return 'Título';
@@ -422,6 +588,9 @@ function editorialElementLabel(component, { inNav = false } = {}) {
 }
 
 export function editorialLabel(component) {
+  const chart = chartAncestor(component);
+  if (componentHasClass(chart, 'alva-chart-bars')) return 'Gráfico de barras';
+  if (componentHasClass(chart, 'alva-donut')) return 'Gráfico circular';
   const firstMeaningfulChild = (model) => {
     for (const child of componentChildren(model)) {
       const label = editorialElementLabel(child);
@@ -451,7 +620,7 @@ export function editorialLabel(component) {
   return editorialFallbacks.has(fallback) ? fallback : 'Elemento';
 }
 
-function editorialTreeEntries(wrapper, selected) {
+export function editorialTreeEntries(wrapper, selected) {
   const sections = [];
   const addSection = (component) => {
     if (sections.some((section) => section.component === component)) return;
@@ -482,15 +651,23 @@ function editorialTreeEntries(wrapper, selected) {
         visit(child, inNav || tag === 'nav');
       }
     };
-    visit(section.component);
+    visit(section.source || section.component);
   };
-  sections.forEach(addElements);
+  const realSections = sections.filter((section) => section.component !== wrapper);
+  if (realSections.length) {
+    realSections.forEach(addElements);
+    const loose = { component: null, source: wrapper, label: 'Elementos soltos', elements: [], synthetic: true };
+    addElements(loose);
+    if (loose.elements.length) sections.push(loose);
+  } else {
+    sections.forEach(addElements);
+  }
   return sections.map((section) => ({
     ...section,
-    selected: componentHas(section.component, selected),
+    selected: !section.synthetic && componentHas(section.component, selected),
     // The editor tree is a map, not a DOM inspector. A concise list keeps each
     // section actionable while the canvas still gives access to every child.
-    elements: section.elements.slice(0, 8).map((element) => ({ ...element, selected: componentHas(element.component, selected) })),
+    elements: section.elements.map((element) => ({ ...element, selected: componentHas(element.component, selected) })),
   }));
 }
 
@@ -595,6 +772,7 @@ export function createFriendlyEditor({
   let repaint;
   let activeModel;
   let treeComponents = new Map();
+  let treeDragSource = null;
   let readOnlyMutationGuard = null;
   let pendingVslOptionFocusId = null;
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
@@ -797,7 +975,8 @@ export function createFriendlyEditor({
     if (!component) return;
     const compact = isCompactWorkspace();
     activateWorkspacePanel('inspector', { focusTab: compact });
-    editor.select(component, { scroll: true });
+    editor.select(component, { scroll: false });
+    scrollTreeComponent(editor, component);
     activeModel = null;
     render();
     if (!compact) focusTreeItem(id, activeItem);
@@ -832,7 +1011,10 @@ export function createFriendlyEditor({
       tree.append(empty);
       return;
     }
-    const visibleIds = sections.flatMap((section) => [componentTreeId(section.component), ...section.elements.map(({ component }) => componentTreeId(component))]);
+    const visibleIds = sections.flatMap((section) => [
+      ...(section.synthetic ? [] : [componentTreeId(section.component)]),
+      ...section.elements.map(({ component }) => componentTreeId(component)),
+    ]);
     const appendItem = ({ component, label, level, selected, section = false, count = 0 }) => {
       const id = componentTreeId(component);
       if (!id) return;
@@ -847,6 +1029,24 @@ export function createFriendlyEditor({
       item.innerHTML = `<span class="fe-tree-drag material-symbols-outlined" aria-hidden="true">drag_indicator</span><span class="fe-tree-icon material-symbols-outlined" aria-hidden="true">${editorTreeIcon(component)}</span><span class="fe-tree-label"></span>${section ? `<small>${count}</small>` : ''}`;
       item.querySelector('.fe-tree-label').textContent = label;
       bindTreeItemActivation(item, (activeItem) => selectTreeItem(id, activeItem));
+      bindTreeDragInteraction(item, {
+        id,
+        component,
+        canReorder: interactionPolicy.canReorder,
+        getSource: (sourceId) => treeComponents.get(sourceId),
+        canMove: (source, target, position) => {
+          const parent = source.parent?.();
+          const at = target.index() + (position === 'after' ? 1 : 0);
+          return Boolean(parent && editor.Components.canMove(parent, source, at)?.result);
+        },
+        reorder: (source, target, position) => {
+          if (reorderTreeComponent({ source, target, position, canReorder: interactionPolicy.canReorder, components: editor.Components })) {
+            editor.select(source, { scroll: false });
+            announce('Elemento reordenado.');
+          }
+        },
+        dragState: { get sourceId() { return treeDragSource; }, set sourceId(value) { treeDragSource = value; } },
+      });
       item.onkeydown = (event) => {
         const next = treeKeyAction(event, visibleIds, id);
         if (!next) return;
@@ -855,16 +1055,27 @@ export function createFriendlyEditor({
       };
       tree.append(item);
     };
+    const appendSyntheticGroup = ({ label, count }) => {
+      const item = document.createElement('div');
+      item.className = 'fe-tree-item fe-tree-section fe-tree-synthetic';
+      item.setAttribute('role', 'presentation');
+      item.innerHTML = `<span aria-hidden="true"></span><span class="fe-tree-icon material-symbols-outlined" aria-hidden="true">folder</span><span class="fe-tree-label"></span><small>${count}</small>`;
+      item.querySelector('.fe-tree-label').textContent = label;
+      tree.append(item);
+    };
     for (const section of sections) {
-      appendItem({ component: section.component, label: section.label, level: 1, selected: section.selected, section: true, count: section.elements.length });
+      if (section.synthetic) appendSyntheticGroup({ label: section.label, count: section.elements.length });
+      else appendItem({ component: section.component, label: section.label, level: 1, selected: section.selected, section: true, count: section.elements.length });
       section.elements.forEach((element) => appendItem({ ...element, level: 2 }));
-      const add = document.createElement('button');
-      add.type = 'button';
-      add.className = 'fe-tree-add';
-      add.textContent = '+ Elemento';
-      add.disabled = !interactionPolicy.canAdd;
-      add.onclick = () => openLibraryFor(section.component);
-      tree.append(add);
+      if (!section.synthetic) {
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'fe-tree-add';
+        add.textContent = '+ Elemento';
+        add.disabled = !interactionPolicy.canAdd;
+        add.onclick = () => openLibraryFor(section.component);
+        tree.append(add);
+      }
     }
     const addSection = document.createElement('button');
     addSection.type = 'button';
@@ -896,8 +1107,10 @@ export function createFriendlyEditor({
     }
     const structure = ['section', 'columns'].includes(id) || id.endsWith('-section') || id.startsWith('section-');
     blockStyles();
+    if (id === 'bar-chart' || id === 'donut-chart') normalizeCharts(editor);
     let target = selected || wrapper;
     let at;
+    const selectedChartTarget = chartInsertionTarget(selected, wrapper);
     // Whole sections belong next to the section being edited, never inside a paragraph.
     if (structure) {
       while (target.parent() && !['main', 'section'].includes(tagOf(target))) target = target.parent();
@@ -905,6 +1118,8 @@ export function createFriendlyEditor({
         at = target.index() + 1;
         target = target.parent();
       }
+    } else if (selectedChartTarget) {
+      ({ target, at } = selectedChartTarget);
     } else {
       while (
         target !== wrapper &&
@@ -924,6 +1139,7 @@ export function createFriendlyEditor({
       }
     }
     const added = target.append(block.get('content'), at === undefined ? {} : { at });
+    if (id === 'bar-chart' || id === 'donut-chart') normalizeCharts(editor);
     formStyles();
     if (added[0]) editor.select(added[0], { scroll: true });
     announce(`${block.get('label')} adicionado. Ajuste o conteúdo no painel lateral.`);
@@ -940,6 +1156,7 @@ export function createFriendlyEditor({
     if (!interactionPolicy.canAdd) return;
     if (component) {
       blockStyles();
+      if (componentWithClass(component, 'alva-chart-bars') || componentWithClass(component, 'alva-donut')) normalizeCharts(editor);
       if (tagOf(component) === 'form' || component.find('form').length) formStyles();
       announce('Elemento adicionado. Selecione para personalizar.');
     }
@@ -953,8 +1170,18 @@ export function createFriendlyEditor({
       announce(error.message || 'Não foi possível alterar este elemento.');
     }
   }
-  $('.fe-canvas-bar [data-undo]').onclick = () => run(() => editor.UndoManager.undo());
-  $('.fe-canvas-bar [data-redo]').onclick = () => run(() => editor.UndoManager.redo());
+  $('.fe-canvas-bar [data-undo]').onclick = () => {
+    const selectedId = componentTreeId(editor.getSelected());
+    run(() => editor.UndoManager.undo());
+    restoreTreeSelection(editor, selectedId, treeComponents);
+    render();
+  };
+  $('.fe-canvas-bar [data-redo]').onclick = () => {
+    const selectedId = componentTreeId(editor.getSelected());
+    run(() => editor.UndoManager.redo());
+    restoreTreeSelection(editor, selectedId, treeComponents);
+    render();
+  };
 
   function section(title) {
     const el = document.createElement('section');
@@ -1010,6 +1237,27 @@ export function createFriendlyEditor({
     parent.append(row);
     return input;
   }
+  function chartItems(parent, rows, { item, addLabel, max = Infinity, change }) {
+    let currentRows = validateChartRows(rows, max);
+    const apply = (next) => {
+      const validRows = validateChartRows(next, max);
+      change(validRows);
+      currentRows = validRows;
+    };
+    currentRows.forEach(([name, value], index) => {
+      const itemEditor = document.createElement('div');
+      itemEditor.className = 'fe-field';
+      field(itemEditor, 'Nome', name, (next) => apply(updateChartRow(currentRows, index, { name: next }, max)));
+      field(itemEditor, 'Valor', value, (next) => apply(updateChartRow(currentRows, index, { value: next }, max)), {
+        type: 'number', min: 0, ...(max !== Infinity ? { max } : {}),
+      });
+      button(itemEditor, `Remover ${item}`, () => {
+        apply(removeChartRow(currentRows, index, max));
+      }, { className: 'fe-danger' });
+      parent.append(itemEditor);
+    });
+    button(parent, addLabel, () => apply([...currentRows, [`${item[0].toUpperCase()}${item.slice(1)} ${currentRows.length + 1}`, 0]]));
+  }
   function button(parent, text, action, options = {}) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -1051,17 +1299,54 @@ export function createFriendlyEditor({
   }
   function color(parent, model, label, property) {
     const current = styleValue(model, property);
-    const rgb = current.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    const hex = rgb
-      ? '#' +
-        rgb
-          .slice(1)
-          .map((n) => Number(n).toString(16).padStart(2, '0'))
-          .join('')
-      : /^#[a-f\d]{6}$/i.test(current)
-        ? current
-        : '#ffffff';
-    field(parent, label, hex, (value) => model.addStyle({ [property]: value }), { type: 'color' });
+    const hex = colorToHex(current) || '#ffffff';
+    const row = document.createElement('div');
+    row.className = 'fe-color-control';
+    const caption = document.createElement('span');
+    caption.className = 'fe-color-label';
+    caption.textContent = label;
+    row.append(caption);
+    const controls = document.createElement('div');
+    controls.className = 'fe-color-controls';
+    const swatch = document.createElement('input');
+    swatch.type = 'color';
+    swatch.className = 'fe-color-swatch';
+    swatch.value = hex;
+    swatch.setAttribute('aria-label', `${label} (amostra)`);
+    const hexInput = document.createElement('input');
+    hexInput.type = 'text';
+    hexInput.className = 'fe-color-hex';
+    hexInput.value = hex;
+    hexInput.placeholder = '#RRGGBB';
+    hexInput.setAttribute('aria-label', `${label} (HEX)`);
+    const apply = (value, input) => {
+      if (!interactionPolicy.canEdit) return;
+      const next = String(value || '').trim().toLowerCase();
+      input.setCustomValidity('');
+      if (!isHexColor(next)) {
+        input.setCustomValidity('Use uma cor hexadecimal no formato #RRGGBB.');
+        input.reportValidity();
+        return;
+      }
+      model.addStyle({ [property]: next });
+      swatch.value = next;
+      hexInput.value = next;
+      announce('Alteração aplicada. Você pode desfazer a qualquer momento.');
+    };
+    swatch.oninput = () => {
+      hexInput.value = swatch.value;
+      hexInput.setCustomValidity('');
+    };
+    swatch.onchange = () => apply(swatch.value, swatch);
+    hexInput.oninput = () => {
+      if (isHexColor(hexInput.value.trim())) apply(hexInput.value, hexInput);
+      else hexInput.setCustomValidity('Use uma cor hexadecimal no formato #RRGGBB.');
+    };
+    hexInput.onchange = () => apply(hexInput.value, hexInput);
+    controls.append(swatch, hexInput);
+    row.append(controls);
+    parent.append(row);
+    return hexInput;
   }
   function render() {
     clearTimeout(repaint);
@@ -1294,19 +1579,40 @@ export function createFriendlyEditor({
       const input = model.find('input,textarea,select')[0];
       if (input) button(content, 'Editar campo', () => editor.select(input));
     }
-    if (String(attrs.class || '').includes('alva-chart-bars')) {
-      const labels = model.find('small');
-      const bars = model.find('i');
-      const value = labels.map((label, index) => {
+    const barChart = componentWithClass(model, 'alva-chart-bars');
+    if (barChart) {
+      const labels = componentsByTag(barChart, 'small');
+      const bars = componentsByTag(barChart, 'i');
+      const rows = labels.map((label, index) => {
         const name = label.getEl()?.textContent || label.get('content') || `Item ${index + 1}`;
-        return `${name}: ${parseFloat(bars[index]?.getStyle()?.['--value']) || 0}`;
-      }).join('\n');
-      field(content, 'Dados do gráfico', value, (next) => {
-        const rows = next.split('\n').map((row) => row.match(/^\s*(.+?)\s*:\s*(\d+(?:\.\d+)?)\s*$/)).filter(Boolean).slice(0, 8);
-        if (rows.length < 2) throw new Error('Use pelo menos duas linhas no formato Nome: 72.');
-        model.components(rows.map((row) => `<div><i style="--value:${Math.min(100, Number(row[2]))}%"></i><small>${escapeText(row[1].trim())}</small></div>`).join(''));
-      }, { multiline: true });
-      help(content, 'Uma linha por barra. Exemplo: Contatos: 72');
+        return [name, parseFloat(bars[index]?.getStyle()?.['--value']) || 0];
+      });
+      chartItems(content, rows, {
+        item: 'barra', addLabel: '+ Adicionar barra', max: 100,
+        change: (nextRows) => {
+          barChart.components(nextRows.map(([name, number]) => `<div><i style="--value:${number}%"></i><small>${escapeText(name)}</small></div>`).join(''));
+        },
+      });
+      help(content, 'Cada barra usa um nome e uma porcentagem entre 0 e 100.');
+    }
+    const donut = componentWithClass(model, 'alva-donut');
+    if (donut) {
+      const data = (() => {
+        try { return JSON.parse(donut.getAttributes()['data-alva-chart-data'] || '[]'); }
+        catch { return []; }
+      })();
+      const rows = data.length ? data : [['Visitas', 52], ['Contatos', 26], ['Vendas', 22]];
+      const title = componentsByTag(donut, 'strong')[0];
+      if (title) field(content, 'Título do gráfico', title.getEl()?.textContent || title.get('content') || 'Resultados', (value) => title.components(escapeText(value)));
+      chartItems(content, rows, {
+        item: 'fatia', addLabel: '+ Adicionar fatia',
+        change: (nextRows) => {
+          const segments = donutSegments(nextRows);
+          donut.addAttributes({ 'data-alva-chart-data': JSON.stringify(nextRows) });
+          donut.addStyle({ background: `conic-gradient(${segments})` });
+        },
+      });
+      help(content, 'Cada fatia usa um nome e uma quantidade. As quantidades definem a proporção.');
     }
     let form = model;
     while (form && tagOf(form) !== 'form') form = form.parent();
@@ -1451,7 +1757,10 @@ export function createFriendlyEditor({
     activeModel = null;
     render();
   });
-  editor.on('load', render);
+  editor.on('load', () => {
+    if (componentWithClass(editor.getWrapper(), 'alva-chart-bars') || componentWithClass(editor.getWrapper(), 'alva-donut')) normalizeCharts(editor);
+    render();
+  });
   function handleEditorKey(event, stopImmediate = false) {
     if (!interactionPolicy.canEdit) return;
     const action = editorKeyboardAction(event, editor.getSelected());

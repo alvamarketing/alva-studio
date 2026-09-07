@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { templates, getTemplate, services, templateCss, formCss, blocks, normalizeForms } from '../public/templates.js';
+import grapesjs from 'grapesjs';
+import { templates, getTemplate, services, templateCss, formCss, chartCss, chartDonutBackgroundCss, blocks, normalizeForms, normalizeCharts, donutBackgroundFromData } from '../public/templates.js';
 
 test('galeria de modelos mantém prévias proporcionais e seleção acessível', async () => {
   const [css, app] = await Promise.all([
@@ -144,6 +145,71 @@ test('normalização tolera canvas vazio e blocos mantêm contrato de quatro pos
   for (const id of ['icon', 'bar-chart', 'donut-chart']) assert.ok(blocks.find((block) => block[0] === id));
   assert.match(templateCss, /data-alva-motion/);
   assert.match(templateCss, /prefers-reduced-motion/);
+});
+
+test('normalização de gráficos adiciona somente o CSS ausente sem reescrever estilos da página', () => {
+  let css = '.hero-grid{display:grid}.custom{color:purple}';
+  const additions = [];
+  const editor = {
+    getCss: () => css,
+    addStyle: (added) => { additions.push(added); css += added; },
+  };
+  assert.equal(normalizeCharts(editor), true);
+  assert.deepEqual(additions, [chartCss + chartDonutBackgroundCss]);
+  assert.match(css, /\.custom\{color:purple\}/);
+  assert.equal(normalizeCharts(editor), false);
+  assert.equal(additions.length, 1);
+});
+
+test('normalização de gráficos repara circular sem fundo e preserva fundo personalizado válido', () => {
+  let css = '.alva-chart-bars{display:flex}.alva-donut{display:grid}';
+  const additions = [];
+  const editor = { getCss: () => css, addStyle: (added) => { additions.push(added); css += added; } };
+  assert.equal(normalizeCharts(editor), true);
+  assert.match(additions[0], /background-image:conic-gradient/);
+  css = '.alva-chart-bars{display:flex}.alva-donut{background-image:linear-gradient(red,blue)}';
+  assert.equal(normalizeCharts(editor), false);
+});
+
+test('normalização real do GrapesJS preserva CSS customizado e repara somente o fallback legado', async () => {
+  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
+  const dom = new JSDOM('<!doctype html>');
+  const previous = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.DOMParser = dom.window.DOMParser;
+  globalThis.Node = dom.window.Node;
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  try {
+    editor.setStyle('.alva-donut{background-image:linear-gradient(red,blue);width:310px}');
+    const custom = editor.getWrapper().append({ tagName: 'div', classes: ['alva-donut'] })[0];
+    const legacy = editor.getWrapper().append({
+      tagName: 'div', classes: ['alva-donut'],
+      attributes: { 'data-alva-chart-data': '[["A",30],["B",20]]' },
+    })[0];
+    legacy.addStyle({ background: 'conic-gradient(#286eea, #80d6c2, #ffc76b)' });
+    assert.equal(normalizeCharts(editor), true);
+    const css = editor.getCss();
+    assert.match(css, /background-image:linear-gradient\(red, blue\)/);
+    assert.match(css, /width:310px/);
+    assert.deepEqual(custom.getStyle(), {});
+    assert.match(legacy.getStyle().background, /0% 60%/);
+    const saved = JSON.stringify(editor.getProjectData());
+    assert.equal(normalizeCharts(editor), false);
+    assert.equal(JSON.stringify(editor.getProjectData()), saved);
+  } finally {
+    editor.destroy();
+    globalThis.window = previous.window;
+    globalThis.document = previous.document;
+    globalThis.DOMParser = previous.DOMParser;
+    globalThis.Node = previous.Node;
+    dom.window.close();
+  }
+});
+
+test('fundo circular calcula as proporções do dado salvo sem limitar quantidades', () => {
+  assert.match(donutBackgroundFromData(JSON.stringify([['A', 30], ['B', 20]])), /0% 60%/);
+  assert.match(donutBackgroundFromData(JSON.stringify([['A', 300], ['B', 200]])), /0% 60%/);
 });
 
 test('CSS personalizado do formulário prevalece quando GrapesJS mescla seletores', () => {
