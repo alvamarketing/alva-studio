@@ -47,3 +47,20 @@ test('as telas de agentes e publicação carregam seus dados ao abrir', () => {
   assert.match(agentes, /renderProject\(\)/);
   assert.match(publicacao, /renderProject\(\)/);
 });
+
+test('a estrutura do projeto começa no topo da coluna, ao lado dos conteúdos', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  // Sem linha explícita o auto-placement empurra a coluna 2 para baixo da coluna 1.
+  assert.match(css, /\.project-columns > \[aria-labelledby='project-content-title'\][^}]*grid-row:\s*1/);
+  assert.match(css, /\.project-columns > \[aria-labelledby='project-modules-title'\][^}]*grid-row:\s*1/);
+});
+
+test('as visitas ocupam a largura inteira, na linha de baixo', async () => {
+  const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.project-columns > \.analytics-card[^}]*grid-column:\s*1 \/ -1[^}]*grid-row:\s*2/);
+});
+
+test('a visão geral não traz mais o aviso de configuração herdada', async () => {
+  const markup = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(markup, /project-rule/);
+});

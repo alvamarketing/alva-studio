@@ -1561,8 +1561,11 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .project-metrics > div > span { margin:0; color:var(--alva-muted); font-size:11px; font-weight:600; }
 .project-metrics small { color:var(--alva-positive); font-size:10px; font-weight:600; }
 .project-columns { grid-template-columns:minmax(0,1.55fr) minmax(300px,.9fr); gap:22px; align-items:start; }
-.project-columns > [aria-labelledby='project-content-title'],.project-columns > .analytics-card { grid-column:1; }
-.project-columns > [aria-labelledby='project-modules-title'],.project-columns > .project-rule { grid-column:2; }
+/* Sem a linha explícita o auto-placement empurra a coluna 2 para baixo da coluna 1,
+   deixando a Estrutura do projeto fora do topo e um vazio ao lado dos Conteúdos. */
+.project-columns > [aria-labelledby='project-content-title'] { grid-column:1; grid-row:1; }
+.project-columns > [aria-labelledby='project-modules-title'] { grid-column:2; grid-row:1; }
+.project-columns > .analytics-card { grid-column:1 / -1; grid-row:2; }
 .project-surface h2,.surface-head h2 { font-size:18px; }
 .project-filter { display:flex; margin-top:12px; }
 #project-content-filter[hidden] { display:none !important; }
@@ -1583,9 +1586,6 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .project-structure-state { color:var(--alva-muted) !important; font-size:10px !important; font-weight:700; text-align:right; }
 .project-structure-state[data-state='ready'] { color:var(--alva-positive) !important; }
 .status-pill[data-state='pending'] { color:var(--alva-muted); }
-.project-rule { padding:20px 22px; border-radius:16px; background:var(--alva-ink); color:var(--alva-white); font-size:12px; line-height:1.45; }
-.project-rule strong { color:var(--alva-blue-light); }
-.project-rule p { margin:4px 0 0; }
 .analytics-card { margin-top:20px; }
 .analytics-card .surface-head { margin-bottom:8px; }
 .chart { height:205px; gap:12px; padding-top:30px; }
@@ -1605,7 +1605,9 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 /* O contrato visual é desktop-first; estas regras vêm depois dos refinamentos
    desktop para preservar a composição da referência também em tablet e celular. */
 @media (max-width:900px) {
-  .project-columns > .analytics-card { grid-column:1 / -1; }
+  .project-columns > [aria-labelledby='project-content-title'],
+  .project-columns > .analytics-card,
+  .project-columns > [aria-labelledby='project-modules-title'] { grid-column:1 / -1; grid-row:auto; }
 }
 @media (max-width:760px) {
   #dashboard > aside { width:min(290px,84vw); padding:24px 18px; }
@@ -1634,7 +1636,6 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   .project-columns > [aria-labelledby='project-content-title'],
   .project-columns > .analytics-card,
   .project-columns > [aria-labelledby='project-modules-title'],
-  .project-columns > .project-rule,
   .project-columns > #project-publication,
   .project-columns > #project-agent-keys { grid-column:auto; }
 }
@@ -1646,7 +1647,6 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   grid-column: 1 / -1;
 }
 #project-view[data-content-view='leads'] .project-structure,
-#project-view[data-content-view='leads'] .project-rule,
 #project-view[data-content-view='leads'] #project-agent-keys,
 #project-view[data-content-view='leads'] #project-publication,
 #project-view[data-content-view='leads'] #analytics-panel {
