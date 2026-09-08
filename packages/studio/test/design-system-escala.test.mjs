@@ -114,3 +114,39 @@ test('quem pediu menos movimento no sistema recebe menos movimento', async () =>
   const { 'styles.css': css } = await lerTodos();
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, 'a preferência do sistema operacional precisa valer aqui');
 });
+
+test('nenhuma folha inventa tamanho de fonte próprio', async () => {
+  const arquivos = await lerTodos();
+  const foraDaEscala = [];
+  for (const [nome, css] of Object.entries(arquivos)) {
+    for (const valor of declaracoes(css, 'font-size')) {
+      // clamp() é escala contínua: já cresce sozinho entre dois extremos, e prendê-lo
+      // a degraus fixos não deixaria a tipografia mais consistente.
+      // font-size: 0 esconde o texto de um botão que mostra só ícone; também não é degrau.
+      if (/var\(--text-|var\(--icon-|clamp\(/.test(valor) || /%|em|inherit/.test(valor) || valor.trim() === '0') continue;
+      foraDaEscala.push(`${nome}: font-size: ${valor.trim()}`);
+    }
+  }
+  assert.deepEqual(foraDaEscala.slice(0, 8), [], `${foraDaEscala.length} tamanhos soltos: cada um é um degrau que ninguém combinou`);
+});
+
+test('ícone e texto são escalas separadas', async () => {
+  const { 'styles.css': css } = await lerTodos();
+  const raiz = css.match(/^:root \{[^}]*\}/m)[0];
+  // ícone não é letra: cresce por tamanho de alvo e alinhamento óptico, não por hierarquia de leitura
+  assert.match(raiz, /--icon-md:/, 'sem escala própria o ícone acaba puxado pelo degrau do texto');
+  assert.match(raiz, /--text-md:/);
+});
+
+test('a escala de texto sobe sem degraus indistinguíveis', async () => {
+  const { 'styles.css': css } = await lerTodos();
+  const raiz = css.match(/^:root \{[^}]*\}/m)[0];
+  const degraus = [...raiz.matchAll(/--text-[a-z0-9]+: *(\d+)px/g)].map((m) => Number(m[1]));
+  assert.ok(degraus.length >= 8, 'a escala precisa cobrir de rótulo miúdo a título de tela');
+  for (let i = 1; i < degraus.length; i += 1) {
+    assert.ok(degraus[i] > degraus[i - 1], `escala fora de ordem em ${degraus[i - 1]}px → ${degraus[i]}px`);
+    const razao = degraus[i] / degraus[i - 1];
+    assert.ok(razao >= 1.08, `${degraus[i - 1]}px e ${degraus[i]}px são o mesmo tamanho com dois nomes`);
+    assert.ok(razao <= 1.35, `salto de ${degraus[i - 1]}px para ${degraus[i]}px deixa buraco na hierarquia`);
+  }
+});

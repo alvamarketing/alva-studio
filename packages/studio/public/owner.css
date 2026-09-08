@@ -49,12 +49,12 @@
   color: var(--alva-blue);
 }
 .access-story p {
-  font-size: 15px;
+  font-size: var(--text-lg);
   line-height: 1.8;
   color: var(--alva-muted);
 }
 .access-story small {
-  font-size: 9px;
+  font-size: var(--text-2xs);
   letter-spacing: 2px;
   color: var(--alva-muted);
 }
@@ -74,20 +74,20 @@
   box-shadow: var(--shadow-soft);
 }
 .access-panel h2 {
-  font-size: 32px;
+  font-size: var(--text-5xl);
   letter-spacing: -1px;
   font-weight: 700;
   margin: 17px 0;
 }
 .access-panel form > p {
   color: var(--alva-muted);
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 1.65;
 }
 .access-panel label,
 .owner-dialog label {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 600;
   margin-top: 21px;
 }
@@ -105,11 +105,11 @@
   margin-top: 12px;
 }
 .access-panel .access-footnote {
-  font-size: 11px;
+  font-size: var(--text-sm);
   margin-top: 25px;
 }
 .form-error {
-  font-size: 12px !important;
+  font-size: var(--text-md) !important;
   color: var(--alva-danger) !important;
   min-height: 16px;
   line-height: 1.5;
@@ -138,7 +138,7 @@
   gap: 15px;
 }
 .owner-header h2 {
-  font-size: 26px;
+  font-size: var(--text-4xl);
   margin: 13px 0 24px;
 }
 .owner-tabs {
@@ -160,7 +160,7 @@
   color: var(--alva-ink);
 }
 .owner-description {
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 1.6;
   color: var(--alva-muted);
 }
@@ -173,9 +173,9 @@
   border-radius: var(--radius-md);
   background: var(--alva-cloud);
 }
-.settings-company-summary strong { font-size: 12px; }
-.settings-company-summary span { font-size: 16px; font-weight: 600; }
-.settings-company-summary small { color: var(--alva-muted); font-size: 11px; }
+.settings-company-summary strong { font-size: var(--text-md); }
+.settings-company-summary span { font-size: var(--text-xl); font-weight: 600; }
+.settings-company-summary small { color: var(--alva-muted); font-size: var(--text-sm); }
 .owner-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -188,7 +188,7 @@
   border-radius: var(--radius-md);
 }
 .owner-password summary {
-  font-size: 12px;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 .owner-form-actions {
@@ -207,10 +207,10 @@
   gap: 20px;
 }
 .owner-session strong {
-  font-size: 12px;
+  font-size: var(--text-md);
 }
 .owner-session p {
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--alva-muted);
   line-height: 1.6;
   margin: 5px 0;
@@ -221,12 +221,12 @@
   gap: 15px;
 }
 .vercel-intro h3 {
-  font-size: 17px;
+  font-size: var(--text-xl);
   font-weight: 600;
   margin: 0 0 7px;
 }
 .vercel-intro p {
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.6;
   color: var(--alva-muted);
   margin: 0;
@@ -239,10 +239,10 @@
   place-items: center;
   background: var(--alva-highlight);
   border-radius: var(--radius-md);
-  font-size: 23px;
+  font-size: var(--icon-lg);
 }
 .optional {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--alva-muted);
   font-weight: 400;
 }
@@ -303,13 +303,13 @@
 }
 .template-choice .template-name {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 600;
   padding: 12px 12px 4px;
 }
 .template-choice .template-description {
   display: block;
-  font-size: 10px;
+  font-size: var(--text-xs);
   line-height: 1.5;
   color: var(--alva-muted);
   padding: 0 12px 12px;
@@ -321,7 +321,7 @@
   margin-top: 20px;
 }
 .template-filter button {
-  font-size: 11px;
+  font-size: var(--text-sm);
   padding: 7px 11px;
   border-radius: var(--radius-pill);
 }
@@ -345,7 +345,7 @@
   margin-bottom: -15px;
 }
 .domain-result {
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.7;
   overflow-wrap: anywhere;
   margin-top: 12px;
@@ -355,7 +355,7 @@
 }
 .domain-records {
   width: 100%;
-  font-size: 11px;
+  font-size: var(--text-sm);
   border-collapse: collapse;
 }
 .domain-records td,
@@ -396,7 +396,7 @@
     gap: 0;
   }
   .owner-header h2 {
-    font-size: 22px;
+    font-size: var(--text-3xl);
   }
   .owner-dialog {
     padding: 20px;
@@ -422,7 +422,7 @@
     gap: 10px;
   }
   .owner-tabs button {
-    font-size: 12px;
+    font-size: var(--text-md);
   }
 }
 
@@ -447,7 +447,7 @@
 #settings-view .owner-header h2 {
   margin: 8px 0 10px;
   color: var(--alva-ink);
-  font-size: 38px;
+  font-size: var(--text-6xl);
   letter-spacing: -1.9px;
   line-height: 1.08;
 }
@@ -470,7 +470,7 @@
   border-radius: var(--radius-pill);
   background: var(--alva-white);
   color: var(--alva-muted);
-  font-size: 12px;
+  font-size: var(--text-md);
 }
 .owner-context > span {
   display: grid;
@@ -479,7 +479,7 @@
   place-items: center;
   border-radius: 50%;
   color: var(--alva-positive);
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 700;
 }
 .owner-context strong {
@@ -507,7 +507,7 @@
 }
 #settings-view .owner-description {
   margin: 0 0 22px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 #settings-view .owner-two-col {
   gap: 16px;
@@ -537,7 +537,7 @@
 #settings-view .connection {
   margin: 0 0 16px;
   color: var(--alva-muted);
-  font-size: 12px;
+  font-size: var(--text-md);
 }
 #settings-view .owner-publication-settings {
   margin-top: 16px;
@@ -554,16 +554,16 @@
 }
 #settings-view .settings-company-summary strong {
   color: var(--alva-blue);
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 1.4px;
 }
 #settings-view .settings-company-summary span {
   color: var(--alva-ink);
-  font-size: 18px;
+  font-size: var(--text-2xl);
   letter-spacing: -0.4px;
 }
 #settings-view .settings-company-summary small {
-  font-size: 12px;
+  font-size: var(--text-md);
 }
 #settings-view #settings-company-status {
   margin: 0 0 14px;
@@ -597,7 +597,7 @@
   display: grid;
   gap: 7px;
   color: var(--alva-muted);
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 .company-details input {
@@ -609,14 +609,14 @@
 .company-details p {
   margin: 2px 0 0;
   color: var(--alva-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 #settings-view .company-overview-section {
   padding: 26px;
 }
 #settings-view .company-overview-section h2 {
-  font-size: 18px;
+  font-size: var(--text-2xl);
 }
 #settings-view .company-overview-section:nth-child(2),
 #settings-view .company-overview-section:nth-child(3) {
@@ -690,7 +690,7 @@
     gap: 16px;
   }
   #settings-view .owner-header h2 {
-    font-size: 31px;
+    font-size: var(--text-5xl);
   }
   .owner-header-actions {
     width: 100%;
@@ -717,7 +717,7 @@
     padding: 20px;
   }
   #settings-view .owner-header h2 {
-    font-size: 28px;
+    font-size: var(--text-4xl);
   }
   .owner-context {
     max-width: 100%;
@@ -740,11 +740,11 @@
   padding: 20px 0;
   border-top: 1px solid var(--alva-line);
 }
-#settings-view .owner-publication strong { font-size: 13px; }
+#settings-view .owner-publication strong { font-size: var(--text-md); }
 #settings-view .owner-publication p {
   margin: 5px 0 0;
   color: var(--alva-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 #settings-view .owner-publication button { flex: 0 0 auto; }
@@ -793,10 +793,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#studio-sidebar.settings-shell .settings-account-switcher strong { font-size: 12px; }
+#studio-sidebar.settings-shell .settings-account-switcher strong { font-size: var(--text-md); }
 #studio-sidebar.settings-shell .settings-account-switcher small {
   color: var(--alva-muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 #studio-sidebar.settings-shell .settings-account-avatar {
   display: grid;
@@ -806,7 +806,7 @@
   border-radius: var(--radius-md);
   color: var(--alva-on-blue);
   background: var(--alva-blue);
-  font-size: 17px;
+  font-size: var(--text-xl);
   font-weight: 700;
 }
 #studio-sidebar.settings-shell .workspace-label {
@@ -821,7 +821,7 @@
 #studio-sidebar.settings-shell .settings-sidebar-nav .nav-item .material-symbols-outlined {
   width: 21px;
   color: currentColor;
-  font-size: 21px;
+  font-size: var(--icon-md);
 }
 #studio-sidebar.settings-shell .settings-sidebar-footer {
   grid-template-columns: auto;
@@ -838,7 +838,7 @@
   text-align: center;
 }
 #studio-sidebar.settings-shell .settings-sidebar-footer .settings-sidebar-back .material-symbols-outlined {
-  font-size: 20px;
+  font-size: var(--icon-md);
 }
 
 @media (max-width: 760px) {
@@ -852,6 +852,6 @@
 #settings-view .member-invite-note {
   margin: 4px 0 14px;
   color: var(--alva-muted);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
