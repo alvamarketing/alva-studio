@@ -6,6 +6,14 @@ const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 // Nomes do Material Symbols, a mesma fonte que o editor já carrega. Caracteres soltos
 // como ▤ e ▥ dependiam da fonte do sistema e chegavam a se repetir entre blocos.
+// Página recém-criada chega com project: {} — verdadeiro num if, mas sem nada dentro.
+// Carregar esse projeto vazio apagava o modelo escolhido e abria a página em branco.
+// Um projeto com qualquer chave é canvas salvo de verdade, inclusive um que a pessoa
+// esvaziou de propósito, e esse continua vazio ao reabrir.
+export function temProjetoSalvo(project) {
+  return !!project && typeof project === 'object' && Object.keys(project).length > 0;
+}
+
 export const blockIcons = {
   section: 'view_day',
   columns: 'view_column_2',
@@ -1430,7 +1438,7 @@ export function createFriendlyEditor({
   editor.on('rte:enable', (_view, rte) => {
     if (!interactionPolicy.canInlineEdit) rte?.disable?.();
   });
-  if (project) editor.loadProjectData(project);
+  if (temProjetoSalvo(project)) editor.loadProjectData(project);
   else {
     editor.setComponents(html);
     editor.setStyle(css);
@@ -1440,7 +1448,7 @@ export function createFriendlyEditor({
   // loading so opening alone never marks the form dirty or sends a PUT.
   if (quizCanvas && !hasQuizImageChoiceHeadingCss(editor.getCss()))
     editor.setStyle(`${quizImageChoiceHeadingCss}\n${editor.getCss()}`);
-  const beforeMigration = project ? JSON.stringify(editor.getProjectData()) : null;
+  const beforeMigration = temProjetoSalvo(project) ? JSON.stringify(editor.getProjectData()) : null;
   if (!quizCanvas) normalizeForms(editor);
   const lockComponent = (component) => {
     component?.set?.({ draggable: false, editable: false, droppable: false }, { silent: true });
@@ -1451,7 +1459,7 @@ export function createFriendlyEditor({
     readOnlyMutationGuard = createReadOnlyMutationGuard(editor, { snapshot: editor.getProjectData(), lock: lockComponent });
     cleanup.push(() => readOnlyMutationGuard?.dispose());
   }
-  editor.__alvaMigrated = interactionPolicy.canEdit && !!project && beforeMigration !== JSON.stringify(editor.getProjectData());
+  editor.__alvaMigrated = interactionPolicy.canEdit && temProjetoSalvo(project) && beforeMigration !== JSON.stringify(editor.getProjectData());
   loading = false;
   if (editor.__alvaMigrated) onChange();
 
