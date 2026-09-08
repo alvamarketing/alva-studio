@@ -40,13 +40,27 @@ test('drag da árvore move antes e depois no mesmo parent e passa por canMove', 
   editor.destroy();
 });
 
-test('drag da árvore recusa sem permissão, parent diferente e ciclos', () => {
+test('arrastar leva o elemento para outra seção, que é o motivo de arrastar', () => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  const primeira = editor.getWrapper().append({ tagName: 'section', components: [{ tagName: 'h1' }] })[0];
+  const segunda = editor.getWrapper().append({ tagName: 'section', components: [{ tagName: 'p' }] })[0];
+  const titulo = primeira.components().at(0);
+  const paragrafo = segunda.components().at(0);
+
+  // exigir o mesmo pai deixava a árvore só reordenando dentro da própria seção:
+  // mover conteúdo de uma seção para outra, que é o caso comum, nunca funcionava
+  assert.equal(reorderTreeComponent({ source: titulo, target: paragrafo, position: 'after', canReorder: true, components: editor.Components }), true);
+  assert.equal(segunda.components().length, 2);
+  assert.equal(primeira.components().length, 0);
+  editor.destroy();
+});
+
+test('arrastar recusa sem permissão e não deixa um elemento cair dentro de si mesmo', () => {
   const editor = grapesjs.init({ headless: true, storageManager: false });
   const outer = editor.getWrapper().append({ tagName: 'section', components: [{ tagName: 'div' }] })[0];
   const inner = outer.components().at(0);
-  const sibling = editor.getWrapper().append({ tagName: 'footer' })[0];
-  assert.equal(reorderTreeComponent({ source: inner, target: sibling, position: 'after', canReorder: true, components: editor.Components }), false);
-  assert.equal(reorderTreeComponent({ source: inner, target: outer, position: 'after', canReorder: true, components: editor.Components }), false);
+  assert.equal(reorderTreeComponent({ source: inner, target: inner, position: 'after', canReorder: true, components: editor.Components }), false);
+  assert.equal(reorderTreeComponent({ source: outer, target: inner, position: 'after', canReorder: true, components: editor.Components }), false, 'mover o pai para dentro do filho some com os dois');
   assert.equal(reorderTreeComponent({ source: inner, target: outer, position: 'after', canReorder: false, components: editor.Components }), false);
   editor.destroy();
 });

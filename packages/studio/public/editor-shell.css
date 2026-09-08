@@ -1175,3 +1175,39 @@
 .fe-field-name:hover { background: var(--alva-highlight); transform: none; }
 .fe-field-name strong { font-size: var(--text-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fe-field-name small { color: var(--alva-muted); font-size: var(--text-2xs); }
+
+/* Controles nativos do GrapesJS dentro do painel: herdam a paleta do editor em vez de
+   trazerem o cinza-escuro do tema original, que destoava de tudo à volta. */
+.fe-advanced-native { margin-top: 10px; }
+.fe-advanced-native .gjs-sm-sectors,
+.fe-advanced-native .gjs-trt-traits,
+.fe-advanced-native .gjs-clm-tags {
+  background: transparent;
+  color: var(--alva-ink);
+}
+.fe-advanced-native .gjs-sm-sector-title,
+.fe-advanced-native .gjs-trt-header {
+  background: var(--alva-surface-alt);
+  border-radius: var(--radius-sm);
+  color: var(--alva-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.fe-advanced-native .gjs-sm-label,
+.fe-advanced-native .gjs-trt-trait__label,
+.fe-advanced-native .gjs-label {
+  color: var(--alva-muted);
+  font-size: var(--text-xs);
+}
+.fe-advanced-native .gjs-field {
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-sm);
+  background: var(--alva-white);
+  color: var(--alva-ink);
+}
+.fe-advanced-native .gjs-field input,
+.fe-advanced-native .gjs-field select {
+  color: var(--alva-ink);
+}
+.fe-advanced-native .gjs-sm-sector:not(.gjs-sm-open) .gjs-sm-properties { display: none; }

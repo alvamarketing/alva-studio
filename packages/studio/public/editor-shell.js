@@ -796,7 +796,7 @@ export function bindTreeDragInteraction(item, { id, component, canReorder, getSo
   };
   item.ondragover = (event) => {
     const source = getSource(treeDragSourceId(dragState.sourceId, event.dataTransfer));
-    if (!source || source === component || source.parent?.() !== component.parent?.()) return;
+    if (!source || source === component) return;
     const position = treeDropPosition(event, item.getBoundingClientRect());
     if (!canMove(source, component, position)) return;
     event.preventDefault();
@@ -825,8 +825,8 @@ export function bindTreeDragInteraction(item, { id, component, canReorder, getSo
 
 export function reorderTreeComponent({ source, target, position = 'after', canReorder = false, components } = {}) {
   if (!canReorder || !source || !target || source === target) return false;
-  const parent = source.parent?.();
-  if (!parent || parent !== target.parent?.()) return false;
+  const parent = target.parent?.();
+  if (!parent) return false;
   const at = target.index() + (position === 'after' ? 1 : 0);
   if (!components?.canMove?.(parent, source, at)?.result) return false;
   source.move(parent, { at });
@@ -2584,6 +2584,24 @@ export function createFriendlyEditor({
     styleNumber(advanced, model, 'Altura mínima (px)', 'min-height', '', 3000);
     if (['section', 'div', 'main', 'article'].includes(tag))
       styleNumber(advanced, model, 'Distância entre elementos (px)', 'gap', 0);
+    // Os controles completos do GrapesJS. A lista curada acima cobre o dia a dia de quem
+    // não é designer, mas o motor tem muito mais — estilo por seletor, atributos do
+    // componente — e sem este caminho nada disso chegava à tela. Fica recolhido: quem só
+    // quer trocar um texto nunca abre; quem precisa de um controle específico encontra.
+    if (interactionPolicy.canEdit) {
+      const completo = document.createElement('details');
+      completo.className = 'fe-advanced fe-advanced-native';
+      completo.innerHTML = '<summary>Controles completos do editor</summary>';
+      const aviso = document.createElement('p');
+      aviso.className = 'fe-help';
+      aviso.textContent = 'Estilo e atributos direto do editor. Mexa aqui quando o ajuste que você quer não estiver acima.';
+      completo.append(aviso);
+      const estilo = editor.StyleManager.render();
+      if (estilo) completo.append(estilo);
+      const atributos = editor.TraitManager.render?.();
+      if (atributos) completo.append(atributos);
+      props.append(completo);
+    }
     if (!interactionPolicy.canEdit) props.querySelectorAll('input, select, textarea, .fe-element-actions button, .fe-vsl-option, .fe-heading-levels button, .fe-motion-select button').forEach((control) => { control.disabled = true; });
     if (pendingVslOptionFocusId !== null) {
       restoreVslOptionFocus(props.querySelectorAll('[data-vsl-option]'), pendingVslOptionFocusId);

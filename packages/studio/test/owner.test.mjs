@@ -27,7 +27,7 @@ test('configurações são uma view interna acessível e reaproveitam o formulá
   assert.match(owner, /selectSettingsTab\(\{ container: settingsContainer/);
   assert.match(owner, /settingsGuard\.isCurrent/);
   assert.match(owner, /closeSettings/);
-  assert.match(owner, /nav\.setAttribute\('aria-orientation', 'vertical'\)/);
+  assert.match(owner, /nav\.setAttribute\('aria-orientation', 'horizontal'\)/);
   assert.match(owner, /settingsSidebarTabs\(\)\.find\(\(button\) => button\.dataset\.settingsSidebarTab === access\.tab\)/);
   assert.doesNotMatch(owner, /\$\('#tab-' \+ access\.tab\)\?\.focus\(\)/);
   assert.match(owner, /id="owner-logout"/);

@@ -135,7 +135,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   const sidebar = document.querySelector('#studio-sidebar');
   let sidebarNodes = null;
   let settingsSidebar = null;
-  const settingsSidebarTabs = () => [...(settingsSidebar?.querySelectorAll('[data-settings-sidebar-tab]') || [])];
+  const settingsSidebarTabs = () => [...document.querySelectorAll('.settings-tabs [data-settings-sidebar-tab]')];
   function updateSettingsSidebar(tab) {
     for (const button of settingsSidebarTabs()) {
       const selected = button.dataset.settingsSidebarTab === tab;
@@ -172,10 +172,10 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       label.className = 'workspace-label';
       label.textContent = 'CONFIGURAÇÕES';
       const nav = document.createElement('div');
-      nav.className = 'settings-sidebar-nav';
+      nav.className = 'settings-tabs';
       nav.setAttribute('role', 'tablist');
       nav.setAttribute('aria-label', 'Áreas de configurações');
-      nav.setAttribute('aria-orientation', 'vertical');
+      nav.setAttribute('aria-orientation', 'horizontal');
       const items = [
         ['account', 'Preferências', 'tune'],
         ['company', 'Empresa', 'corporate_fare'],
@@ -185,7 +185,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       for (const [key, text, icon] of items) {
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'nav-item';
+        button.className = 'settings-tab';
         button.setAttribute('role', 'tab');
         button.id = 'settings-sidebar-tab-' + key;
         button.setAttribute('aria-controls', 'panel-' + key);
@@ -193,11 +193,11 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
         button.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">' + icon + '</span><span>' + text + '</span>';
         button.onclick = () => selectTab(key);
         button.onkeydown = (event) => {
-          if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+          if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
           event.preventDefault();
           const tabs = settingsSidebarTabs();
           const index = tabs.indexOf(button);
-          const targetIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length;
+          const targetIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
           const next = tabs[targetIndex];
           if (next) { selectTab(next.dataset.settingsSidebarTab); next.focus(); }
         };
@@ -214,7 +214,10 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       back.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">home</span>';
       back.onclick = () => closeSettings();
       footer.append(back);
-      sidebar.append(brand, account, label, nav, footer);
+      sidebar.append(brand, account, label, footer);
+      const cabecalho = settingsMount.querySelector('.owner-header');
+      if (cabecalho) cabecalho.after(nav);
+      else settingsMount.prepend(nav);
       settingsSidebar = sidebar;
     }
     updateSettingsSidebar(tab);

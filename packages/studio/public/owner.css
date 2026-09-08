@@ -855,3 +855,42 @@
   font-size: var(--text-sm);
   line-height: 1.5;
 }
+
+/* Áreas de configuração como abas no topo. Antes eram uma coluna à esquerda: quatro
+   telas com pouco conteúdo cada não sustentam uma barra lateral própria, e o que
+   sobrava era meia tela vazia à direita. */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 28px;
+  border-bottom: 1px solid var(--alva-line);
+  overflow-x: auto;
+}
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--alva-muted);
+  font-size: var(--text-md);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.settings-tab:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--alva-line);
+  color: var(--alva-ink);
+}
+.settings-tab .material-symbols-outlined {
+  font-size: var(--icon-sm);
+}
+.settings-tab[aria-selected='true'] {
+  border-bottom-color: var(--alva-blue);
+  color: var(--alva-blue);
+  font-weight: 600;
+}
