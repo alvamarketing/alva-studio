@@ -29,6 +29,7 @@
       const estado = document.querySelector('#en-state');
       const aviso = (texto) => { estado.textContent = texto; };
       const pageId = new URLSearchParams(location.search).get('page');
+      let nomeInicial = '';
 
       const api = async (caminho, method = 'GET', corpo) => {
         const resposta = await fetch('/api' + caminho, {
@@ -44,8 +45,7 @@
       let pagina = null;
 
       const carregar = async (id) => {
-        pagina = await api('/pages/' + id);
-        document.querySelector('#en-page-name').textContent = pagina.name || 'Sem nome';
+        if (!pagina || pagina.id !== id) pagina = await api('/pages/' + id);
         aviso('Aberto.');
         // O SDK usa o mesmo formato de projeto do GrapesJS, então a página feita no
         // editor atual abre aqui sem conversão.
@@ -73,7 +73,10 @@
         aviso('Abra a partir de uma página: /editor-novo.html?page=<id>');
       } else {
         try {
-          globalThis.GrapesJsStudioSDK.createStudioEditor(studioEditorOptions({ pageId, carregar, salvar }));
+          pagina = await api('/pages/' + pageId);
+          nomeInicial = pagina.name || 'Sem nome';
+          document.querySelector('#en-page-name').textContent = nomeInicial;
+          globalThis.GrapesJsStudioSDK.createStudioEditor(studioEditorOptions({ pageId, nomeDaPagina: nomeInicial, carregar, salvar }));
         } catch (erro) {
           aviso('Não foi possível abrir: ' + erro.message);
         }

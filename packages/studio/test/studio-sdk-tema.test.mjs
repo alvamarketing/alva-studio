@@ -74,3 +74,32 @@ test('editor sem exportação não derruba o salvamento', async () => {
   await opcoes.storage.onSave({ project: { pages: [] } });
   assert.equal(gravados.length, 1);
 });
+
+test('a página carregada leva o nome que a pessoa deu, não o identificador', async () => {
+  const opcoes = studioEditorOptions({
+    pageId: 'p1',
+    nomeDaPagina: 'Campanha de verão',
+    carregar: async () => ({ pages: [{ id: 'u0S8XWDXI4', component: '<h1>Oi</h1>' }] }),
+    salvar: async () => {},
+  });
+  const { project } = await opcoes.storage.onLoad();
+  // sem nome, o gerenciador de páginas do SDK mostra o id cru e ninguém reconhece nada
+  assert.equal(project.pages[0].name, 'Campanha de verão');
+});
+
+test('página que já tem nome não é renomeada por cima', async () => {
+  const opcoes = studioEditorOptions({
+    pageId: 'p1',
+    nomeDaPagina: 'Campanha',
+    carregar: async () => ({ pages: [{ name: 'Etapa 2', component: '<h1>Oi</h1>' }] }),
+    salvar: async () => {},
+  });
+  const { project } = await opcoes.storage.onLoad();
+  assert.equal(project.pages[0].name, 'Etapa 2');
+});
+
+test('sem nome informado o carregamento não quebra', async () => {
+  const opcoes = studioEditorOptions({ pageId: 'p1', carregar: async () => ({ pages: [{ component: '<h1>Oi</h1>' }] }), salvar: async () => {} });
+  const { project } = await opcoes.storage.onLoad();
+  assert.equal(project.pages.length, 1);
+});

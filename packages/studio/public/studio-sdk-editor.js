@@ -60,7 +60,7 @@ const PAGINA_INICIAL = {
   pages: [{ name: 'Página', component: '<section><h1>Sua nova página</h1><p>Clique para editar este texto.</p></section>' }],
 };
 
-export function studioEditorOptions({ pageId, carregar, salvar, root = '#studio-sdk-root' } = {}) {
+export function studioEditorOptions({ pageId, nomeDaPagina = '', carregar, salvar, root = '#studio-sdk-root' } = {}) {
   return {
     root,
     licenseKey: '',
@@ -71,7 +71,13 @@ export function studioEditorOptions({ pageId, carregar, salvar, root = '#studio-
       autosaveChanges: 8,
       onLoad: async () => {
         const projeto = await carregar(pageId);
-        return { project: projeto?.pages?.length ? projeto : PAGINA_INICIAL };
+        if (!projeto?.pages?.length) return { project: PAGINA_INICIAL };
+        // Sem nome, o gerenciador de páginas do SDK mostra o identificador cru e a
+        // pessoa não reconhece a própria página. Quem já tem nome mantém o seu.
+        const pages = projeto.pages.map((pagina, indice) => (
+          pagina.name || !nomeDaPagina ? pagina : { ...pagina, name: indice ? `${nomeDaPagina} ${indice + 1}` : nomeDaPagina }
+        ));
+        return { project: { ...projeto, pages } };
       },
       onSave: async ({ project, editor }) => {
         const html = editor?.getHtml?.() ?? '';
