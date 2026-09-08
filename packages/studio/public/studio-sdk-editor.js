@@ -1,3 +1,6 @@
+import { blocks, blockDescriptions, runtimeCss, templateCss } from './templates.js';
+import { blockIcons } from './editor-shell.js';
+
 // O editor do GrapesJS Studio vestido com a cara do Alva.
 //
 // O SDK traz a interface pronta que faltava — camadas, páginas, upload, estilo por
@@ -60,12 +63,37 @@ const PAGINA_INICIAL = {
   pages: [{ name: 'Página', component: '<section><h1>Sua nova página</h1><p>Clique para editar este texto.</p></section>' }],
 };
 
+// O catálogo do Alva dentro do editor novo. Sem isto, quem monta uma página encontraria
+// só os blocos genéricos de fábrica e perderia gráfico, formulário e as faixas prontas.
+// O SDK lê este catálogo em blocks.default: registrar pelo BlockManager num plugin não
+// chega ao painel dele, que tem UI própria.
+export function alvaBlocks() {
+  return blocks.map(([id, label, category, content]) => ({
+    id,
+    label,
+    category,
+    content,
+    media: `<span class="fe-block-icon material-symbols-outlined" aria-hidden="true">${blockIcons[id] || 'add'}</span>`,
+    attributes: { title: blockDescriptions[id] || `Adicionar ${label.toLocaleLowerCase('pt-BR')}` },
+  }));
+}
+
+// Gráfico, formulário e carrossel só têm forma com o CSS que os desenha; sem ele o bloco
+// entra na página como uma pilha de texto.
+export function alvaStylePlugin(editor) {
+  const aplicar = () => editor.setStyle(`${templateCss}\n${runtimeCss}\n${editor.getCss?.() || ''}`);
+  if (editor.onReady) editor.onReady(aplicar);
+  else aplicar();
+}
+
 export function studioEditorOptions({ pageId, nomeDaPagina = '', carregar, salvar, root = '#studio-sdk-root' } = {}) {
   return {
     root,
     licenseKey: '',
     customTheme: alvaStudioTheme(),
     project: { type: 'web' },
+    plugins: [alvaStylePlugin],
+    blocks: { default: alvaBlocks() },
     storage: {
       type: 'self',
       autosaveChanges: 8,
