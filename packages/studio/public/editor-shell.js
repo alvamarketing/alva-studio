@@ -350,6 +350,14 @@ export function nextPanelTab(atual, { selecionou = false } = {}) {
   return { abas: PANEL_TABS, ativa: PANEL_TABS.includes(atual) ? atual : 'estrutura' };
 }
 
+// Alinhar imagem é margem, não alinhamento de texto: text-align no pai não move uma
+// imagem que já é bloco, e foi por isso que "centralizar" não funcionava.
+export function imageAlignmentStyle(alinhamento) {
+  if (alinhamento === 'center') return { display: 'block', 'margin-left': 'auto', 'margin-right': 'auto' };
+  if (alinhamento === 'right') return { display: 'block', 'margin-left': 'auto', 'margin-right': '0' };
+  return { display: 'block', 'margin-left': '0', 'margin-right': 'auto' };
+}
+
 export function panelMode(component) {
   return !component || component.is?.('wrapper') ? 'library' : 'inspector';
 }
@@ -1128,6 +1136,32 @@ export function createFriendlyEditor({
     const syncOnResize = () => syncWorkspacePanels();
     window.addEventListener('resize', syncOnResize);
     cleanup.push(() => window.removeEventListener('resize', syncOnResize));
+  }
+  // O ícone se explica pelo desenho: uma grade de miniaturas diz mais que uma lista de
+  // nomes técnicos para quem não é de tecnologia.
+  function iconGrid(container, escolhas, atual, aoEscolher) {
+    const grade = document.createElement('div');
+    grade.className = 'fe-icon-grid';
+    grade.setAttribute('role', 'group');
+    grade.setAttribute('aria-label', 'Escolha o ícone');
+    for (const [icone, nome] of escolhas) {
+      const opcao = document.createElement('button');
+      opcao.type = 'button';
+      opcao.className = 'fe-icon-option';
+      opcao.title = nome;
+      opcao.setAttribute('aria-label', nome);
+      opcao.setAttribute('aria-pressed', String(icone === atual));
+      opcao.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">${icone}</span>`;
+      opcao.disabled = !interactionPolicy.canEdit;
+      opcao.onclick = () => {
+        for (const irma of grade.querySelectorAll('.fe-icon-option')) irma.setAttribute('aria-pressed', 'false');
+        opcao.setAttribute('aria-pressed', 'true');
+        aoEscolher(icone);
+      };
+      grade.append(opcao);
+    }
+    container.append(grade);
+    return grade;
   }
   function applyIconButton(element, action, shortcut = '') {
     const meta = editorActionMeta[action];
@@ -2055,9 +2089,8 @@ export function createFriendlyEditor({
       content.append(level);
     }
     if (isIcon) {
-      field(content, 'Escolha o ícone', model.get('content') || model.getEl()?.textContent || 'star', (value) => setComponentText(model, value), {
-        choices: materialIconChoicesFor(model.get('content') || model.getEl()?.textContent || 'star'),
-      });
+      const iconeAtual = model.get('content') || model.getEl()?.textContent || 'star';
+      iconGrid(content, materialIconChoicesFor(iconeAtual), iconeAtual, (value) => setComponentText(model, value));
       help(content, 'Ícones fornecidos pelo Google Material Symbols.');
       // Sem tamanho próprio o ícone herda o texto ao redor e nasce miúdo dentro dos cartões.
       // font-size direto no componente, não variável: páginas salvas guardam o próprio CSS
@@ -2090,16 +2123,7 @@ export function createFriendlyEditor({
       );
     }
     if (tag === 'img') {
-      field(
-        content,
-        'Endereço da imagem',
-        attrs.src || model.get('src') || '',
-        (value) => model.set('src', safeDestination(value, true)),
-        { placeholder: 'https://…/imagem.jpg' },
-      );
-      field(content, 'Descrição da imagem', attrs.alt || '', (value) => model.addAttributes({ alt: value }), {
-        placeholder: 'Descreva o que aparece na imagem',
-      });
+      // Subir do computador é o caminho normal; o endereço fica no fim, para quem tem um.
       const upload = field(content, 'Escolher imagem do computador', '', () => {}, { type: 'file' });
       upload.accept = 'image/png,image/jpeg,image/webp,image/gif';
       upload.onchange = () => {
@@ -2118,6 +2142,15 @@ export function createFriendlyEditor({
         };
         reader.readAsDataURL(file);
       };
+      const alinhamentoAtual = styleValue(model, 'margin-left') === 'auto'
+        ? (styleValue(model, 'margin-right') === 'auto' ? 'center' : 'right')
+        : 'left';
+      field(content, 'Alinhamento da imagem', alinhamentoAtual, (value) => model.addStyle(imageAlignmentStyle(value)), {
+        choices: [['left', 'À esquerda'], ['center', 'Centralizada'], ['right', 'À direita']],
+      });
+      field(content, 'Descrição da imagem', attrs.alt || '', (value) => model.addAttributes({ alt: value }), {
+        placeholder: 'Descreva o que aparece na imagem',
+      });
       field(
         content,
         'Encaixe da imagem',
@@ -2129,6 +2162,13 @@ export function createFriendlyEditor({
             ['contain', 'Mostrar a imagem inteira'],
           ],
         },
+      );
+      field(
+        content,
+        'Endereço da imagem (opcional)',
+        attrs.src || model.get('src') || '',
+        (value) => model.set('src', safeDestination(value, true)),
+        { placeholder: 'https://…/imagem.jpg' },
       );
       styleNumber(content, model, 'Altura da imagem (px)', 'height', '', 2000);
     }

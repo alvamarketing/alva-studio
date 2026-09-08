@@ -1150,3 +1150,11 @@
 .fe-tree-toggle { font-size: 18px; color: var(--alva-muted); cursor: pointer; border-radius: 5px; }
 .fe-tree-toggle:hover { background: var(--alva-cloud); color: var(--alva-ink); }
 .fe-tree-toggle:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 1px; }
+
+/* Escolha de ícone por miniatura: o desenho é a informação, o nome fica no hover. */
+.fe-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; margin-top: 8px; }
+.fe-icon-option { display: grid; place-items: center; aspect-ratio: 1; padding: 0; border: 1px solid var(--alva-line); border-radius: 10px; background: var(--alva-white); color: var(--alva-ink); cursor: pointer; }
+.fe-icon-option:hover { background: var(--alva-highlight); transform: none; }
+.fe-icon-option .material-symbols-outlined { font-size: 22px; }
+.fe-icon-option[aria-pressed='true'] { border-color: var(--alva-blue); background: var(--alva-highlight); color: var(--alva-blue-strong); box-shadow: inset 0 0 0 1px var(--alva-blue); }
+.fe-icon-option:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 1px; }
