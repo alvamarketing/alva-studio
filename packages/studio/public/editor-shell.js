@@ -2042,6 +2042,16 @@ export function createFriendlyEditor({
         choices: materialIconChoicesFor(model.get('content') || model.getEl()?.textContent || 'star'),
       });
       help(content, 'Ícones fornecidos pelo Google Material Symbols.');
+      // Sem tamanho próprio o ícone herda o texto ao redor e nasce miúdo dentro dos cartões.
+      // font-size direto no componente, não variável: páginas salvas guardam o próprio CSS
+      // e podem não ter a regra que leria a variável.
+      const tamanhoAtual = Number(String(model.getStyle()?.['font-size'] || '').replace('px', ''))
+        || Number(String(model.getEl?.() ? getComputedStyle(model.getEl()).fontSize : '').replace('px', ''))
+        || 48;
+      field(content, 'Tamanho do ícone', String(Math.round(tamanhoAtual)), (value) => {
+        const px = Math.min(240, Math.max(12, Number(value) || 48));
+        model.addStyle({ 'font-size': `${px}px`, '--alva-icon-size': `${px}px` });
+      }, { type: 'number', min: 12, max: 240 });
     }
     if (tag === 'a') {
       field(
