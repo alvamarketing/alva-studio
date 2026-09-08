@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alva Studio · editor novo</title>
+    <link rel="stylesheet" href="/material-symbols.css" />
+    <link rel="stylesheet" href="/vendor/studio-sdk.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/editor-novo.css" />
+  </head>
+  <body>
+    <header class="en-header">
+      <a class="en-back" href="/#/paginas" aria-label="Voltar para as páginas">
+        <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      </a>
+      <div class="en-title">
+        <span class="eyebrow">EDITOR NOVO</span>
+        <strong id="en-page-name">Carregando…</strong>
+      </div>
+      <p class="en-state" id="en-state" role="status">Abrindo o editor…</p>
+    </header>
+    <div id="studio-sdk-root" class="en-root"></div>
+
+    <script src="/vendor/studio-sdk.umd.js"></script>
+    <script type="module">
+      import { studioEditorOptions } from '/studio-sdk-editor.js';
+
+      const estado = document.querySelector('#en-state');
+      const aviso = (texto) => { estado.textContent = texto; };
+      const pageId = new URLSearchParams(location.search).get('page');
+
+      const api = async (caminho, method = 'GET', corpo) => {
+        const resposta = await fetch('/api' + caminho, {
+          method,
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: corpo === undefined ? undefined : JSON.stringify(corpo),
+        });
+        if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).error || `Falha ${resposta.status}`);
+        return resposta.json();
+      };
+
+      let pagina = null;
+
+      const carregar = async (id) => {
+        pagina = await api('/pages/' + id);
+        document.querySelector('#en-page-name').textContent = pagina.name || 'Sem nome';
+        aviso('Aberto.');
+        // O SDK usa o mesmo formato de projeto do GrapesJS, então a página feita no
+        // editor atual abre aqui sem conversão.
+        return pagina.project && Object.keys(pagina.project).length ? pagina.project : null;
+      };
+
+      const salvar = async (id, project, { html, css } = {}) => {
+        aviso('Salvando…');
+        const documento = html
+          ? `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>${css || ''}</style></head><body>${html}</body></html>`
+          : pagina.html || '';
+        const salvo = await api('/pages/' + id, 'PUT', {
+          revision: pagina.revision,
+          name: pagina.name,
+          project,
+          html: documento,
+          domain: pagina.domain,
+          webhook: pagina.webhook,
+        });
+        pagina = { ...pagina, revision: salvo.revision };
+        aviso('Salvo.');
+      };
+
+      if (!pageId) {
+        aviso('Abra a partir de uma página: /editor-novo.html?page=<id>');
+      } else {
+        try {
+          globalThis.GrapesJsStudioSDK.createStudioEditor(studioEditorOptions({ pageId, carregar, salvar }));
+        } catch (erro) {
+          aviso('Não foi possível abrir: ' + erro.message);
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -13,6 +13,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
+    "@grapesjs/studio-sdk": "1.2.1",
     "grapesjs": "0.23.6",
     "hls.js": "^1.5.17",
     "parse5": "8.0.1",

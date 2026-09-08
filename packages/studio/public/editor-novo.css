@@ -1,0 +1,28 @@
+/* Moldura do editor novo. O SDK ocupa a tela toda abaixo de uma faixa fina com o nome
+   da página, para a pessoa saber onde está e como voltar. */
+html, body { height: 100%; margin: 0; background: var(--alva-cloud); }
+body { display: grid; grid-template-rows: auto minmax(0, 1fr); font-family: var(--font-sans); }
+.en-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--alva-line);
+  background: var(--alva-white);
+}
+.en-back {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-sm);
+  color: var(--alva-muted);
+  text-decoration: none;
+}
+.en-back:hover { background: var(--alva-highlight); color: var(--alva-blue); }
+.en-title { display: grid; gap: 2px; }
+.en-title .eyebrow { font-size: var(--text-2xs); letter-spacing: 1.4px; color: var(--alva-blue); }
+.en-title strong { font-size: var(--text-lg); color: var(--alva-ink); }
+.en-state { margin: 0 0 0 auto; color: var(--alva-muted); font-size: var(--text-md); }
+.en-root { min-height: 0; height: 100%; }

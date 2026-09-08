@@ -408,6 +408,11 @@ export function createApp({
     '/view-route.js': ['public/view-route.js', 'text/javascript'],
     '/confirm-dialog.js': ['public/confirm-dialog.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
+    '/vendor/studio-sdk.umd.js': ['node_modules/@grapesjs/studio-sdk/dist/index.umd.js', 'text/javascript'],
+    '/vendor/studio-sdk.css': ['node_modules/@grapesjs/studio-sdk/dist/style.css', 'text/css'],
+    '/editor-novo.html': ['public/editor-novo.html', 'text/html'],
+    '/editor-novo.css': ['public/editor-novo.css', 'text/css'],
+    '/studio-sdk-editor.js': ['public/studio-sdk-editor.js', 'text/javascript'],
   };
   const server = createServer(async (req, res) => {
     const json = (data, status = 200) => {
