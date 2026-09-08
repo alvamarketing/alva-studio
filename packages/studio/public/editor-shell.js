@@ -1,4 +1,4 @@
-import { blocks, normalizeCharts, normalizeForms, runtimeCss, templateCss } from './templates.js';
+import { blocks, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 import { materialSymbolsFontCss } from './quiz-elements.js';
 
@@ -561,8 +561,17 @@ export const removeChartRow = (rows, index, max = Infinity) => {
   if (current.length < 3) throw new Error('Mantenha ao menos duas opções no gráfico.');
   return validateChartRows(current.filter((_, rowIndex) => rowIndex !== index), max);
 };
-export const donutSegments = (rows) => {
-  const colors = ['#286eea', '#80d6c2', '#ffc76b', '#8f7ee8', '#ed8bb3', '#66b9e8', '#9ac85c', '#dca768'];
+const CHART_COLORS = ['#286eea', '#80d6c2', '#ffc76b', '#8f7ee8', '#ed8bb3', '#66b9e8', '#9ac85c', '#dca768'];
+
+// Cores escolhidas para o gráfico, completadas pelo padrão. Assim quem trocar só a
+// primeira fatia não fica sem cor nas outras.
+export function chartPalette(escolhidas, total = 3) {
+  const lista = Array.isArray(escolhidas) ? escolhidas : [];
+  return Array.from({ length: total }, (_, indice) => lista[indice] || CHART_COLORS[indice]);
+}
+
+export const donutSegments = (rows, escolhidas) => {
+  const colors = chartPalette(escolhidas, CHART_COLORS.length);
   const values = rows.map(([, value]) => Number(value));
   if (values.some((value) => !Number.isFinite(value) || value < 0))
     throw new Error('Use valores finitos maiores ou iguais a zero.');
@@ -1474,7 +1483,10 @@ export function createFriendlyEditor({
     const existingCss = editor.getCss();
     // O comportamento entra sempre: uma página salva antes destas regras existirem também
     // precisa de movimento, ícone e gráficos funcionando.
-    if (!existingCss.includes('data-alva-motion')) editor.addStyle(runtimeCss);
+    // Versionado: uma correção no comportamento precisa alcançar até quem já recebeu a
+    // versão anterior, senão a página congela na primeira que pegou.
+    const versaoNaPagina = Number(existingCss.match(/--alva-runtime\s*:\s*(\d+)/)?.[1] || 0);
+    if (versaoNaPagina < RUNTIME_CSS_VERSION) editor.addStyle(runtimeCss);
     if (/--alva-block-base\s*:\s*1/.test(existingCss) || existingCss.includes('.hero-grid')) return;
     // Fill the blank page with block defaults, preserving every user declaration.
     const custom = editor.Css.getAll().map((rule) => ({ rule, style: { ...rule.getStyle() } }));
@@ -2196,6 +2208,24 @@ export function createFriendlyEditor({
         bindings: chartBindings, onBindingsChange: quizCanvas ? saveBindings : null,
       });
       help(content, 'Cada barra usa um nome e uma porcentagem entre 0 e 100.');
+      // O gradiente das barras era fixo no css: sem isso não havia como mudar o tom.
+      const estiloBarras = barChart.getStyle() || {};
+      // A variável sozinha não basta: a regra antiga com gradiente fixo continua no css das
+      // páginas salvas e vence. O gradiente é aplicado em cada barra, que sempre ganha.
+      const pintarBarras = (de, para) => {
+        barChart.addStyle({ '--alva-bar-from': de, '--alva-bar-to': para });
+        for (const barra of componentsByTag(barChart, 'i')) {
+          barra.addStyle({ background: `linear-gradient(${de}, ${para})` });
+        }
+      };
+      const corDe = estiloBarras['--alva-bar-from'] || '#286eea';
+      const corPara = estiloBarras['--alva-bar-to'] || '#80d6c2';
+      field(content, 'Cor das barras', corDe, (value) => pintarBarras(value, barChart.getStyle()?.['--alva-bar-to'] || corPara), { type: 'color' });
+      field(content, 'Cor do pé das barras', corPara, (value) => pintarBarras(barChart.getStyle()?.['--alva-bar-from'] || corDe, value), { type: 'color' });
+      field(content, 'Altura do gráfico', String(parseInt(estiloBarras['--alva-chart-height'], 10) || 230), (value) => {
+        const px = Math.min(600, Math.max(80, Number(value) || 230));
+        barChart.addStyle({ '--alva-chart-height': `${px}px`, height: `${px}px` });
+      }, { type: 'number', min: 80, max: 600 });
     }
     const donut = componentWithClass(model, 'alva-donut');
     if (donut) {
@@ -2211,16 +2241,38 @@ export function createFriendlyEditor({
         donut.addAttributes({ 'data-alva-chart-bindings': JSON.stringify(bindings) });
         onQuizChartBindingsChange(bindings);
       };
+      const coresEscolhidas = () => {
+        try { const lista = JSON.parse(donut.getAttributes()['data-alva-chart-colors'] || '[]'); return Array.isArray(lista) ? lista : []; }
+        catch { return []; }
+      };
       chartItems(content, rows, {
         item: 'fatia', addLabel: '+ Adicionar fatia',
         change: (nextRows) => {
-          const segments = donutSegments(nextRows);
+          const segments = donutSegments(nextRows, chartPalette(coresEscolhidas()));
           donut.addAttributes({ 'data-alva-chart-data': JSON.stringify(nextRows) });
           donut.addStyle({ background: `conic-gradient(${segments})` });
         },
         bindings: chartBindings, onBindingsChange: quizCanvas ? saveBindings : null,
       });
       help(content, 'Cada fatia usa um nome e uma quantidade. As quantidades definem a proporção.');
+      // As cores do donut eram uma lista fixa no código; agora ficam no próprio elemento.
+      const coresSalvas = (() => {
+        try { const lista = JSON.parse(donut.getAttributes()['data-alva-chart-colors'] || '[]'); return Array.isArray(lista) ? lista : []; }
+        catch { return []; }
+      })();
+      const paleta = chartPalette(coresSalvas);
+      const repintar = (cores) => {
+        donut.addAttributes({ 'data-alva-chart-colors': JSON.stringify(cores) });
+        const atuais = (() => { try { return JSON.parse(donut.getAttributes()['data-alva-chart-data'] || '[]'); } catch { return rows; } })();
+        donut.addStyle({ background: `conic-gradient(${donutSegments(atuais.length ? atuais : rows, cores)})` });
+      };
+      paleta.forEach((cor, indice) => {
+        field(content, `Cor das fatias ${indice + 1}`, cor, (value) => {
+          const cores = [...paleta];
+          cores[indice] = value;
+          repintar(cores);
+        }, { type: 'color' });
+      });
     }
     let form = model;
     while (form && tagOf(form) !== 'form') form = form.parent();

@@ -36,3 +36,14 @@ test('abrir uma página já existente também traz o css de sistema', async () =
   // sem isso o css só entrava ao inserir um bloco, e a página aberta ficava sem movimento
   assert.match(load, /blockStyles\(\)/);
 });
+
+test('o css de sistema é versionado, para uma correção alcançar quem já o recebeu', async () => {
+  const { runtimeCss, RUNTIME_CSS_VERSION } = await import('../public/templates.js');
+  assert.ok(Number.isInteger(RUNTIME_CSS_VERSION) && RUNTIME_CSS_VERSION > 0);
+  assert.ok(runtimeCss.includes(`--alva-runtime:${RUNTIME_CSS_VERSION}`), 'a versão viaja dentro do css');
+
+  const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
+  const corpo = fonte.slice(fonte.indexOf('function blockStyles('), fonte.indexOf('function insertBlock('));
+  // checar só por 'data-alva-motion' congelava a primeira versão recebida
+  assert.match(corpo, /RUNTIME_CSS_VERSION/);
+});
