@@ -16,10 +16,10 @@ test('galeria de modelos mantém prévias proporcionais e seleção acessível',
   assert.match(app, /frame\.title = 'Modelo ' \+ template\.name/);
 });
 
-test('catálogo oferece cinco estruturas distintas e uma página em branco', () => {
-  assert.equal(templates.length, 6);
-  assert.equal(new Set(templates.map((t) => t.id)).size, 6);
-  assert.equal(new Set(templates.map((t) => t.html)).size, 6);
+test('cada modelo do catálogo é uma estrutura distinta, mais a página em branco', () => {
+  assert.ok(templates.length >= 6, 'o catálogo precisa cobrir os começos mais comuns');
+  assert.equal(new Set(templates.map((t) => t.id)).size, templates.length);
+  assert.equal(new Set(templates.map((t) => t.html)).size, templates.length);
   assert.equal(getTemplate('blank').html, '');
   assert.equal(getTemplate('services').html, services);
   for (const template of templates) {
