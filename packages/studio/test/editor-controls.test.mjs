@@ -590,11 +590,15 @@ test('painel de edição oferece retorno explícito aos elementos', async () => 
   assert.match(source, /Adicionar elementos/);
 });
 
-test('somente o fundo estrutural do canvas fecha a edição', () => {
+test('clicar fora da página fecha a edição; clicar numa seção abre a dela', () => {
   const element = (tagName) => ({ tagName });
+  assert.equal(isCanvasBackgroundElement(element('HTML')), true);
   assert.equal(isCanvasBackgroundElement(element('BODY')), true);
-  assert.equal(isCanvasBackgroundElement(element('MAIN')), true);
-  assert.equal(isCanvasBackgroundElement(element('SECTION')), true);
+  // Seção e main são conteúdo, não moldura: as páginas são feitas de <section>, e
+  // tratá-las como fundo limpava a seleção a cada clique. O painel voltava para
+  // "Selecione um elemento" e nenhuma propriedade — cor, espaço, tamanho — abria.
+  assert.equal(isCanvasBackgroundElement(element('SECTION')), false);
+  assert.equal(isCanvasBackgroundElement(element('MAIN')), false);
   assert.equal(isCanvasBackgroundElement(element('DIV')), false);
   assert.equal(isCanvasBackgroundElement(element('BUTTON')), false);
   assert.equal(isCanvasBackgroundElement(null), false);

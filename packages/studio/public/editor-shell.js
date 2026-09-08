@@ -421,8 +421,12 @@ export function panelMode(component) {
   return !component || component.is?.('wrapper') ? 'library' : 'inspector';
 }
 
+// O que é moldura e o que é página. Seção e main entravam aqui, mas são conteúdo: as
+// páginas são feitas de <section>, então quase todo clique caía nesta regra, limpava a
+// seleção e devolvia o painel ao estado vazio. Editar cor, espaço ou tamanho pelo canvas
+// ficou impossível. Fundo é só o que está fora da página.
 export function isCanvasBackgroundElement(element) {
-  return /^(HTML|BODY|MAIN|SECTION)$/.test(String(element?.tagName || '').toUpperCase());
+  return /^(HTML|BODY)$/.test(String(element?.tagName || '').toUpperCase());
 }
 
 export function editorKeyboardAction(event, selected) {
