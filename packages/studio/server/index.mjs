@@ -422,6 +422,8 @@ export function createApp({
     '/vendor/studio-sdk.css': ['node_modules/@grapesjs/studio-sdk/dist/style.css', 'text/css'],
     '/vsl-retention-ui.js': ['public/vsl-retention-ui.js', 'text/javascript'],
     '/vsl-upload.js': ['public/vsl-upload.js', 'text/javascript'],
+    '/quiz-runtime.js': ['public/quiz-runtime.js', 'text/javascript'],
+    '/quiz-mecanica.js': ['public/quiz-mecanica.js', 'text/javascript'],
     '/editor-novo.html': ['public/editor-novo.html', 'text/html'],
     '/editor-novo.css': ['public/editor-novo.css', 'text/css'],
     '/studio-sdk-editor.js': ['public/studio-sdk-editor.js', 'text/javascript'],

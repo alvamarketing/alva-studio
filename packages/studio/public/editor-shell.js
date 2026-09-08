@@ -1,4 +1,5 @@
 import { blockDescriptions, blocks, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
+import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 import { materialSymbolsFontCss } from './quiz-elements.js';
 
@@ -263,16 +264,19 @@ export function renderVslReferences(html, { publicOrigin } = {}) {
 // acompanha a página apenas quando há um carrossel nela.
 const carouselScript = "document.querySelectorAll('.alva-carousel').forEach(function(c){var t=c.querySelector('.alva-carousel-track');if(!t)return;c.querySelectorAll('[data-carousel]').forEach(function(b){b.addEventListener('click',function(){var card=t.querySelector('.alva-testimonial');var step=card?card.getBoundingClientRect().width+20:t.clientWidth;t.scrollBy({left:b.dataset.carousel==='next'?step:-step,behavior:'smooth'})})})});";
 
-export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin } = {}) {
+// Quiz e landing saem da mesma página e do mesmo editor. O que os separa na publicação é
+// a marca no corpo e o script que mostra uma seção por vez — não outro gerador de HTML.
+export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin, quiz = false, quizDestino = '' } = {}) {
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escapeText(title) +
     // A página publicada leva o comportamento junto: sem isso, uma página antiga vai ao ar
     // sem movimento e com o ícone encolhido, do mesmo jeito que aparecia no editor.
-    '</title><style>' + materialSymbolsFontCss(publicOrigin) + (css.includes('data-alva-motion') ? '' : runtimeCss) + css +
-    '</style></head><body>' +
+    '</title><style>' + materialSymbolsFontCss(publicOrigin) + (css.includes('data-alva-motion') ? '' : runtimeCss) + (quiz ? quizRuntimeCss : '') + css +
+    '</style></head><body' + (quiz ? ' data-alva-quiz="true"' : '') + '>' +
     renderVslReferences(html, { publicOrigin }) +
     '<script>' +
     (html.includes('alva-carousel') ? carouselScript : '') +
+    (quiz ? quizRuntimeScript({ destino: quizDestino || '' }) : '') +
     js +
     '</script></body></html>';
 }
