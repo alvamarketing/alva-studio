@@ -39,6 +39,7 @@ import { UmamiAnalyticsReader } from './umami-analytics-reader.mjs';
 import { normalizeUmamiGatewayPayload } from './umami-gateway.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
+import { CloudflareStream } from './cloudflare-stream.mjs';
 import { readRuntimeFlags, requiredTrackingEngines } from './runtime-flags.mjs';
 import { billingRuntimeEnvironment } from './runtime-flags.mjs';
 import { AsaasClient } from './asaas-client.mjs';
@@ -268,6 +269,14 @@ export function createApp({
   const formStore = new FormStore(dataDir);
   let content = null;
   const videos = database ? new VideoRepository(database) : null;
+  // Hospedagem do vídeo na conta Cloudflare de quem opera o Studio. Fica desligada até
+  // as credenciais existirem no ambiente: sem elas o Studio segue aceitando URL externa.
+  const videoHosting = runtimeFlags.mediaPipeline
+    ? new CloudflareStream({
+        accountId: process.env.CLOUDFLARE_ACCOUNT_ID || '',
+        apiToken: process.env.CLOUDFLARE_STREAM_TOKEN || '',
+      })
+    : null;
   const analytics = database ? new AnalyticsRepository(database) : null;
   const collectLimiter = createCollectLimiter(collectLimiterOptions);
   const analyticsRetention = analytics
@@ -351,6 +360,7 @@ export function createApp({
       projects,
       content,
       videos,
+      videoHosting,
       analytics,
       umamiAnalytics,
       tracking,
@@ -411,6 +421,7 @@ export function createApp({
     '/vendor/studio-sdk.umd.js': ['node_modules/@grapesjs/studio-sdk/dist/index.umd.js', 'text/javascript'],
     '/vendor/studio-sdk.css': ['node_modules/@grapesjs/studio-sdk/dist/style.css', 'text/css'],
     '/vsl-retention-ui.js': ['public/vsl-retention-ui.js', 'text/javascript'],
+    '/vsl-upload.js': ['public/vsl-upload.js', 'text/javascript'],
     '/editor-novo.html': ['public/editor-novo.html', 'text/html'],
     '/editor-novo.css': ['public/editor-novo.css', 'text/css'],
     '/studio-sdk-editor.js': ['public/studio-sdk-editor.js', 'text/javascript'],

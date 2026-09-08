@@ -1,4 +1,5 @@
 import { modeloDaCurva } from './vsl-retention-ui.js';
+import { estadoDoEnvio, mensagemDoEnvio, enviarArquivo } from './vsl-upload.js';
 
 export function vslStatusLabel(video = {}) {
   if (!video.publishedVersionId) return 'Rascunho';
@@ -110,6 +111,67 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     if (cta) { cta.textContent = modelo.cta; cta.hidden = !modelo.cta; }
   };
 
+  // Envio do vídeo: pedimos o endereço, o navegador manda o arquivo direto para a
+  // Cloudflare e depois perguntamos, de tempos em tempos, se a conversão terminou.
+  const ligarEnvioDeVideo = () => {
+    const escolher = document.querySelector('#vsl-upload-input');
+    const aviso = document.querySelector('#vsl-upload-status');
+    if (!escolher || escolher.dataset.ligado === 'true') return;
+    escolher.dataset.ligado = 'true';
+
+    const mostrar = (estado) => {
+      if (!aviso) return;
+      aviso.textContent = mensagemDoEnvio(estado);
+      aviso.dataset.erro = String(estado.fase === 'erro');
+    };
+
+    escolher.onchange = async () => {
+      const arquivo = escolher.files?.[0];
+      if (!arquivo) return;
+      const projectId = currentShell().state().currentProject.id;
+      escolher.disabled = true;
+      try {
+        mostrar({ fase: 'enviando', progresso: 0 });
+        const envio = await api(`/projects/${projectId}/videos/upload-url`, 'POST', {
+          nome: document.querySelector('#vsl-form')?.elements?.name?.value || arquivo.name,
+        });
+        await enviarArquivo({
+          uploadUrl: envio.uploadUrl,
+          arquivo,
+          aoProgredir: (progresso) => mostrar({ fase: 'enviando', progresso }),
+        });
+        mostrar({ fase: 'convertendo' });
+        // A conversão leva minutos; perguntar de 4 em 4 segundos é suficiente e não
+        // martela a API. O teto evita esperar para sempre por um vídeo travado.
+        const limite = Date.now() + 20 * 60 * 1000;
+        for (;;) {
+          await new Promise((resolve) => setTimeout(resolve, 4000));
+          const estado = estadoDoEnvio(await api(`/projects/${projectId}/videos/upload-status/${envio.uid}`));
+          mostrar(estado);
+          if (estado.fase === 'pronto') {
+            const formulario = document.querySelector('#vsl-form');
+            formulario.elements.sourceUrl.value = estado.sourceUrl;
+            formulario.elements.sourceType.value = estado.sourceType;
+            if (estado.posterUrl && !formulario.elements.posterUrl.value)
+              formulario.elements.posterUrl.value = estado.posterUrl;
+            formulario.elements.sourceUrl.dispatchEvent(new Event('input', { bubbles: true }));
+            break;
+          }
+          if (!estado.continuarConsultando) break;
+          if (Date.now() > limite) {
+            mostrar({ fase: 'erro', motivo: 'a conversão demorou mais que o esperado. Confira na Cloudflare.' });
+            break;
+          }
+        }
+      } catch (erro) {
+        mostrar({ fase: 'erro', motivo: erro?.message || 'erro desconhecido' });
+      } finally {
+        escolher.disabled = false;
+        escolher.value = '';
+      }
+    };
+  };
+
   const showForm = (video = null) => {
     if (!video && !currentShell()?.can?.('video.write')) return;
     current = video;
@@ -126,6 +188,7 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     for (const control of target.querySelectorAll('input, select, textarea')) control.disabled = !policy.canEdit;
     const submit = target.querySelector('[type="submit"]');
     if (submit) submit.hidden = !policy.canEdit;
+    ligarEnvioDeVideo();
     pintarRetencao(video);
     field(target, 'publish').hidden = !policy.canPublish;
     field(target, 'publish').disabled = !policy.canPublish;

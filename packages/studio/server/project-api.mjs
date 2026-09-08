@@ -179,6 +179,7 @@ export function createProjectApi({
   integrations,
   publication,
   videos,
+  videoHosting = null,
     analytics,
   umamiAnalytics,
   tracking,
@@ -537,6 +538,30 @@ export function createProjectApi({
         const input = await body(req);
         return json(await videos.createVideo({ ...input, companyId: context.companyId, projectId, actorId: context.user.id }), 201);
       }
+    }
+
+    // Enviar o vídeo é do dono do conteúdo, então exige a mesma permissão de escrever.
+    // O arquivo nunca passa por aqui: devolvemos o endereço e o navegador envia direto.
+    const envioDeVideo = path.match(/^\/api\/projects\/([^/]+)\/videos\/upload-url$/);
+    if (envioDeVideo && method === 'POST') {
+      if (runtimeFlags?.mediaPipeline === false) throw fail('A função de VSL está indisponível neste ambiente.', 404);
+      const [, projectId] = envioDeVideo;
+      await sessionService.authorize(context, 'video.write', projectId);
+      if (!videoHosting?.configurado) throw fail('Configure a conta Cloudflare no servidor para hospedar vídeos.', 409);
+      const input = await body(req);
+      return json(await videoHosting.criarEnvioDireto({
+        duracaoMaximaSegundos: Number(input?.duracaoMaximaSegundos) || 7200,
+        nome: String(input?.nome || '').slice(0, 100),
+      }), 201);
+    }
+
+    const situacaoDoEnvio = path.match(/^\/api\/projects\/([^/]+)\/videos\/upload-status\/([^/]+)$/);
+    if (situacaoDoEnvio && method === 'GET') {
+      if (runtimeFlags?.mediaPipeline === false) throw fail('A função de VSL está indisponível neste ambiente.', 404);
+      const [, projectId, uid] = situacaoDoEnvio;
+      await sessionService.authorize(context, 'video.write', projectId);
+      if (!videoHosting?.configurado) throw fail('Configure a conta Cloudflare no servidor para hospedar vídeos.', 409);
+      return json(await videoHosting.consultar(uid));
     }
 
     const video = path.match(/^\/api\/projects\/([^/]+)\/videos\/([^/]+)(?:\/(duplicate|publish))?$/);

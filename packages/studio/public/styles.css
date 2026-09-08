@@ -1989,3 +1989,32 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   color: var(--alva-muted);
   font-size: var(--text-md);
 }
+
+/* Envio do vídeo da VSL. O andamento precisa de lugar fixo: sem ele a tela parece
+   travada durante a conversão e a pessoa recarrega no meio. */
+.vsl-upload {
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px dashed var(--alva-blue-light);
+  border-radius: var(--radius-md);
+  background: var(--alva-highlight);
+}
+.vsl-upload-pick {
+  display: grid;
+  gap: 7px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--alva-ink);
+}
+.vsl-upload-pick input {
+  font-weight: 400;
+}
+.vsl-upload-status {
+  margin: 10px 0 0;
+  color: var(--alva-blue-strong);
+  font-size: var(--text-md);
+  min-height: 1em;
+}
+.vsl-upload-status[data-erro='true'] {
+  color: var(--alva-negative);
+}
