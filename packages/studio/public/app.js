@@ -7,7 +7,7 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, trackingEventsModel, trackingHealthModel, trackingMetricsModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
@@ -1552,7 +1552,11 @@ async function openProjectSection({ navigation, filter = 'all', target, capabili
   }
 }
 let analyticsViewDays = 7;
-let analyticsViewTab = 'overview';
+let journeySource = '';
+let journeyGraph = null;
+let journeyView = { escala: 1, x: 0, y: 0 };
+let journeyArea = null;
+let journeySelecionado = null;
 function pintarRankList(seletor, linhas, vazio) {
   const alvo = clear($(seletor));
   if (!linhas.length) return alvo.append(projectEmpty(vazio, 'Os dados aparecem assim que houver movimento no período.'));
@@ -1584,7 +1588,7 @@ function pintarAnalyticsView(summary, { phase = 'ready', message = '' } = {}) {
   const metrics = clear($('#analytics-view-metrics'));
   for (const metric of analyticsMetricsModel(phase === 'ready' ? summary : null)) {
     const card = document.createElement('article');
-    card.className = 'surface metric';
+    card.className = 'metric';
     const label = document.createElement('small');
     label.textContent = metric.label;
     const value = document.createElement('strong');
@@ -1610,19 +1614,197 @@ function pintarAnalyticsView(summary, { phase = 'ready', message = '' } = {}) {
   pintarRankList('#analytics-pages', analyticsRankModel(summary?.topRoutes), 'Nenhuma página visitada.');
   pintarRankList('#analytics-sources', analyticsRankModel(summary?.sources), 'Nenhuma origem registrada.');
   pintarRankList('#analytics-campaigns', analyticsRankModel((summary?.utms || []).map((utm) => ({ source: utm.campaign || utm.source || '(sem campanha)', total: utm.total }))), 'Nenhuma campanha registrada.');
-  pintarRankList('#analytics-events', analyticsRankModel((summary?.events || []).map((evento) => ({ source: evento.name, total: evento.total }))), 'Nenhum evento registrado.');
+  // O coletor legado não devolve `events` como o Umami: as conversões por conteúdo e os
+  // marcos de VSL são o que ele mede de evento, e é isso que a aba mostra.
+  const eventos = [
+    ...(summary?.conversions || []).map((item) => ({ source: item.contentId || item.urlPath, total: item.total })),
+    ...(summary?.vslFunnel || []).map((item) => ({ source: item.milestone === null ? item.eventName : `${item.eventName} · ${item.milestone}%`, total: item.total })),
+    ...(summary?.events || []).map((evento) => ({ source: evento.name, total: evento.total })),
+  ];
+  pintarRankList('#analytics-events', analyticsRankModel(eventos, 10), 'Nenhum evento registrado.');
+  pintarRankList('#analytics-countries', analyticsRankModel((summary?.audience?.countries || []).map((i) => ({ source: i.value, total: i.total }))), 'Nenhum país registrado.');
+  pintarRankList('#analytics-cities', analyticsRankModel((summary?.audience?.cities || []).map((i) => ({ source: i.value, total: i.total }))), 'Nenhuma cidade registrada.');
+  pintarRankList('#analytics-devices', analyticsRankModel((summary?.audience?.devices || []).map((i) => ({ source: i.value, total: i.total }))), 'Nenhum dispositivo registrado.');
+  pintarRankList('#analytics-entries', analyticsRankModel((summary?.behavior?.entries || []).map((i) => ({ source: i.value, total: i.total }))), 'Nenhuma entrada registrada.');
+  pintarRankList('#analytics-exits', analyticsRankModel((summary?.behavior?.exits || []).map((i) => ({ source: i.value, total: i.total }))), 'Nenhuma saída registrada.');
 }
-function selecionarAbaAnalytics(aba) {
-  analyticsViewTab = aba;
-  for (const botao of document.querySelectorAll('[data-analytics-tab]')) botao.classList.toggle('active', botao.dataset.analyticsTab === aba);
-  for (const painel of document.querySelectorAll('[data-analytics-panel]')) painel.classList.toggle('active', painel.dataset.analyticsPanel === aba);
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const svgEl = (nome, atributos = {}) => {
+  const elemento = document.createElementNS(SVG_NS, nome);
+  for (const [chave, valor] of Object.entries(atributos)) elemento.setAttribute(chave, valor);
+  return elemento;
+};
+function desenharJornada(graph) {
+  const alvo = clear($('#journey-graph'));
+  const mapa = journeyLayout(graph);
+  if (!mapa.nodes.length) {
+    const vazio = document.createElement('p');
+    vazio.className = 'journey-empty';
+    vazio.textContent = 'Ainda não há páginas suficientes para desenhar o caminho das visitas.';
+    alvo.append(vazio);
+    return;
+  }
+  const alturaTitulos = 22;
+  const alturaTotal = mapa.height + alturaTitulos;
+  // O mapa é muito mais largo que alto. Encaixá-lo inteiro na largura deixaria os cartões
+  // ilegíveis, então a área mostra pixels reais e quem quiser a visão geral usa Enquadrar.
+  const larguraVisivel = Math.max(320, alvo.clientWidth || 900);
+  const alturaVisivel = Math.min(520, Math.max(320, alturaTotal + 24));
+  const svg = svgEl('svg', { width: '100%', height: alturaVisivel, viewBox: `0 0 ${larguraVisivel} ${alturaVisivel}` });
+  const palco = svgEl('g', { class: 'journey-stage' });
+  svg.append(palco);
+  journeyArea = { largura: larguraVisivel, altura: alturaVisivel, conteudo: { largura: mapa.width, altura: alturaTotal } };
+  for (const coluna of mapa.columns) {
+    const titulo = svgEl('text', { x: coluna.x, y: 12, class: 'journey-column' });
+    titulo.textContent = coluna.title;
+    palco.append(titulo);
+  }
+  for (const aresta of mapa.edges) {
+    const deslocada = aresta.path.replace(/,(-?\d+(?:\.\d+)?)/g, (todo, valor) => `,${Number(valor) + alturaTitulos}`);
+    palco.append(svgEl('path', { d: deslocada, class: 'journey-edge', 'data-source': aresta.source, 'data-target': aresta.target }));
+    const rotulo = svgEl('text', {
+      x: aresta.labelX, y: aresta.labelY + alturaTitulos - 4,
+      class: `journey-edge-label${aresta.major ? '' : ' journey-edge-label-weak'}`,
+      'text-anchor': 'middle', 'data-source': aresta.source, 'data-target': aresta.target,
+    });
+    rotulo.textContent = `${aresta.transitions} · ${aresta.share}`;
+    palco.append(rotulo);
+  }
+  for (const no of mapa.nodes) {
+    const origem = no.type === 'source';
+    const tipo = origem ? ' journey-source' : no.type === 'event' ? ' journey-event' : '';
+    const grupo = svgEl('g', { class: `journey-node${tipo}`, 'data-node': no.id, transform: `translate(${no.x}, ${no.y + alturaTitulos})` });
+    grupo.addEventListener('click', () => destacarCaminho(no.id === journeySelecionado ? null : no.id));
+    grupo.append(svgEl('rect', { width: mapa.cardWidth, height: mapa.cardHeight }));
+    const nome = svgEl('text', { x: 12, y: 24, class: 'journey-label' });
+    nome.textContent = no.label.length > 22 ? `${no.label.slice(0, 21)}…` : no.label;
+    const linha1 = svgEl('text', { x: 12, y: 42, class: 'journey-meta' });
+    linha1.textContent = origem || no.type === 'event' ? `${no.sessions} sessões` : `${no.pageviews} visualizações · ${no.sessions} sessões`;
+    const linha2 = svgEl('text', { x: 12, y: 58, class: 'journey-meta' });
+    linha2.textContent = origem ? 'origem das visitas' : no.type === 'event' ? 'ação executada' : `${no.entries} entradas · ${no.exits} saídas`;
+    const titulo = svgEl('title');
+    titulo.textContent = no.label;
+    grupo.append(nome, linha1, linha2, titulo);
+    palco.append(grupo);
+  }
+  alvo.append(svg);
+  enquadrarJornada();
+  ligarArrasteEZoom(alvo, svg);
+  destacarCaminho(journeySelecionado);
 }
+function aplicarTransformacao() {
+  const palco = document.querySelector('#journey-graph .journey-stage');
+  if (palco) palco.setAttribute('transform', `translate(${journeyView.x}, ${journeyView.y}) scale(${journeyView.escala})`);
+}
+// Enquadrar: escala o mapa para caber na área, sem passar de 1 — ampliar não ajuda a ler.
+function enquadrarJornada() {
+  if (!journeyArea) return;
+  const { largura, altura, conteudo } = journeyArea;
+  const escala = Math.min(1, (largura - 24) / conteudo.largura, (altura - 24) / conteudo.altura);
+  journeyView = {
+    escala,
+    x: Math.max(12, (largura - conteudo.largura * escala) / 2),
+    y: Math.max(12, (altura - conteudo.altura * escala) / 2),
+  };
+  aplicarTransformacao();
+}
+function ajustarZoom(fator) {
+  journeyView.escala = Math.min(3, Math.max(0.4, journeyView.escala * fator));
+  aplicarTransformacao();
+}
+function ligarArrasteEZoom(alvo, svg) {
+  let arrastando = null;
+  alvo.addEventListener('pointerdown', (evento) => {
+    arrastando = { x: evento.clientX - journeyView.x, y: evento.clientY - journeyView.y };
+    alvo.classList.add('is-dragging');
+    svg.setPointerCapture?.(evento.pointerId);
+  });
+  alvo.addEventListener('pointermove', (evento) => {
+    if (!arrastando) return;
+    journeyView.x = evento.clientX - arrastando.x;
+    journeyView.y = evento.clientY - arrastando.y;
+    aplicarTransformacao();
+  });
+  for (const nome of ['pointerup', 'pointerleave', 'pointercancel']) {
+    alvo.addEventListener(nome, () => { arrastando = null; alvo.classList.remove('is-dragging'); });
+  }
+  alvo.addEventListener('wheel', (evento) => {
+    evento.preventDefault();
+    ajustarZoom(evento.deltaY < 0 ? 1.12 : 1 / 1.12);
+  }, { passive: false });
+}
+// Clicar num cartão acende a cadeia inteira em que ele está — de onde as visitas vieram
+// até onde chegaram. O que não tem ligação com ele recua.
+function destacarCaminho(nodeId) {
+  journeySelecionado = nodeId;
+  const alcancados = journeyConnected(journeyGraph, nodeId);
+  for (const cartao of document.querySelectorAll('#journey-graph .journey-node')) {
+    const dele = cartao.dataset.node;
+    cartao.classList.toggle('journey-dim', Boolean(nodeId) && !alcancados.has(dele));
+    cartao.classList.toggle('journey-selected', dele === nodeId);
+  }
+  for (const passagem of document.querySelectorAll('#journey-graph .journey-edge')) {
+    const noCaminho = Boolean(nodeId) && alcancados.has(passagem.dataset.source) && alcancados.has(passagem.dataset.target);
+    passagem.classList.toggle('journey-dim', Boolean(nodeId) && !noCaminho);
+    passagem.classList.toggle('journey-strong', noCaminho);
+  }
+  for (const rotulo of document.querySelectorAll('#journey-graph .journey-edge-label')) {
+    const noCaminho = Boolean(nodeId) && alcancados.has(rotulo.dataset.source) && alcancados.has(rotulo.dataset.target);
+    rotulo.classList.toggle('journey-dim', Boolean(nodeId) && !noCaminho);
+    rotulo.classList.toggle('journey-reveal', noCaminho);
+  }
+}
+function pintarJornadaDoSite(graph) {
+  journeyGraph = graph;
+  const seletor = $('#journey-source');
+  const escolhida = seletor.value;
+  clear(seletor);
+  const todas = document.createElement('option');
+  todas.value = '';
+  todas.textContent = 'Todas as origens';
+  seletor.append(todas);
+  for (const origem of graph?.sources ?? []) {
+    const opcao = document.createElement('option');
+    opcao.value = origem;
+    opcao.textContent = origem;
+    seletor.append(opcao);
+  }
+  seletor.value = escolhida || journeySource || '';
+  desenharJornada(graph);
+  $('#journey-summary').textContent = graph?.totals
+    ? `${graph.totals.sessions} sessões · ${graph.totals.conversions} com ação · ${graph.totals.conversionRate}% de conversão · ${graph.totals.pages} páginas`
+    : 'Caminho percorrido pelas visitas, montado a partir das páginas vistas em cada sessão.';
+  pintarRankList('#journey-attributions', analyticsRankModel((graph?.attributions || []).map((item) => ({
+    source: [item.source, item.campaign].filter(Boolean).join(' · '), total: item.sessions,
+  }))), 'Nenhuma origem registrada.');
+}
+async function carregarJornada() {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) return;
+  try {
+    const { from, to } = analyticsRangeParams(new Date(), analyticsViewDays);
+    const filtro = journeySource ? `&source=${encodeURIComponent(journeySource)}` : '';
+    const graph = await api(`/projects/${projectId}/analytics/journey?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${filtro}`);
+    pintarJornadaDoSite(graph);
+  } catch (error) {
+    pintarJornadaDoSite(null);
+    toast(error.message);
+  }
+}
+
+$('#journey-source').onchange = () => {
+  journeySource = $('#journey-source').value;
+  journeySelecionado = null;
+  void carregarJornada();
+};
+$('#journey-zoom-in').onclick = () => ajustarZoom(1.2);
+$('#journey-zoom-out').onclick = () => ajustarZoom(1 / 1.2);
+$('#journey-reset').onclick = () => enquadrarJornada();
 async function abrirAnalytics() {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
   if (!studioShell.can('analytics.read')) throw new Error('Você não tem permissão para acessar esta área.');
   setDashboardView('analytics');
-  selecionarAbaAnalytics(analyticsViewTab);
   pintarAnalyticsView(null, { phase: 'loading' });
   const request = analyticsPanelGuard.next();
   try {
@@ -1630,6 +1812,7 @@ async function abrirAnalytics() {
     const summary = await api(`/projects/${projectId}/analytics/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
     pintarAnalyticsView(summary);
+    void carregarJornada();
   } catch (error) {
     if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
     pintarAnalyticsView(null, { phase: 'error', message: error.message });
@@ -1640,19 +1823,16 @@ $('#analytics-range').onchange = action(async () => {
   analyticsViewDays = Number($('#analytics-range').value) || 7;
   await abrirAnalytics();
 });
-document.querySelector('.analytics-view .tabs').onclick = (event) => {
-  const aba = event.target.closest('[data-analytics-tab]');
-  if (aba) selecionarAbaAnalytics(aba.dataset.analyticsTab);
-};
 const DESTINOS = { meta: ['Meta', 'Pixel e Conversions API'], google: ['Google Ads', 'Enhanced Conversions'], tiktok: ['TikTok', 'Events API'], linkedin: ['LinkedIn', 'Conversions API'], taboola: ['Taboola', 'Server-to-server'] };
 const CONSENTIMENTO = {
   granted: ['granted', 'Concedido', 'Click IDs e hashes de contato gerados no servidor seguem para os destinos.'],
   pending: ['pending', 'Aguardando decisão', 'O evento e os identificadores pseudônimos permitidos continuam sendo processados. Sem nome, e-mail ou telefone.'],
   denied: ['denied', 'Negado', 'Nenhum hash derivado é gerado. Só seguem os identificadores estritamente permitidos.'],
 };
+const TRACKING_PAGINA = 10;
 let trackingDeliveries = [];
-let trackingTab = 'events';
 let trackingSelected = null;
+let trackingVisiveis = TRACKING_PAGINA;
 function tempoRelativo(valor) {
   const data = new Date(valor);
   if (Number.isNaN(data.valueOf())) return '—';
@@ -1671,7 +1851,7 @@ function pintarRastreamento() {
   const metrics = clear($('#tracking-metrics'));
   for (const metric of trackingMetricsModel(entregas)) {
     const card = document.createElement('article');
-    card.className = 'surface metric';
+    card.className = 'metric';
     const label = document.createElement('small');
     label.textContent = metric.label;
     const value = document.createElement('strong');
@@ -1684,8 +1864,13 @@ function pintarRastreamento() {
   }
   const tipo = $('#tracking-filter-event').value;
   const estado = $('#tracking-filter-state').value;
-  const eventos = trackingEventsModel(entregas)
+  const encontrados = trackingEventsModel(entregas)
     .filter((evento) => (!tipo || evento.eventName === tipo) && (!estado || evento.status === estado));
+  const pagina = trackingPageModel(encontrados, trackingVisiveis);
+  const eventos = pagina.rows;
+  const verMais = $('#tracking-more');
+  verMais.hidden = !pagina.hasMore;
+  verMais.textContent = 'Ver mais';
   const corpo = clear($('#tracking-events'));
   if (!eventos.length) {
     const linha = document.createElement('tr');
@@ -1713,7 +1898,7 @@ function pintarRastreamento() {
     linha.onclick = () => { trackingSelected = evento.eventRef; pintarRastreamento(); };
     corpo.append(linha);
   }
-  pintarJornada(eventos.find((evento) => evento.eventRef === trackingSelected) || eventos[0] || null);
+  pintarJornada(encontrados.find((evento) => evento.eventRef === trackingSelected) || eventos[0] || null);
   const saude = clear($('#tracking-health'));
   const linhas = trackingHealthModel(entregas);
   if (!linhas.length) saude.append(projectEmpty('Nenhuma entrega registrada.', 'A saúde por destino aparece assim que houver envios.'));
@@ -1736,7 +1921,7 @@ function pintarRastreamento() {
   const ativos = new Set(entregas.map((linha) => linha.destination));
   for (const [chave, [nome, descricao]] of Object.entries(DESTINOS)) {
     const card = document.createElement('article');
-    card.className = 'surface provider';
+    card.className = 'provider';
     const texto = document.createElement('div');
     const titulo = document.createElement('strong');
     titulo.textContent = nome;
@@ -1754,7 +1939,7 @@ function pintarRastreamento() {
   for (const evento of trackingEventsModel(entregas)) contagem.set(evento.consentState, (contagem.get(evento.consentState) || 0) + 1);
   for (const [chave, [rotulo, titulo, descricao]] of Object.entries(CONSENTIMENTO)) {
     const card = document.createElement('article');
-    card.className = 'surface consent-card';
+    card.className = 'consent-card';
     const nome = document.createElement('h3');
     nome.textContent = titulo;
     const marca = document.createElement('span');
@@ -1799,17 +1984,13 @@ function pintarJornada(evento) {
   }
   alvo.append(titulo, linhaDoTempo);
 }
-function selecionarAbaRastreamento(aba) {
-  trackingTab = aba;
-  for (const botao of document.querySelectorAll('[data-tracking-tab]')) botao.classList.toggle('active', botao.dataset.trackingTab === aba);
-  for (const painel of document.querySelectorAll('[data-tracking-panel]')) painel.classList.toggle('active', painel.dataset.trackingPanel === aba);
-}
+
 async function abrirRastreamento() {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
   if (!studioShell.can('analytics.read')) throw new Error('Você não tem permissão para acessar esta área.');
   setDashboardView('tracking');
-  selecionarAbaRastreamento(trackingTab);
+  trackingVisiveis = TRACKING_PAGINA;
   const status = $('#tracking-status');
   status.textContent = 'Carregando eventos…';
   status.dataset.state = 'loading';
@@ -1825,11 +2006,14 @@ async function abrirRastreamento() {
   pintarRastreamento();
 }
 $('#nav-project-tracking').onclick = action(abrirRastreamento);
-document.querySelector('.tracking-view .tabs').onclick = (event) => {
-  const aba = event.target.closest('[data-tracking-tab]');
-  if (aba) selecionarAbaRastreamento(aba.dataset.trackingTab);
+for (const seletor of ['#tracking-environment', '#tracking-filter-event', '#tracking-filter-state']) $(seletor).onchange = () => {
+  trackingVisiveis = TRACKING_PAGINA;
+  pintarRastreamento();
 };
-for (const seletor of ['#tracking-environment', '#tracking-filter-event', '#tracking-filter-state']) $(seletor).onchange = () => pintarRastreamento();
+$('#tracking-more').onclick = () => {
+  trackingVisiveis += TRACKING_PAGINA;
+  pintarRastreamento();
+};
 async function abrirPublicacao() {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de continuar.');
   setDashboardView('publication');

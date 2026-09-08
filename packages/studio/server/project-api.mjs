@@ -3,6 +3,7 @@ import { normalizeProjectSlug, normalizeRoute } from './domain/access.mjs';
 import { renderLeadsCsv } from './leads-csv.mjs';
 import { publicRuntimeCapabilities } from './runtime-flags.mjs';
 import { renderDynamicForm } from './dynamic-form.mjs';
+import { buildJourneyGraph } from './analytics-journey.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -377,9 +378,15 @@ export function createProjectApi({
       await sessionService.authorize(context, 'analytics.read', projectId);
       const search = new URL(req.url, 'http://localhost').searchParams;
       const { from, to } = analyticsRange(search.get('from'), search.get('to'));
-      if (!umamiAnalytics || !runtimeFlags?.umamiRuntime) return json(analyticsCollection[2] === 'journey' ? [] : []);
       const input = { companyId: context.companyId, projectId, actorId: context.user.id, from, to, environment: search.get('environment') || 'production' };
-      return json(analyticsCollection[2] === 'journey' ? await umamiAnalytics.journey(input) : await umamiAnalytics.events(input));
+      // A jornada é montada a partir dos pageviews do próprio banco: o coletor legado já os
+      // guarda com sessão e origem, então ela não fica esperando a migração para o Umami.
+      if (analyticsCollection[2] === 'journey') {
+        const eventos = await analytics.journeyEvents({ companyId: context.companyId, projectId, from, to });
+        return json(buildJourneyGraph(eventos, { source: search.get('source') || '' }));
+      }
+      if (!umamiAnalytics || !runtimeFlags?.umamiRuntime) return json([]);
+      return json(await umamiAnalytics.events(input));
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);

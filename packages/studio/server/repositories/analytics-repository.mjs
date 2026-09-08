@@ -257,6 +257,58 @@ export class AnalyticsRepository {
       dailyVisits.push({ date: key, visits: dailyMap.get(key) ?? 0 });
     }
 
+    // Visitas, rejeição e tempo de sessão saem das próprias sessões: o coletor legado
+    // não tinha esses números, e a tela de Analytics os mostra ao lado de visualizações.
+    const { rows: sessionRows } = await this.database.query(
+      `SELECT COUNT(*)::int AS visits,
+              COALESCE(SUM(EXTRACT(EPOCH FROM (last_seen_at - first_seen_at)))::int, 0) AS total_time
+         FROM analytics_sessions
+        WHERE company_id = $1 AND project_id = $2 AND first_seen_at >= $3 AND first_seen_at < $4`,
+      [companyId, projectId, from, to],
+    );
+    const { rows: bounceRows } = await this.database.query(
+      `SELECT COUNT(*)::int AS bounces FROM (
+         SELECT session.id
+           FROM analytics_sessions session
+           LEFT JOIN analytics_events event
+             ON event.session_id = session.id AND event.event_type = 'pageview'
+          WHERE session.company_id = $1 AND session.project_id = $2
+            AND session.first_seen_at >= $3 AND session.first_seen_at < $4
+          GROUP BY session.id HAVING COUNT(event.id) <= 1
+       ) AS uma_pagina`,
+      [companyId, projectId, from, to],
+    );
+    const dimensao = async (coluna) => {
+      const { rows } = await this.database.query(
+        `SELECT ${coluna} AS value, COUNT(*)::int AS total
+           FROM analytics_sessions
+          WHERE company_id = $1 AND project_id = $2 AND first_seen_at >= $3 AND first_seen_at < $4
+            AND ${coluna} IS NOT NULL AND ${coluna} <> ''
+          GROUP BY value ORDER BY total DESC, value ASC LIMIT 10`,
+        [companyId, projectId, from, to],
+      );
+      return rows.map((current) => ({ value: current.value, total: current.total }));
+    };
+    const [countries, cities, devices, browsers] = await Promise.all(
+      ['country', 'city', 'device', 'browser'].map((coluna) => dimensao(coluna)),
+    );
+    // Entrada e saída são a primeira e a última página de cada sessão.
+    const extremo = async (ordem) => {
+      const { rows } = await this.database.query(
+        `SELECT url_path AS value, COUNT(*)::int AS total FROM (
+           SELECT DISTINCT ON (event.session_id) event.session_id, event.url_path
+             FROM analytics_events event
+             JOIN analytics_sessions session ON session.id = event.session_id
+            WHERE event.company_id = $1 AND event.project_id = $2 AND event.event_type = 'pageview'
+              AND session.first_seen_at >= $3 AND session.first_seen_at < $4
+            ORDER BY event.session_id, event.event_at ${ordem}, event.id ${ordem}
+         ) AS extremos GROUP BY value ORDER BY total DESC, value ASC LIMIT 10`,
+        [companyId, projectId, from, to],
+      );
+      return rows.map((current) => ({ value: current.value, total: current.total }));
+    };
+    const [entries, exits] = await Promise.all([extremo('ASC'), extremo('DESC')]);
+
     // Jornada única no estilo do wireframe ("Meta Ads → rota → rota → Lead"): origem mais comum,
     // top 2 rotas e total de conversões — não é um grafo por sessão, é o caminho mais frequente.
     const funnel = [
@@ -270,6 +322,11 @@ export class AnalyticsRepository {
       pageviews: byType.pageview ?? 0,
       custom: byType.custom ?? 0,
       visitors: visitorRows[0]?.total ?? 0,
+      visits: sessionRows[0]?.visits ?? 0,
+      bounces: bounceRows[0]?.bounces ?? 0,
+      totalTime: sessionRows[0]?.total_time ?? 0,
+      audience: { countries, cities, devices, browsers },
+      behavior: { entries, exits },
       sources: sourceRows.map((current) => ({ source: current.source, total: current.total })),
       utms: utmRows.map((current) => ({
         source: current.utm_source, medium: current.utm_medium, campaign: current.utm_campaign,
@@ -281,6 +338,38 @@ export class AnalyticsRepository {
       dailyVisits,
       funnel,
     };
+  }
+
+  // Pageviews crus da janela, com a sessão e a origem de cada um: é o que o motor da
+  // jornada precisa para reconstruir o caminho de cada visita.
+  async journeyEvents({ companyId, projectId, from, to, limit = 10_000 } = {}) {
+    const { rows } = await this.database.query(
+      `SELECT event.id, event.session_id, event.url_path, event.event_at, event.event_type, event.event_name,
+              session.utm_source, session.utm_medium, session.utm_campaign, session.utm_content,
+              session.utm_term, session.referrer_domain
+         FROM analytics_events event
+         JOIN analytics_sessions session ON session.id = event.session_id
+        WHERE event.company_id = $1 AND event.project_id = $2
+          AND (event.event_type = 'pageview' OR event.event_name IS NOT NULL)
+          AND event.event_at >= $3 AND event.event_at < $4
+        ORDER BY event.event_at ASC
+        LIMIT $5`,
+      [companyId, projectId, from, to, limit],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      sessionId: row.session_id,
+      urlPath: row.url_path,
+      at: row.event_at,
+      eventType: row.event_type,
+      eventName: row.event_name,
+      utmSource: row.utm_source,
+      utmMedium: row.utm_medium,
+      utmCampaign: row.utm_campaign,
+      utmContent: row.utm_content,
+      utmTerm: row.utm_term,
+      referrerDomain: row.referrer_domain,
+    }));
   }
 
   async purgeExpired({ eventDays = 90, rollupMonths = 25, limit = 1000 } = {}) {

@@ -51,11 +51,11 @@ const { readFile } = await import('node:fs/promises');
 const markup = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 
-test('a tela de rastreamento tem o cabeçalho, as abas e as áreas da referência visual', () => {
-  const tela = markup.slice(markup.indexOf('id="tracking-view"'), markup.indexOf('id="tracking-view"') + 4000);
-  assert.match(tela, /PROJETO · RASTREAMENTO/);
-  assert.match(tela, /Eventos e entregas/);
-  for (const aba of ['Eventos', 'Entregas', 'Destinos', 'Consentimento']) assert.match(tela, new RegExp(`>${aba}<`), `faltou a aba ${aba}`);
+test('a tela de rastreamento reúne tudo numa página só', () => {
+  const tela = markup.slice(markup.indexOf('id="tracking-view"'), markup.indexOf('id="agents-view"'));
+  assert.match(tela, /id="tracking-view-title">Rastreamento</);
+  assert.match(tela, /Eventos recentes/);
+  for (const secao of ['Entregas por destino', 'Destinos', 'Consentimento']) assert.match(tela, new RegExp(secao), `faltou a seção ${secao}`);
   assert.match(tela, /id="tracking-metrics"/);
   assert.match(tela, /id="tracking-events"/);
   assert.match(tela, /id="tracking-journey"/);
@@ -71,4 +71,35 @@ test('rastreamento é tela própria com rota e abertura', async () => {
   assert.match(app, /async function abrirRastreamento\(\)/);
   assert.match(app, /\$\('#nav-project-tracking'\)\.onclick = action\(abrirRastreamento\)/);
   assert.match(app, /if \(view === 'tracking'\) return void action\(abrirRastreamento\)\(\)/);
+});
+
+test('a lista de eventos mostra 10 por vez até acabar', async () => {
+  const { trackingPageModel } = await import('../public/studio-dashboard.js');
+  const eventos = Array.from({ length: 26 }, (_, i) => ({ eventRef: `e${i}` }));
+
+  const primeira = trackingPageModel(eventos, 10);
+  assert.equal(primeira.rows.length, 10);
+  assert.equal(primeira.hasMore, true);
+
+  const segunda = trackingPageModel(eventos, 20);
+  assert.equal(segunda.rows.length, 20);
+  assert.equal(segunda.hasMore, true);
+
+  const terceira = trackingPageModel(eventos, 30);
+  assert.equal(terceira.rows.length, 26);
+  assert.equal(terceira.hasMore, false);
+});
+
+test('a paginação não quebra com lista curta ou vazia', async () => {
+  const { trackingPageModel } = await import('../public/studio-dashboard.js');
+  assert.deepEqual(trackingPageModel([], 10), { rows: [], hasMore: false, remaining: 0 });
+  assert.equal(trackingPageModel([{ eventRef: 'x' }], 10).hasMore, false);
+});
+
+test('a tela tem o botão de carregar mais e volta ao início quando o filtro muda', () => {
+  const tela = markup.slice(markup.indexOf('id="tracking-view"'), markup.indexOf('id="agents-view"'));
+  assert.match(tela, /id="tracking-more"/);
+  assert.match(app, /trackingVisiveis = TRACKING_PAGINA/);
+  assert.match(app, /const TRACKING_PAGINA = 10;/);
+  assert.match(app, /verMais\.textContent = 'Ver mais';/);
 });

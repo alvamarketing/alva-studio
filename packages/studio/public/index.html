@@ -209,8 +209,8 @@
         <section id="analytics-view" class="analytics-view" aria-labelledby="analytics-view-title" hidden>
           <header class="page-heading">
             <div>
-              <div class="eyebrow">PROJETO · ANALYTICS</div>
-              <h1 id="analytics-view-title">Visão geral</h1>
+              <div class="eyebrow">Projeto</div>
+              <h1 id="analytics-view-title">Analytics</h1>
               <p id="analytics-view-source">Comportamento e aquisição do seu projeto.</p>
             </div>
             <div class="heading-actions">
@@ -221,64 +221,106 @@
               </select>
             </div>
           </header>
-          <nav class="tabs" aria-label="Dimensões de Analytics">
-            <button type="button" class="tab active" data-analytics-tab="overview">Visão geral</button>
-            <button type="button" class="tab" data-analytics-tab="audience">Público</button>
-            <button type="button" class="tab" data-analytics-tab="acquisition">Aquisição</button>
-            <button type="button" class="tab" data-analytics-tab="behavior">Comportamento</button>
-            <button type="button" class="tab" data-analytics-tab="events">Eventos</button>
-          </nav>
           <p id="analytics-view-status" class="dashboard-status" role="status" aria-live="polite"></p>
-          <div class="analytics-overview active" data-analytics-panel="overview">
-            <div id="analytics-view-metrics" class="metrics"></div>
-            <section class="surface analytics-main" aria-labelledby="analytics-chart-title">
-              <div class="chart-head">
-                <div>
-                  <div class="surface-head"><h2 id="analytics-chart-title">Visitas e visualizações</h2></div>
-                  <p class="helper" id="analytics-chart-helper"></p>
-                </div>
-                <div class="chart-legend"><span><i class="legend-dot"></i>Visitas</span></div>
-              </div>
-              <div id="analytics-view-chart" class="chart-area" role="img" aria-label="Visitas por dia no período"></div>
-              <div id="analytics-view-axis" class="axis"></div>
-            </section>
-            <div class="analytics-lists">
-              <section class="surface list-card" aria-labelledby="analytics-pages-title">
-                <div class="surface-head"><h2 id="analytics-pages-title">Páginas</h2></div>
-                <div id="analytics-pages" class="rank-list"></div>
-              </section>
-              <section class="surface list-card" aria-labelledby="analytics-sources-title">
-                <div class="surface-head"><h2 id="analytics-sources-title">Origens</h2></div>
-                <div id="analytics-sources" class="rank-list"></div>
-              </section>
+
+          <div id="analytics-view-metrics" class="metrics"></div>
+
+          <section class="page-block" aria-labelledby="analytics-chart-title">
+            <div class="block-head">
+              <h2 id="analytics-chart-title">Visitas e visualizações</h2>
+              <p class="helper" id="analytics-chart-helper"></p>
             </div>
-          </div>
-          <div class="analytics-overview" data-analytics-panel="audience">
-            <section class="surface list-card"><div class="surface-head"><h2>Público</h2></div><p class="helper">Países, cidades e dispositivos ainda não são medidos pelo coletor deste projeto.</p></section>
-          </div>
-          <div class="analytics-overview" data-analytics-panel="acquisition">
-            <section class="surface list-card" aria-labelledby="analytics-campaigns-title">
-              <div class="surface-head"><h2 id="analytics-campaigns-title">Campanhas</h2></div>
-              <div id="analytics-campaigns" class="rank-list"></div>
-            </section>
-          </div>
-          <div class="analytics-overview" data-analytics-panel="behavior">
-            <section class="surface list-card"><div class="surface-head"><h2>Comportamento</h2></div><p class="helper">Entradas e saídas ainda não são medidas pelo coletor deste projeto.</p></section>
-          </div>
-          <div class="analytics-overview" data-analytics-panel="events">
-            <section class="surface list-card" aria-labelledby="analytics-events-title">
-              <div class="surface-head"><h2 id="analytics-events-title">Eventos</h2></div>
-              <div id="analytics-events" class="rank-list"></div>
-            </section>
-          </div>
+            <div id="analytics-view-chart" class="chart-area" role="img" aria-label="Visitas por dia no período"></div>
+            <div id="analytics-view-axis" class="axis"></div>
+          </section>
+
+          <section class="page-block" aria-labelledby="analytics-content-title">
+            <div class="block-head"><h2 id="analytics-content-title">O que trouxe as visitas</h2></div>
+            <div class="analytics-lists analytics-lists-3">
+              <div class="list-card" aria-labelledby="analytics-pages-title">
+                <h3 id="analytics-pages-title">Páginas</h3>
+                <div id="analytics-pages" class="rank-list"></div>
+              </div>
+              <div class="list-card" aria-labelledby="analytics-sources-title">
+                <h3 id="analytics-sources-title">Origens</h3>
+                <div id="analytics-sources" class="rank-list"></div>
+              </div>
+              <div class="list-card" aria-labelledby="analytics-campaigns-title">
+                <h3 id="analytics-campaigns-title">Campanhas</h3>
+                <div id="analytics-campaigns" class="rank-list"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="page-block" aria-labelledby="analytics-audience-title">
+            <div class="block-head"><h2 id="analytics-audience-title">Quem visitou</h2></div>
+            <div class="analytics-lists analytics-lists-3">
+              <div class="list-card" aria-labelledby="analytics-countries-title">
+                <h3 id="analytics-countries-title">Países</h3>
+                <div id="analytics-countries" class="rank-list"></div>
+              </div>
+              <div class="list-card" aria-labelledby="analytics-cities-title">
+                <h3 id="analytics-cities-title">Cidades</h3>
+                <div id="analytics-cities" class="rank-list"></div>
+              </div>
+              <div class="list-card" aria-labelledby="analytics-devices-title">
+                <h3 id="analytics-devices-title">Dispositivos</h3>
+                <div id="analytics-devices" class="rank-list"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="page-block" aria-labelledby="analytics-behavior-title">
+            <div class="block-head"><h2 id="analytics-behavior-title">Como navegaram</h2></div>
+            <div class="analytics-lists analytics-lists-3">
+              <div class="list-card" aria-labelledby="analytics-entries-title">
+                <h3 id="analytics-entries-title">Entradas</h3>
+                <div id="analytics-entries" class="rank-list"></div>
+              </div>
+              <div class="list-card" aria-labelledby="analytics-exits-title">
+                <h3 id="analytics-exits-title">Saídas</h3>
+                <div id="analytics-exits" class="rank-list"></div>
+              </div>
+              <div class="list-card" aria-labelledby="analytics-events-title">
+                <h3 id="analytics-events-title">Ações</h3>
+                <div id="analytics-events" class="rank-list"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="page-block" aria-labelledby="journey-title">
+            <div class="block-head block-head-row">
+              <div>
+                <h2 id="journey-title">Mapa de resultados</h2>
+                <p class="helper" id="journey-summary">Caminho percorrido pelas visitas, da origem até a ação.</p>
+              </div>
+              <div class="toolbar">
+                <select id="journey-source" class="control" aria-label="Origem"><option value="">Todas as origens</option></select>
+                <button type="button" id="journey-zoom-out" class="button ghost journey-control" aria-label="Afastar">−</button>
+                <button type="button" id="journey-zoom-in" class="button ghost journey-control" aria-label="Aproximar">+</button>
+                <button type="button" id="journey-reset" class="button ghost journey-control">Enquadrar</button>
+              </div>
+            </div>
+            <div id="journey-graph" class="journey-graph" role="img" aria-label="Mapa da jornada das visitas"></div>
+            <div class="journey-legend">
+              <span><i class="journey-key journey-key-source"></i>Origem</span>
+              <span><i class="journey-key journey-key-page"></i>Página</span>
+              <span><i class="journey-key journey-key-event"></i>Ação</span>
+              <span class="helper">Clique num cartão para acender a cadeia inteira.</span>
+            </div>
+            <div class="list-card journey-origins" aria-labelledby="journey-attributions-title">
+              <h3 id="journey-attributions-title">De onde vieram</h3>
+              <div id="journey-attributions" class="rank-list"></div>
+            </div>
+          </section>
           <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>
         <section id="tracking-view" class="analytics-view tracking-view" aria-labelledby="tracking-view-title" hidden>
           <header class="page-heading">
             <div>
-              <div class="eyebrow">PROJETO · RASTREAMENTO</div>
-              <h1 id="tracking-view-title">Eventos e entregas</h1>
-              <p>Operação server-side pelo NVS, isolada neste projeto.</p>
+              <div class="eyebrow">Projeto</div>
+              <h1 id="tracking-view-title">Rastreamento</h1>
+              <p>Eventos e entregas server-side, isolados neste projeto.</p>
             </div>
             <div class="heading-actions">
               <select id="tracking-environment" class="control" aria-label="Ambiente">
@@ -287,60 +329,67 @@
               </select>
             </div>
           </header>
-          <nav class="tabs" aria-label="Áreas de rastreamento">
-            <button type="button" class="tab active" data-tracking-tab="events">Eventos</button>
-            <button type="button" class="tab" data-tracking-tab="deliveries">Entregas</button>
-            <button type="button" class="tab" data-tracking-tab="destinations">Destinos</button>
-            <button type="button" class="tab" data-tracking-tab="consent">Consentimento</button>
-          </nav>
           <p id="tracking-status" class="dashboard-status" role="status" aria-live="polite"></p>
-          <div class="tracking-panel active" data-tracking-panel="events">
-            <div id="tracking-metrics" class="tracking-metrics"></div>
+
+          <div id="tracking-metrics" class="metrics metrics-4"></div>
+
+          <section class="page-block" aria-labelledby="tracking-feed-title">
+            <div class="block-head block-head-row">
+              <div>
+                <h2 id="tracking-feed-title">Eventos recentes</h2>
+                <p class="helper">Clique num evento para acompanhar sua jornada.</p>
+              </div>
+              <div class="toolbar">
+                <select id="tracking-filter-event" class="control" aria-label="Tipo do evento">
+                  <option value="">Todos os eventos</option>
+                  <option value="lead">Lead</option>
+                  <option value="purchase">Compra</option>
+                  <option value="initiate_checkout">Checkout</option>
+                  <option value="vsl_start">VSL iniciada</option>
+                  <option value="vsl_complete">VSL concluída</option>
+                </select>
+                <select id="tracking-filter-state" class="control" aria-label="Estado">
+                  <option value="">Todos os estados</option>
+                  <option value="Entregue">Entregue</option>
+                  <option value="Nova tentativa">Nova tentativa</option>
+                  <option value="Encerrada">Encerrado</option>
+                </select>
+              </div>
+            </div>
             <div class="tracking-layout">
-              <section class="surface tracking-feed" aria-labelledby="tracking-feed-title">
-                <div class="surface-head">
-                  <div>
-                    <h2 id="tracking-feed-title">Eventos recentes</h2>
-                    <p class="helper">Clique em um evento para acompanhar sua jornada.</p>
-                  </div>
-                  <div class="toolbar">
-                    <select id="tracking-filter-event" class="control" aria-label="Tipo do evento">
-                      <option value="">Todos os eventos</option>
-                      <option value="lead">Lead</option>
-                      <option value="purchase">Compra</option>
-                      <option value="initiate_checkout">Checkout</option>
-                    </select>
-                    <select id="tracking-filter-state" class="control" aria-label="Estado">
-                      <option value="">Todos os estados</option>
-                      <option value="Entregue">Entregue</option>
-                      <option value="Nova tentativa">Nova tentativa</option>
-                      <option value="Encerrada">Encerrado</option>
-                    </select>
-                  </div>
-                </div>
+              <div>
                 <div class="event-table-scroll">
                   <table class="event-table">
                     <thead><tr><th>Evento</th><th>Conteúdo</th><th>Consentimento</th><th>Recebido</th><th>Entrega</th></tr></thead>
                     <tbody id="tracking-events"></tbody>
                   </table>
                 </div>
-              </section>
-              <aside id="tracking-journey" class="surface detail-card" aria-live="polite"></aside>
+                <button type="button" id="tracking-more" class="button ghost tracking-more" hidden></button>
+              </div>
+              <aside id="tracking-journey" class="detail-card" aria-live="polite"></aside>
             </div>
-          </div>
-          <div class="tracking-panel" data-tracking-panel="deliveries">
-            <section class="surface delivery-summary" aria-labelledby="tracking-health-title">
-              <div class="surface-head"><h2 id="tracking-health-title">Saúde das entregas</h2></div>
-              <p class="helper">Resultado acumulado por destino no ambiente selecionado.</p>
-              <div id="tracking-health" class="delivery-bars"></div>
-            </section>
-          </div>
-          <div class="tracking-panel" data-tracking-panel="destinations">
-            <div id="tracking-destinations" class="providers active"></div>
-          </div>
-          <div class="tracking-panel" data-tracking-panel="consent">
-            <div id="tracking-consent" class="consent-board active"></div>
-          </div>
+          </section>
+
+          <section class="page-block" aria-labelledby="tracking-health-title">
+            <div class="block-head">
+              <h2 id="tracking-health-title">Entregas por destino</h2>
+              <p class="helper">Resultado acumulado no ambiente selecionado.</p>
+            </div>
+            <div id="tracking-health" class="delivery-bars"></div>
+          </section>
+
+          <section class="page-block" aria-labelledby="tracking-destinations-title">
+            <div class="block-head"><h2 id="tracking-destinations-title">Destinos</h2></div>
+            <div id="tracking-destinations" class="providers"></div>
+          </section>
+
+          <section class="page-block" aria-labelledby="tracking-consent-title">
+            <div class="block-head">
+              <h2 id="tracking-consent-title">Consentimento</h2>
+              <p class="helper">O que segue para os destinos em cada estado.</p>
+            </div>
+            <div id="tracking-consent" class="consent-board"></div>
+          </section>
           <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>
         <section id="agents-view" aria-labelledby="project-agent-keys-title" hidden>

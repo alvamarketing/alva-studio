@@ -256,6 +256,12 @@ export function trackingEventsModel(deliveries) {
   return [...porEvento.values()];
 }
 
+export function trackingPageModel(events, visible) {
+  const linhas = Array.isArray(events) ? events : [];
+  const limite = Math.max(0, Number(visible) || 0);
+  return { rows: linhas.slice(0, limite), hasMore: linhas.length > limite, remaining: Math.max(0, linhas.length - limite) };
+}
+
 export function trackingHealthModel(deliveries) {
   const linhas = Array.isArray(deliveries) ? deliveries : [];
   const porDestino = new Map();
@@ -444,5 +450,176 @@ export function createProjectSubmission({ createProject, selectProject, closeDia
         throw error;
       }
     },
+  };
+}
+
+// Mapa de resultados: distribui os nós da jornada em colunas por profundidade
+// (Entrada, Etapa 2, ...), calcula as coordenadas dos cartões e a curva de cada passagem.
+const JOURNEY_MAX_NODES = 24;
+const JOURNEY_CARD = { width: 168, height: 74, gapX: 96, gapY: 18, padding: 16 };
+
+const rotuloDaOrigem = (atribuicao) => [atribuicao.source, atribuicao.campaign].filter(Boolean).join(' \u00b7 ');
+
+// As atribuicoes viram a primeira coluna do mapa: cada origem e um no, ligado por uma
+// passagem a cada pagina em que ela entrou. Mesma origem com entradas diferentes soma
+// num no so, para nao repetir o mesmo cartao lado a lado.
+function origensDaJornada(graph, paginasPermitidas) {
+  const porOrigem = new Map();
+  for (const atribuicao of graph?.attributions ?? []) {
+    if (!paginasPermitidas.has(atribuicao.entry)) continue;
+    const rotulo = rotuloDaOrigem(atribuicao);
+    if (!rotulo) continue;
+    const id = `origem:${rotulo}`;
+    if (!porOrigem.has(id)) porOrigem.set(id, { id, type: 'source', label: rotulo, pageviews: 0, sessions: 0, entries: 0, exits: 0, entradas: new Map() });
+    const origem = porOrigem.get(id);
+    origem.sessions += atribuicao.sessions;
+    origem.pageviews += atribuicao.sessions;
+    origem.entries += atribuicao.sessions;
+    origem.entradas.set(atribuicao.entry, (origem.entradas.get(atribuicao.entry) ?? 0) + atribuicao.sessions);
+  }
+  const nos = [];
+  const arestas = [];
+  for (const { entradas, ...origem } of porOrigem.values()) {
+    nos.push(origem);
+    for (const [entrada, sessoes] of entradas) {
+      arestas.push({ source: origem.id, target: entrada, transitions: sessoes, sessions: sessoes });
+    }
+  }
+  return { nos, arestas };
+}
+
+// Cadeia de um cartão: tudo que leva até ele e tudo que sai dele. Para um fim de linha
+// como /obrigado, só o que sai seria vazio — o que interessa é justamente o caminho de trás.
+export function journeyConnected(graph, nodeId) {
+  const alcancados = new Set();
+  if (!nodeId || !graph) return alcancados;
+  const arestas = graph.edges ?? [];
+  alcancados.add(nodeId);
+  for (const [de, para] of [['source', 'target'], ['target', 'source']]) {
+    const fila = [nodeId];
+    while (fila.length) {
+      const atual = fila.shift();
+      for (const aresta of arestas) {
+        if (aresta[de] !== atual || alcancados.has(aresta[para])) continue;
+        alcancados.add(aresta[para]);
+        fila.push(aresta[para]);
+      }
+    }
+  }
+  return alcancados;
+}
+
+export function journeyLayout(graph, { maxNodes = JOURNEY_MAX_NODES } = {}) {
+  const paginas = [...(graph?.nodes ?? [])].sort((a, b) => b.pageviews - a.pageviews).slice(0, maxNodes);
+  const permitidos = new Set(paginas.map((no) => no.id));
+  const origens = origensDaJornada(graph, permitidos);
+  const nodes = [...origens.nos, ...paginas];
+  const edges = [
+    ...origens.arestas,
+    ...(graph?.edges ?? []).filter((e) => permitidos.has(e.source) && permitidos.has(e.target)),
+  ];
+  if (!nodes.length) return { nodes: [], edges: [], columns: [], width: 0, height: 0, cardWidth: JOURNEY_CARD.width, cardHeight: JOURNEY_CARD.height };
+
+  // profundidade: abre o mapa quem não recebe passagem de ninguém; cada passagem empurra
+  // o destino uma coluna adiante. Em ciclo, a página com mais entradas vira a raiz.
+  const recebe = new Set(edges.map((aresta) => aresta.target));
+  const profundidade = new Map(nodes.map((no) => [no.id, recebe.has(no.id) ? Infinity : 0]));
+  if (![...profundidade.values()].some((valor) => valor === 0)) {
+    profundidade.set([...nodes].sort((a, b) => b.entries - a.entries)[0].id, 0);
+  }
+  for (let volta = 0; volta < nodes.length; volta += 1) {
+    let mudou = false;
+    for (const aresta of edges) {
+      const origem = profundidade.get(aresta.source);
+      if (origem === Infinity) continue;
+      if (profundidade.get(aresta.target) > origem + 1) { profundidade.set(aresta.target, origem + 1); mudou = true; }
+    }
+    if (!mudou) break;
+  }
+  for (const [id, valor] of profundidade) if (valor === Infinity) profundidade.set(id, 0);
+
+  const porColuna = new Map();
+  for (const no of nodes) {
+    const nivel = profundidade.get(no.id);
+    if (!porColuna.has(nivel)) porColuna.set(nivel, []);
+    porColuna.get(nivel).push(no);
+  }
+  const niveis = [...porColuna.keys()].sort((a, b) => a - b);
+  const posicionados = [];
+  for (const nivel of niveis) {
+    const coluna = porColuna.get(nivel).sort((a, b) => b.sessions - a.sessions || a.id.localeCompare(b.id));
+    for (const [linha, no] of coluna.entries()) {
+      posicionados.push({
+        ...no,
+        depth: nivel,
+        x: JOURNEY_CARD.padding + nivel * (JOURNEY_CARD.width + JOURNEY_CARD.gapX),
+        y: JOURNEY_CARD.padding + linha * (JOURNEY_CARD.height + JOURNEY_CARD.gapY),
+      });
+    }
+  }
+  const posicaoDe = new Map(posicionados.map((no) => [no.id, no]));
+  // A participação responde "de quem viu esta página, quantos seguiram por aqui" — por isso
+  // a base são as visualizações da origem, não a soma das passagens desenhadas.
+  const vistasDaOrigem = new Map(nodes.map((no) => [no.id, no.pageviews]));
+
+  // Rótulo no meio da curva faz as passagens de um mesmo cartão se empilharem no mesmo
+  // ponto. Cada uma escreve o seu em uma fração diferente do caminho, e só as três
+  // maiores de cada origem trazem rótulo fixo — o resto aparece quando o caminho é aceso.
+  const ordemNaOrigem = new Map();
+  const forca = [...edges].sort((a, b) => b.transitions - a.transitions);
+  for (const aresta of forca) {
+    const anteriores = ordemNaOrigem.get(aresta.source) ?? [];
+    anteriores.push(aresta);
+    ordemNaOrigem.set(aresta.source, anteriores);
+  }
+  const posicaoNaOrigem = new Map();
+  for (const [origem, lista] of ordemNaOrigem) {
+    for (const [indice, aresta] of lista.entries()) posicaoNaOrigem.set(aresta, { indice, total: lista.length, origem });
+  }
+  const pontoNaCurva = (t, x1, y1, c1, c2, x2, y2) => {
+    const u = 1 - t;
+    return {
+      x: u ** 3 * x1 + 3 * u ** 2 * t * c1 + 3 * u * t ** 2 * c2 + t ** 3 * x2,
+      y: u ** 3 * y1 + 3 * u ** 2 * t * y1 + 3 * u * t ** 2 * y2 + t ** 3 * y2,
+    };
+  };
+  const desenhadas = edges.map((aresta) => {
+    const de = posicaoDe.get(aresta.source);
+    const para = posicaoDe.get(aresta.target);
+    const x1 = de.x + JOURNEY_CARD.width;
+    const y1 = de.y + JOURNEY_CARD.height / 2;
+    const x2 = para.x;
+    const y2 = para.y + JOURNEY_CARD.height / 2;
+    const curva = (x2 - x1) / 2;
+    const total = vistasDaOrigem.get(aresta.source) || 0;
+    const lugar = posicaoNaOrigem.get(aresta) ?? { indice: 0, total: 1 };
+    const t = lugar.total === 1 ? 0.5 : 0.26 + (lugar.indice / Math.max(1, lugar.total - 1)) * 0.48;
+    const ponto = pontoNaCurva(t, x1, y1, x1 + curva, x2 - curva, x2, y2);
+    return {
+      ...aresta,
+      path: `M${x1},${y1} C${x1 + curva},${y1} ${x2 - curva},${y2} ${x2},${y2}`,
+      share: total ? `${Math.round((aresta.transitions / total) * 100)}%` : '0%',
+      major: lugar.indice < 3,
+      labelX: ponto.x,
+      labelY: ponto.y,
+    };
+  });
+
+  const maiorColuna = Math.max(...niveis.map((nivel) => porColuna.get(nivel).length));
+  const temOrigens = origens.nos.length > 0;
+  return {
+    nodes: posicionados,
+    edges: desenhadas,
+    columns: niveis.map((nivel) => ({
+      depth: nivel,
+      title: temOrigens
+        ? (nivel === 0 ? 'Origem' : nivel === 1 ? 'Entrada' : `Etapa ${nivel}`)
+        : (nivel === 0 ? 'Entrada' : `Etapa ${nivel + 1}`),
+      x: JOURNEY_CARD.padding + nivel * (JOURNEY_CARD.width + JOURNEY_CARD.gapX),
+    })),
+    width: JOURNEY_CARD.padding * 2 + niveis.length * JOURNEY_CARD.width + Math.max(0, niveis.length - 1) * JOURNEY_CARD.gapX,
+    height: JOURNEY_CARD.padding * 2 + maiorColuna * JOURNEY_CARD.height + Math.max(0, maiorColuna - 1) * JOURNEY_CARD.gapY,
+    cardWidth: JOURNEY_CARD.width,
+    cardHeight: JOURNEY_CARD.height,
   };
 }
