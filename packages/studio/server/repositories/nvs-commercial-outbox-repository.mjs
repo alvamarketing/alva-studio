@@ -32,7 +32,16 @@ function statusRecord(row) {
   if (!delivery) return delivery;
   delete delivery.propertyId;
   delete delivery.trackingEventId;
-  return delivery;
+  // A tela agrupa as entregas de um mesmo evento. `eventRef` é derivado do id de rastreio
+  // para que ele continue fora da resposta; do payload só saem consentimento e conteúdo,
+  // nunca os hashes de contato de `user`.
+  return {
+    ...delivery,
+    eventRef: row.tracking_event_id ? createHash('sha256').update(String(row.tracking_event_id)).digest('hex').slice(0, 12) : null,
+    destination: row.destination,
+    consentState: row.payload?.consent_state ?? 'pending',
+    contentId: row.payload?.content_id ?? '',
+  };
 }
 export function commercialRetryDelay(attempt) { return BACKOFF_MS[Math.min(Math.max(1, attempt), BACKOFF_MS.length) - 1]; }
 export const MAX_COMMERCIAL_ATTEMPTS = BACKOFF_MS.length;

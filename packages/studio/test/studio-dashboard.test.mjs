@@ -161,9 +161,12 @@ test('troca de projeto pelo seletor mantém a visão do projeto e seus módulos'
 test('entrada autenticada e retorno das configurações preservam a visão do projeto', async () => {
   const app = await readFile(appPath, 'utf8');
 
-  assert.match(app, /dashboardContextFlow\.bootstrap\(\);[\s\S]*setDashboardView\(studioShell\.state\(\)\.currentProject \? 'project' : 'home'\);/);
+  assert.match(app, /dashboardContextFlow\.bootstrap\(\);[\s\S]*const hasProject = Boolean\(studioShell\.state\(\)\.currentProject\);/);
+  assert.match(app, /abrirView\(viewToRestore\(rota, \{ hasProject \}\), \{ settingsTab: rota\?\.settingsTab \?\? 'account' \}\);/);
+  assert.match(app, /viewRouter\.start\(\);/);
   assert.match(app, /onSettingsClosed: \(\) => setDashboardView\(studioShell\?\.state\(\)\.currentProject \? 'project' : 'home'\)/);
-  assert.match(app, /const activeView = view === 'home' && studioShell\?\.state\?\.\(\)\.currentProject \? 'project' : view;/);
+  assert.match(app, /const activeView = view;/);
+  assert.match(app, /if \(view === 'home'\) return 'studio';/);
   assert.match(app, /const context = sidebarContextFor\(view, hasProject\);/);
 });
 

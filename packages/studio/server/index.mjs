@@ -384,6 +384,9 @@ export function createApp({
     '/forms.js': ['public/forms.js', 'text/javascript'],
     '/quiz-canvas-seed.js': ['public/quiz-canvas-seed.js', 'text/javascript'],
     '/quiz-elements.js': ['public/quiz-elements.js', 'text/javascript'],
+    '/quiz-navigation.js': ['public/quiz-navigation.js', 'text/javascript'],
+    '/quiz-calculations.js': ['public/quiz-calculations.js', 'text/javascript'],
+    '/quiz-flow-editor.js': ['public/quiz-flow-editor.js', 'text/javascript'],
     '/editor-workspace.js': ['public/editor-workspace.js', 'text/javascript'],
     '/studio-shell.js': ['public/studio-shell.js', 'text/javascript'],
     '/studio-context-boundary.js': ['public/studio-context-boundary.js', 'text/javascript'],
@@ -402,6 +405,7 @@ export function createApp({
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
+    '/view-route.js': ['public/view-route.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
   };
   const server = createServer(async (req, res) => {

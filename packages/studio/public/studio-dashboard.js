@@ -72,6 +72,10 @@ export function filterProjectContent(content = [], filter = 'all') {
   return kind ? content.filter((item) => item.kind === kind) : [...content];
 }
 
+export function previewProjectContent(content = [], limit = 3) {
+  return content.slice(0, limit);
+}
+
 export function projectContentAction(shell, item) {
   const capability = item?.kind === 'form' ? 'form.write' : item?.kind === 'video' ? 'video.write' : 'page.write';
   return shell?.can?.(capability) ? 'edit' : 'read';
@@ -180,16 +184,121 @@ const ANALYTICS_WEEKDAY = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' });
 
 // GET /api/projects/:id/analytics/summary exige from/to (server/project-api.mjs, analyticsRange) —
 // sem isso o endpoint sempre responde 400. "Últimos 7 dias" é o recorte que o próprio título do cartão promete.
-export function analyticsRangeParams(now = new Date()) {
+export function analyticsRangeParams(now = new Date(), days = ANALYTICS_DAYS) {
   const to = new Date(now);
-  const from = new Date(to.getTime() - ANALYTICS_DAYS * 24 * 60 * 60 * 1000);
+  const janela = Number(days) > 0 ? Number(days) : ANALYTICS_DAYS;
+  const from = new Date(to.getTime() - janela * 24 * 60 * 60 * 1000);
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+const NUMERO = new Intl.NumberFormat('pt-BR');
+const numero = (value) => (Number.isFinite(Number(value)) && value !== null && value !== undefined ? NUMERO.format(Number(value)) : '—');
+
+function duracaoMedia(totalTime, visits) {
+  if (!Number.isFinite(Number(totalTime)) || !Number(visits)) return '—';
+  const segundos = Math.round(Number(totalTime) / Number(visits));
+  const horas = Math.floor(segundos / 3600);
+  const minutos = Math.floor((segundos % 3600) / 60);
+  const resto = segundos % 60;
+  return [...(horas ? [`${horas}h`] : []), ...(horas || minutos ? [`${minutos}m`] : []), `${resto}s`].join(' ');
+}
+
+function taxaDeRejeicao(bounces, visits) {
+  if (!Number.isFinite(Number(bounces)) || !Number(visits)) return '—';
+  return `${Math.round((Number(bounces) / Number(visits)) * 100)}%`;
+}
+
+const PERCENTUAL = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const ESTADO_ENTREGA = { delivered: 'Entregue', dead: 'Encerrada' };
+
+export function trackingMetricsModel(deliveries) {
+  const linhas = Array.isArray(deliveries) ? deliveries : [];
+  const eventos = new Set(linhas.map((linha) => linha?.eventRef ?? linha?.id)).size;
+  const conta = (estado) => linhas.filter((linha) => (estado === 'pending' ? !ESTADO_ENTREGA[linha?.status] : linha?.status === estado)).length;
+  const parcela = (quantidade) => (linhas.length ? `${PERCENTUAL.format((quantidade / linhas.length) * 100)}%` : '');
+  const entregues = conta('delivered');
+  const tentando = conta('pending');
+  const encerradas = conta('dead');
+  return [
+    { key: 'received', label: 'Eventos recebidos', value: numero(eventos), detail: '' },
+    { key: 'delivered', label: 'Entregues', value: numero(entregues), detail: parcela(entregues) },
+    { key: 'retrying', label: 'Em nova tentativa', value: numero(tentando), detail: parcela(tentando) },
+    { key: 'dead', label: 'Falhas encerradas', value: numero(encerradas), detail: parcela(encerradas) },
+  ];
+}
+
+export function trackingEventsModel(deliveries) {
+  const linhas = Array.isArray(deliveries) ? deliveries : [];
+  const porEvento = new Map();
+  for (const linha of linhas) {
+    const chave = linha?.eventRef ?? linha?.id;
+    if (!porEvento.has(chave)) {
+      porEvento.set(chave, {
+        eventRef: chave,
+        eventName: linha?.eventName ?? '',
+        contentId: linha?.contentId ?? '',
+        consentState: linha?.consentState ?? 'pending',
+        consentLabel: linha?.consentState ?? 'pending',
+        receivedAt: linha?.createdAt ?? null,
+        destinations: [],
+        delivered: 0,
+        total: 0,
+        status: 'Entregue',
+      });
+    }
+    const evento = porEvento.get(chave);
+    evento.destinations.push(linha?.destination);
+    evento.total += 1;
+    if (linha?.status === 'delivered') evento.delivered += 1;
+    if (linha?.status === 'dead') evento.status = 'Encerrada';
+    else if (evento.status !== 'Encerrada' && linha?.status !== 'delivered') evento.status = 'Nova tentativa';
+  }
+  return [...porEvento.values()];
+}
+
+export function trackingHealthModel(deliveries) {
+  const linhas = Array.isArray(deliveries) ? deliveries : [];
+  const porDestino = new Map();
+  for (const linha of linhas) {
+    const destino = linha?.destination;
+    if (!destino) continue;
+    if (!porDestino.has(destino)) porDestino.set(destino, { destination: destino, delivered: 0, total: 0 });
+    const alvo = porDestino.get(destino);
+    alvo.total += 1;
+    if (linha?.status === 'delivered') alvo.delivered += 1;
+  }
+  return [...porDestino.values()].map((alvo) => ({ destination: alvo.destination, rate: `${Math.round((alvo.delivered / alvo.total) * 100)}%`, delivered: alvo.delivered, total: alvo.total }));
+}
+
+export function analyticsRankModel(rows, limit = 5) {
+  const lista = (Array.isArray(rows) ? rows : []).slice(0, limit);
+  const total = lista.reduce((soma, linha) => soma + (Number(linha?.total) || 0), 0);
+  const maior = Math.max(0, ...lista.map((linha) => Number(linha?.total) || 0));
+  return lista.map((linha) => {
+    const valor = Number(linha?.total) || 0;
+    return {
+      label: linha?.urlPath || linha?.source || '(direto)',
+      value: numero(valor),
+      share: `${total ? Math.round((valor / total) * 100) : 0}%`,
+      width: `${maior ? Math.round((valor / maior) * 100) : 0}%`,
+    };
+  });
+}
+
+export function analyticsMetricsModel(summary) {
+  return [
+    { key: 'pageviews', label: 'Visualizações', value: numero(summary?.pageviews) },
+    { key: 'visits', label: 'Visitas', value: numero(summary?.visits) },
+    { key: 'visitors', label: 'Visitantes', value: numero(summary?.visitors) },
+    { key: 'bounceRate', label: 'Taxa de rejeição', value: taxaDeRejeicao(summary?.bounces, summary?.visits) },
+    { key: 'averageTime', label: 'Duração média', value: duracaoMedia(summary?.totalTime, summary?.visits) },
+  ];
+}
+
 export function analyticsPanelModel(summary, { phase = 'ready', error = '', canRead = true } = {}) {
-  if (!canRead) return { phase: 'hidden', bars: [], funnel: [], updatedLabel: '' };
-  if (phase === 'loading') return { phase: 'loading', bars: [], funnel: [], updatedLabel: '' };
-  if (phase === 'error') return { phase: 'error', message: error || 'Não foi possível carregar as visitas.', bars: [], funnel: [], updatedLabel: '' };
+  if (!canRead) return { phase: 'hidden', bars: [], funnel: [], metrics: [], updatedLabel: '' };
+  if (phase === 'loading') return { phase: 'loading', bars: [], funnel: [], metrics: analyticsMetricsModel(null), updatedLabel: '' };
+  if (phase === 'error') return { phase: 'error', message: error || 'Não foi possível carregar as visitas.', bars: [], funnel: [], metrics: analyticsMetricsModel(null), updatedLabel: '' };
 
   const days = Array.isArray(summary?.dailyVisits) ? summary.dailyVisits.slice(-ANALYTICS_DAYS) : [];
   const padded = Array.from({ length: ANALYTICS_DAYS }, (_, index) => days[index] || null);
@@ -209,6 +318,7 @@ export function analyticsPanelModel(summary, { phase = 'ready', error = '', canR
     phase: hasVisits || funnel.length ? 'ready' : 'empty',
     bars,
     funnel,
+    metrics: analyticsMetricsModel(summary),
     updatedLabel: summary?.source === 'legacy'
       ? 'Coletor legado · migração pendente'
       : 'Origem dos dados indisponível',

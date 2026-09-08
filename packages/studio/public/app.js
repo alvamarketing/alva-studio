@@ -7,11 +7,13 @@ import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { analyticsPanelModel, analyticsRangeParams, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, trackingEventsModel, trackingHealthModel, trackingMetricsModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
+import { createViewRouter, viewToRestore } from './view-route.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
+const viewRouter = createViewRouter({ onNavigate: ({ view, settingsTab }) => abrirView(view, { settingsTab, fromHistory: true }) });
 const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -69,7 +71,7 @@ function action(fn) {
   };
 }
 function setActiveNavigation(view) {
-  const activeView = view === 'home' && studioShell?.state?.().currentProject ? 'project' : view;
+  const activeView = view;
   const navigation = {
     home: $('#nav-home'),
     projects: $('#nav-projects'),
@@ -79,13 +81,23 @@ function setActiveNavigation(view) {
     analytics: $('#nav-project-analytics'),
     tracking: $('#nav-project-tracking'),
     publication: $('#nav-project-publication'),
-    projectAgents: $('#nav-project-agents'),
+    agents: $('#nav-project-agents'),
     settings: $('#app-settings'),
   };
   applyDashboardNavigation(Object.fromEntries(Object.entries(navigation).filter(([, element]) => element)), activeView);
 }
+function abrirView(view, options = {}) {
+  if (view === 'pages') return void action(abrirPaginas)();
+  if (view === 'forms') return void action(abrirFormularios)();
+  if (view === 'analytics') return void action(abrirAnalytics)();
+  if (view === 'tracking') return void action(abrirRastreamento)();
+  if (view === 'agents') return void action(abrirAgentes)();
+  if (view === 'publication') return void action(abrirPublicacao)();
+  return setDashboardView(view, options);
+}
 function sidebarContextFor(view, hasProject = false) {
-  return hasProject || ['project', 'pages', 'forms', 'vsl'].includes(view) ? 'project' : 'studio';
+  if (view === 'home') return 'studio';
+  return hasProject || ['project', 'pages', 'forms', 'vsl', 'analytics', 'tracking', 'agents', 'publication'].includes(view) ? 'project' : 'studio';
 }
 function syncSidebarContext(view) {
   const sidebar = $('#studio-sidebar');
@@ -114,9 +126,9 @@ function updateVslNavigation() {
     if (videosFilter.hidden && projectContentFilter === 'videos') projectContentFilter = 'all';
   }
 }
-function setDashboardView(view, { settingsTab = 'account' } = {}) {
-  if (view === 'home' && studioShell?.state?.().currentProject) view = 'project';
+function setDashboardView(view, { settingsTab = 'account', fromHistory = false } = {}) {
   if (view === 'vsl' && !mediaPipelineEnabled) view = 'project';
+  if (!fromHistory) viewRouter.commit(view, { settingsTab });
   const sections = {
     home: '#studio-home',
     company: '#company-view',
@@ -126,6 +138,10 @@ function setDashboardView(view, { settingsTab = 'account' } = {}) {
     pages: '#pages-view',
     forms: '#forms-view',
     vsl: '#vsl-view',
+    analytics: '#analytics-view',
+    tracking: '#tracking-view',
+    agents: '#agents-view',
+    publication: '#publication-view',
   };
   if (view !== 'settings') ownerUI?.closeSettings({ notify: false });
   for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
@@ -274,7 +290,7 @@ function projectCard(project) {
   identity.append(icon, name, domain, state);
   const counts = document.createElement('div');
   counts.className = 'project-card-counts';
-  for (const [key, label] of [['pages', 'Páginas'], ['forms', 'Quizzes'], ['videos', 'VSLs'], ['submissions', 'Leads'], ['published', 'Publicados']]) {
+  for (const [key, label] of [['pages', 'Páginas'], ['forms', 'Quizzes'], ['videos', 'VSL'], ['submissions', 'Leads'], ['published', 'No ar']]) {
     const value = document.createElement('span');
     const amount = document.createElement('strong');
     amount.dataset.countKey = key;
@@ -739,7 +755,7 @@ function renderProjectLeads(state) {
 }
 function renderProjectContent(model) {
   const list = clear($('#project-content-list'));
-  const content = filterProjectContent(model.content, projectContentFilter);
+  const content = previewProjectContent(filterProjectContent(model.content, projectContentFilter));
   if (!content.length) {
     const label = projectContentFilter === 'pages' ? 'página' : projectContentFilter === 'forms' ? 'quiz' : projectContentFilter === 'videos' ? 'VSL' : 'conteúdo';
     list.append(projectEmpty(`Nenhum ${label} disponível.`, projectContentFilter === 'all' ? 'Crie uma página ou quiz para começar.' : 'Mude o filtro ou crie um novo conteúdo.'));
@@ -1535,13 +1551,298 @@ async function openProjectSection({ navigation, filter = 'all', target, capabili
     if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
-$('#nav-project-analytics').onclick = action(async () => {
-  await openProjectSection({ navigation: 'analytics', target: '#analytics-panel', capability: 'analytics.read' });
-  await renderAnalyticsPanel(studioShell.state().currentProject.id);
+let analyticsViewDays = 7;
+let analyticsViewTab = 'overview';
+function pintarRankList(seletor, linhas, vazio) {
+  const alvo = clear($(seletor));
+  if (!linhas.length) return alvo.append(projectEmpty(vazio, 'Os dados aparecem assim que houver movimento no período.'));
+  for (const linha of linhas) {
+    const row = document.createElement('div');
+    row.className = 'rank-row';
+    const label = document.createElement('span');
+    label.textContent = linha.label;
+    label.title = linha.label;
+    const value = document.createElement('strong');
+    value.textContent = linha.value;
+    const share = document.createElement('div');
+    share.className = 'rank-value';
+    share.style.setProperty('--p', linha.width);
+    const pct = document.createElement('span');
+    pct.textContent = linha.share;
+    share.append(pct);
+    row.append(label, value, share);
+    alvo.append(row);
+  }
+}
+function pintarAnalyticsView(summary, { phase = 'ready', message = '' } = {}) {
+  const status = $('#analytics-view-status');
+  status.textContent = phase === 'loading' ? 'Carregando dados…' : phase === 'error' ? message : '';
+  status.dataset.state = phase;
+  $('#analytics-view-source').textContent = summary?.source === 'umami'
+    ? 'Comportamento e aquisição medidos pelo Umami.'
+    : 'Comportamento e aquisição medidos pelo coletor legado · migração pendente.';
+  const metrics = clear($('#analytics-view-metrics'));
+  for (const metric of analyticsMetricsModel(phase === 'ready' ? summary : null)) {
+    const card = document.createElement('article');
+    card.className = 'surface metric';
+    const label = document.createElement('small');
+    label.textContent = metric.label;
+    const value = document.createElement('strong');
+    value.textContent = metric.value;
+    card.append(label, value);
+    metrics.append(card);
+  }
+  const dias = Array.isArray(summary?.dailyVisits) ? summary.dailyVisits.slice(-analyticsViewDays) : [];
+  const maior = Math.max(1, ...dias.map((dia) => Number(dia?.visits) || 0));
+  const chart = clear($('#analytics-view-chart'));
+  const axis = clear($('#analytics-view-axis'));
+  for (const dia of dias) {
+    const bar = document.createElement('i');
+    bar.className = 'bar';
+    bar.style.setProperty('--h', `${Math.round(((Number(dia?.visits) || 0) / maior) * 100)}%`);
+    bar.title = `${dia?.date ?? ''}: ${Number(dia?.visits) || 0} visitas`;
+    chart.append(bar);
+    const marca = document.createElement('span');
+    marca.textContent = dia?.date ? new Date(dia.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+    axis.append(marca);
+  }
+  $('#analytics-chart-helper').textContent = dias.length ? `Últimos ${dias.length} dias · visitas por dia` : 'Sem visitas no período.';
+  pintarRankList('#analytics-pages', analyticsRankModel(summary?.topRoutes), 'Nenhuma página visitada.');
+  pintarRankList('#analytics-sources', analyticsRankModel(summary?.sources), 'Nenhuma origem registrada.');
+  pintarRankList('#analytics-campaigns', analyticsRankModel((summary?.utms || []).map((utm) => ({ source: utm.campaign || utm.source || '(sem campanha)', total: utm.total }))), 'Nenhuma campanha registrada.');
+  pintarRankList('#analytics-events', analyticsRankModel((summary?.events || []).map((evento) => ({ source: evento.name, total: evento.total }))), 'Nenhum evento registrado.');
+}
+function selecionarAbaAnalytics(aba) {
+  analyticsViewTab = aba;
+  for (const botao of document.querySelectorAll('[data-analytics-tab]')) botao.classList.toggle('active', botao.dataset.analyticsTab === aba);
+  for (const painel of document.querySelectorAll('[data-analytics-panel]')) painel.classList.toggle('active', painel.dataset.analyticsPanel === aba);
+}
+async function abrirAnalytics() {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
+  if (!studioShell.can('analytics.read')) throw new Error('Você não tem permissão para acessar esta área.');
+  setDashboardView('analytics');
+  selecionarAbaAnalytics(analyticsViewTab);
+  pintarAnalyticsView(null, { phase: 'loading' });
+  const request = analyticsPanelGuard.next();
+  try {
+    const { from, to } = analyticsRangeParams(new Date(), analyticsViewDays);
+    const summary = await api(`/projects/${projectId}/analytics/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
+    pintarAnalyticsView(summary);
+  } catch (error) {
+    if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
+    pintarAnalyticsView(null, { phase: 'error', message: error.message });
+  }
+}
+$('#nav-project-analytics').onclick = action(abrirAnalytics);
+$('#analytics-range').onchange = action(async () => {
+  analyticsViewDays = Number($('#analytics-range').value) || 7;
+  await abrirAnalytics();
 });
-$('#nav-project-tracking').onclick = action(() => openProjectSection({ navigation: 'tracking', filter: 'conversions', capability: 'analytics.read' }));
-$('#nav-project-publication').onclick = action(() => openProjectSection({ navigation: 'publication', target: '#project-publication' }));
-$('#nav-project-agents').onclick = action(() => openProjectSection({ navigation: 'projectAgents', target: '#project-agent-keys', capability: 'project.manage' }));
+document.querySelector('.analytics-view .tabs').onclick = (event) => {
+  const aba = event.target.closest('[data-analytics-tab]');
+  if (aba) selecionarAbaAnalytics(aba.dataset.analyticsTab);
+};
+const DESTINOS = { meta: ['Meta', 'Pixel e Conversions API'], google: ['Google Ads', 'Enhanced Conversions'], tiktok: ['TikTok', 'Events API'], linkedin: ['LinkedIn', 'Conversions API'], taboola: ['Taboola', 'Server-to-server'] };
+const CONSENTIMENTO = {
+  granted: ['granted', 'Concedido', 'Click IDs e hashes de contato gerados no servidor seguem para os destinos.'],
+  pending: ['pending', 'Aguardando decisão', 'O evento e os identificadores pseudônimos permitidos continuam sendo processados. Sem nome, e-mail ou telefone.'],
+  denied: ['denied', 'Negado', 'Nenhum hash derivado é gerado. Só seguem os identificadores estritamente permitidos.'],
+};
+let trackingDeliveries = [];
+let trackingTab = 'events';
+let trackingSelected = null;
+function tempoRelativo(valor) {
+  const data = new Date(valor);
+  if (Number.isNaN(data.valueOf())) return '—';
+  const minutos = Math.max(0, Math.round((Date.now() - data.valueOf()) / 60_000));
+  if (minutos < 1) return 'agora';
+  if (minutos < 60) return `há ${minutos} min`;
+  const horas = Math.round(minutos / 60);
+  return horas < 24 ? `há ${horas} h` : data.toLocaleDateString('pt-BR');
+}
+function entregasFiltradas() {
+  const ambiente = $('#tracking-environment').value;
+  return trackingDeliveries.filter((linha) => !ambiente || linha.environment === ambiente);
+}
+function pintarRastreamento() {
+  const entregas = entregasFiltradas();
+  const metrics = clear($('#tracking-metrics'));
+  for (const metric of trackingMetricsModel(entregas)) {
+    const card = document.createElement('article');
+    card.className = 'surface metric';
+    const label = document.createElement('small');
+    label.textContent = metric.label;
+    const value = document.createElement('strong');
+    value.textContent = metric.value;
+    const detail = document.createElement('span');
+    detail.className = 'trend';
+    detail.textContent = metric.detail;
+    card.append(label, value, detail);
+    metrics.append(card);
+  }
+  const tipo = $('#tracking-filter-event').value;
+  const estado = $('#tracking-filter-state').value;
+  const eventos = trackingEventsModel(entregas)
+    .filter((evento) => (!tipo || evento.eventName === tipo) && (!estado || evento.status === estado));
+  const corpo = clear($('#tracking-events'));
+  if (!eventos.length) {
+    const linha = document.createElement('tr');
+    const celula = document.createElement('td');
+    celula.colSpan = 5;
+    celula.textContent = 'Nenhum evento comercial registrado neste ambiente.';
+    linha.append(celula);
+    corpo.append(linha);
+  }
+  for (const evento of eventos) {
+    const linha = document.createElement('tr');
+    linha.classList.toggle('selected', evento.eventRef === trackingSelected);
+    const estados = { Entregue: 'ok', 'Nova tentativa': 'retry', Encerrada: 'error' };
+    for (const texto of [evento.eventName, evento.contentId || '—', evento.consentLabel, tempoRelativo(evento.receivedAt)]) {
+      const celula = document.createElement('td');
+      celula.textContent = texto;
+      linha.append(celula);
+    }
+    const entrega = document.createElement('td');
+    const marca = document.createElement('span');
+    marca.className = `delivery-state ${estados[evento.status] || 'retry'}`;
+    marca.textContent = evento.status;
+    entrega.append(marca);
+    linha.append(entrega);
+    linha.onclick = () => { trackingSelected = evento.eventRef; pintarRastreamento(); };
+    corpo.append(linha);
+  }
+  pintarJornada(eventos.find((evento) => evento.eventRef === trackingSelected) || eventos[0] || null);
+  const saude = clear($('#tracking-health'));
+  const linhas = trackingHealthModel(entregas);
+  if (!linhas.length) saude.append(projectEmpty('Nenhuma entrega registrada.', 'A saúde por destino aparece assim que houver envios.'));
+  for (const destino of linhas) {
+    const barra = document.createElement('div');
+    barra.className = 'delivery-bar';
+    const nome = document.createElement('span');
+    nome.textContent = DESTINOS[destino.destination]?.[0] || destino.destination;
+    const trilho = document.createElement('div');
+    trilho.className = 'track';
+    const preenchido = document.createElement('i');
+    preenchido.style.setProperty('--p', destino.rate);
+    trilho.append(preenchido);
+    const taxa = document.createElement('strong');
+    taxa.textContent = destino.rate;
+    barra.append(nome, trilho, taxa);
+    saude.append(barra);
+  }
+  const destinos = clear($('#tracking-destinations'));
+  const ativos = new Set(entregas.map((linha) => linha.destination));
+  for (const [chave, [nome, descricao]] of Object.entries(DESTINOS)) {
+    const card = document.createElement('article');
+    card.className = 'surface provider';
+    const texto = document.createElement('div');
+    const titulo = document.createElement('strong');
+    titulo.textContent = nome;
+    const detalhe = document.createElement('small');
+    detalhe.textContent = descricao;
+    texto.append(titulo, detalhe);
+    const estado = document.createElement('span');
+    estado.className = `delivery-state ${ativos.has(chave) ? 'ok' : 'retry'}`;
+    estado.textContent = ativos.has(chave) ? 'Enviando' : 'Sem envios';
+    card.append(texto, estado);
+    destinos.append(card);
+  }
+  const consentimento = clear($('#tracking-consent'));
+  const contagem = new Map();
+  for (const evento of trackingEventsModel(entregas)) contagem.set(evento.consentState, (contagem.get(evento.consentState) || 0) + 1);
+  for (const [chave, [rotulo, titulo, descricao]] of Object.entries(CONSENTIMENTO)) {
+    const card = document.createElement('article');
+    card.className = 'surface consent-card';
+    const nome = document.createElement('h3');
+    nome.textContent = titulo;
+    const marca = document.createElement('span');
+    marca.className = 'delivery-state retry';
+    marca.textContent = `${rotulo} · ${contagem.get(chave) || 0} eventos`;
+    const texto = document.createElement('p');
+    texto.textContent = descricao;
+    card.append(nome, marca, texto);
+    consentimento.append(card);
+  }
+}
+function pintarJornada(evento) {
+  const alvo = clear($('#tracking-journey'));
+  if (!evento) return alvo.append(projectEmpty('Selecione um evento.', 'A jornada aparece ao escolher uma linha.'));
+  const titulo = document.createElement('strong');
+  titulo.textContent = `${evento.eventName} · ${evento.contentId || 'sem conteúdo'}`;
+  const linhaDoTempo = document.createElement('div');
+  linhaDoTempo.className = 'timeline';
+  const entregues = evento.destinations.filter(Boolean).map((destino) => DESTINOS[destino]?.[0] || destino);
+  const passos = [
+    ['1', 'Registrado no Studio', new Date(evento.receivedAt).toLocaleString('pt-BR')],
+    ['2', 'Consentimento aplicado', `${evento.consentLabel} · hashes gerados no servidor`],
+    ['3', 'Recebido pelo NVS', `${evento.total} ${evento.total === 1 ? 'entrega enfileirada' : 'entregas enfileiradas'}`],
+    ['4', 'Destinos concluídos', entregues.length ? `${evento.delivered} de ${evento.total} · ${entregues.join(', ')}` : 'Nenhum destino concluído'],
+  ];
+  for (const [ordem, nome, detalhe] of passos) {
+    const linha = document.createElement('div');
+    linha.className = 'timeline-row';
+    const marca = document.createElement('div');
+    marca.className = 'timeline-mark';
+    const bolinha = document.createElement('i');
+    bolinha.textContent = ordem;
+    marca.append(bolinha);
+    const texto = document.createElement('div');
+    const forte = document.createElement('strong');
+    forte.textContent = nome;
+    const pequeno = document.createElement('small');
+    pequeno.textContent = detalhe;
+    texto.append(forte, pequeno);
+    linha.append(marca, texto);
+    linhaDoTempo.append(linha);
+  }
+  alvo.append(titulo, linhaDoTempo);
+}
+function selecionarAbaRastreamento(aba) {
+  trackingTab = aba;
+  for (const botao of document.querySelectorAll('[data-tracking-tab]')) botao.classList.toggle('active', botao.dataset.trackingTab === aba);
+  for (const painel of document.querySelectorAll('[data-tracking-panel]')) painel.classList.toggle('active', painel.dataset.trackingPanel === aba);
+}
+async function abrirRastreamento() {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
+  if (!studioShell.can('analytics.read')) throw new Error('Você não tem permissão para acessar esta área.');
+  setDashboardView('tracking');
+  selecionarAbaRastreamento(trackingTab);
+  const status = $('#tracking-status');
+  status.textContent = 'Carregando eventos…';
+  status.dataset.state = 'loading';
+  try {
+    trackingDeliveries = await api(`/projects/${projectId}/conversions`);
+    status.textContent = '';
+    status.dataset.state = 'ready';
+  } catch (error) {
+    trackingDeliveries = [];
+    status.textContent = error.message;
+    status.dataset.state = 'error';
+  }
+  pintarRastreamento();
+}
+$('#nav-project-tracking').onclick = action(abrirRastreamento);
+document.querySelector('.tracking-view .tabs').onclick = (event) => {
+  const aba = event.target.closest('[data-tracking-tab]');
+  if (aba) selecionarAbaRastreamento(aba.dataset.trackingTab);
+};
+for (const seletor of ['#tracking-environment', '#tracking-filter-event', '#tracking-filter-state']) $(seletor).onchange = () => pintarRastreamento();
+async function abrirPublicacao() {
+  if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de continuar.');
+  setDashboardView('publication');
+  await renderProject();
+}
+async function abrirAgentes() {
+  if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de continuar.');
+  if (!studioShell.can('project.manage')) throw new Error('Você não tem permissão para acessar esta área.');
+  setDashboardView('agents');
+  await renderProject();
+}
+$('#nav-project-publication').onclick = action(abrirPublicacao);
+$('#nav-project-agents').onclick = action(abrirAgentes);
 $('#publication-preview').onclick = action(async () => {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha um projeto antes de criar a prévia.');
@@ -1592,18 +1893,20 @@ $('#mcp-key-form').onsubmit = action(async (event) => {
   $('#mcp-key-status').textContent = `Copie agora e guarde em local seguro: ${result.token}`;
   toast('Chave MCP criada. O segredo aparece somente agora.');
 });
-$('#nav-pages').onclick = action(async () => {
+async function abrirPaginas() {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
   setDashboardView('pages');
   $('#new-page').hidden = !studioShell.can('page.write');
   formsUI.showPages();
   await loadList();
-});
-$('#nav-forms').onclick = action(async () => {
+}
+async function abrirFormularios() {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
   setDashboardView('forms');
   await formsUI.showForms();
-});
+}
+$('#nav-pages').onclick = action(abrirPaginas);
+$('#nav-forms').onclick = action(abrirFormularios);
 $('#new-vsl').onclick = () => { if (studioShell.can('video.write')) vslUI.edit(); };
 function selectProjectContentFilter(filter) {
   if (filter === 'leads' && !studioShell?.can?.('submission.read')) return;
@@ -1634,10 +1937,8 @@ $('#project-content-all').onclick = action(async () => {
     selectProjectContentFilter('all');
     return;
   }
-  setDashboardView('pages');
-  $('#new-page').hidden = !studioShell.can('page.write');
-  formsUI.showPages();
-  await loadList();
+  if (projectContentFilter === 'forms') return abrirFormularios();
+  await abrirPaginas();
 });
 $('#project-leads-form').onchange = () => {
   const value = $('#project-leads-form').value;
@@ -1775,7 +2076,10 @@ ownerUI = createOwnerUI({
       $('#dashboard').hidden = true;
     } else {
       $('#dashboard').hidden = false;
-      setDashboardView(studioShell.state().currentProject ? 'project' : 'home');
+      const rota = window.location.hash.length > 1 ? viewRouter.current() : null;
+      const hasProject = Boolean(studioShell.state().currentProject);
+      abrirView(viewToRestore(rota, { hasProject }), { settingsTab: rota?.settingsTab ?? 'account' });
+      viewRouter.start();
     }
   },
   beforeLogout: save,

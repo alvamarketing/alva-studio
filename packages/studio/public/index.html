@@ -119,13 +119,12 @@
             <div>
               <div class="eyebrow">DA IDEIA AO AR</div>
               <h1 id="studio-home-title">Seus projetos.</h1>
-              <p>Escolha um projeto para criar páginas, quizzes e acompanhar seus leads.</p>
+              <p>Escolha um projeto para criar páginas, quizzes, VSLs e acompanhar seus leads.</p>
             </div>
             <button class="primary" id="new-project" hidden>＋ Novo projeto</button>
           </header>
           <p id="studio-dashboard-status" class="dashboard-status" role="status" aria-live="polite"></p>
-          <section class="dashboard-section" aria-labelledby="home-projects-title">
-            <div class="section-heading"><h2 id="home-projects-title">Seus projetos</h2></div>
+          <section class="dashboard-section" aria-labelledby="studio-home-title">
             <div id="home-projects" class="project-grid"></div>
           </section>
           <section class="dashboard-section" aria-labelledby="home-activity-title">
@@ -205,26 +204,169 @@
               <div id="project-modules" class="project-modules"></div>
             </section>
             <aside class="project-rule"><strong>Uma configuração, todos os conteúdos.</strong><p>Novas páginas e formulários herdam domínio, publicação, UTMs, pixels e eventos deste projeto.</p></aside>
-            <section id="project-agent-keys" class="project-surface" aria-labelledby="project-agent-keys-title" hidden>
-              <div class="section-heading"><div><span class="eyebrow">AGENTES</span><h2 id="project-agent-keys-title">Conectar agentes</h2></div></div>
-              <p>Crie uma chave limitada a este projeto. O segredo aparece uma única vez.</p>
-              <form id="mcp-key-form" class="publication-details">
-                <label>Nome da conexão<input name="name" required maxlength="100" placeholder="Ex.: Claude Code"></label>
-                <label>Validade<select name="expiresInDays"><option value="30">30 dias</option><option value="90" selected>90 dias</option><option value="365">1 ano</option></select></label>
-                <label class="mcp-key-scope"><input class="mcp-key-scope-input" name="drafts" type="checkbox"> Permitir criar rascunhos</label>
-                <button class="primary" type="submit">Criar chave</button>
-              </form>
-              <p id="mcp-key-status" class="dashboard-status" role="status" aria-live="polite"></p>
-              <div id="mcp-key-list" class="project-content-list" aria-live="polite"></div>
+          </div>
+          <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="analytics-view" class="analytics-view" aria-labelledby="analytics-view-title" hidden>
+          <header class="page-heading">
+            <div>
+              <div class="eyebrow">PROJETO · ANALYTICS</div>
+              <h1 id="analytics-view-title">Visão geral</h1>
+              <p id="analytics-view-source">Comportamento e aquisição do seu projeto.</p>
+            </div>
+            <div class="heading-actions">
+              <select id="analytics-range" class="control" aria-label="Período">
+                <option value="1">Últimas 24 horas</option>
+                <option value="7" selected>Últimos 7 dias</option>
+                <option value="30">Últimos 30 dias</option>
+              </select>
+            </div>
+          </header>
+          <nav class="tabs" aria-label="Dimensões de Analytics">
+            <button type="button" class="tab active" data-analytics-tab="overview">Visão geral</button>
+            <button type="button" class="tab" data-analytics-tab="audience">Público</button>
+            <button type="button" class="tab" data-analytics-tab="acquisition">Aquisição</button>
+            <button type="button" class="tab" data-analytics-tab="behavior">Comportamento</button>
+            <button type="button" class="tab" data-analytics-tab="events">Eventos</button>
+          </nav>
+          <p id="analytics-view-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <div class="analytics-overview active" data-analytics-panel="overview">
+            <div id="analytics-view-metrics" class="metrics"></div>
+            <section class="surface analytics-main" aria-labelledby="analytics-chart-title">
+              <div class="chart-head">
+                <div>
+                  <div class="surface-head"><h2 id="analytics-chart-title">Visitas e visualizações</h2></div>
+                  <p class="helper" id="analytics-chart-helper"></p>
+                </div>
+                <div class="chart-legend"><span><i class="legend-dot"></i>Visitas</span></div>
+              </div>
+              <div id="analytics-view-chart" class="chart-area" role="img" aria-label="Visitas por dia no período"></div>
+              <div id="analytics-view-axis" class="axis"></div>
             </section>
-            <section id="project-publication" class="project-surface publication-surface" aria-labelledby="project-publication-title">
-              <div class="section-heading"><div><span class="eyebrow">PUBLICAÇÃO</span><h2 id="project-publication-title">Coloque seu projeto no ar</h2></div><span id="publication-state" class="publication-state" role="status">Conecte a Vercel</span></div>
-              <p id="publication-summary">As rotas publicadas deste projeto serão enviadas juntas para um único destino.</p>
-              <p id="publication-routes" class="publication-routes">Nenhuma rota publicada ainda.</p>
-              <div class="publication-actions"><button type="button" id="publication-preview">Criar prévia</button><button type="button" id="publication-production" class="primary">Publicar em produção</button></div>
-              <details class="publication-details"><summary>Configurar conexão e domínio</summary><form id="publication-connection-form"><label>Projeto da Vercel<input name="vercelProjectId" placeholder="projeto-na-vercel" autocomplete="off"></label><label>Team ID <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off"></label><label>Token da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole o token no servidor"></label><button class="primary">Salvar conexão</button></form><form id="publication-domain-form"><label>Domínio <input name="domain" placeholder="lp.suaempresa.com.br"></label><button type="submit">Conectar domínio</button></form><p id="publication-detail-error" class="form-error" role="alert"></p></details>
+            <div class="analytics-lists">
+              <section class="surface list-card" aria-labelledby="analytics-pages-title">
+                <div class="surface-head"><h2 id="analytics-pages-title">Páginas</h2></div>
+                <div id="analytics-pages" class="rank-list"></div>
+              </section>
+              <section class="surface list-card" aria-labelledby="analytics-sources-title">
+                <div class="surface-head"><h2 id="analytics-sources-title">Origens</h2></div>
+                <div id="analytics-sources" class="rank-list"></div>
+              </section>
+            </div>
+          </div>
+          <div class="analytics-overview" data-analytics-panel="audience">
+            <section class="surface list-card"><div class="surface-head"><h2>Público</h2></div><p class="helper">Países, cidades e dispositivos ainda não são medidos pelo coletor deste projeto.</p></section>
+          </div>
+          <div class="analytics-overview" data-analytics-panel="acquisition">
+            <section class="surface list-card" aria-labelledby="analytics-campaigns-title">
+              <div class="surface-head"><h2 id="analytics-campaigns-title">Campanhas</h2></div>
+              <div id="analytics-campaigns" class="rank-list"></div>
             </section>
           </div>
+          <div class="analytics-overview" data-analytics-panel="behavior">
+            <section class="surface list-card"><div class="surface-head"><h2>Comportamento</h2></div><p class="helper">Entradas e saídas ainda não são medidas pelo coletor deste projeto.</p></section>
+          </div>
+          <div class="analytics-overview" data-analytics-panel="events">
+            <section class="surface list-card" aria-labelledby="analytics-events-title">
+              <div class="surface-head"><h2 id="analytics-events-title">Eventos</h2></div>
+              <div id="analytics-events" class="rank-list"></div>
+            </section>
+          </div>
+          <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="tracking-view" class="analytics-view tracking-view" aria-labelledby="tracking-view-title" hidden>
+          <header class="page-heading">
+            <div>
+              <div class="eyebrow">PROJETO · RASTREAMENTO</div>
+              <h1 id="tracking-view-title">Eventos e entregas</h1>
+              <p>Operação server-side pelo NVS, isolada neste projeto.</p>
+            </div>
+            <div class="heading-actions">
+              <select id="tracking-environment" class="control" aria-label="Ambiente">
+                <option value="production">Produção</option>
+                <option value="preview">Prévia</option>
+              </select>
+            </div>
+          </header>
+          <nav class="tabs" aria-label="Áreas de rastreamento">
+            <button type="button" class="tab active" data-tracking-tab="events">Eventos</button>
+            <button type="button" class="tab" data-tracking-tab="deliveries">Entregas</button>
+            <button type="button" class="tab" data-tracking-tab="destinations">Destinos</button>
+            <button type="button" class="tab" data-tracking-tab="consent">Consentimento</button>
+          </nav>
+          <p id="tracking-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <div class="tracking-panel active" data-tracking-panel="events">
+            <div id="tracking-metrics" class="tracking-metrics"></div>
+            <div class="tracking-layout">
+              <section class="surface tracking-feed" aria-labelledby="tracking-feed-title">
+                <div class="surface-head">
+                  <div>
+                    <h2 id="tracking-feed-title">Eventos recentes</h2>
+                    <p class="helper">Clique em um evento para acompanhar sua jornada.</p>
+                  </div>
+                  <div class="toolbar">
+                    <select id="tracking-filter-event" class="control" aria-label="Tipo do evento">
+                      <option value="">Todos os eventos</option>
+                      <option value="lead">Lead</option>
+                      <option value="purchase">Compra</option>
+                      <option value="initiate_checkout">Checkout</option>
+                    </select>
+                    <select id="tracking-filter-state" class="control" aria-label="Estado">
+                      <option value="">Todos os estados</option>
+                      <option value="Entregue">Entregue</option>
+                      <option value="Nova tentativa">Nova tentativa</option>
+                      <option value="Encerrada">Encerrado</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="event-table-scroll">
+                  <table class="event-table">
+                    <thead><tr><th>Evento</th><th>Conteúdo</th><th>Consentimento</th><th>Recebido</th><th>Entrega</th></tr></thead>
+                    <tbody id="tracking-events"></tbody>
+                  </table>
+                </div>
+              </section>
+              <aside id="tracking-journey" class="surface detail-card" aria-live="polite"></aside>
+            </div>
+          </div>
+          <div class="tracking-panel" data-tracking-panel="deliveries">
+            <section class="surface delivery-summary" aria-labelledby="tracking-health-title">
+              <div class="surface-head"><h2 id="tracking-health-title">Saúde das entregas</h2></div>
+              <p class="helper">Resultado acumulado por destino no ambiente selecionado.</p>
+              <div id="tracking-health" class="delivery-bars"></div>
+            </section>
+          </div>
+          <div class="tracking-panel" data-tracking-panel="destinations">
+            <div id="tracking-destinations" class="providers active"></div>
+          </div>
+          <div class="tracking-panel" data-tracking-panel="consent">
+            <div id="tracking-consent" class="consent-board active"></div>
+          </div>
+          <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="agents-view" aria-labelledby="project-agent-keys-title" hidden>
+          <section id="project-agent-keys" class="project-surface" aria-labelledby="project-agent-keys-title" hidden>
+            <div class="section-heading"><div><span class="eyebrow">AGENTES</span><h2 id="project-agent-keys-title">Conectar agentes</h2></div></div>
+            <p>Crie uma chave limitada a este projeto. O segredo aparece uma única vez.</p>
+            <form id="mcp-key-form" class="publication-details">
+              <label>Nome da conexão<input name="name" required maxlength="100" placeholder="Ex.: Claude Code"></label>
+              <label>Validade<select name="expiresInDays"><option value="30">30 dias</option><option value="90" selected>90 dias</option><option value="365">1 ano</option></select></label>
+              <label class="mcp-key-scope"><input class="mcp-key-scope-input" name="drafts" type="checkbox"> Permitir criar rascunhos</label>
+              <button class="primary" type="submit">Criar chave</button>
+            </form>
+            <p id="mcp-key-status" class="dashboard-status" role="status" aria-live="polite"></p>
+            <div id="mcp-key-list" class="project-content-list" aria-live="polite"></div>
+          </section>
+          <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
+        </section>
+        <section id="publication-view" aria-labelledby="project-publication-title" hidden>
+          <section id="project-publication" class="project-surface publication-surface" aria-labelledby="project-publication-title">
+            <div class="section-heading"><div><span class="eyebrow">PUBLICAÇÃO</span><h2 id="project-publication-title">Coloque seu projeto no ar</h2></div><span id="publication-state" class="publication-state" role="status">Conecte a Vercel</span></div>
+            <p id="publication-summary">As rotas publicadas deste projeto serão enviadas juntas para um único destino.</p>
+            <p id="publication-routes" class="publication-routes">Nenhuma rota publicada ainda.</p>
+            <div class="publication-actions"><button type="button" id="publication-preview">Criar prévia</button><button type="button" id="publication-production" class="primary">Publicar em produção</button></div>
+            <details class="publication-details"><summary>Configurar conexão e domínio</summary><form id="publication-connection-form"><label>Projeto da Vercel<input name="vercelProjectId" placeholder="projeto-na-vercel" autocomplete="off"></label><label>Team ID <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off"></label><label>Token da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole o token no servidor"></label><button class="primary">Salvar conexão</button></form><form id="publication-domain-form"><label>Domínio <input name="domain" placeholder="lp.suaempresa.com.br"></label><button type="submit">Conectar domínio</button></form><p id="publication-detail-error" class="form-error" role="alert"></p></details>
+          </section>
           <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>
         <section id="pages-view" hidden>

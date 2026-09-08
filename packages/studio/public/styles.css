@@ -1652,3 +1652,87 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 #project-view[data-content-view='leads'] #analytics-panel {
   display: none !important;
 }
+
+/* Tela de Analytics — estrutura e medidas vindas de docs/wireframes/alva-studio-analytics-tracking-reference.html */
+.analytics-view .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 25px; }
+.analytics-view .page-heading h1 { font-size: 30px; letter-spacing: -1.2px; margin: 7px 0; }
+.analytics-view .page-heading p { font-size: 11px; color: var(--alva-muted); margin: 0; }
+.analytics-view .heading-actions { display: flex; align-items: center; gap: 8px; }
+.analytics-view .control { height: 38px; border: 1px solid var(--alva-line); border-radius: 9px; background: var(--alva-white); color: var(--alva-ink); padding: 0 11px; font-size: 10px; }
+.analytics-view .helper { font-size: 10px; color: var(--alva-muted); margin: 5px 0 0; }
+.analytics-view .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--alva-line); margin: 0 0 20px; }
+.analytics-view .tab { border: 0; background: transparent; padding: 11px 13px; color: var(--alva-muted); font-size: 10px; font-weight: 650; cursor: pointer; border-bottom: 2px solid transparent; }
+.analytics-view .tab.active { color: var(--alva-blue); border-color: var(--alva-blue); }
+.analytics-view .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 11px; margin-bottom: 14px; }
+.analytics-view .metric { padding: 17px 18px; min-height: 112px; }
+.analytics-view .metric small { display: block; color: var(--alva-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+.analytics-view .metric strong { display: block; font-size: 25px; letter-spacing: -1px; margin: 10px 0 8px; }
+.analytics-view .analytics-main { padding: 20px; }
+.analytics-view .chart-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 14px; }
+.analytics-view .chart-legend { display: flex; align-items: center; gap: 13px; color: var(--alva-muted); font-size: 9px; }
+.analytics-view .legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; background: var(--alva-blue); }
+.analytics-view .chart-area { height: 265px; border-bottom: 1px solid var(--alva-line); border-left: 1px solid var(--alva-line); display: grid; grid-auto-flow: column; grid-auto-columns: minmax(7px, 1fr); align-items: end; gap: 7px; padding: 18px 14px 0; }
+.analytics-view .chart-area .bar { height: var(--h); min-height: 4px; background: var(--alva-blue); border-radius: 2px 2px 0 0; }
+.analytics-view .axis { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin: 8px 0 0; color: var(--alva-soft); font-size: 8px; text-align: center; }
+.analytics-view .analytics-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.analytics-view .list-card { padding: 18px; }
+.analytics-view .rank-list { display: grid; gap: 0; margin-top: 15px; }
+.analytics-view .rank-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px 40px; gap: 8px; align-items: center; min-height: 32px; border-bottom: 1px solid var(--alva-line); font-size: 10px; }
+.analytics-view .rank-row:last-child { border-bottom: 0; }
+.analytics-view .rank-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.analytics-view .rank-row strong { text-align: right; }
+.analytics-view .rank-value { position: relative; padding: 4px 0; }
+.analytics-view .rank-value::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p); background: var(--alva-blue-light); border-left: 2px solid var(--alva-blue); z-index: 0; }
+.analytics-view .rank-value span { position: relative; z-index: 1; padding-left: 5px; }
+.analytics-view [data-analytics-panel] { display: none; }
+.analytics-view [data-analytics-panel].active { display: block; }
+@media (max-width: 900px) {
+  .analytics-view .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analytics-view .analytics-lists { grid-template-columns: 1fr; }
+}
+
+/* Tela de Rastreamento — medidas de docs/wireframes/alva-studio-analytics-tracking-reference.html */
+.tracking-view .tracking-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-bottom: 14px; }
+.tracking-view .tracking-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; }
+.tracking-view .tracking-feed { padding: 18px; }
+.tracking-view .toolbar { display: flex; gap: 8px; }
+.tracking-view .event-table-scroll { overflow-x: auto; }
+.tracking-view .event-table { width: 100%; border-collapse: collapse; font-size: 10px; min-width: 620px; }
+.tracking-view .event-table th { text-align: left; color: var(--alva-muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 9px; border-bottom: 1px solid var(--alva-line); }
+.tracking-view .event-table td { padding: 12px 9px; border-bottom: 1px solid var(--alva-line); vertical-align: middle; }
+.tracking-view .event-table tbody tr { cursor: pointer; }
+.tracking-view .event-table tbody tr:hover, .tracking-view .event-table tbody tr.selected { background: var(--alva-blue-light); }
+.tracking-view .delivery-state { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 5px 7px; font-size: 8px; font-weight: 700; }
+.tracking-view .delivery-state.ok { color: var(--alva-positive); background: var(--alva-positive-bg); }
+.tracking-view .delivery-state.retry { color: var(--alva-warning); background: var(--alva-warning-bg); }
+.tracking-view .delivery-state.error { color: var(--alva-negative); background: var(--alva-negative-bg); }
+.tracking-view .detail-card { padding: 18px; }
+.tracking-view .timeline { display: grid; gap: 0; margin: 14px 0 20px; }
+.tracking-view .timeline-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; min-height: 49px; }
+.tracking-view .timeline-mark { position: relative; }
+.tracking-view .timeline-mark::before { content: ""; position: absolute; top: 16px; bottom: -4px; left: 9px; width: 1px; background: var(--alva-line); }
+.tracking-view .timeline-row:last-child .timeline-mark::before { display: none; }
+.tracking-view .timeline-mark i { width: 19px; height: 19px; border: 1px solid var(--alva-blue); background: var(--alva-blue-light); color: var(--alva-blue); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-style: normal; position: relative; z-index: 1; }
+.tracking-view .timeline-row strong, .tracking-view .timeline-row small { display: block; }
+.tracking-view .timeline-row strong { font-size: 9px; }
+.tracking-view .timeline-row small { font-size: 8px; color: var(--alva-muted); margin-top: 3px; }
+.tracking-view .delivery-summary { padding: 20px; }
+.tracking-view .delivery-bars { display: grid; gap: 12px; margin-top: 20px; }
+.tracking-view .delivery-bar { display: grid; grid-template-columns: 85px minmax(0, 1fr) 38px; align-items: center; gap: 10px; font-size: 9px; }
+.tracking-view .delivery-bar .track { height: 6px; border-radius: 999px; background: var(--alva-line); overflow: hidden; }
+.tracking-view .delivery-bar .track i { display: block; height: 100%; width: var(--p); background: var(--alva-blue); }
+.tracking-view .providers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.tracking-view .provider { padding: 17px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.tracking-view .provider strong, .tracking-view .provider small { display: block; }
+.tracking-view .provider strong { font-size: 11px; }
+.tracking-view .provider small { font-size: 8px; color: var(--alva-muted); margin-top: 3px; }
+.tracking-view .consent-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
+.tracking-view .consent-card { padding: 18px; }
+.tracking-view .consent-card h3 { font-size: 13px; margin: 0 0 8px; }
+.tracking-view .consent-card p { font-size: 9px; line-height: 1.5; color: var(--alva-muted); }
+.tracking-view .tracking-panel { display: none; }
+.tracking-view .tracking-panel.active { display: block; }
+@media (max-width: 900px) {
+  .tracking-view .tracking-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tracking-view .tracking-layout, .tracking-view .providers, .tracking-view .consent-board { grid-template-columns: 1fr; }
+}
