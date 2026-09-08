@@ -150,3 +150,13 @@ test('a escala de texto sobe sem degraus indistinguíveis', async () => {
     assert.ok(razao <= 1.35, `salto de ${degraus[i - 1]}px para ${degraus[i]}px deixa buraco na hierarquia`);
   }
 });
+
+test('botão desligado tem a mesma aparência, seja primário ou não', async () => {
+  const { 'styles.css': css } = await lerTodos();
+  const desligado = css.indexOf("button:disabled,\n");
+  const primario = css.indexOf('button.primary {');
+  // button.primary e button:disabled têm a mesma especificidade: quem vier depois vence.
+  // Com o primário depois, o botão azul continuava azul mesmo desligado, ao lado de um
+  // cinza desligado — dois estados diferentes para a mesma coisa, lado a lado.
+  assert.ok(desligado > primario, 'a regra de desligado precisa vir depois da do primário para valer nos dois');
+});

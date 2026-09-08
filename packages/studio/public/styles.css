@@ -113,6 +113,17 @@ button:hover:not(:disabled) {
   background: var(--alva-highlight);
   border-color: var(--alva-blue-light);
 }
+button.primary {
+  background: var(--alva-blue);
+  border-color: var(--alva-blue);
+  color: var(--alva-on-blue);
+  box-shadow: var(--shadow-button);
+}
+.primary:hover:not(:disabled) {
+  background: var(--alva-blue-strong);
+  border-color: var(--alva-blue-strong);
+  box-shadow: var(--shadow-raised);
+}
 button:disabled,
 button[aria-disabled='true'] {
   opacity: 0.5;
@@ -126,17 +137,6 @@ button:disabled:hover,
 button[aria-disabled='true']:hover {
   background: var(--alva-cloud);
   border-color: var(--alva-line);
-}
-button.primary {
-  background: var(--alva-blue);
-  border-color: var(--alva-blue);
-  color: var(--alva-on-blue);
-  box-shadow: var(--shadow-button);
-}
-.primary:hover:not(:disabled) {
-  background: var(--alva-blue-strong);
-  border-color: var(--alva-blue-strong);
-  box-shadow: var(--shadow-raised);
 }
 input,
 select,

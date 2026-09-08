@@ -2197,9 +2197,9 @@ $('#project-create-action').onclick = () => $('#new-project').click();
 $('#project-settings-action').onclick = action(async () => {
   const projectId = dashboardState().currentProject?.id;
   if (!projectId) throw new Error('Escolha um projeto para configurar.');
-  if ($('#project-view').hidden) setDashboardView('project');
+  setDashboardView('publication');
   const details = $('#project-publication .publication-details');
-  details.open = true;
+  if (details) details.open = true;
   $('#project-publication').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 $('#home-history-all').onclick = () => setDashboardView('history');
