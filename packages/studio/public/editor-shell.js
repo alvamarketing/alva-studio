@@ -396,6 +396,15 @@ export function formFieldSummary({ type, name, label } = {}) {
   };
 }
 
+// "Avança como?" é a dúvida certa: num quiz o campo leva para a próxima tela, mas numa
+// página ele só guarda a resposta até a pessoa enviar o formulário. E um campo fora de
+// qualquer formulário não entrega resposta a lugar nenhum.
+export function fieldPlacementHint({ dentroDeFormulario = false, quiz = false } = {}) {
+  if (!dentroDeFormulario) return 'Este campo está fora de um formulário, então a resposta não chega a lugar nenhum. Arraste-o para dentro de um formulário.';
+  if (quiz) return 'A resposta fica guardada e a pessoa segue para a próxima tela do quiz.';
+  return 'A resposta viaja junto quando a pessoa envia o formulário. Ela aparece em Leads.';
+}
+
 export function panelMode(component) {
   return !component || component.is?.('wrapper') ? 'library' : 'inspector';
 }
@@ -2316,6 +2325,9 @@ export function createFriendlyEditor({
         (checked) => (checked ? model.addAttributes({ required: true }) : model.removeAttributes('required')),
         { type: 'checkbox' },
       );
+      let ancestral = model;
+      while (ancestral && tagOf(ancestral) !== 'form') ancestral = ancestral.parent?.();
+      help(content, fieldPlacementHint({ dentroDeFormulario: Boolean(ancestral), quiz: Boolean(quizCanvas) }));
     }
     if (tag === 'label') {
       help(content, 'Selecione o campo abaixo para configurar o tipo de resposta e a obrigatoriedade.');
