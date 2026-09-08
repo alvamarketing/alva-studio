@@ -410,6 +410,7 @@ export function createApp({
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
     '/vendor/studio-sdk.umd.js': ['node_modules/@grapesjs/studio-sdk/dist/index.umd.js', 'text/javascript'],
     '/vendor/studio-sdk.css': ['node_modules/@grapesjs/studio-sdk/dist/style.css', 'text/css'],
+    '/vsl-retention-ui.js': ['public/vsl-retention-ui.js', 'text/javascript'],
     '/editor-novo.html': ['public/editor-novo.html', 'text/html'],
     '/editor-novo.css': ['public/editor-novo.css', 'text/css'],
     '/studio-sdk-editor.js': ['public/studio-sdk-editor.js', 'text/javascript'],

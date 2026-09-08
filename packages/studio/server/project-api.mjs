@@ -355,6 +355,15 @@ export function createProjectApi({
       return json(commercialOutbox ? await commercialOutbox.status({ companyId: context.companyId, projectId }) : []);
     }
 
+    const vslRetention = path.match(/^\/api\/projects\/([^/]+)\/analytics\/vsl-retention$/);
+    if (vslRetention && method === 'GET') {
+      const projectId = vslRetention[1];
+      await sessionService.authorize(context, 'analytics.read', projectId);
+      const search = new URL(req.url, 'http://localhost').searchParams;
+      const { from, to } = analyticsRange(search.get('from'), search.get('to'));
+      return json(await analytics.vslRetention({ companyId: context.companyId, projectId, from, to }));
+    }
+
     const analyticsSummary = path.match(/^\/api\/projects\/([^/]+)\/analytics\/summary$/);
     if (analyticsSummary && method === 'GET') {
       const projectId = analyticsSummary[1];

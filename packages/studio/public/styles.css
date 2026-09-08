@@ -1933,3 +1933,59 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   border-color: var(--alva-negative);
   color: var(--alva-negative);
 }
+
+/* Curva de retenção da VSL: a leitura é a forma da queda entre um marco e o outro, então
+   as barras precisam de altura de verdade, não de números lado a lado. */
+.vsl-retention {
+  padding: 22px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-lg);
+  background: var(--alva-white);
+  margin-bottom: 18px;
+}
+.vsl-retention h2 {
+  margin: 6px 0 18px;
+  font-size: var(--text-2xl);
+}
+.vsl-retention-chart {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  height: 150px;
+}
+.vsl-retention-bar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: end;
+  gap: 7px;
+  height: 100%;
+  text-align: center;
+}
+.vsl-retention-bar i {
+  display: block;
+  border-radius: var(--radius-sm) var(--radius-sm) var(--radius-xs) var(--radius-xs);
+  background: var(--alva-blue);
+  min-height: 2px;
+}
+/* A barra onde a audiência sumiu é a que se olha primeiro. */
+.vsl-retention-bar[data-queda='true'] i {
+  background: var(--alva-negative);
+}
+.vsl-retention-bar small {
+  color: var(--alva-muted);
+  font-size: var(--text-xs);
+}
+.vsl-retention-bar strong {
+  font-size: var(--text-md);
+}
+.vsl-retention-summary {
+  margin: 18px 0 0;
+  color: var(--alva-ink);
+  font-size: var(--text-lg);
+}
+.vsl-retention-cta {
+  margin: 6px 0 0;
+  color: var(--alva-muted);
+  font-size: var(--text-md);
+}

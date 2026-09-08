@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability } from '../domain/access.mjs';
+import { curvaDeRetencao } from '../vsl-retention.mjs';
 
 function fail(message, statusCode = 400) {
   const error = new Error(message);
@@ -342,6 +343,43 @@ export class AnalyticsRepository {
       dailyVisits,
       funnel,
     };
+  }
+
+  // Retenção por VSL. O funil do resumo agrega o projeto inteiro, o que responde
+  // "quanto se assiste aqui" mas não "onde esta VSL perde gente" — que é a pergunta de
+  // quem vai reescrever o vídeo.
+  async vslRetention({ companyId, projectId, from, to } = {}) {
+    const { rows } = await this.database.query(
+      `SELECT publico.data_value AS public_id,
+              event.event_name,
+              marco.data_value AS milestone,
+              COUNT(*)::int AS total
+         FROM analytics_events event
+         JOIN analytics_event_data publico
+           ON publico.company_id = event.company_id AND publico.project_id = event.project_id
+          AND publico.event_id = event.id AND publico.data_key = 'vsl_public_id'
+         LEFT JOIN analytics_event_data marco
+           ON marco.company_id = event.company_id AND marco.project_id = event.project_id
+          AND marco.event_id = event.id AND marco.data_key = 'milestone'
+        WHERE event.company_id = $1 AND event.project_id = $2
+          AND event.event_at >= $3 AND event.event_at < $4
+          AND event.event_name IN ('vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click')
+        GROUP BY publico.data_value, event.event_name, marco.data_value`,
+      [companyId, projectId, from, to],
+    );
+
+    const porVsl = new Map();
+    for (const linha of rows) {
+      if (!porVsl.has(linha.public_id)) porVsl.set(linha.public_id, []);
+      porVsl.get(linha.public_id).push({
+        eventName: linha.event_name,
+        milestone: linha.milestone === null ? null : Number(linha.milestone),
+        total: linha.total,
+      });
+    }
+    return [...porVsl.entries()]
+      .map(([publicId, linhas]) => ({ publicId, ...curvaDeRetencao(linhas) }))
+      .sort((a, b) => b.inicios - a.inicios || a.publicId.localeCompare(b.publicId));
   }
 
   // Pageviews crus da janela, com a sessão e a origem de cada um: é o que o motor da

@@ -1,3 +1,5 @@
+import { modeloDaCurva } from './vsl-retention-ui.js';
+
 export function vslStatusLabel(video = {}) {
   if (!video.publishedVersionId) return 'Rascunho';
   if (video.publishedLockVersion !== undefined && video.publishedLockVersion !== null && video.lockVersion !== video.publishedLockVersion)
@@ -65,6 +67,49 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     poster.hidden = !url;
     if (url) poster.src = url;
   };
+  // A curva só existe para VSL já salva: antes disso não há público nem eventos.
+  const pintarRetencao = async (video) => {
+    const secao = document.querySelector('#vsl-retention');
+    if (!secao) return;
+    secao.hidden = !video;
+    if (!video) return;
+    let retencao = { inicios: 0, pontos: [], maiorQueda: null, cliquesNoCta: 0, conversao: 0 };
+    try {
+      const projectId = currentShell().state().currentProject.id;
+      const janela = new URLSearchParams({
+        from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        to: new Date().toISOString(),
+      });
+      const todas = await api(`/projects/${projectId}/analytics/vsl-retention?${janela}`);
+      retencao = todas.find((linha) => linha.publicId === video.publicId) || retencao;
+    } catch {
+      // Sem analytics a VSL continua editável: a curva é informação, não pré-requisito.
+    }
+    const modelo = modeloDaCurva(retencao);
+    const grafico = document.querySelector('#vsl-retention-chart');
+    if (grafico) {
+      grafico.replaceChildren();
+      for (const barra of modelo.barras) {
+        const coluna = document.createElement('div');
+        coluna.className = 'vsl-retention-bar';
+        coluna.dataset.queda = String(barra.queda);
+        const valor = document.createElement('strong');
+        valor.textContent = String(barra.espectadores);
+        const desenho = document.createElement('i');
+        desenho.style.height = barra.altura;
+        const rotulo = document.createElement('small');
+        rotulo.textContent = barra.rotulo;
+        coluna.append(valor, desenho, rotulo);
+        grafico.append(coluna);
+      }
+      grafico.setAttribute('aria-label', `Retenção da VSL: ${modelo.resumo}`);
+    }
+    const resumo = document.querySelector('#vsl-retention-summary');
+    if (resumo) resumo.textContent = modelo.resumo;
+    const cta = document.querySelector('#vsl-retention-cta');
+    if (cta) { cta.textContent = modelo.cta; cta.hidden = !modelo.cta; }
+  };
+
   const showForm = (video = null) => {
     if (!video && !currentShell()?.can?.('video.write')) return;
     current = video;
@@ -81,6 +126,7 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     for (const control of target.querySelectorAll('input, select, textarea')) control.disabled = !policy.canEdit;
     const submit = target.querySelector('[type="submit"]');
     if (submit) submit.hidden = !policy.canEdit;
+    pintarRetencao(video);
     field(target, 'publish').hidden = !policy.canPublish;
     field(target, 'publish').disabled = !policy.canPublish;
   };
