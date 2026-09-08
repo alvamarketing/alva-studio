@@ -22,7 +22,7 @@ function record(elements) {
         { label: 'Ligação', imageUrl: '', icon: 'phone' },
       ] }],
     }],
-    completion: { title: 'Ok', message: 'Ok' }, webhook: '', publicPath: '',
+    completion: { title: 'Ok', message: 'Ok' }, webhook: '', publicPath: '', calculations: [{ id: 'calc_total', label: 'Total estimado', operation: 'add', operands: [{ value: 0 }, { value: 0 }] }],
   };
 }
 
@@ -356,5 +356,43 @@ test('blocos de escolha inseridos pelo catálogo usam opções editáveis e esqu
       assert.ok(field, `${type} normalizada com três opções`);
       assert.equal(field.required, true);
     }
+  });
+});
+
+test('gráfico do quiz preserva vínculos de cálculos por linha', async () => {
+  await withUi(async ({ getEditor, getInitOptions }) => {
+    const source = record();
+    const ui = createFormsUI({ api: apiFor(source, []), toast: () => {}, can: () => true, getProjectId: () => source.projectId, mediaEnabled: () => false });
+    await ui.openForm(source.id);
+    const editor = getEditor();
+    getInitOptions().blockManager.appendOnClick(editor.BlockManager.get('bar-chart'));
+    await settled();
+    const chart = descendants(editor.getWrapper()).find((component) => String(component.getAttributes?.().class || '').split(/\s+/).includes('alva-chart-bars'));
+    assert.ok(chart);
+    editor.select(chart); editor.trigger('component:selected', chart);
+    await settled();
+    const sourceSelect = [...document.querySelectorAll('.fe-properties label')].find((row) => row.firstElementChild?.textContent === 'Fonte')?.querySelector('select');
+    assert.ok(sourceSelect);
+    sourceSelect.value = 'calc_total';
+    sourceSelect.dispatchEvent(new document.defaultView.Event('change', { bubbles: true }));
+    await settled();
+    assert.deepEqual(JSON.parse(chart.getAttributes()['data-alva-chart-bindings']), ['calc_total', null, null]);
+  });
+});
+
+test('rótulo de campo atualiza o modelo e a view montada sem recriar o input', async () => {
+  await withUi(async ({ document, getEditor, getInitOptions }) => {
+    const source = record(); const ui = createFormsUI({ api: apiFor(source, []), toast: () => {}, can: () => true, getProjectId: () => source.projectId, mediaEnabled: () => false });
+    await ui.openForm(source.id);
+    const editor = getEditor();
+    getInitOptions().blockManager.appendOnClick(editor.BlockManager.get('quiz-select'));
+    await settled();
+    const label = descendants(editor.getWrapper()).find((component) => component.get?.('tagName') === 'label' && component.getAttributes?.().name === undefined && descendants(component).some((child) => child.get?.('tagName') === 'select'));
+    assert.ok(label);
+    editor.select(label); editor.trigger('component:selected', label); await settled();
+    change(document, 'Nome mostrado acima do campo', 'Quantidade');
+    const textNode = label.components().models.find((component) => component.is('textnode'));
+    assert.equal(textNode.get('content'), 'Quantidade');
+    assert.match(editor.getHtml(), /Quantidade<select/);
   });
 });

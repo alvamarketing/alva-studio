@@ -3,6 +3,7 @@ import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './e
 import { restoreVslOptionFocus, vslOptionKeyboardAction } from './editor-shell.js';
 import { createFriendlyEditor } from './editor-shell.js';
 import { canvasSnapshot, seedQuizCanvas } from './quiz-canvas-seed.js';
+import { renderQuizFlowEditor, validateQuizFlow } from './quiz-flow-editor.js';
 
 const TYPES = {
   short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
@@ -149,6 +150,7 @@ export function cloneQuizStep(step, id = `tela-${Date.now()}-${Math.random().toS
     (node.pages || []).forEach((page) => (page.frames || []).forEach((frame) => visit(frame.component)));
   };
   visit(copy.canvas.editorState);
+  if (Array.isArray(copy.branching?.rules)) copy.branching.rules = copy.branching.rules.map((rule) => ({ ...rule, fieldId: names.get(String(rule.fieldId || '')) || ids.get(String(rule.fieldId || '')) || rule.fieldId }));
   return copy;
 }
 
@@ -381,6 +383,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   let pendingVslOptionFocusId = null;
   let activeCanvasEditor = null;
   let activeCanvasTarget = null;
+  let activeFlowEditor = null;
   const previewDelegates = new WeakSet();
   const workspaceId = `forms-workspace-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
   function formPreviewDialog() {
@@ -604,6 +607,8 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   async function save() {
     if (!current || !dirty) return current;
     snapshotActiveCanvas();
+    const flowErrors = validateQuizFlow(flowSchema());
+    if (flowErrors.length) throw new Error(flowErrors[0]);
     if (!can('form.write')) throw new Error('Você não tem permissão para editar formulários.');
     $('#form-save-state').textContent = 'Salvando…';
     current = await api('/forms/' + current.id, 'PUT', {
@@ -612,6 +617,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       headerElements: current.headerElements,
       headerCanvas: current.headerCanvas,
       steps: current.steps,
+      calculations: current.calculations || [],
       completion: current.completion,
       webhook: current.webhook,
     });
@@ -622,6 +628,43 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
 
   function hasQuizCanvasRuntime() {
     return Boolean(globalThis.window?.grapesjs && document?.createElement);
+  }
+
+  function canvasFieldCatalog(html = '') {
+    if (typeof DOMParser === 'undefined') return [];
+    const doc = new DOMParser().parseFromString(String(html), 'text/html');
+    const seen = new Map();
+    doc.querySelectorAll('input[name],select[name],textarea[name]').forEach((input) => {
+      const name = String(input.getAttribute('name') || '').trim();
+      if (!name || ['submit', 'button', 'reset', 'hidden'].includes(String(input.type || '').toLowerCase())) return;
+      const kind = String(input.type || input.tagName).toLowerCase();
+      const holder = input.closest('[data-quiz-type]');
+      const type = holder?.getAttribute('data-quiz-type') || (kind === 'radio' ? 'single_choice' : kind === 'checkbox' ? 'multiple_choice' : kind === 'range' ? 'scale' : kind === 'number' ? 'number' : kind === 'email' ? 'email' : kind === 'file' ? 'file' : input.tagName === 'TEXTAREA' ? 'long_text' : 'short_text');
+      const label = holder?.getAttribute('data-quiz-question') || input.closest('label')?.textContent?.trim() || name;
+      const item = seen.get(name) || { id: name, title: label, type, options: [] };
+      if (['single_choice', 'multiple_choice', 'image_choice'].includes(type) && input.value && !item.options.includes(input.value)) item.options.push(input.value);
+      seen.set(name, item);
+    });
+    return [...seen.values()];
+  }
+  function flowSchema() {
+    const steps = current.steps.map((step) => {
+      const active = activeCanvasTarget === `step:${step.id}` && activeCanvasEditor ? activeCanvasEditor.getHtml() : step.canvas?.html || seedQuizCanvas(step.elements || [], { vslEmbedUrls }).html;
+      return { ...step, elements: canvasFieldCatalog(active) };
+    });
+    return { steps, elements: steps.flatMap((step) => step.elements), calculations: current.calculations || [] };
+  }
+  function refreshFlowEditor() {
+    activeFlowEditor?.refresh?.(flowSchema());
+  }
+  function applyFlowSchema(next) {
+    current.steps.forEach((step) => {
+      const incoming = next.steps.find((candidate) => candidate.id === step.id);
+      if (incoming && Object.hasOwn(incoming, 'branching')) step.branching = structuredClone(incoming.branching);
+    });
+    current.calculations = structuredClone(next.calculations || []);
+    markDirty();
+    activeCanvasEditor?.trigger?.('component:selected', activeCanvasEditor.getSelected());
   }
 
   function activeCanvasValue() {
@@ -641,6 +684,8 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
   }
 
   function destroyActiveCanvas() {
+    activeFlowEditor?.destroy?.();
+    activeFlowEditor = null;
     snapshotActiveCanvas();
     activeCanvasEditor?.destroy?.();
     activeCanvasEditor = null;
@@ -707,7 +752,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       project: source.editorState,
       html: source.html,
       css: source.css,
-      onChange: () => { snapshotActiveCanvas(); markDirty(); },
+      onChange: () => { snapshotActiveCanvas(); markDirty(); refreshFlowEditor(); },
       vslVideos,
       vslLoadError,
       mediaEnabled,
@@ -718,6 +763,8 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       headerContext: 'Formulário',
       quizCanvas: true,
       quizHeader: isHeader,
+      quizCalculations: () => current.calculations || [],
+      onQuizChartBindingsChange: () => markDirty(),
     });
     const sidebar = root.querySelector('.fe-sidebar');
     const journey = root.querySelector('.quiz-canvas-journey');
@@ -752,6 +799,12 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
       meta.querySelector('[data-quiz-screen-timer]').onchange = (event) => { step.timer = Math.max(0, Math.min(15, Number(event.target.value) || 0)); markDirty(); };
     }
     sidebar?.append(meta);
+    if (!isHeader && sidebar) {
+      const flow = document.createElement('div');
+      flow.dataset.quizFlowEditor = 'true';
+      sidebar.append(flow);
+      activeFlowEditor = renderQuizFlowEditor({ container: flow, schema: flowSchema(), stepId: current.steps[selected].id, readOnly: !can('form.write'), onChange: applyFlowSchema });
+    }
   }
 
   function renderEditor({ focusWorkspaceTab = false, focusTreeNodeId = null, activeTreeItem = null } = {}) {

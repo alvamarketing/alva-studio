@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { createFormsUI } from '../public/forms.js';
+import { normalizeFormInput } from '../server/form-store.mjs';
 
 const indexHtml = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 const jsdomPath = new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url);
@@ -38,17 +39,18 @@ async function withCanvasDom(run) {
   const { JSDOM } = await import(jsdomPath);
   const dom = new JSDOM(indexHtml, { url: 'https://studio.test/', pretendToBeVisual: true });
   const previous = Object.fromEntries(['window', 'document', 'DOMParser', 'Node', 'HTMLElement', 'MutationObserver', 'getComputedStyle'].map((key) => [key, globalThis[key]]));
-  const { default: grapesjs } = await import('grapesjs');
   let activeEditor = null;
   Object.assign(globalThis, {
     window: dom.window, document: dom.window.document, DOMParser: dom.window.DOMParser,
     Node: dom.window.Node, HTMLElement: dom.window.HTMLElement, MutationObserver: dom.window.MutationObserver,
     getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
   });
+  // GrapesJS captures document at import time; load it only after JSDOM.
+  const { default: grapesjs } = await import('grapesjs');
   // GrapesJS stays real, but uses its documented headless mode because JSDOM
   // cannot complete the iframe canvas boot performed by the visual runtime.
   dom.window.grapesjs = { ...grapesjs, init: (options) => {
-    activeEditor = grapesjs.init({ ...options, headless: true });
+    activeEditor = grapesjs.init({ ...options, headless: true, styleManager: false });
     return activeEditor;
   } };
   dom.window.confirm = () => true;
@@ -256,5 +258,55 @@ test('salvar e reabrir snapshot antigo preserva a regra estrutural de escolha vi
     await ui.openForm(source.id);
     await settled();
     assert.match(getEditor().getCss(), /\.image-choices>:is\(h1,\s*h2,\s*h3,\s*p\)\{grid-column:1\/-1;?\}/);
+  });
+});
+
+test('regras e cálculos usam catálogo do canvas, salvam e passam pela normalização do formulário', async () => {
+  await withCanvasDom(async (document) => {
+    const puts = [];
+    const ui = formsUi(legacyForm(), puts);
+    await ui.openForm('quiz-lifecycle');
+    document.querySelector('[data-quiz-canvas-target="1"]').click();
+    await settled();
+    const flow = document.querySelector('[data-quiz-flow-editor]');
+    assert.ok(flow, 'a tela deve expor os controles de fluxo');
+    [...flow.querySelectorAll('button')].find((button) => button.textContent === 'Adicionar regra').click();
+    [...flow.querySelectorAll('button')].find((button) => button.textContent === 'Adicionar cálculo').click();
+    document.querySelector('#form-save').click();
+    await settled();
+    assert.equal(puts.length, 1);
+    const saved = puts[0];
+    assert.equal(saved.steps[1].branching.rules[0].fieldId, 'perfil');
+    assert.equal(saved.steps[1].branching.rules[0].value, 'Agência');
+    assert.equal(saved.steps[1].branching.rules[0].nextScreenId, '$complete');
+    assert.equal(saved.calculations.length, 1);
+    const normalized = normalizeFormInput(saved);
+    assert.equal(normalized.steps[1].branching.rules[0].fieldId, 'perfil');
+    assert.equal(normalized.calculations.length, 1);
+  });
+});
+
+test('atualiza regras e cálculos ao alterar o canvas sem trocar de tela', async () => {
+  await withCanvasDom(async (document, getEditor) => {
+    const ui = formsUi(legacyForm(), []);
+    await ui.openForm('quiz-lifecycle');
+    const editor = getEditor();
+    const flow = () => document.querySelector('[data-quiz-flow-editor]');
+    const addRule = () => [...flow().querySelectorAll('button')].find((button) => button.textContent === 'Adicionar regra');
+    assert.equal(addRule().disabled, true, 'sem escolha o botão fica indisponível');
+    editor.getWrapper().append(editor.BlockManager.get('quiz-single-choice').get('content'));
+    editor.trigger('update');
+    await settled();
+    assert.equal(addRule().disabled, false, 'a nova escolha entra no catálogo sem trocar de tela');
+    [...flow().querySelectorAll('button')].find((button) => button.textContent === 'Adicionar cálculo').click();
+    await settled();
+    editor.getWrapper().append(editor.BlockManager.get('bar-chart').get('content'));
+    editor.trigger('update');
+    const chart = editor.getWrapper().components().models.find((component) => String(component.getAttributes?.().class || '').includes('alva-chart-bars')) || editor.getWrapper().find('.alva-chart-bars')[0];
+    editor.select(chart); editor.trigger('component:selected', chart);
+    await settled();
+    const source = [...document.querySelectorAll('.fe-properties label')].find((row) => row.firstElementChild?.textContent === 'Fonte')?.querySelector('select');
+    assert.ok(source);
+    assert.ok([...source.options].some((option) => option.textContent === 'Novo cálculo'), 'o gráfico lê cálculo criado nesta mesma montagem');
   });
 });

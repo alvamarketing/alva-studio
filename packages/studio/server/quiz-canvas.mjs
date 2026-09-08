@@ -82,6 +82,21 @@ function extractHtmlFields(html) {
   fragment.childNodes.forEach((node) => visit(node));
   return { fields: groupFields(raw), html: serialize(fragment) };
 }
+function chartBindings(html) {
+  const result = new Map(); const all = [];
+  const visit = (node) => {
+    const attrs = attributes(node); const raw = attrs['data-alva-chart-bindings'];
+    if (raw !== undefined) {
+      const id = String(attrs['data-element-id'] || '').trim(); let bindings;
+      try { bindings = JSON.parse(raw); } catch { throw fail('Os vínculos do gráfico no canvas são inválidos.'); }
+      if (!Array.isArray(bindings) || bindings.some((binding) => binding !== null && (typeof binding !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(binding)))) throw fail('Os vínculos do gráfico no canvas são inválidos.');
+      all.push(bindings); if (id) result.set(id, bindings);
+    }
+    (node.childNodes || []).forEach(visit);
+  };
+  parseFragment(html).childNodes.forEach(visit);
+  return { byElementId: result, all };
+}
 function roots(state) {
   if (Array.isArray(state?.pages)) return state.pages.flatMap((page) => (page.frames || []).map((frame) => frame.component).filter(Boolean));
   return Array.isArray(state?.components) ? state.components : [];
@@ -183,7 +198,7 @@ export function normalizeQuizCanvas(value, { header = false } = {}) {
   const modelFields = extractModelFields(value.editorState);
   if (signature(parsed.fields) !== signature(modelFields)) throw fail('O canvas e seu modelo estão divergentes. Reabra a tela e salve novamente.');
   if (header && parsed.fields.length) throw fail('O topo compartilhado não pode conter campos de resposta.');
-  return { canvas: { version: 1, editorState: structuredClone(value.editorState), html: parsed.html, css: value.css }, fields: parsed.fields, elementIds: modelElementIds(value.editorState) };
+  return { canvas: { version: 1, editorState: structuredClone(value.editorState), html: parsed.html, css: value.css }, fields: parsed.fields, elementIds: modelElementIds(value.editorState), chartBindings: chartBindings(parsed.html) };
 }
 
 export function renderQuizCanvas(canvas, scope) {

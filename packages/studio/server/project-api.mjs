@@ -111,6 +111,7 @@ function legacyForm(form) {
     steps: schema.steps ?? [],
     completion: schema.completion ?? initialLegacyForm().completion,
     webhook: schema.webhook ?? '',
+    ...(schema.calculations === undefined ? {} : { calculations: schema.calculations }),
     revision: form.lockVersion,
     stepCount: (schema.steps ?? []).length,
     submissionCount: form.submissionCount ?? 0,
@@ -119,7 +120,7 @@ function legacyForm(form) {
 
 function legacyFormPatch(input, form) {
   const schema = { ...(form.draftSchema ?? initialLegacyForm()), ...(input.draftSchema ?? {}) };
-  for (const key of ['headerElements', 'headerCanvas', 'steps', 'completion', 'webhook']) {
+  for (const key of ['headerElements', 'headerCanvas', 'steps', 'completion', 'webhook', 'calculations']) {
     if (Object.hasOwn(input, key)) schema[key] = input[key];
   }
   return {

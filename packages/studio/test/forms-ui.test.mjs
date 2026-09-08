@@ -44,6 +44,7 @@ test('editor cria e reordena etapas sem alterar o array original', () => {
 test('duplicar tela de canvas regenera ids de elementos e nomes de respostas', () => {
   const step = {
     id: 'tela-original', title: 'Diagnóstico', elements: [{ id: 'nome', type: 'short_text' }, { id: 'perfil', type: 'single_choice' }],
+    branching: { rules: [{ fieldId: 'perfil', operator: 'equals', value: 'A', nextScreenId: '$complete' }] },
     canvas: {
       version: 1,
       html: '<section><div data-element-id="nome"><input name="nome" type="text"></div><div data-element-id="perfil"><input name="perfil" type="radio" value="A"><input name="perfil" type="radio" value="B"></div></section>',
@@ -59,6 +60,8 @@ test('duplicar tela de canvas regenera ids de elementos e nomes de respostas', (
   const names = [...copy.canvas.html.matchAll(/name="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(names).size, 2);
   assert.equal(names[1], names[2]);
+  assert.equal(copy.branching.rules[0].fieldId, names[1], 'a regra da cópia segue o novo nome do grupo');
+  assert.notEqual(copy.branching.rules[0].fieldId, step.branching.rules[0].fieldId);
   assert.deepEqual(normalizeQuizCanvas(copy.canvas).fields.map((field) => field.type), ['short_text', 'single_choice']);
 });
 

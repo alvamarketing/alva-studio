@@ -343,6 +343,16 @@ export function setComponentText(model, value) {
   model?.components?.(components);
   return components;
 }
+export function setTextNodeContent(model, value) {
+  const text = String(value ?? '');
+  model?.set?.('content', text);
+  const view = model?.getEl?.();
+  if (view) {
+    if (view.nodeType === 3) view.nodeValue = text;
+    else view.textContent = text;
+  }
+  return text;
+}
 export function inspectorTextAlign(value, direction = 'ltr') {
   const normalized = String(value || '').toLowerCase();
   const rtl = String(direction || '').toLowerCase() === 'rtl';
@@ -844,6 +854,8 @@ export function createFriendlyEditor({
   decorateHeader = true,
   quizCanvas = false,
   quizHeader = false,
+  quizCalculations = [],
+  onQuizChartBindingsChange = () => {},
 }) {
   const host = typeof container === 'string' ? document.querySelector(container) : container;
   if (!host) throw new Error('Não foi possível abrir a área de edição.');
@@ -937,6 +949,7 @@ export function createFriendlyEditor({
   let readOnlyMutationGuard = null;
   let pendingVslOptionFocusId = null;
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
+  const availableQuizCalculations = () => typeof quizCalculations === 'function' ? quizCalculations() : quizCalculations;
   const quizChoiceOptionMarkup = ({ type, name, label, index, required = false }) => {
     const visual = type === 'image_choice';
     const inputType = type === 'multiple_choice' ? 'checkbox' : 'radio';
@@ -1505,11 +1518,14 @@ export function createFriendlyEditor({
     parent.append(row);
     return input;
   }
-  function chartItems(parent, rows, { item, addLabel, max = Infinity, change }) {
+  function chartItems(parent, rows, { item, addLabel, max = Infinity, change, bindings = [], onBindingsChange = null }) {
     let currentRows = validateChartRows(rows, max);
-    const apply = (next) => {
+    let currentBindings = currentRows.map((_, index) => bindings[index] || null);
+    const apply = (next, nextBindings = currentBindings) => {
       const validRows = validateChartRows(next, max);
+      currentBindings = validRows.map((_, index) => nextBindings[index] || null);
       change(validRows);
+      onBindingsChange?.(currentBindings);
       currentRows = validRows;
     };
     currentRows.forEach(([name, value], index) => {
@@ -1519,12 +1535,16 @@ export function createFriendlyEditor({
       field(itemEditor, 'Valor', value, (next) => apply(updateChartRow(currentRows, index, { value: next }, max)), {
         type: 'number', min: 0, ...(max !== Infinity ? { max } : {}),
       });
+      if (quizCanvas) field(itemEditor, 'Fonte', currentBindings[index] || '', (next) => {
+        const bindingsNext = [...currentBindings]; bindingsNext[index] = next || null; apply(currentRows, bindingsNext);
+      }, { choices: [['', 'Valor manual'], ...(availableQuizCalculations() || []).map((calculation) => [calculation.id, calculation.label || 'Cálculo sem nome'])] });
       button(itemEditor, `Remover ${item}`, () => {
-        apply(removeChartRow(currentRows, index, max));
+        const nextRows = removeChartRow(currentRows, index, max);
+        apply(nextRows, currentBindings.filter((_, bindingIndex) => bindingIndex !== index));
       }, { className: 'fe-danger' });
       parent.append(itemEditor);
     });
-    button(parent, addLabel, () => apply([...currentRows, [`${item[0].toUpperCase()}${item.slice(1)} ${currentRows.length + 1}`, 0]]));
+    button(parent, addLabel, () => apply([...currentRows, [`${item[0].toUpperCase()}${item.slice(1)} ${currentRows.length + 1}`, 0]], [...currentBindings, null]));
   }
   function button(parent, text, action, options = {}) {
     const b = document.createElement('button');
@@ -1961,7 +1981,7 @@ export function createFriendlyEditor({
       const textNode = fieldLabel.components().models.find((child) => child.is('textnode'));
       const labelText = textNode?.get('content') || fieldLabel.get('content') || '';
       field(content, 'Nome mostrado acima do campo', labelText, (value) => {
-        if (textNode) textNode.set('content', value);
+        if (textNode) setTextNodeContent(textNode, value);
         else if (fieldLabel.get('content')) fieldLabel.set('content', escapeText(value));
         else fieldLabel.append({ type: 'textnode', content: value }, { at: 0 });
       });
@@ -2004,11 +2024,17 @@ export function createFriendlyEditor({
         const name = label.getEl()?.textContent || label.get('content') || `Item ${index + 1}`;
         return [name, parseFloat(bars[index]?.getStyle()?.['--value']) || 0];
       });
+      const chartBindings = (() => { try { const parsed = JSON.parse(barChart.getAttributes()['data-alva-chart-bindings'] || '[]'); return Array.isArray(parsed) ? parsed : []; } catch { return []; } })();
+      const saveBindings = (bindings) => {
+        barChart.addAttributes({ 'data-alva-chart-bindings': JSON.stringify(bindings) });
+        onQuizChartBindingsChange(bindings);
+      };
       chartItems(content, rows, {
         item: 'barra', addLabel: '+ Adicionar barra', max: 100,
         change: (nextRows) => {
           barChart.components(nextRows.map(([name, number]) => `<div><i style="--value:${number}%"></i><small>${escapeText(name)}</small></div>`).join(''));
         },
+        bindings: chartBindings, onBindingsChange: quizCanvas ? saveBindings : null,
       });
       help(content, 'Cada barra usa um nome e uma porcentagem entre 0 e 100.');
     }
@@ -2021,6 +2047,11 @@ export function createFriendlyEditor({
       const rows = data.length ? data : [['Visitas', 52], ['Contatos', 26], ['Vendas', 22]];
       const title = componentsByTag(donut, 'strong')[0];
       if (title) field(content, 'Título do gráfico', title.getEl()?.textContent || title.get('content') || 'Resultados', (value) => setComponentText(title, value));
+      const chartBindings = (() => { try { const parsed = JSON.parse(donut.getAttributes()['data-alva-chart-bindings'] || '[]'); return Array.isArray(parsed) ? parsed : []; } catch { return []; } })();
+      const saveBindings = (bindings) => {
+        donut.addAttributes({ 'data-alva-chart-bindings': JSON.stringify(bindings) });
+        onQuizChartBindingsChange(bindings);
+      };
       chartItems(content, rows, {
         item: 'fatia', addLabel: '+ Adicionar fatia',
         change: (nextRows) => {
@@ -2028,6 +2059,7 @@ export function createFriendlyEditor({
           donut.addAttributes({ 'data-alva-chart-data': JSON.stringify(nextRows) });
           donut.addStyle({ background: `conic-gradient(${segments})` });
         },
+        bindings: chartBindings, onBindingsChange: quizCanvas ? saveBindings : null,
       });
       help(content, 'Cada fatia usa um nome e uma quantidade. As quantidades definem a proporção.');
     }

@@ -1,3 +1,4 @@
+import { normalizeQuizNavigation, quizVisitedScreenIds } from '../public/quiz-navigation.js';
 const INFORMATIONAL = new Set(['image', 'video', 'vsl', 'cta', 'statement', 'chart', 'loader', 'logo', 'progress', 'countdown', 'timer']);
 
 function fail(message, status = 400) {
@@ -13,11 +14,17 @@ function text(value, max, label, required = false) {
 export function validateFormAnswers(schema, input) {
   const answers = {};
   const provided = input?.answers && typeof input.answers === 'object' && !Array.isArray(input.answers) ? input.answers : {};
-  const fields = Array.isArray(schema?.steps)
-    ? schema.steps.flatMap((step) => Array.isArray(step?.elements) ? step.elements : [step])
-    : [];
-  const canvasOnly = Array.isArray(schema?.steps) && schema.steps.length > 0
-    && schema.steps.every((step) => Array.isArray(step?.elements) && step.canvas && !step.elements.some((element) => !INFORMATIONAL.has(element?.type)));
+  const steps = Array.isArray(schema?.steps) ? normalizeQuizNavigation(schema.steps) : [];
+  const visitedIds = new Set(steps.length ? quizVisitedScreenIds(steps, provided) : []);
+  const unvisited = steps.filter((step) => !visitedIds.has(step.id));
+  for (const step of unvisited) for (const field of Array.isArray(step.elements) ? step.elements : []) {
+    if (!field?.id || !Object.hasOwn(provided, field.id)) continue;
+    const value = provided[field.id];
+    if ((Array.isArray(value) && value.length) || (!Array.isArray(value) && value !== '' && value !== undefined && value !== null)) throw fail('Resposta para uma etapa não visitada.');
+  }
+  const fields = steps.flatMap((step) => visitedIds.has(step.id) ? (Array.isArray(step.elements) ? step.elements : [step]) : []);
+  const canvasOnly = steps.length > 0
+    && [...visitedIds].every((id) => { const step = steps.find((item) => item.id === id); return Array.isArray(step?.elements) && step.canvas && !step.elements.some((element) => !INFORMATIONAL.has(element?.type)); });
   if (!fields.length && canvasOnly) return {};
   if (!fields.length) throw fail('Formulário publicado inválido.', 409);
   if (canvasOnly) return {};

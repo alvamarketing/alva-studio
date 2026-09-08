@@ -200,8 +200,8 @@ test('renderiza VSL com embed absoluto resolvido e fallback acessível sem expor
 
 test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte', () => {
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 20615);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '400ae9782d1dbb25309d232f32e438d8513444f98a6ea933544ca2fa128bb99e');
+  assert.equal(html.length, 27131);
+  assert.equal(createHash('sha256').update(html).digest('hex'), 'd68bbae11308eb10f8705382d9e1d6030712edcafd961642c7a7d4a48e1602b1');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {

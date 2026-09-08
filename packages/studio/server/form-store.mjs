@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from './form-answer-validation.mjs';
 import { normalizeQuizCanvas } from './quiz-canvas.mjs';
+import { normalizeQuizNavigation } from '../public/quiz-navigation.js';
+import { normalizeQuizCalculations } from '../public/quiz-calculations.js';
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const TYPES = new Set([
@@ -148,7 +150,10 @@ function normalizeElement(input, ids) {
     const labels = Array.isArray(chart.labels) ? chart.labels.slice(0, 8).map((item) => text(item, 40, 'Rótulo do gráfico', true)) : [];
     const values = Array.isArray(chart.values) ? chart.values.slice(0, 8).map((item) => boundedNumber(item, 0, 0, 100)) : [];
     if (labels.length < 2 || labels.length !== values.length) throw fail('O gráfico precisa de 2 a 8 rótulos e valores.');
-    element.chart = { type: chart.type === 'donut' ? 'donut' : 'bar', labels, values };
+    const calculationIds = chart.calculationIds === undefined ? undefined : chart.calculationIds;
+    if (calculationIds !== undefined && (!Array.isArray(calculationIds) || calculationIds.length !== values.length || calculationIds.some((id) => id !== null && (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(id)))))
+      throw fail('Os vínculos do gráfico são inválidos.');
+    element.chart = { type: chart.type === 'donut' ? 'donut' : 'bar', labels, values, ...(calculationIds ? { calculationIds: [...calculationIds] } : {}) };
   } else element.chart = { type: 'bar', labels: [], values: [] };
   return element;
 }
@@ -186,7 +191,12 @@ export function normalizeSteps(value) {
         throw fail('Identificador de tela inválido ou repetido.');
       ids.add(`screen:${id}`);
       const sourceElements = canvasResult
-        ? [...input.elements.filter((element) => INFORMATIONAL.has(element?.type) && canvasResult.elementIds.has(element.id)), ...canvasResult.fields]
+        ? [...input.elements.filter((element) => INFORMATIONAL.has(element?.type) && canvasResult.elementIds.has(element.id)).map((element) => {
+          if (element?.type !== 'chart') return element;
+          const bindings = canvasResult.chartBindings.byElementId.get(element.id);
+          const chart = { ...element.chart }; if (bindings === undefined) delete chart.calculationIds; else chart.calculationIds = bindings;
+          return { ...element, chart };
+        }), ...canvasResult.fields]
         : input.elements;
       if ((!sourceElements.length && !canvas) || sourceElements.length > 30) throw fail('Adicione de 1 a 30 elementos por tela.');
       return {
@@ -196,6 +206,7 @@ export function normalizeSteps(value) {
         autoAdvance: Boolean(input.autoAdvance),
         timer: boundedNumber(input.timer, 0, 0, 15),
         elements: sourceElements.map((element) => normalizeElement(element, ids)),
+        ...(input.branching === undefined ? {} : { branching: input.branching }),
         ...(canvas ? { canvas } : {}),
       };
     }
@@ -206,12 +217,21 @@ export function normalizeSteps(value) {
 export function normalizeFormInput(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('Formulário inválido.');
   const headerCanvas = value.headerCanvas === undefined ? undefined : normalizeQuizCanvas(value.headerCanvas, { header: true }).canvas;
+  const steps = normalizeQuizNavigation(normalizeSteps(value.steps));
+  const calculations = value.calculations === undefined ? undefined : normalizeQuizCalculations({ steps, calculations: value.calculations });
+  const calculationIds = new Set((calculations || []).map((calculation) => calculation.id));
+  for (const step of steps) {
+    for (const bindings of step.canvas ? normalizeQuizCanvas(step.canvas).chartBindings.all : [])
+      if (bindings.some((id) => id !== null && !calculationIds.has(id))) throw fail('O gráfico referencia um cálculo inexistente.');
+    for (const element of (Array.isArray(step.elements) ? step.elements : [])) {
+      if (element.type !== 'chart' || !element.chart.calculationIds) continue;
+      if (element.chart.calculationIds.some((id) => id !== null && !calculationIds.has(id))) throw fail('O gráfico referencia um cálculo inexistente.');
+    }
+  }
   return {
-    headerElements: normalizeHeaderElements(value.headerElements),
-    steps: normalizeSteps(value.steps),
-    completion: normalizeCompletion(value.completion),
-    webhook: normalizeWebhook(value.webhook),
-    ...(headerCanvas ? { headerCanvas } : {}),
+    headerElements: normalizeHeaderElements(value.headerElements), steps,
+    completion: normalizeCompletion(value.completion), webhook: normalizeWebhook(value.webhook),
+    ...(calculations === undefined ? {} : { calculations }), ...(headerCanvas ? { headerCanvas } : {}),
   };
 }
 
