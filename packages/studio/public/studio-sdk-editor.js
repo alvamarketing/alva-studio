@@ -146,6 +146,20 @@ export function traducaoDoEditor() {
   };
 }
 
+// O layout do SDK monta os painéis. Aqui só o essencial: páginas e camadas à esquerda,
+// canvas no meio, ajustes à direita — com os cabeçalhos na língua de quem usa.
+export function layoutDoEditor() {
+  return {
+    type: 'row',
+    style: { height: '100%' },
+    children: [
+      { type: 'panelPagesLayers', header: { label: 'Estrutura da página' }, style: { width: '272px' } },
+      { type: 'canvas' },
+      { type: 'panelSidebarTabs', style: { width: '300px' } },
+    ],
+  };
+}
+
 export function studioEditorOptions({ pageId, nomeDaPagina = '', carregar, salvar, root = '#studio-sdk-root' } = {}) {
   return {
     root,
@@ -154,6 +168,7 @@ export function studioEditorOptions({ pageId, nomeDaPagina = '', carregar, salva
     project: { type: 'web' },
     plugins: [alvaStylePlugin],
     i18n: { locales: { en: traducaoDoEditor() } },
+    layout: { default: layoutDoEditor() },
     storage: {
       type: 'self',
       autosaveChanges: 8,
