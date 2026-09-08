@@ -291,7 +291,8 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   };
   function selectTab(requestedTab) {
     const publicationVisible = requestedTab === 'vercel' && canManageIntegration();
-    const tab = selectSettingsTab({ container: settingsContainer, tabList: settingsSidebar, requestedTab, canManageIntegration: canManageIntegration() });
+    const faixaDeAbas = settingsContainer.querySelector?.('.settings-tabs') || document.querySelector('.settings-tabs') || settingsContainer;
+    const tab = selectSettingsTab({ container: settingsContainer, tabList: faixaDeAbas, requestedTab, canManageIntegration: canManageIntegration() });
     updateSettingsSidebar(tab);
     const publicationSettings = $('#account-publication-settings');
     if (publicationSettings) publicationSettings.hidden = !publicationVisible;
