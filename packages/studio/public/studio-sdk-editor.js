@@ -70,6 +70,82 @@ export function alvaStylePlugin(editor) {
   else aplicar();
 }
 
+// O SDK vem todo em inglês, e "Layers", "Traits" ou "Selectors" não dizem nada para quem
+// monta uma página e não é da área. As chaves são as do dicionário do próprio pacote;
+// sobrescrever o 'en' troca os rótulos sem depender de um locale que talvez não exista.
+export function traducaoDoEditor() {
+  return {
+    actions: {
+      componentOutline: { title: 'Contornos' },
+      preview: { title: 'Prévia' },
+      fullscreen: { title: 'Tela cheia' },
+      showCode: { title: 'Código', exportButton: 'Baixar em ZIP' },
+      undo: { title: 'Desfazer' },
+      redo: { title: 'Refazer' },
+      save: { title: 'Salvar' },
+      store: { title: 'Salvar conteúdo' },
+      open: { title: 'Abrir projeto' },
+      editCode: { title: 'Editar código', noChanges: 'Nada mudou para atualizar', button: 'Atualizar' },
+      importCode: {
+        title: 'Importar código',
+        parseError: 'Não foi possível ler o código',
+        content: 'Cole aqui o HTML e o CSS e clique em importar',
+        button: 'Importar',
+      },
+      clearCanvas: { title: 'Limpar página', content: 'Você tem certeza de que quer apagar tudo desta página?' },
+      about: { title: 'Sobre' },
+    },
+    pageManager: {
+      pages: 'Páginas',
+      page: 'Página',
+      newPage: 'Nova página',
+      add: 'Adicionar página',
+      rename: 'Renomear',
+      duplicate: 'Duplicar',
+      copy: 'Copiar',
+      delete: 'Excluir',
+      deletePage: 'Excluir página',
+      confirmDelete: 'Você tem certeza de que quer excluir esta página?',
+      homePage: 'Página inicial',
+    },
+    blockManager: {
+      notFound: 'Nenhum elemento encontrado',
+      blocks: 'Elementos',
+      add: 'Adicionar mais elementos',
+      search: 'Buscar…',
+    },
+    layerManager: { layers: 'Camadas' },
+    styleManager: {
+      empty: 'Selecione um elemento na página para mudar a aparência dele.',
+      notFound: 'Nada para ajustar aqui',
+      panelLabel: 'Aparência',
+    },
+    traitManager: {
+      empty: 'Selecione um elemento na página para ver o conteúdo dele.',
+      notFound: 'Nada para preencher aqui',
+      panelLabel: 'Conteúdo',
+    },
+    selectorManager: {
+      noSelecton: 'Nada selecionado ainda.',
+      selectFromCanvas: 'Clique em algo na página para começar a editar.',
+      selectFromList: 'Ou escolha um estilo pronto no catálogo.',
+      selectCustom: 'Adicione um estilo seu.',
+      selection: 'Selecionado',
+      selector: 'Estilo',
+      addNewSelector: 'Novo estilo',
+      removeSelector: 'Remover estilo',
+      target: 'Alvo',
+      device: 'Tela',
+      state: 'Situação',
+      deleteStyle: 'Excluir estilo',
+      noSelectors: 'Nenhum estilo aplicado',
+      noComponents: 'Nenhum elemento selecionado',
+      currentSelection: 'O elemento de onde vêm os ajustes mostrados',
+    },
+    assetManager: { images: 'Imagens', addImage: 'Adicionar imagem', search: 'Buscar…' },
+  };
+}
+
 export function studioEditorOptions({ pageId, nomeDaPagina = '', carregar, salvar, root = '#studio-sdk-root' } = {}) {
   return {
     root,
@@ -77,6 +153,7 @@ export function studioEditorOptions({ pageId, nomeDaPagina = '', carregar, salva
     customTheme: alvaStudioTheme(),
     project: { type: 'web' },
     plugins: [alvaStylePlugin],
+    i18n: { locales: { en: traducaoDoEditor() } },
     storage: {
       type: 'self',
       autosaveChanges: 8,
