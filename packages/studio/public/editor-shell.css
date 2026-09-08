@@ -347,7 +347,7 @@
 }
 .friendly-editor .gjs-block {
   width: auto;
-  min-height: 82px;
+  min-height: 74px;
   margin: 0;
   padding: 10px 5px;
   border: 1px solid var(--alva-line);
@@ -373,14 +373,8 @@
 }
 .fe-block-icon {
   color: var(--alva-blue);
-  font-size: 25px;
+  font-size: 22px;
   line-height: 1;
-  font-weight: 500;
-}
-.fe-block-icon svg {
-  display: block;
-  width: 24px;
-  height: 24px;
 }
 .friendly-editor .gjs-block-label {
   font-size: 11px;
@@ -1171,9 +1165,7 @@
 .fe-box-spacing-lock[aria-pressed='true'] { border-color: var(--alva-blue); background: var(--alva-highlight); color: var(--alva-blue-strong); }
 .fe-box-spacing-lock .material-symbols-outlined { font-size: 16px; }
 
-/* A descrição do bloco fica sob o nome, para a escolha não depender de adivinhação. */
-.fe-block-hint { display: block; margin-top: 3px; color: var(--alva-muted); font-size: 9px; font-weight: 400; line-height: 1.35; }
-
+/* O card do bloco traz ícone e nome; a descrição chega no hover, pelo title. */
 /* Campos do formulário listados no inspetor, com remover ao lado de cada um. */
 .fe-field-list { display: grid; gap: 6px; margin: 10px 0; }
 .fe-field-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 6px; align-items: center; }

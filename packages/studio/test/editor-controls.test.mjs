@@ -491,21 +491,22 @@ test('ações compactas preservam nomes acessíveis e ícones', () => {
   }
 });
 
-test('blocos usam os símbolos visuais anteriores na cor da interface', async () => {
+test('blocos usam ícones da fonte do editor, um distinto por bloco', async () => {
+  // caracteres soltos como ▤ e ▥ dependiam da fonte do sistema e se repetiam entre blocos
   assert.deepEqual(
     Object.fromEntries(
       ['section', 'columns', 'heading', 'text', 'image', 'button', 'form', 'input'].map((id) => [id, blockIcons[id]]),
     ),
-    { section: '▤', columns: '▥', heading: 'T', text: '≡', image: '▧', button: '↗', form: '☷', input: '▱' },
+    { section: 'view_day', columns: 'view_column_2', heading: 'title', text: 'notes', image: 'image', button: 'smart_button', form: 'list_alt', input: 'text_fields' },
   );
-  const css = await readFile(new URL('../public/editor-shell.css', import.meta.url), 'utf8');
-  assert.match(css, /\.fe-block-icon\s*\{[^}]*font-size:\s*25px/s);
+  const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
+  assert.match(fonte, /fe-block-icon material-symbols-outlined/);
 });
 
 test('landing pages oferecem ícones, gráficos e movimento por elemento', async () => {
-  assert.equal(blockIcons.icon, '★');
-  assert.equal(blockIcons['bar-chart'], '▥');
-  assert.equal(blockIcons['donut-chart'], '◉');
+  assert.equal(blockIcons.icon, 'star');
+  assert.equal(blockIcons['bar-chart'], 'bar_chart');
+  assert.equal(blockIcons['donut-chart'], 'donut_large');
   const source = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
   assert.match(source, /Movimento/);
   assert.match(source, /data-alva-motion/);

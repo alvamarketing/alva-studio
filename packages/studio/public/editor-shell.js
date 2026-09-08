@@ -4,24 +4,27 @@ import { materialSymbolsFontCss } from './quiz-elements.js';
 
 const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+// Nomes do Material Symbols, a mesma fonte que o editor já carrega. Caracteres soltos
+// como ▤ e ▥ dependiam da fonte do sistema e chegavam a se repetir entre blocos.
 export const blockIcons = {
-  section: '▤',
-  columns: '▥',
-  heading: 'T',
-  text: '≡',
-  image: '▧',
-  vsl: '▶',
-  button: '↗',
-  icon: '★',
-  'bar-chart': '▥',
-  'donut-chart': '◉',
-  form: '☷',
-  input: '▱',
-  'hero-section': '▣',
-  'benefits-section': '✓',
-  'testimonials-section': '❝',
-  'faq-section': '?',
-  'contact-section': '✉',
+  section: 'view_day',
+  columns: 'view_column_2',
+  heading: 'title',
+  text: 'notes',
+  image: 'image',
+  'embedded-video': 'smart_display',
+  vsl: 'play_circle',
+  button: 'smart_button',
+  icon: 'star',
+  'bar-chart': 'bar_chart',
+  'donut-chart': 'donut_large',
+  form: 'list_alt',
+  input: 'text_fields',
+  'hero-section': 'branding_watermark',
+  'benefits-section': 'checklist',
+  'testimonials-section': 'format_quote',
+  'faq-section': 'help',
+  'contact-section': 'mail',
 };
 
 export const VSL_ATTRIBUTE = 'data-alva-vsl';
@@ -1335,13 +1338,11 @@ export function createFriendlyEditor({
       appendOnClick: (block) => { if (interactionPolicy.canAdd) insertBlock(block); },
       blocks: [...blocks, ...quizBlocks].filter(([id]) => interactionPolicy.canAdd && (id !== 'form' || !quizCanvas) && (!quizHeader || !['input', 'quiz-single-choice', 'quiz-multiple-choice', 'quiz-image-choice', 'quiz-select', 'quiz-range', 'quiz-file', 'hero-section', 'contact-section'].includes(id)) && (id !== 'vsl' || canInsertVsl())).map(([id, label, category, content]) => ({
         id,
-        // A descrição vai junto do nome: "Campo de texto" não diz o que a peça faz.
-        label: blockDescriptions[id]
-          ? `${label}<small class="fe-block-hint">${blockDescriptions[id]}</small>`
-          : label,
+        // Só ícone e nome no card; a descrição aparece ao passar o mouse.
+        label,
         category,
         content: quizSafeContent(id, content),
-        media: `<span class="fe-block-icon" aria-hidden="true">${blockIcons[id] || '+'}</span>`,
+        media: `<span class="fe-block-icon material-symbols-outlined" aria-hidden="true">${blockIcons[id] || 'add'}</span>`,
         attributes: {
           title: blockDescriptions[id] || `Adicionar ${label.toLocaleLowerCase('pt-BR')}`,
           tabindex: '0',

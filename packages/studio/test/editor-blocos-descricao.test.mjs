@@ -17,13 +17,6 @@ test('as descrições falam de resultado, não de html', () => {
   }
 });
 
-test('a biblioteca mostra a descrição junto do bloco', async () => {
-  const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
-  assert.match(fonte, /blockDescriptions/);
-  const css = await readFile(new URL('../public/editor-shell.css', import.meta.url), 'utf8');
-  assert.match(css, /\.fe-block-hint/);
-});
-
 test('o grupo genérico ganha nome que diz o que ele é', async () => {
   const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
   // "Grupo" não diz nada; o rótulo passa a descrever o que está dentro
