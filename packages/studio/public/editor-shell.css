@@ -1158,3 +1158,26 @@
 .fe-icon-option .material-symbols-outlined { font-size: 22px; }
 .fe-icon-option[aria-pressed='true'] { border-color: var(--alva-blue); background: var(--alva-highlight); color: var(--alva-blue-strong); box-shadow: inset 0 0 0 1px var(--alva-blue); }
 .fe-icon-option:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 1px; }
+
+/* Espaçamento nos quatro lados com trava — o formato que quem usa Elementor reconhece. */
+.fe-box-spacing { margin-top: 14px; }
+.fe-box-spacing-title { display: block; margin-bottom: 6px; color: var(--alva-muted); font-size: 11px; font-weight: 500; }
+.fe-box-spacing-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 34px; gap: 5px; align-items: start; }
+.fe-box-spacing-field { display: grid; gap: 3px; }
+.fe-box-spacing-field input { width: 100%; min-width: 0; padding: 7px 6px; border: 1px solid var(--alva-line); border-radius: 8px; font-size: 11px; text-align: center; }
+.fe-box-spacing-field span { color: var(--alva-soft); font-size: 9px; text-align: center; }
+.fe-box-spacing-lock { display: grid; place-items: center; height: 32px; padding: 0; border: 1px solid var(--alva-line); border-radius: 8px; background: var(--alva-white); color: var(--alva-muted); cursor: pointer; }
+.fe-box-spacing-lock:hover { background: var(--alva-highlight); transform: none; }
+.fe-box-spacing-lock[aria-pressed='true'] { border-color: var(--alva-blue); background: var(--alva-highlight); color: var(--alva-blue-strong); }
+.fe-box-spacing-lock .material-symbols-outlined { font-size: 16px; }
+
+/* A descrição do bloco fica sob o nome, para a escolha não depender de adivinhação. */
+.fe-block-hint { display: block; margin-top: 3px; color: var(--alva-muted); font-size: 9px; font-weight: 400; line-height: 1.35; }
+
+/* Campos do formulário listados no inspetor, com remover ao lado de cada um. */
+.fe-field-list { display: grid; gap: 6px; margin: 10px 0; }
+.fe-field-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 6px; align-items: center; }
+.fe-field-name { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--alva-line); border-radius: 9px; background: var(--alva-white); text-align: left; cursor: pointer; }
+.fe-field-name:hover { background: var(--alva-highlight); transform: none; }
+.fe-field-name strong { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fe-field-name small { color: var(--alva-muted); font-size: 9px; }

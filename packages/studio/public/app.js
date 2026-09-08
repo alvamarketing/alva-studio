@@ -126,6 +126,15 @@ function updateVslNavigation() {
     if (videosFilter.hidden && projectContentFilter === 'videos') projectContentFilter = 'all';
   }
 }
+// O diálogo trata de dois assuntos. Quem vem do formulário quer o recebimento das
+// respostas; quem vem do cabeçalho quer a página inteira.
+function abrirConfiguracoesDaPagina(assunto = '') {
+  $('#settings').click();
+  if (assunto !== 'respostas') return;
+  const alvo = $('#settings-respostas');
+  alvo?.scrollIntoView({ block: 'start' });
+  alvo?.querySelector('input')?.focus();
+}
 function setDashboardView(view, { settingsTab = 'account', fromHistory = false } = {}) {
   if (view === 'vsl' && !mediaPipelineEnabled) view = 'project';
   if (!fromHistory) viewRouter.commit(view, { settingsTab });
@@ -1234,7 +1243,7 @@ async function openPage(id) {
     html: template.html,
     css: template.css,
     onChange: markDirty,
-    onOpenFormSettings: () => $('#settings').click(),
+    onOpenFormSettings: () => abrirConfiguracoesDaPagina('respostas'),
     vslVideos,
     vslLoadError,
     mediaEnabled: () => mediaPipelineEnabled,

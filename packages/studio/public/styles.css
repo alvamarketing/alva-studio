@@ -1770,3 +1770,8 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   .analytics-view .analytics-lists, .analytics-view .analytics-lists-3,
   .tracking-view .tracking-layout, .tracking-view .providers, .tracking-view .consent-board { grid-template-columns: 1fr; gap: 28px; }
 }
+
+/* O diálogo de configurações trata de dois assuntos; cada um ganha seu bloco. */
+#settings-dialog .dialog-section { padding: 18px 0; border-top: 1px solid var(--alva-line); }
+#settings-dialog .dialog-section:first-of-type { border-top: 0; padding-top: 8px; }
+#settings-dialog .dialog-section h3 { margin: 0 0 6px; font-size: 14px; }

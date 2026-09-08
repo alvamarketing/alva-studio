@@ -1,4 +1,4 @@
-import { blocks, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
+import { blockDescriptions, blocks, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 import { materialSymbolsFontCss } from './quiz-elements.js';
 
@@ -256,6 +256,10 @@ export function renderVslReferences(html, { publicOrigin } = {}) {
   });
 }
 
+// O carrossel desliza sozinho por scroll-snap; as setas só empurram o trilho. O script
+// acompanha a página apenas quando há um carrossel nela.
+const carouselScript = "document.querySelectorAll('.alva-carousel').forEach(function(c){var t=c.querySelector('.alva-carousel-track');if(!t)return;c.querySelectorAll('[data-carousel]').forEach(function(b){b.addEventListener('click',function(){var card=t.querySelector('.alva-testimonial');var step=card?card.getBoundingClientRect().width+20:t.clientWidth;t.scrollBy({left:b.dataset.carousel==='next'?step:-step,behavior:'smooth'})})})});";
+
 export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin } = {}) {
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escapeText(title) +
@@ -265,6 +269,7 @@ export function buildPageExportHtml({ title = '', css = '', html = '', js = '', 
     '</style></head><body>' +
     renderVslReferences(html, { publicOrigin }) +
     '<script>' +
+    (html.includes('alva-carousel') ? carouselScript : '') +
     js +
     '</script></body></html>';
 }
@@ -356,6 +361,39 @@ export function imageAlignmentStyle(alinhamento) {
   if (alinhamento === 'center') return { display: 'block', 'margin-left': 'auto', 'margin-right': 'auto' };
   if (alinhamento === 'right') return { display: 'block', 'margin-left': 'auto', 'margin-right': '0' };
   return { display: 'block', 'margin-left': '0', 'margin-right': 'auto' };
+}
+
+const BOX_SIDES = ['top', 'right', 'bottom', 'left'];
+const numeroPx = (valor) => {
+  const numero = parseFloat(String(valor ?? '').replace('px', ''));
+  return Number.isFinite(numero) ? numero : 0;
+};
+
+// Espaçamento nos quatro lados, no formato que o Elementor consagrou: quatro campos e uma
+// trava. O padrão é zero — herdar sobras do template era o que fazia a página "andar"
+// sozinha quando alguém mexia num respiro.
+export function readBoxSpacing(estilo, propriedade) {
+  const atual = estilo ?? {};
+  return Object.fromEntries(BOX_SIDES.map((lado) => [lado, numeroPx(atual[`${propriedade}-${lado}`])]));
+}
+
+export function boxSpacingStyle(propriedade, atual, { lado, valor, travado = false } = {}) {
+  const numero = Number.isFinite(Number(valor)) ? Math.max(0, Number(valor)) : 0;
+  const proximo = travado
+    ? Object.fromEntries(BOX_SIDES.map((cada) => [cada, numero]))
+    : { ...readBoxSpacing(Object.fromEntries(BOX_SIDES.map((cada) => [`${propriedade}-${cada}`, `${atual?.[cada] ?? 0}px`])), propriedade), [lado]: numero };
+  return Object.fromEntries(BOX_SIDES.map((cada) => [`${propriedade}-${cada}`, `${proximo[cada]}px`]));
+}
+
+const TIPOS_DE_CAMPO = { text: 'Texto', email: 'E-mail', tel: 'Telefone', number: 'Número', date: 'Data', file: 'Arquivo', textarea: 'Texto longo' };
+
+// Como um campo se apresenta na lista do formulário: o rótulo que a pessoa escreveu, ou o
+// nome interno se ainda não houver rótulo, mais o tipo em português.
+export function formFieldSummary({ type, name, label } = {}) {
+  return {
+    titulo: (label || '').trim() || (name || '').trim() || 'Campo',
+    tipo: TIPOS_DE_CAMPO[type] || 'Texto',
+  };
 }
 
 export function panelMode(component) {
@@ -858,7 +896,7 @@ export function editorialLabel(component) {
     if (tag === 'div') {
       const children = componentChildren(model);
       if (children.length === 2 && children.every((child) => tagOf(child) === 'div')) return 'Duas colunas';
-      return 'Grupo';
+      return 'Bloco de conteúdo';
     }
     return '';
   };
@@ -1163,6 +1201,60 @@ export function createFriendlyEditor({
     container.append(grade);
     return grade;
   }
+  // Quatro campos e uma trava, como no Elementor: um controle só no lugar de "respiro
+  // acima", "respiro abaixo" e "respiro nas laterais" espalhados pelo painel.
+  function boxSpacingControl(container, model, propriedade, rotulo) {
+    const bloco = document.createElement('div');
+    bloco.className = 'fe-box-spacing';
+    const titulo = document.createElement('span');
+    titulo.className = 'fe-box-spacing-title';
+    titulo.textContent = rotulo;
+    const linha = document.createElement('div');
+    linha.className = 'fe-box-spacing-row';
+    let travado = false;
+    const nomes = { top: 'Acima', right: 'Direita', bottom: 'Abaixo', left: 'Esquerda' };
+    const entradas = {};
+    const aplicar = (lado, valor) => {
+      const atual = readBoxSpacing(model.getStyle(), propriedade);
+      const estilo = boxSpacingStyle(propriedade, atual, { lado, valor, travado });
+      model.addStyle(estilo);
+      for (const cada of ['top', 'right', 'bottom', 'left']) entradas[cada].value = String(parseFloat(estilo[`${propriedade}-${cada}`]) || 0);
+    };
+    const atual = readBoxSpacing(model.getStyle(), propriedade);
+    for (const lado of ['top', 'right', 'bottom', 'left']) {
+      const campo = document.createElement('label');
+      campo.className = 'fe-box-spacing-field';
+      const nome = document.createElement('span');
+      nome.textContent = nomes[lado];
+      const entrada = document.createElement('input');
+      entrada.type = 'number';
+      entrada.min = '0';
+      entrada.max = '500';
+      entrada.value = String(atual[lado]);
+      entrada.disabled = !interactionPolicy.canEdit;
+      entrada.onchange = () => aplicar(lado, entrada.value);
+      entradas[lado] = entrada;
+      campo.append(entrada, nome);
+      linha.append(campo);
+    }
+    const trava = document.createElement('button');
+    trava.type = 'button';
+    trava.className = 'fe-box-spacing-lock';
+    trava.setAttribute('aria-pressed', 'false');
+    trava.title = 'Manter os quatro lados iguais';
+    trava.setAttribute('aria-label', 'Manter os quatro lados iguais');
+    trava.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">link</span>';
+    trava.disabled = !interactionPolicy.canEdit;
+    trava.onclick = () => {
+      travado = !travado;
+      trava.setAttribute('aria-pressed', String(travado));
+      if (travado) aplicar('top', entradas.top.value);
+    };
+    linha.append(trava);
+    bloco.append(titulo, linha);
+    container.append(bloco);
+    return bloco;
+  }
   function applyIconButton(element, action, shortcut = '') {
     const meta = editorActionMeta[action];
     const label = shortcut ? `${meta.label} (${shortcut})` : meta.label;
@@ -1234,12 +1326,15 @@ export function createFriendlyEditor({
       appendOnClick: (block) => { if (interactionPolicy.canAdd) insertBlock(block); },
       blocks: [...blocks, ...quizBlocks].filter(([id]) => interactionPolicy.canAdd && (id !== 'form' || !quizCanvas) && (!quizHeader || !['input', 'quiz-single-choice', 'quiz-multiple-choice', 'quiz-image-choice', 'quiz-select', 'quiz-range', 'quiz-file', 'hero-section', 'contact-section'].includes(id)) && (id !== 'vsl' || canInsertVsl())).map(([id, label, category, content]) => ({
         id,
-        label,
+        // A descrição vai junto do nome: "Campo de texto" não diz o que a peça faz.
+        label: blockDescriptions[id]
+          ? `${label}<small class="fe-block-hint">${blockDescriptions[id]}</small>`
+          : label,
         category,
         content: quizSafeContent(id, content),
         media: `<span class="fe-block-icon" aria-hidden="true">${blockIcons[id] || '+'}</span>`,
         attributes: {
-          title: `Adicionar ${label.toLocaleLowerCase('pt-BR')}`,
+          title: blockDescriptions[id] || `Adicionar ${label.toLocaleLowerCase('pt-BR')}`,
           tabindex: '0',
           role: 'button',
           'aria-label': `Adicionar ${label.toLocaleLowerCase('pt-BR')}`,
@@ -2319,6 +2414,45 @@ export function createFriendlyEditor({
     if (form) {
       button(content, 'Configurar recebimento das respostas', () => onOpenFormSettings(form));
       if (tag === 'form') {
+        // Lista os campos com remover ao lado: antes era preciso caçar cada um no canvas
+        // para descobrir como tirá-lo do formulário.
+        const lista = document.createElement('div');
+        lista.className = 'fe-field-list';
+        const rotuloDoCampo = (etiqueta) => {
+          const texto = (etiqueta.getEl?.()?.childNodes?.[0]?.textContent || '').trim();
+          return texto;
+        };
+        for (const etiqueta of form.components().models.filter((filho) => tagOf(filho) === 'label')) {
+          const entrada = etiqueta.components().models.find((filho) => tagOf(filho) === 'input' || tagOf(filho) === 'textarea');
+          const resumo = formFieldSummary({
+            type: entrada?.getAttributes?.()?.type,
+            name: entrada?.getAttributes?.()?.name,
+            label: rotuloDoCampo(etiqueta),
+          });
+          const linha = document.createElement('div');
+          linha.className = 'fe-field-row';
+          const nome = document.createElement('button');
+          nome.type = 'button';
+          nome.className = 'fe-field-name';
+          nome.innerHTML = `<strong></strong><small>${resumo.tipo}</small>`;
+          nome.querySelector('strong').textContent = resumo.titulo;
+          nome.onclick = () => editor.select(entrada || etiqueta);
+          const remover = document.createElement('button');
+          remover.type = 'button';
+          remover.className = 'fe-icon-button fe-danger';
+          remover.setAttribute('aria-label', `Remover campo ${resumo.titulo}`);
+          remover.title = 'Remover campo';
+          applyIconButton(remover, 'delete');
+          remover.disabled = !interactionPolicy.canEdit;
+          remover.onclick = () => {
+            etiqueta.remove();
+            announce('Campo removido. Use Desfazer para recuperar.');
+            render();
+          };
+          linha.append(nome, remover);
+          lista.append(linha);
+        }
+        content.append(lista);
         button(content, '+ Adicionar campo', () => {
           formStyles();
           const submit = form.components().models.find((child) => tagOf(child) === 'button');
@@ -2327,7 +2461,7 @@ export function createFriendlyEditor({
           });
           editor.select(added[0]);
         });
-        help(content, 'Selecione cada campo para mudar seu nome, tipo e obrigatoriedade.');
+        help(content, 'Toque num campo para mudar nome, tipo e obrigatoriedade.');
       }
     }
     if (!isVsl && ['section', 'main', 'div', 'article', 'nav', 'footer'].includes(tag)) {
@@ -2405,13 +2539,8 @@ export function createFriendlyEditor({
       if (!Number.isFinite(number) || number < 0 || number > 10) throw new Error('Use um atraso entre 0 e 10 segundos.');
       model.addStyle({ '--alva-delay': number + 's' });
     }, { type: 'number', min: 0, max: 10 });
-    styleNumber(advanced, model, 'Respiro acima (px)', 'padding-top', 0);
-    styleNumber(advanced, model, 'Respiro abaixo (px)', 'padding-bottom', 0);
-    styleNumber(advanced, model, 'Respiro nas laterais (px)', 'padding-left', 0).onchange = (event) => {
-      if (!interactionPolicy.canEdit) return;
-      const value = Number(event.target.value);
-      if (Number.isFinite(value) && value >= 0 && value <= 500) model.addStyle({ 'padding-left': value + 'px', 'padding-right': value + 'px' });
-    };
+    boxSpacingControl(advanced, model, 'padding', 'Espaço interno');
+    boxSpacingControl(advanced, model, 'margin', 'Espaço externo');
     field(
       advanced,
       'Largura',

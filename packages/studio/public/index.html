@@ -627,14 +627,20 @@
       <form id="settings-form">
         <div class="eyebrow">CONFIGURAÇÕES DA PÁGINA</div>
         <h2>Do editor para o mundo.</h2>
-        <label
-          >Webhook (opcional)<input name="webhook" type="url" placeholder="https://seu-sistema.com/formulario"
-        /></label>
-        <p class="help">
-          As respostas ficam disponíveis no Studio. Opcionalmente, envie uma cópia em JSON para seu CRM ou automação.
-        </p>
-        <label>Domínio ou subdomínio<input name="domain" placeholder="lp.suaempresa.com.br" /></label>
-        <p class="help">Após publicar, conecte o domínio. O apontamento DNS é configurado no provedor do domínio.</p>
+        <section class="dialog-section" id="settings-respostas">
+          <h3>Respostas do formulário</h3>
+          <p class="help">
+            As respostas ficam disponíveis no Studio, em Leads. Se quiser, envie também uma cópia para outro sistema.
+          </p>
+          <label
+            >Enviar cópia para (opcional)<input name="webhook" type="url" placeholder="https://seu-sistema.com/formulario"
+          /></label>
+          <p class="help">Opcionalmente, envie uma cópia em JSON para seu CRM ou automação.</p>
+        </section>
+        <section class="dialog-section" id="settings-publicacao">
+          <h3>Publicação e domínio</h3>
+          <label>Domínio ou subdomínio<input name="domain" placeholder="lp.suaempresa.com.br" /></label>
+          <p class="help">Após publicar, conecte o domínio. O apontamento DNS é configurado no provedor do domínio.</p>
         <div id="vercel-state" class="connection"></div>
         <div class="page-connection-actions">
           <button type="button" id="page-vercel-settings">Configurar conexão Vercel</button>
@@ -645,6 +651,7 @@
           <button type="button" id="check-publication">Consultar publicação</button
           ><button type="button" id="connect-domain">Conectar domínio</button>
         </div>
+        </section>
         <div class="dialog-actions">
           <button type="button" data-close>Fechar</button><button class="primary">Salvar configurações</button>
         </div>

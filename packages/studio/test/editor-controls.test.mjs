@@ -382,10 +382,10 @@ test('rótulos editoriais nunca expõem tags técnicas na seleção ou no inspet
     parent: () => null,
   });
 
-  assert.equal(editorialLabel(component('div')), 'Grupo');
+  assert.equal(editorialLabel(component('div')), 'Bloco de conteúdo');
   assert.equal(editorialLabel(component('span')), 'Elemento');
   assert.equal(editorialLabel(component('section')), 'Seção');
-  assert.equal(editorialLabel(component('div', [component('h1')])), 'Grupo');
+  assert.equal(editorialLabel(component('div', [component('h1')])), 'Bloco de conteúdo');
   assert.equal(editorialElementLabel(component('summary')), 'Pergunta');
 });
 
