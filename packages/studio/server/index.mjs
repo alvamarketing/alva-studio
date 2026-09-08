@@ -406,6 +406,7 @@ export function createApp({
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
     '/view-route.js': ['public/view-route.js', 'text/javascript'],
+    '/confirm-dialog.js': ['public/confirm-dialog.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
   };
   const server = createServer(async (req, res) => {

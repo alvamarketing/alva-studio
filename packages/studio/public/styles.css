@@ -1846,3 +1846,44 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 #settings-dialog .dialog-section { padding: 18px 0; border-top: 1px solid var(--alva-line); }
 #settings-dialog .dialog-section:first-of-type { border-top: 0; padding-top: 8px; }
 #settings-dialog .dialog-section h3 { margin: 0 0 6px; font-size: var(--text-lg); }
+
+/* Confirmação de ação: substitui o confirm() do navegador, que some sem avisar
+   quando o contexto bloqueia diálogos nativos. */
+.confirm-dialog {
+  max-width: 420px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-lg);
+  background: var(--alva-white);
+  color: var(--alva-ink);
+  padding: 26px;
+  box-shadow: var(--shadow-lift);
+}
+.confirm-dialog::backdrop {
+  background: rgb(16 24 40 / 45%);
+}
+.confirm-dialog h2 {
+  margin: 0 0 8px;
+  font-size: var(--text-3xl);
+  line-height: 1.25;
+}
+.confirm-dialog p {
+  margin: 0 0 22px;
+  color: var(--alva-muted);
+  font-size: var(--text-lg);
+  line-height: 1.5;
+}
+.confirm-dialog .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm-dialog .primary.perigo {
+  background: var(--alva-negative);
+  border-color: var(--alva-negative);
+  color: var(--alva-on-blue);
+}
+.confirm-dialog .primary.perigo:hover:not(:disabled) {
+  background: var(--alva-negative);
+  border-color: var(--alva-negative);
+  filter: brightness(0.93);
+}

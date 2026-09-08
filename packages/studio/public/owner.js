@@ -1,3 +1,4 @@
+import { confirmarAcao } from './confirm-dialog.js';
 export function validatePasswordConfirmation(password, confirmation) {
   if (password !== confirmation) throw new Error('As senhas não conferem. Digite novamente.');
 }
@@ -421,7 +422,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   };
   $('#vercel-disconnect').onclick = async () => {
     if (!canManageIntegration()) return;
-    if (!confirm('Desconectar a Vercel deste Studio? Suas páginas publicadas continuarão no ar.')) return;
+    if (!(await confirmarAcao({ titulo: 'Desconectar a Vercel?', descricao: 'As páginas já publicadas continuam no ar; novas publicações ficam indisponíveis até reconectar.', confirmar: 'Desconectar', perigo: true }))) return;
     try {
       await api('/settings/vercel', 'PUT', { disconnect: true });
       await refreshSettings();

@@ -11,6 +11,7 @@ import { analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analy
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
+import { confirmarAcao } from './confirm-dialog.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const viewRouter = createViewRouter({ onNavigate: ({ view, settingsTab }) => abrirView(view, { settingsTab, fromHistory: true }) });
@@ -477,7 +478,7 @@ function renderCompanyOverview(overview, { content = $('#company-content'), titl
       cancel.type = 'button';
       cancel.textContent = 'Cancelar renovação';
       cancel.onclick = action(async () => {
-        if (!window.confirm('Cancelar a renovação ao fim do período já pago?')) return;
+        if (!await confirmarAcao({ titulo: 'Cancelar a renovação?', descricao: 'O acesso continua até o fim do período já pago.', confirmar: 'Cancelar renovação', cancelar: 'Manter assinatura', perigo: true })) return;
         await api('/billing/cancel', 'POST');
         await renderCompany();
       });
@@ -895,7 +896,7 @@ function mcpKeyRow(key, projectId) {
     revoke.className = 'project-content-open';
     revoke.textContent = 'Revogar';
     revoke.onclick = action(async () => {
-      if (!confirm(`Revogar a chave “${key.name}”? Agentes conectados perdem acesso imediatamente.`)) return;
+      if (!await confirmarAcao({ titulo: `Revogar a chave “${key.name}”?`, descricao: 'Agentes conectados perdem acesso imediatamente.', confirmar: 'Revogar chave', perigo: true })) return;
       await api(`/projects/${projectId}/mcp/keys/${key.id}`, 'DELETE', {});
       toast('Chave MCP revogada.');
       await renderMcpKeys(projectId);
@@ -1178,8 +1179,7 @@ function renderList() {
         toast('Cópia criada. O domínio foi deixado em branco.');
       });
       card.querySelector('.delete').onclick = action(async () => {
-        if (!confirm('Excluir “' + p.name + '” deste computador? Uma publicação existente na Vercel continuará no ar.'))
-          return;
+        if (!(await confirmarAcao({ titulo: 'Excluir “' + p.name + '”?', descricao: 'A página sai deste Studio. Uma publicação existente na Vercel continua no ar.', confirmar: 'Excluir página', perigo: true }))) return;
         await api('/pages/' + p.id, 'DELETE', {});
         await loadList();
       });
@@ -1362,7 +1362,7 @@ $('#settings-form').onsubmit = action(async (event) => {
 $('#publish').onclick = action(async () => {
   if (!studioShell?.can?.('deployment.publish')) throw new Error('Você não tem permissão para publicar. Peça acesso a um administrador.');
   await save();
-  if (!confirm('Publicar a versão atual de “' + page.name + '” na Vercel?')) return;
+  if (!(await confirmarAcao({ titulo: 'Publicar “' + page.name + '”?', descricao: 'A versão atual vai para a Vercel e fica visível para quem acessar o endereço.', confirmar: 'Publicar' }))) return;
   $('#publish').disabled = true;
   try {
     page.deployment = await api('/pages/' + page.id + '/publish', 'POST', { revision: page.revision });
@@ -1379,7 +1379,7 @@ $('#check-publication').onclick = action(async () => {
 $('#connect-domain').onclick = action(async () => {
   await save();
   if (!page.domain) throw new Error('Preencha e salve um domínio primeiro.');
-  if (!confirm('Conectar ' + page.domain + ' ao projeto desta página na Vercel?')) return;
+  if (!(await confirmarAcao({ titulo: 'Conectar ' + page.domain + '?', descricao: 'O domínio passa a apontar para o projeto desta página na Vercel.', confirmar: 'Conectar domínio' }))) return;
   const result = await api('/pages/' + page.id + '/domain', 'POST', {});
   const domainNode = $('#domain-result');
   domainNode.textContent = result.verified
@@ -2044,7 +2044,7 @@ $('#publication-preview').onclick = action(async () => {
 $('#publication-production').onclick = action(async () => {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha um projeto antes de publicar.');
-  if (!confirm('Publicar todas as rotas deste projeto em produção?')) return;
+  if (!(await confirmarAcao({ titulo: 'Publicar em produção?', descricao: 'Todas as rotas deste projeto vão ao ar de uma vez.', confirmar: 'Publicar tudo' }))) return;
   const publication = await api(`/projects/${projectId}/publication`);
   if (!publication.latestPreviewReady?.id) throw new Error('Crie uma prévia pronta antes de publicar em produção.');
   await api(`/projects/${projectId}/publication/production`, 'POST', { confirmed: true, previewRunId: publication.latestPreviewReady.id, revision: 0 });

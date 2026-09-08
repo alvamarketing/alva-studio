@@ -4,6 +4,7 @@ import { restoreVslOptionFocus, vslOptionKeyboardAction } from './editor-shell.j
 import { createFriendlyEditor } from './editor-shell.js';
 import { canvasSnapshot, seedQuizCanvas } from './quiz-canvas-seed.js';
 import { renderQuizFlowEditor, validateQuizFlow } from './quiz-flow-editor.js';
+import { confirmarAcao } from './confirm-dialog.js';
 
 const TYPES = {
   short_text: { label: 'Texto curto', icon: 'text_fields', title: 'Digite sua pergunta' },
@@ -563,7 +564,7 @@ export function createFormsUI({ api, toast, onReturnToProject = async () => {}, 
           });
         card.querySelector('.delete').onclick = () =>
           run(async () => {
-            if (!confirm(`Excluir “${form.name}” e todas as respostas recebidas?`)) return;
+            if (!(await confirmarAcao({ titulo: `Excluir “${form.name}”?`, descricao: 'As respostas já recebidas são apagadas junto e não há como recuperá-las.', confirmar: 'Excluir formulário', perigo: true }))) return;
             await api(`/forms/${form.id}`, 'DELETE', {});
             await loadList();
           });
