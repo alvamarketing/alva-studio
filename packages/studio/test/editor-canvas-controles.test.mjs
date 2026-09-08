@@ -10,12 +10,10 @@ test('o canvas alterna entre computador, tablet e celular', () => {
   assert.equal(nextCanvasDevice('qualquer-coisa'), 'Desktop');
 });
 
-test('recolher um painel guarda o estado de cada lado separadamente', () => {
-  const inicial = panelToggleState({});
-  assert.deepEqual(inicial, { left: false, right: false });
-  assert.deepEqual(panelToggleState({ left: false, right: false }, 'left'), { left: true, right: false });
-  assert.deepEqual(panelToggleState({ left: true, right: false }, 'right'), { left: true, right: true });
-  assert.deepEqual(panelToggleState({ left: true, right: true }, 'left'), { left: false, right: true });
+test('recolher o painel da estrutura alterna e nada mais', () => {
+  assert.deepEqual(panelToggleState({}), { left: false });
+  assert.deepEqual(panelToggleState({ left: false }, 'left'), { left: true });
+  assert.deepEqual(panelToggleState({ left: true }, 'left'), { left: false });
 });
 
 test('a barra do canvas traz os controles de dispositivo e de recolher', async () => {
@@ -25,7 +23,6 @@ test('a barra do canvas traz os controles de dispositivo e de recolher', async (
   assert.match(barra, /data-device="Tablet"/);
   assert.match(barra, /data-device="Mobile"/);
   assert.match(barra, /data-toggle-panel="left"/);
-  assert.match(barra, /data-toggle-panel="right"/);
 });
 
 test('trocar de dispositivo fala com o GrapesJS, não só com o rótulo', async () => {

@@ -291,7 +291,6 @@ export const editorActionMeta = Object.freeze({
   pageSettings: { label: 'Configurar página', icon: svg('<circle cx="12" cy="12" r="3"/><path d="M4 12h2m12 0h2M12 4v2m0 12v2"/>') },
   pageDownload: { label: 'Baixar', icon: svg('<path d="M12 4v12m-5-5 5 5 5-5"/><path d="M4 20h16"/>') },
   collapseLeft: { label: 'Recolher a estrutura', icon: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>') },
-  collapseRight: { label: 'Recolher as propriedades', icon: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>') },
   deviceDesktop: { label: 'Computador', icon: svg('<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>') },
   deviceTablet: { label: 'Tablet', icon: svg('<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/>') },
   deviceMobile: { label: 'Celular', icon: svg('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>') },
@@ -322,10 +321,12 @@ export function nextCanvasDevice(atual) {
 
 // Cada lado do editor recolhe por conta própria: quem quer ver a página inteira costuma
 // fechar os dois, mas quem está ajustando propriedade fecha só a estrutura.
+// As propriedades viraram a aba "Conteúdo" da barra lateral: sobrou um painel só para
+// recolher, e um estado com dois lados só criava um botão que não tinha o que esconder.
 export function panelToggleState(estado = {}, lado) {
-  const atual = { left: Boolean(estado.left), right: Boolean(estado.right) };
-  if (lado !== 'left' && lado !== 'right') return atual;
-  return { ...atual, [lado]: !atual[lado] };
+  const atual = { left: Boolean(estado.left) };
+  if (lado !== 'left') return atual;
+  return { left: !atual.left };
 }
 
 // Onde uma seção inteira deve nascer. Subir até a primeira <section> não basta: numa
@@ -1038,7 +1039,7 @@ export function createFriendlyEditor({
     </aside>
     <div class="fe-workspace" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas">
       <div class="fe-canvas-shell">
-        <div class="fe-canvas-bar" aria-label="Controles do canvas"><button type="button" class="fe-icon-button" data-toggle-panel="left" aria-pressed="false" title="Recolher a estrutura"></button><span class="fe-canvas-meta">CANVAS · <span data-canvas-device>COMPUTADOR</span></span><span class="fe-canvas-devices" role="group" aria-label="Tamanho da tela"><button type="button" class="fe-device" data-device="Desktop" aria-pressed="true" title="Computador"></button><button type="button" class="fe-device" data-device="Tablet" aria-pressed="false" title="Tablet"></button><button type="button" class="fe-device" data-device="Mobile" aria-pressed="false" title="Celular"></button></span><span class="fe-canvas-history"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></span><span class="fe-canvas-zoom">100%</span><button type="button" class="fe-icon-button" data-toggle-panel="right" aria-pressed="false" title="Recolher as propriedades"></button></div>
+        <div class="fe-canvas-bar" aria-label="Controles do canvas"><button type="button" class="fe-icon-button" data-toggle-panel="left" aria-pressed="false" title="Recolher a estrutura"></button><span class="fe-canvas-meta">CANVAS · <span data-canvas-device>COMPUTADOR</span></span><span class="fe-canvas-devices" role="group" aria-label="Tamanho da tela"><button type="button" class="fe-device" data-device="Desktop" aria-pressed="true" title="Computador"></button><button type="button" class="fe-device" data-device="Tablet" aria-pressed="false" title="Tablet"></button><button type="button" class="fe-device" data-device="Mobile" aria-pressed="false" title="Celular"></button></span><span class="fe-canvas-history"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></span><span class="fe-canvas-zoom">100%</span></div>
         <div class="fe-canvas-frame"><div class="fe-canvas"></div></div>
       </div>
       <div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div>
@@ -1184,9 +1185,12 @@ export function createFriendlyEditor({
     host.querySelectorAll('[data-toggle-panel]').forEach((botao) => {
       const recolhido = painelRecolhido[botao.dataset.togglePanel];
       botao.setAttribute('aria-pressed', String(recolhido));
-      botao.title = botao.dataset.togglePanel === 'left'
-        ? (recolhido ? 'Mostrar a estrutura' : 'Recolher a estrutura')
-        : (recolhido ? 'Mostrar as propriedades' : 'Recolher as propriedades');
+      // title, aria-label e data-tooltip são lidos por gente diferente e precisam
+      // dizer a mesma coisa: a ação que o próximo clique faz, não o estado atual
+      const proximaAcao = recolhido ? 'Mostrar a estrutura' : 'Recolher a estrutura';
+      botao.title = proximaAcao;
+      botao.setAttribute('aria-label', proximaAcao);
+      botao.dataset.tooltip = proximaAcao;
     });
   };
   if (!interactionPolicy.canEdit) status.textContent = 'Modo de visualização: edição, ordem e exclusão estão desativadas.';
@@ -1284,7 +1288,6 @@ export function createFriendlyEditor({
     element.dataset.tooltip = meta.label;
   }
   applyIconButton($('.fe-canvas-bar [data-toggle-panel="left"]'), 'collapseLeft');
-  applyIconButton($('.fe-canvas-bar [data-toggle-panel="right"]'), 'collapseRight');
   for (const id of ['Desktop', 'Tablet', 'Mobile']) {
     applyIconButton($(`.fe-canvas-bar [data-device="${id}"]`), `device${id}`);
   }
