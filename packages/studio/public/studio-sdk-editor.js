@@ -146,16 +146,60 @@ export function traducaoDoEditor() {
   };
 }
 
-// O layout do SDK monta os painéis. Aqui só o essencial: páginas e camadas à esquerda,
-// canvas no meio, ajustes à direita — com os cabeçalhos na língua de quem usa.
+// O layout do SDK monta a tela inteira, barra de cima incluída: definir o layout sem ela
+// faz a barra sumir junto com dispositivos, desfazer e prévia, que são usados o tempo
+// todo. Aqui ela volta enxuta — o que se usa fica à mão, o resto vai para o menu.
 export function layoutDoEditor() {
   return {
-    type: 'row',
+    type: 'column',
     style: { height: '100%' },
     children: [
-      { type: 'panelPagesLayers', header: { label: 'Estrutura da página' }, style: { width: '272px' } },
-      { type: 'canvas' },
-      { type: 'panelSidebarTabs', style: { width: '300px' } },
+      {
+        type: 'row',
+        style: {
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 10px',
+          borderBottom: '1px solid var(--alva-line, #e1e7ef)',
+        },
+        children: [
+          { type: 'devices', style: { width: '180px', flexShrink: 0 } },
+          { type: 'button', id: 'undo', icon: 'arrowULeftTop', tooltip: 'Desfazer', onClick: ({ editor }) => editor.runCommand('core:undo') },
+          { type: 'button', id: 'redo', icon: 'arrowURightTop', tooltip: 'Refazer', onClick: ({ editor }) => editor.runCommand('core:redo') },
+          { type: 'row', grow: true, children: [] },
+          { type: 'button', id: 'preview', icon: 'eye', tooltip: 'Prévia', onClick: ({ editor }) => editor.runCommand('studio:preview') },
+          {
+            type: 'buttonMenu',
+            id: 'mais',
+            label: 'Mais',
+            tooltip: 'Mais opções',
+            options: [
+              { id: 'code', label: 'Ver o código' },
+              { id: 'fullscreen', label: 'Tela cheia' },
+              { id: 'clear', label: 'Limpar a página' },
+            ],
+            onOptionSelect: ({ option, editor }) => {
+              if (option?.id === 'code')
+                editor.runCommand('studio:layoutToggle', {
+                  id: 'code',
+                  layout: 'panelEditCode',
+                  placer: { type: 'dialog', title: 'Código da página', size: 'l' },
+                });
+              if (option?.id === 'fullscreen') editor.runCommand('studio:fullscreen');
+              if (option?.id === 'clear') editor.runCommand('studio:canvasClear');
+            },
+          },
+        ],
+      },
+      {
+        type: 'row',
+        grow: true,
+        children: [
+          { type: 'panelPagesLayers', header: { label: 'Estrutura da página' }, style: { width: '272px' } },
+          { type: 'canvas' },
+          { type: 'panelSidebarTabs', style: { width: '300px' } },
+        ],
+      },
     ],
   };
 }
