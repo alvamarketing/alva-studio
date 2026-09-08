@@ -240,6 +240,7 @@ test('resumo não contém visitor_hash, linha crua de evento nem campo de respos
   assert.equal(response.data.totalEvents, 2, 'só deve contar eventos do projeto A, nunca do projeto B');
   assert.equal(response.data.pageviews, 1);
   assert.equal(response.data.conversions.some((item) => item.urlPath === '/formulario'), true);
-  assert.equal(response.data.dailyVisits.length, 7, 'API repassa a série diária de 7 dias sem alterar o formato do repositório');
+  assert.equal(response.data.dailyVisits.length, 1, 'a série acompanha o período pedido: um dia, um ponto');
+  assert.ok(response.data.dailyVisits.every((day) => typeof day.date === 'string' && typeof day.visits === 'number'), 'API repassa a série sem alterar o formato do repositório');
   assert.ok(Array.isArray(response.data.funnel) && response.data.funnel.every((step) => typeof step.label === 'string' && typeof step.total === 'number'), 'API repassa a jornada origem/rota(s)/conversão sem alterar a forma');
 });

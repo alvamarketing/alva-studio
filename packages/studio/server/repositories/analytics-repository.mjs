@@ -239,21 +239,25 @@ export class AnalyticsRepository {
       range,
     );
 
-    // Últimos 7 dias terminando em "to" (o widget "Visitas nos últimos 7 dias" do wireframe),
-    // independente do range pedido — zero preenchido para dia sem pageview, nunca ausente.
-    const sevenDaysStart = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Série diária da janela pedida, terminando em "to" — zero preenchido para dia sem
+    // pageview, nunca ausente. Quem quer só a última semana (o widget "Visitas nos
+    // últimos 7 dias") corta o fim da série; presa em 7, ela ignorava o período escolhido
+    // na tela de Analytics e o seletor não mudava o gráfico.
+    const umDia = 24 * 60 * 60 * 1000;
+    const diasNaJanela = Math.min(366, Math.max(1, Math.round((to.getTime() - from.getTime()) / umDia)));
+    const dailyStart = new Date(to.getTime() - diasNaJanela * umDia);
     const { rows: dailyRows } = await this.database.query(
       `SELECT date_trunc('day', event_at) AS day, COUNT(*)::int AS total
          FROM analytics_events
         WHERE company_id = $1 AND project_id = $2 AND event_type = 'pageview'
           AND event_at >= $3 AND event_at < $4
         GROUP BY day`,
-      [companyId, projectId, sevenDaysStart, to],
+      [companyId, projectId, dailyStart, to],
     );
     const dailyMap = new Map(dailyRows.map((current) => [current.day.toISOString().slice(0, 10), current.total]));
     const dailyVisits = [];
-    for (let offset = 6; offset >= 0; offset -= 1) {
-      const key = new Date(to.getTime() - offset * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    for (let offset = diasNaJanela - 1; offset >= 0; offset -= 1) {
+      const key = new Date(to.getTime() - offset * umDia).toISOString().slice(0, 10);
       dailyVisits.push({ date: key, visits: dailyMap.get(key) ?? 0 });
     }
 

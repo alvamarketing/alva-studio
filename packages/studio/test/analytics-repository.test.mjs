@@ -142,7 +142,7 @@ test('summary conta somente eventos do próprio projeto e nunca de outro projeto
   }
 });
 
-test('summary inclui dailyVisits: série diária dos últimos 7 dias terminando em "to", com zero preenchido', async (t) => {
+test('summary inclui dailyVisits: série diária da janela pedida, com zero preenchido', async (t) => {
   const database = await migratedDatabase(t);
   try {
     const seed = await seedCompany(database, { email: 'daily@alva.test', companyName: 'Daily', slug: 'daily' });
@@ -157,8 +157,9 @@ test('summary inclui dailyVisits: série diária dos últimos 7 dias terminando 
     await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'v1', event: { type: 'pageview', urlPath: '/', at: threeDaysAgo } });
     await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'v2', event: { type: 'pageview', urlPath: '/', at: threeDaysAgo } });
 
-    const summary = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from: new Date(0), to });
-    assert.equal(summary.dailyVisits.length, 7, 'sempre 7 dias, mesmo sem evento em todos eles');
+    const from = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const summary = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from, to });
+    assert.equal(summary.dailyVisits.length, 7, 'a janela pedida tem 7 dias e todos aparecem, com ou sem evento');
     assert.equal(summary.dailyVisits[0].date, sixDaysAgo.toISOString().slice(0, 10));
     assert.equal(summary.dailyVisits[0].visits, 1);
     assert.equal(summary.dailyVisits[3].date, threeDaysAgo.toISOString().slice(0, 10));
@@ -400,6 +401,32 @@ test('purgeExpired remove dados do evento e sessões sem atividade além da rete
     assert.equal((await database.query('SELECT id FROM analytics_sessions WHERE company_id = $1', [seed.company.id])).rowCount, 0);
     assert.equal((await database.query('SELECT id FROM analytics_events WHERE company_id = $1', [seed.company.id])).rowCount, 0);
     assert.equal((await database.query('SELECT id FROM analytics_event_data WHERE company_id = $1', [seed.company.id])).rowCount, 0);
+  } finally {
+    await database.close();
+  }
+});
+
+test('dailyVisits acompanha o período pedido, não uma janela fixa de 7 dias', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedCompany(database, { email: `daily30-${randomUUID()}@alva.test`, companyName: 'Alva', slug: `alva-daily30-${randomUUID().slice(0, 8)}` });
+    const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'projeto-daily30' });
+    const website = await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'tracker-daily30');
+    const repo = new AnalyticsRepository(database);
+    const to = new Date('2026-03-10T00:00:00Z');
+    // Quem escolhe "Últimos 30 dias" na tela de Analytics precisa ver 30 barras;
+    // a série presa em 7 fazia o seletor de período não mudar o gráfico.
+    const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const vinteDiasAtras = new Date(to.getTime() - 20 * 24 * 60 * 60 * 1000);
+
+    await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'v1', event: { type: 'pageview', urlPath: '/', at: vinteDiasAtras } });
+
+    const summary = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from, to });
+    assert.equal(summary.dailyVisits.length, 30);
+    assert.equal(summary.dailyVisits[0].date, new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    assert.equal(summary.dailyVisits.at(-1).date, to.toISOString().slice(0, 10));
+    const dia = summary.dailyVisits.find((current) => current.date === vinteDiasAtras.toISOString().slice(0, 10));
+    assert.equal(dia.visits, 1, 'o dia com evento aparece na posição certa da janela longa');
   } finally {
     await database.close();
   }
