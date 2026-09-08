@@ -268,6 +268,15 @@ export function buildPageExportHtml({ title = '', css = '', html = '', js = '', 
 }
 
 export const editorActionMeta = Object.freeze({
+  pagePreview: { label: 'Prévia', icon: svg('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>') },
+  pagePublish: { label: 'Publicar', icon: svg('<path d="M12 16V4m-5 5 5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>') },
+  pageSettings: { label: 'Configurar página', icon: svg('<circle cx="12" cy="12" r="3"/><path d="M4 12h2m12 0h2M12 4v2m0 12v2"/>') },
+  pageDownload: { label: 'Baixar', icon: svg('<path d="M12 4v12m-5-5 5 5 5-5"/><path d="M4 20h16"/>') },
+  collapseLeft: { label: 'Recolher a estrutura', icon: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>') },
+  collapseRight: { label: 'Recolher as propriedades', icon: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>') },
+  deviceDesktop: { label: 'Computador', icon: svg('<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>') },
+  deviceTablet: { label: 'Tablet', icon: svg('<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/>') },
+  deviceMobile: { label: 'Celular', icon: svg('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>') },
   undo: { label: 'Desfazer', icon: svg('<path d="M9 7 4 12l5 5"/><path d="M20 17a8 8 0 0 0-13-5"/>') },
   redo: { label: 'Refazer', icon: svg('<path d="m15 7 5 5-5 5"/><path d="M4 17a8 8 0 0 1 13-5"/>') },
   moveUp: { label: 'Mover acima', icon: svg('<path d="m12 19V5m-6 6 6-6 6 6"/>') },
@@ -284,6 +293,22 @@ export const editorActionMeta = Object.freeze({
   },
   delete: { label: 'Excluir', icon: svg('<path d="M4 7h16m-10 4v5m4-5v5M9 7l1-3h4l1 3m3 0-1 13H7L6 7"/>') },
 });
+
+const CANVAS_DEVICES = ['Desktop', 'Tablet', 'Mobile'];
+
+// Ciclo de dispositivos do canvas. Fica fora do editor para poder ser testado sozinho.
+export function nextCanvasDevice(atual) {
+  const indice = CANVAS_DEVICES.indexOf(atual);
+  return indice === -1 ? CANVAS_DEVICES[0] : CANVAS_DEVICES[(indice + 1) % CANVAS_DEVICES.length];
+}
+
+// Cada lado do editor recolhe por conta própria: quem quer ver a página inteira costuma
+// fechar os dois, mas quem está ajustando propriedade fecha só a estrutura.
+export function panelToggleState(estado = {}, lado) {
+  const atual = { left: Boolean(estado.left), right: Boolean(estado.right) };
+  if (lado !== 'left' && lado !== 'right') return atual;
+  return { ...atual, [lado]: !atual[lado] };
+}
 
 export function panelMode(component) {
   return !component || component.is?.('wrapper') ? 'library' : 'inspector';
@@ -751,6 +776,20 @@ export function editorialElementLabel(component, { inNav = false } = {}) {
   return ({ p: 'Texto', a: 'Botão', button: 'Botão', img: 'Imagem', form: 'Formulário', input: 'Campo', textarea: 'Mensagem', select: 'Lista de opções', label: 'Campo', summary: 'Pergunta', })[tag] || '';
 }
 
+// Dois "Gráfico de barras" seguidos são indistinguíveis para quem não é técnico.
+// Quem se repete dentro da seção ganha número; quem é único fica como está.
+export function numberRepeatedLabels(labels = []) {
+  const total = new Map();
+  for (const label of labels) total.set(label, (total.get(label) ?? 0) + 1);
+  const visto = new Map();
+  return labels.map((label) => {
+    if (total.get(label) < 2) return label;
+    const ordem = (visto.get(label) ?? 0) + 1;
+    visto.set(label, ordem);
+    return `${label} ${ordem}`;
+  });
+}
+
 export function editorialLabel(component) {
   const chart = chartAncestor(component);
   if (componentHasClass(chart, 'alva-chart-bars')) return 'Gráfico de barras';
@@ -880,7 +919,7 @@ export function createFriendlyEditor({
     </aside>
     <div class="fe-workspace" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas">
       <div class="fe-canvas-shell">
-        <div class="fe-canvas-bar" aria-label="Controles do canvas"><span class="fe-canvas-meta">CANVAS · <span data-canvas-device>COMPUTADOR</span></span><span class="fe-canvas-history"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></span><span class="fe-canvas-zoom">100%</span></div>
+        <div class="fe-canvas-bar" aria-label="Controles do canvas"><button type="button" class="fe-icon-button" data-toggle-panel="left" aria-pressed="false" title="Recolher a estrutura"></button><span class="fe-canvas-meta">CANVAS · <span data-canvas-device>COMPUTADOR</span></span><span class="fe-canvas-devices" role="group" aria-label="Tamanho da tela"><button type="button" class="fe-device" data-device="Desktop" aria-pressed="true" title="Computador"></button><button type="button" class="fe-device" data-device="Tablet" aria-pressed="false" title="Tablet"></button><button type="button" class="fe-device" data-device="Mobile" aria-pressed="false" title="Celular"></button></span><span class="fe-canvas-history"><button type="button" class="fe-icon-button" data-undo></button><button type="button" class="fe-icon-button" data-redo></button></span><span class="fe-canvas-zoom">100%</span><button type="button" class="fe-icon-button" data-toggle-panel="right" aria-pressed="false" title="Recolher as propriedades"></button></div>
         <div class="fe-canvas-frame"><div class="fe-canvas"></div></div>
       </div>
       <div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div>
@@ -918,27 +957,25 @@ export function createFriendlyEditor({
       cleanup.push(() => observer.disconnect());
     }
     const actions = pageHeader.querySelector('.editor-actions');
-    if (actions && !pageHeader.querySelector('.fe-header-more')) {
-      const more = document.createElement('details');
-      more.className = 'fe-header-more';
-      more.innerHTML = '<summary aria-label="Mais ações" title="Mais ações"><span class="material-symbols-outlined" aria-hidden="true">more_horiz</span></summary><div class="fe-header-more-menu" role="group" aria-label="Mais ações"></div>';
-      const menu = more.querySelector('.fe-header-more-menu');
-      // Move the original controls so their established IDs and handlers remain
-      // the source of truth; the menu merely gives them a compact home.
-      ['.device-control', '#settings', '#download'].forEach((selector) => {
-        const control = actions.querySelector(selector);
-        if (control) menu.append(control);
-      });
-      [['preview', 'Prévia'], ['publish', 'Publicar']].forEach(([id, label]) => {
-        const shortcut = document.createElement('button');
-        shortcut.type = 'button';
-        shortcut.className = 'fe-header-menu-action';
-        shortcut.setAttribute('aria-label', label);
-        shortcut.textContent = label;
-        shortcut.onclick = () => pageHeader.querySelector(`#${id}`)?.click();
-        menu.append(shortcut);
-      });
-      actions.before(more);
+    if (actions) {
+      // O tamanho da tela agora vive na barra do canvas, junto da página que ele afeta.
+      pageHeader.querySelector('.device-control')?.remove();
+      // Prévia, publicar, configurar e baixar viram ícones: o nome aparece no hover, e
+      // Salvar continua com texto por ser a ação que a pessoa procura primeiro.
+      for (const [seletor, acao] of [['#preview', 'pagePreview'], ['#publish', 'pagePublish'], ['#settings', 'pageSettings'], ['#download', 'pageDownload']]) {
+        const botao = pageHeader.querySelector(seletor);
+        if (!botao) continue;
+        botao.classList.add('fe-header-icon');
+        applyIconButton(botao, acao);
+        actions.append(botao);
+      }
+      // O estado de salvamento estava solto no meio do cabeçalho; passa a abrir as ações.
+      const savedGroup = document.createElement('span');
+      savedGroup.className = 'fe-saved-group';
+      const marca = pageHeader.querySelector('.fe-saved-mark');
+      if (marca) savedGroup.append(marca);
+      if (saveState) savedGroup.append(saveState);
+      actions.prepend(savedGroup);
     }
   }
   let loading = true;
@@ -1012,17 +1049,26 @@ export function createFriendlyEditor({
   }
   bindWorkspaceTabs();
   syncWorkspacePanels();
-  const syncCanvasDevice = () => {
-    const device = document.querySelector('#device');
-    const label = device?.selectedOptions?.[0]?.textContent || 'Computador';
-    host.querySelectorAll('[data-canvas-device]').forEach((node) => { node.textContent = label.toUpperCase(); });
+  const NOMES_DE_DISPOSITIVO = { Desktop: 'Computador', Tablet: 'Tablet', Mobile: 'Celular' };
+  const syncCanvasDevice = (id = 'Desktop') => {
+    host.querySelectorAll('[data-canvas-device]').forEach((node) => { node.textContent = (NOMES_DE_DISPOSITIVO[id] || 'Computador').toUpperCase(); });
+    host.querySelectorAll('[data-device]').forEach((botao) => {
+      botao.setAttribute('aria-pressed', String(botao.dataset.device === id));
+    });
+    host.querySelector('.fe-canvas-frame')?.setAttribute('data-device', id);
   };
-  const deviceControl = document.querySelector('#device');
-  syncCanvasDevice();
-  if (deviceControl) {
-    deviceControl.addEventListener('change', syncCanvasDevice);
-    cleanup.push(() => deviceControl.removeEventListener('change', syncCanvasDevice));
-  }
+  let painelRecolhido = panelToggleState({});
+  const syncPainelRecolhido = () => {
+    // o próprio host é o .friendly-editor: querySelector não encontraria a si mesmo
+    host.setAttribute('data-collapsed', [painelRecolhido.left ? 'left' : '', painelRecolhido.right ? 'right' : ''].filter(Boolean).join(' '));
+    host.querySelectorAll('[data-toggle-panel]').forEach((botao) => {
+      const recolhido = painelRecolhido[botao.dataset.togglePanel];
+      botao.setAttribute('aria-pressed', String(recolhido));
+      botao.title = botao.dataset.togglePanel === 'left'
+        ? (recolhido ? 'Mostrar a estrutura' : 'Recolher a estrutura')
+        : (recolhido ? 'Mostrar as propriedades' : 'Recolher as propriedades');
+    });
+  };
   if (!interactionPolicy.canEdit) status.textContent = 'Modo de visualização: edição, ordem e exclusão estão desativadas.';
   if (typeof window !== 'undefined') {
     const syncOnResize = () => syncWorkspacePanels();
@@ -1037,6 +1083,25 @@ export function createFriendlyEditor({
     element.title = label;
     element.dataset.tooltip = meta.label;
   }
+  applyIconButton($('.fe-canvas-bar [data-toggle-panel="left"]'), 'collapseLeft');
+  applyIconButton($('.fe-canvas-bar [data-toggle-panel="right"]'), 'collapseRight');
+  for (const id of ['Desktop', 'Tablet', 'Mobile']) {
+    applyIconButton($(`.fe-canvas-bar [data-device="${id}"]`), `device${id}`);
+  }
+  for (const botao of host.querySelectorAll('.fe-canvas-bar [data-device]')) {
+    botao.onclick = () => {
+      editor.setDevice(botao.dataset.device);
+      syncCanvasDevice(botao.dataset.device);
+    };
+  }
+  for (const botao of host.querySelectorAll('.fe-canvas-bar [data-toggle-panel]')) {
+    botao.onclick = () => {
+      painelRecolhido = panelToggleState(painelRecolhido, botao.dataset.togglePanel);
+      syncPainelRecolhido();
+    };
+  }
+  syncPainelRecolhido();
+  syncCanvasDevice('Desktop');
   applyIconButton($('.fe-canvas-bar [data-undo]'), 'undo', 'Ctrl/Cmd + Z');
   applyIconButton($('.fe-canvas-bar [data-redo]'), 'redo');
   const editor = window.grapesjs.init({
@@ -1295,8 +1360,11 @@ export function createFriendlyEditor({
     for (const section of sections) {
       if (section.synthetic) appendSyntheticGroup({ label: section.label, count: section.elements.length });
       else appendItem({ component: section.component, label: section.label, level: 1, selected: section.selected, section: true, count: section.elements.length });
-      section.elements.forEach((element) => appendItem({ ...element, level: 2 }));
-      if (!section.synthetic) {
+      const rotulos = numberRepeatedLabels(section.elements.map((element) => element.label));
+      section.elements.forEach((element, indice) => appendItem({ ...element, label: rotulos[indice], level: 2 }));
+      // O botão adiciona dentro desta seção. Mostrar um por seção polui a árvore, então
+      // ele acompanha a seção aberta — que é onde a pessoa está trabalhando.
+      if (!section.synthetic && section.selected) {
         const add = document.createElement('button');
         add.type = 'button';
         add.className = 'fe-tree-add';

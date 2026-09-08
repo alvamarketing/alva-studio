@@ -1243,7 +1243,6 @@ async function openPage(id) {
   });
   loading = false;
   if (!page.project || editor.__alvaMigrated) markDirty();
-  $('#device').value = 'Desktop';
   syncPagePublishControl();
 }
 $('#new-page').onclick = () => {
@@ -1287,7 +1286,6 @@ $('#back').onclick = action(async () => {
   await returnToProject(projectId);
   setDashboardView('project');
 });
-$('#device').onchange = () => editor.setDevice($('#device').value);
 $('#preview').onclick = action(async () => {
   await save();
   $('#preview-dialog iframe').srcdoc = exportHtml();
