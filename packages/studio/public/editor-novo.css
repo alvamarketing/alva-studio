@@ -26,3 +26,63 @@ body { display: grid; grid-template-rows: auto minmax(0, 1fr); font-family: var(
 .en-title strong { font-size: var(--text-lg); color: var(--alva-ink); }
 .en-state { margin: 0 0 0 auto; color: var(--alva-muted); font-size: var(--text-md); }
 .en-root { min-height: 0; height: 100%; }
+
+/* Ajustes sobre a interface do SDK.
+   O SDK desenha estes pedaços por conta própria e não expõe configuração para eles, só
+   as classes gs-*. Por isso este bloco é mais frágil que o resto do editor: numa
+   atualização do pacote uma classe pode mudar de nome e o ajuste some sem avisar. Cada
+   regra abaixo diz a que se agarra e por quê. */
+
+/* Tag e classe CSS são vocabulário de quem programa. Quem monta uma landing aqui escolhe
+   o elemento no canvas e mexe na aparência; o painel de seletores só assusta. */
+.gs-cmp-selector-manager__field-selectors,
+.gs-cmp-selector-manager__field-components,
+.gs-cmp-selector-manager__actions {
+  display: none;
+}
+.gs-cmp-selector-manager__head {
+  padding-bottom: 4px;
+}
+
+/* A barra que aparece sobre o elemento selecionado vinha com círculos brancos sobre azul,
+   que não existem em nenhum outro lugar da interface. Vira uma faixa só, com os cantos e
+   a cor do resto do Studio. */
+.gs-component-toolbar {
+  border-radius: var(--radius-sm) !important;
+  background: var(--alva-blue, #286eea) !important;
+  padding: 2px !important;
+}
+.gs-component-toolbar__item-btn {
+  border-radius: var(--radius-xs) !important;
+  background: transparent !important;
+  color: #fff !important;
+}
+.gs-component-toolbar__item-btn:hover {
+  background: rgb(255 255 255 / 18%) !important;
+}
+
+/* Camadas: a linha é o que a pessoa lê e arrasta. O ícone recua para não competir com o
+   nome, e a linha escolhida ganha o azul do Studio em vez de um cinza qualquer. */
+.gs-cmp-layer-item__icon {
+  opacity: 0.55;
+}
+.gs-cmp-layer-item__name {
+  font-size: var(--text-md);
+}
+.gs-cmp-layer-item--selected > .gs-cmp-layer-item__layer,
+.gs-cmp-layer-item--selected .gs-cmp-layer-item__content {
+  background: var(--alva-highlight, #edf4ff) !important;
+  color: var(--alva-blue-strong, #286eea) !important;
+}
+.gs-cmp-layer-item--selected .gs-cmp-layer-item__icon {
+  opacity: 1;
+}
+
+/* Categorias de estilo: o nome fica em peso de leitura, e o cabeçalho ganha respiro para
+   parecer uma lista de assuntos, não uma pilha de barras. */
+.gs-style-manager-sector-header {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
