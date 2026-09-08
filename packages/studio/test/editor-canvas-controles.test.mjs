@@ -39,3 +39,13 @@ test('o estado de recolhido é marcado no próprio editor, não num filho', asyn
   assert.match(corpo, /host\.setAttribute\('data-collapsed'/);
   assert.doesNotMatch(corpo, /host\.querySelector\('\.friendly-editor'\)/);
 });
+
+test('em computador a página ocupa a largura toda; tablet e celular é que simulam', async () => {
+  const css = await readFile(new URL('../public/editor-shell.css', import.meta.url), 'utf8');
+  const quadro = css.slice(css.indexOf('.fe-canvas-frame {'), css.indexOf('.fe-canvas-frame {') + 300);
+  assert.doesNotMatch(quadro, /width:\s*min\(790px/);
+  assert.match(quadro, /width:\s*100%/);
+  // as larguras simuladas continuam presas ao dispositivo escolhido
+  assert.match(css, /\.fe-canvas-frame\[data-device='Tablet'\][^}]*width:\s*768px/);
+  assert.match(css, /\.fe-canvas-frame\[data-device='Mobile'\][^}]*width:\s*375px/);
+});

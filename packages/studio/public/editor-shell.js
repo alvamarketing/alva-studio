@@ -310,6 +310,44 @@ export function panelToggleState(estado = {}, lado) {
   return { ...atual, [lado]: !atual[lado] };
 }
 
+// Onde uma seção inteira deve nascer. Subir até a primeira <section> não basta: numa
+// página que já tem seções aninhadas, isso aninharia mais uma. Sobe até a seção de mais
+// alto nível e devolve o lugar ao lado dela, no corpo da página.
+export function sectionInsertionTarget(selected, wrapper) {
+  const tag = (model) => String(model?.get?.('tagName') || '').toLowerCase();
+  if (!selected || selected === wrapper) return { target: wrapper, at: undefined };
+  let atual = selected;
+  let secaoDeTopo = null;
+  while (atual && atual !== wrapper) {
+    if (tag(atual) === 'section') secaoDeTopo = atual;
+    atual = atual.parent?.();
+  }
+  if (!secaoDeTopo) return { target: wrapper, at: undefined };
+  return { target: secaoDeTopo.parent?.() ?? wrapper, at: secaoDeTopo.index() + 1 };
+}
+
+// Seções recolhidas da árvore. Guardamos só quem está fechado: assim uma seção nova
+// nasce aberta, sem precisar ser registrada em lugar nenhum.
+export function toggleTreeSection(recolhidas, id) {
+  const proximo = new Set(recolhidas ?? []);
+  if (proximo.has(id)) proximo.delete(id);
+  else proximo.add(id);
+  return proximo;
+}
+
+export function isTreeSectionOpen(recolhidas, id) {
+  return !(recolhidas ?? new Set()).has(id);
+}
+
+const PANEL_TABS = ['estrutura', 'elementos', 'conteudo'];
+
+// Abas do painel, no espírito do Elementor: estrutura, biblioteca e propriedades no mesmo
+// lugar. Escolher um elemento leva direto ao conteúdo dele — é o que a pessoa quer ver.
+export function nextPanelTab(atual, { selecionou = false } = {}) {
+  if (selecionou) return { abas: PANEL_TABS, ativa: 'conteudo' };
+  return { abas: PANEL_TABS, ativa: PANEL_TABS.includes(atual) ? atual : 'estrutura' };
+}
+
 export function panelMode(component) {
   return !component || component.is?.('wrapper') ? 'library' : 'inspector';
 }
@@ -905,17 +943,21 @@ export function createFriendlyEditor({
   host.innerHTML = `
     <div class="editor-workspace-tabs" role="tablist" aria-label="Regiões do editor">${workspace.panels.map((panel) => `<button type="button" role="tab" data-workspace-tab="${panel.id}" id="${workspaceId}-tab-${panel.id}" aria-controls="${workspaceId}-panel-${panel.id}" aria-selected="${panel.selected}" tabindex="${panel.selected ? '0' : '-1'}">${panel.label}</button>`).join('')}</div>
     <aside class="fe-sidebar" data-editor-panel="structure" id="${workspaceId}-panel-structure" role="tabpanel" aria-labelledby="${workspaceId}-tab-structure">
-      <div class="fe-panel-heading">
-        <span class="fe-eyebrow">PÁGINA</span>
-        <h2>Estrutura</h2>
-        <p>Organize seções e elementos em uma única árvore.</p>
+      <div class="fe-panel-tabs" role="tablist" aria-label="Painel de edição">
+        <button type="button" class="fe-panel-tab" data-panel-tab="estrutura" role="tab" aria-selected="true">Estrutura</button>
+        <button type="button" class="fe-panel-tab" data-panel-tab="elementos" role="tab" aria-selected="false">Elementos</button>
+        <button type="button" class="fe-panel-tab" data-panel-tab="conteudo" role="tab" aria-selected="false">Conteúdo</button>
       </div>
-      <div class="fe-tree" role="tree" aria-label="Estrutura da página"></div>
-      <details class="fe-library">
-        <summary>Adicionar elementos</summary>
+      <div class="fe-panel-pane" data-panel-pane="estrutura">
+        <div class="fe-tree" role="tree" aria-label="Estrutura da página"></div>
+      </div>
+      <div class="fe-panel-pane" data-panel-pane="elementos" hidden>
         <div class="fe-blocks"></div>
         <div class="fe-library-tip"><strong>Comece pelo essencial</strong><p>Um título claro, uma imagem e um convite para conversar.</p></div>
-      </details>
+      </div>
+      <div class="fe-panel-pane" data-panel-pane="conteudo" hidden>
+        <div class="fe-inspector" data-editor-panel="inspector" id="${workspaceId}-panel-inspector" role="tabpanel" aria-labelledby="${workspaceId}-tab-inspector" aria-label="Editar elemento"><div class="fe-properties"></div></div>
+      </div>
     </aside>
     <div class="fe-workspace" data-editor-panel="canvas" id="${workspaceId}-panel-canvas" role="tabpanel" aria-labelledby="${workspaceId}-tab-canvas">
       <div class="fe-canvas-shell">
@@ -924,7 +966,7 @@ export function createFriendlyEditor({
       </div>
       <div class="fe-status" role="status" aria-live="polite">Dica: dê dois cliques em um texto para escrever diretamente na página.</div>
     </div>
-    <aside class="fe-inspector" data-editor-panel="inspector" id="${workspaceId}-panel-inspector" role="tabpanel" aria-labelledby="${workspaceId}-tab-inspector" aria-label="Editar elemento"><div class="fe-properties"></div></aside>`;
+`;
   const $ = (selector) => host.querySelector(selector);
   const props = $('.fe-properties');
   const status = $('.fe-status');
@@ -983,6 +1025,7 @@ export function createFriendlyEditor({
   let activeModel;
   let treeComponents = new Map();
   let treeDragSource = null;
+  let secoesRecolhidas = new Set();
   let readOnlyMutationGuard = null;
   let pendingVslOptionFocusId = null;
   const publishedVslById = new Map(publishedVslOptions(vslVideos).map((video) => [video.publicId, video]));
@@ -1100,6 +1143,24 @@ export function createFriendlyEditor({
       syncPainelRecolhido();
     };
   }
+  let abaDoPainel = 'estrutura';
+  const syncAbasDoPainel = ({ selecionou = false } = {}) => {
+    const { ativa } = nextPanelTab(abaDoPainel, { selecionou });
+    abaDoPainel = ativa;
+    for (const botao of host.querySelectorAll('[data-panel-tab]')) {
+      botao.setAttribute('aria-selected', String(botao.dataset.panelTab === ativa));
+    }
+    for (const painel of host.querySelectorAll('[data-panel-pane]')) {
+      painel.hidden = painel.dataset.panelPane !== ativa;
+    }
+  };
+  host.querySelector('.fe-panel-tabs')?.addEventListener('click', (evento) => {
+    const aba = evento.target.closest('[data-panel-tab]');
+    if (!aba) return;
+    abaDoPainel = aba.dataset.panelTab;
+    syncAbasDoPainel();
+  });
+  syncAbasDoPainel();
   syncPainelRecolhido();
   syncCanvasDevice('Desktop');
   applyIconButton($('.fe-canvas-bar [data-undo]'), 'undo', 'Ctrl/Cmd + Z');
@@ -1268,6 +1329,8 @@ export function createFriendlyEditor({
     const component = treeComponents.get(id);
     if (!component) return;
     const compact = isCompactWorkspace();
+    // Escolher um elemento é pedir para editá-lo: o painel vai para o conteúdo dele.
+    syncAbasDoPainel({ selecionou: true });
     activateWorkspacePanel('inspector', { focusTab: compact });
     editor.select(component, { scroll: false });
     scrollTreeComponent(editor, component);
@@ -1320,8 +1383,22 @@ export function createFriendlyEditor({
       item.setAttribute('aria-level', String(level));
       item.setAttribute('aria-selected', String(selected));
       item.style.setProperty('--fe-tree-level', String(level));
-      item.innerHTML = `<span class="fe-tree-drag material-symbols-outlined" aria-hidden="true">drag_indicator</span><span class="fe-tree-icon material-symbols-outlined" aria-hidden="true">${editorTreeIcon(component)}</span><span class="fe-tree-label"></span>${section ? `<small>${count}</small>` : ''}`;
+      const aberta = isTreeSectionOpen(secoesRecolhidas, id);
+      item.innerHTML = `<span class="fe-tree-drag material-symbols-outlined" aria-hidden="true">drag_indicator</span>${section ? `<span class="fe-tree-toggle material-symbols-outlined" role="button" tabindex="0" aria-expanded="${aberta}" aria-label="${aberta ? 'Recolher seção' : 'Expandir seção'}">${aberta ? 'expand_more' : 'chevron_right'}</span>` : ''}<span class="fe-tree-icon material-symbols-outlined" aria-hidden="true">${editorTreeIcon(component)}</span><span class="fe-tree-label"></span>${section ? `<small>${count}</small>` : ''}`;
       item.querySelector('.fe-tree-label').textContent = label;
+      const toggle = item.querySelector('.fe-tree-toggle');
+      if (toggle) {
+        const alternar = (evento) => {
+          evento.preventDefault();
+          evento.stopPropagation();
+          secoesRecolhidas = toggleTreeSection(secoesRecolhidas, id);
+          renderTree();
+        };
+        toggle.addEventListener('click', alternar);
+        toggle.addEventListener('keydown', (evento) => {
+          if (evento.key === 'Enter' || evento.key === ' ') alternar(evento);
+        });
+      }
       bindTreeItemActivation(item, (activeItem) => selectTreeItem(id, activeItem));
       bindTreeDragInteraction(item, {
         id,
@@ -1360,8 +1437,11 @@ export function createFriendlyEditor({
     for (const section of sections) {
       if (section.synthetic) appendSyntheticGroup({ label: section.label, count: section.elements.length });
       else appendItem({ component: section.component, label: section.label, level: 1, selected: section.selected, section: true, count: section.elements.length });
-      const rotulos = numberRepeatedLabels(section.elements.map((element) => element.label));
-      section.elements.forEach((element, indice) => appendItem({ ...element, label: rotulos[indice], level: 2 }));
+      const idDaSecao = section.component ? componentTreeId(section.component) : `sintetica:${section.label}`;
+      if (isTreeSectionOpen(secoesRecolhidas, idDaSecao)) {
+        const rotulos = numberRepeatedLabels(section.elements.map((element) => element.label));
+        section.elements.forEach((element, indice) => appendItem({ ...element, label: rotulos[indice], level: 2 }));
+      }
       // O botão adiciona dentro desta seção. Mostrar um por seção polui a árvore, então
       // ele acompanha a seção aberta — que é onde a pessoa está trabalhando.
       if (!section.synthetic && section.selected) {
@@ -1413,11 +1493,7 @@ export function createFriendlyEditor({
     const selectedChartTarget = chartInsertionTarget(selected, wrapper);
     // Whole sections belong next to the section being edited, never inside a paragraph.
     if (structure) {
-      while (target.parent() && !['main', 'section'].includes(tagOf(target))) target = target.parent();
-      if (tagOf(target) === 'section') {
-        at = target.index() + 1;
-        target = target.parent();
-      }
+      ({ target, at } = sectionInsertionTarget(selected, wrapper));
     } else if (selectedChartTarget) {
       ({ target, at } = selectedChartTarget);
     } else {
@@ -2254,6 +2330,8 @@ export function createFriendlyEditor({
     repaint = setTimeout(render, 100);
   }));
   editor.on('component:selected component:deselected', render);
+  // Clicar direto no canvas também é escolher um elemento para editar.
+  editor.on('component:selected', () => syncAbasDoPainel({ selecionou: true }));
   editor.on('update', () => {
     if (!interactionPolicy.canEdit) return;
     if (!loading) onChange();

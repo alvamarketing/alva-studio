@@ -20,7 +20,7 @@
 }
 .friendly-editor {
   display: grid;
-  grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 320px);
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
   height: calc(100dvh - 64px);
   min-height: 520px;
   width: 100%;
@@ -174,7 +174,8 @@
   background: #fff;
 }
 .fe-canvas-frame {
-  width: min(790px, 100%);
+  /* Computador é a tela inteira do editor. Só tablet e celular simulam largura. */
+  width: 100%;
   min-height: 760px;
   height: calc(100% - 34px);
   margin: 0 auto;
@@ -183,7 +184,7 @@
   box-shadow: 0 12px 35px rgb(16 24 40 / 5%);
 }
 .fe-canvas-bar {
-  width: min(790px, 100%);
+  width: 100%;
   min-height: 28px;
   margin: 0 auto 14px;
   display: flex;
@@ -807,7 +808,7 @@
 .landing-editor-header #publish-help { display: none; }
 @media (max-width: 1250px) {
   .friendly-editor {
-    grid-template-columns: minmax(0, 270px) minmax(0, 1fr) minmax(0, 320px);
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
   }
   .fe-canvas-bar {
     justify-content: flex-end;
@@ -1114,11 +1115,8 @@
 
 /* Recolher os painéis e ver a página em cada tamanho de tela. A grade some coluna a
    coluna, então o canvas ganha a largura sem precisar de posicionamento absoluto. */
-.friendly-editor[data-collapsed~='left'] { grid-template-columns: 0 minmax(0, 1fr) minmax(0, 320px); }
-.friendly-editor[data-collapsed~='right'] { grid-template-columns: minmax(0, 270px) minmax(0, 1fr) 0; }
-.friendly-editor[data-collapsed~='left'][data-collapsed~='right'] { grid-template-columns: 0 minmax(0, 1fr) 0; }
-.friendly-editor[data-collapsed~='left'] > .fe-library,
-.friendly-editor[data-collapsed~='right'] > .fe-inspector { display: none; }
+.friendly-editor[data-collapsed~='left'] { grid-template-columns: 0 minmax(0, 1fr); }
+.friendly-editor[data-collapsed~='left'] > .fe-sidebar { display: none; }
 
 .fe-canvas-devices { display: inline-flex; gap: 2px; margin-left: 12px; }
 .fe-device { width: 30px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--alva-muted); cursor: pointer; padding: 0; }
@@ -1126,10 +1124,9 @@
 .fe-device[aria-pressed='true'] { background: var(--alva-highlight); color: var(--alva-blue-strong); }
 .fe-device .material-symbols-outlined { font-size: 17px; }
 
-/* Tablet e celular estreitam o quadro para mostrar a página no tamanho real. */
-.fe-canvas-frame[data-device='Tablet'] .fe-canvas { max-width: 768px; margin: 0 auto; }
-.fe-canvas-frame[data-device='Mobile'] .fe-canvas { max-width: 375px; margin: 0 auto; }
-.fe-canvas-frame[data-device='Tablet'], .fe-canvas-frame[data-device='Mobile'] { background: var(--alva-cloud); }
+/* Tablet e celular estreitam o próprio quadro, para a página aparecer no tamanho real. */
+.fe-canvas-frame[data-device='Tablet'] { width: 768px; }
+.fe-canvas-frame[data-device='Mobile'] { width: 375px; }
 
 /* Cabeçalho do editor: ações viram ícones e o nome aparece no hover. O estado de
    salvamento abre o grupo de ações em vez de ficar solto no meio da barra. */
@@ -1138,3 +1135,18 @@
 .editor-header .fe-header-icon { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 1px solid var(--alva-line); border-radius: 10px; background: var(--alva-white); color: var(--alva-ink); position: relative; }
 .editor-header .fe-header-icon:hover { background: var(--alva-highlight); transform: none; }
 .editor-header .fe-header-icon svg { width: 18px; height: 18px; }
+
+/* Abas do painel, no topo: estrutura, biblioteca e propriedades no mesmo lugar. */
+.fe-panel-tabs { display: flex; flex-wrap: nowrap; gap: 2px; padding: 12px 12px 0; border-bottom: 1px solid var(--alva-line); }
+.fe-panel-tab { flex: 1 1 0; min-width: 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 10px 4px; color: var(--alva-muted); font-size: 11px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.fe-panel-tab:hover { background: transparent; transform: none; color: var(--alva-ink); }
+.fe-panel-tab[aria-selected='true'] { color: var(--alva-blue); border-bottom-color: var(--alva-blue); font-weight: 650; }
+.fe-panel-pane { min-height: 0; overflow-y: auto; }
+.fe-panel-pane[data-panel-pane='elementos'] { padding: 16px; }
+.fe-panel-pane[data-panel-pane='conteudo'] .fe-inspector { border: 0; width: 100%; }
+
+/* Recolher seções na árvore: a seta fica antes do ícone e não dispara a seleção. */
+.fe-tree-item.fe-tree-section { grid-template-columns: 18px 18px 22px minmax(0, 1fr) auto; }
+.fe-tree-toggle { font-size: 18px; color: var(--alva-muted); cursor: pointer; border-radius: 5px; }
+.fe-tree-toggle:hover { background: var(--alva-cloud); color: var(--alva-ink); }
+.fe-tree-toggle:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 1px; }
