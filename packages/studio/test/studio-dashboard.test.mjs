@@ -578,17 +578,3 @@ test('ações de cabeçalho levam para superfícies reais do projeto', async () 
   assert.doesNotMatch(app, /\$\('#project-settings-action'\)\.onclick = \(\) => setDashboardView\('settings'\)/);
 });
 
-test('Configurar projeto abre a tela onde a seção de publicação realmente está', async () => {
-  const [html, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(appPath, 'utf8')]);
-
-  // A seção já mudou de tela uma vez e o botão ficou para trás: rolava até um
-  // elemento escondido, sem navegar e sem erro, então o clique não fazia nada.
-  const antes = html.slice(0, html.indexOf('id="project-publication"'));
-  const telaDaSecao = [...antes.matchAll(/<section id="([a-z-]+-view)"/g)].at(-1)[1];
-  const view = telaDaSecao.replace(/-view$/, '');
-
-  const handler = app.slice(app.indexOf("$('#project-settings-action').onclick"));
-  const corpo = handler.slice(0, handler.indexOf('\n});'));
-  assert.match(corpo, new RegExp(`setDashboardView\\('${view}'\\)`), `o botão precisa abrir '${view}', que é onde a seção de publicação está`);
-  assert.match(corpo, /\$\('#project-publication'\)\.scrollIntoView/, 'depois de abrir a tela, rolar até a seção');
-});

@@ -47,6 +47,14 @@ function cleanTeamId(value) {
   return teamId;
 }
 
+async function temSegredo(client, companyId, provider, secretName) {
+  const { rows } = await client.query(
+    `SELECT 1 FROM company_secrets WHERE company_id = $1 AND provider = $2 AND secret_name = $3 LIMIT 1`,
+    [companyId, provider, secretName],
+  );
+  return rows.length > 0;
+}
+
 function cleanProjectId(value) {
   const projectId = String(value ?? '').trim();
   if (!projectId || projectId.length > 120 || !/^[a-zA-Z0-9_-]+$/.test(projectId)) throw fail('Informe o projeto da Vercel.');
@@ -91,21 +99,40 @@ export class ProjectIntegrationRepository {
     return publicConfiguration(await this.queryIntegration(scope) || {});
   }
 
-  async save({ companyId, projectId, teamId = '', vercelProjectId, token }) {
-    const cleanProject = cleanProjectId(vercelProjectId);
-    const cleanTeam = cleanTeamId(teamId);
-    const clean = cleanToken(token);
+  // O token é da empresa: uma conta na Vercel, uma credencial. O projeto só diz qual é o
+  // projeto dele lá. Por isso salvar a configuração de um projeto sem informar token não
+  // pode apagar a credencial — senão configurar um projeto derrubava a publicação de
+  // todos os outros da mesma empresa.
+  async save({ companyId, projectId, teamId, vercelProjectId, token }) {
+    // Dois donos escrevem aqui e cada um manda só o que é dele: a empresa manda a
+    // credencial e a equipe; o projeto manda o projeto na Vercel. O que não veio é
+    // preservado — antes, salvar de um lado exigia repetir o do outro, e a tela de
+    // Preferências, que nunca soube de projeto, falhava sempre ao salvar o token.
+    const atual = (await this.queryIntegration({ companyId, projectId })) || {};
+    const mudaProjeto = vercelProjectId !== undefined && vercelProjectId !== null && vercelProjectId !== '';
+    const mudaEquipe = teamId !== undefined && teamId !== null;
+    const cleanProject = mudaProjeto ? cleanProjectId(vercelProjectId) : (atual.vercelProjectId || '');
+    const cleanTeam = mudaEquipe ? cleanTeamId(teamId) : (atual.teamId || '');
+    const trocaToken = token !== undefined && token !== null && token !== '';
+    const encrypted = trocaToken ? (this.vault || new SecretVault()).encrypt(cleanToken(token)) : null;
     const secretName = 'access_token';
-    const encrypted = (this.vault || new SecretVault()).encrypt(clean);
     const run = async (client) => {
-      await client.query(
-        `INSERT INTO company_secrets (company_id, provider, secret_name, encrypted_value, key_version, rotated_at)
-         VALUES ($1, $2, $3, $4, 1, now())
-         ON CONFLICT (company_id, provider, secret_name, key_version)
-         DO UPDATE SET encrypted_value = EXCLUDED.encrypted_value, rotated_at = now()`,
-        [companyId, this.provider, secretName, encrypted],
-      );
-      const configuration = { connectionStatus: 'configured', teamId: cleanTeam, vercelProjectId: cleanProject, secretName };
+      if (trocaToken) {
+        await client.query(
+          `INSERT INTO company_secrets (company_id, provider, secret_name, encrypted_value, key_version, rotated_at)
+           VALUES ($1, $2, $3, $4, 1, now())
+           ON CONFLICT (company_id, provider, secret_name, key_version)
+           DO UPDATE SET encrypted_value = EXCLUDED.encrypted_value, rotated_at = now()`,
+          [companyId, this.provider, secretName, encrypted],
+        );
+      }
+      const temCredencial = trocaToken || atual.connectionStatus === 'configured' || (await temSegredo(client, companyId, this.provider, secretName));
+      const configuration = {
+        connectionStatus: temCredencial && cleanProject ? 'configured' : 'pending',
+        teamId: cleanTeam,
+        vercelProjectId: cleanProject,
+        secretName,
+      };
       await client.query(
         `INSERT INTO project_integrations (company_id, project_id, provider, environment, configuration, updated_at)
          VALUES ($1, $2, $3, $4, $5::jsonb, now())

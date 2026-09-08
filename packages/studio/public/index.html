@@ -413,7 +413,7 @@
             <p id="publication-summary">As rotas publicadas deste projeto serão enviadas juntas para um único destino.</p>
             <p id="publication-routes" class="publication-routes">Nenhuma rota publicada ainda.</p>
             <div class="publication-actions"><button type="button" id="publication-preview">Criar prévia</button><button type="button" id="publication-production" class="primary">Publicar em produção</button></div>
-            <details class="publication-details"><summary>Configurar conexão e domínio</summary><form id="publication-connection-form"><label>Projeto da Vercel<input name="vercelProjectId" placeholder="projeto-na-vercel" autocomplete="off"></label><label>Team ID <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off"></label><label>Token da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole o token no servidor"></label><button class="primary">Salvar conexão</button></form><form id="publication-domain-form"><label>Domínio <input name="domain" placeholder="lp.suaempresa.com.br"></label><button type="submit">Conectar domínio</button></form><p id="publication-detail-error" class="form-error" role="alert"></p></details>
+            <details class="publication-details"><summary>Projeto na Vercel e domínio</summary><form id="publication-connection-form"><label>Projeto na Vercel<input name="vercelProjectId" placeholder="taian" autocomplete="off"></label><p class="help">As páginas deste projeto sobem como rotas dele: taian.vercel.app/pagina1, /quiz, e assim por diante. O acesso à Vercel é da empresa e fica em Configurações · Preferências.</p><button class="primary">Salvar projeto na Vercel</button></form><form id="publication-domain-form"><label>Domínio <input name="domain" placeholder="lp.suaempresa.com.br"></label><button type="submit">Conectar domínio</button></form><p id="publication-detail-error" class="form-error" role="alert"></p></details>
           </section>
           <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>
@@ -590,6 +590,19 @@
         <div class="template-gallery" id="template-gallery" aria-label="Escolher um modelo"></div>
         <div class="dialog-actions">
           <button type="button" data-close>Cancelar</button><button class="primary">Criar página</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="project-settings-dialog">
+      <form id="project-settings-form">
+        <div class="eyebrow">CONFIGURAÇÃO DO PROJETO</div>
+        <h2>Nome e endereço</h2>
+        <label>Nome do projeto<input name="name" required maxlength="100" placeholder="Ex.: Campanha de primavera" /></label>
+        <label>Identificador do projeto<input name="slug" required maxlength="80" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="campanha-de-primavera" /></label>
+        <p class="help">O identificador entra no endereço das páginas publicadas. Mudar depois de publicar quebra os links que já estão no ar.</p>
+        <p class="form-error" id="project-settings-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" data-close>Cancelar</button><button class="primary">Salvar projeto</button>
         </div>
       </form>
     </dialog>

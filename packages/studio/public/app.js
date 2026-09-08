@@ -940,8 +940,6 @@ function renderPublication(overview, publication = {}) {
   $('#publication-domain-form').hidden = !model.canProduction || !studioShell.can('integration.manage');
   const connection = $('#publication-connection-form');
   connection.elements.vercelProjectId.value = publication.integration?.vercelProjectId || '';
-  connection.elements.teamId.value = publication.integration?.teamId || '';
-  connection.elements.token.value = '';
 }
 function paintAnalyticsPanel(model) {
   const card = $('#analytics-panel');
@@ -2195,12 +2193,43 @@ $('#new-project').onclick = () => {
 };
 $('#project-create-action').onclick = () => $('#new-project').click();
 $('#project-settings-action').onclick = action(async () => {
+  const projeto = dashboardState().currentProject;
+  if (!projeto?.id) throw new Error('Escolha um projeto para configurar.');
+  const form = $('#project-settings-form');
+  form.elements.name.value = projeto.name || '';
+  form.elements.slug.value = projeto.slug || '';
+  $('#project-settings-error').textContent = '';
+  $('#project-settings-dialog').showModal();
+});
+$('#project-settings-form').onsubmit = action(async (event) => {
+  event.preventDefault();
   const projectId = dashboardState().currentProject?.id;
-  if (!projectId) throw new Error('Escolha um projeto para configurar.');
-  setDashboardView('publication');
-  const details = $('#project-publication .publication-details');
-  if (details) details.open = true;
-  $('#project-publication').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const values = Object.fromEntries(new FormData(event.currentTarget));
+  const name = values.name.trim();
+  const slug = values.slug.trim();
+  const error = $('#project-settings-error');
+  error.textContent = '';
+  if (!name || name.length > 100) {
+    error.textContent = 'Informe um nome de até 100 caracteres.';
+    return;
+  }
+  if (!isProjectSlug(slug) || slug.length > 80) {
+    error.textContent = 'Use um identificador de até 80 caracteres com letras minúsculas, números e hífens.';
+    return;
+  }
+  const button = event.submitter;
+  button.disabled = true;
+  try {
+    await api('/projects/' + projectId, 'PUT', { name, slug });
+    $('#project-settings-dialog').close();
+    await studioShell.initialize();
+    await selectProject(projectId);
+    toast('Projeto atualizado.');
+  } catch (falha) {
+    error.textContent = falha?.message || 'Não foi possível salvar o projeto.';
+  } finally {
+    button.disabled = false;
+  }
 });
 $('#home-history-all').onclick = () => setDashboardView('history');
 $('#open-analytics').onclick = action(async () => {
