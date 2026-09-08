@@ -267,19 +267,11 @@ export const blockDescriptions = {
   heading: 'Um título para anunciar o que vem a seguir.',
   text: 'Um parágrafo para explicar sua ideia.',
   image: 'Uma foto ou ilustração, enviada do seu computador.',
-  'embedded-video': 'Um vídeo do YouTube ou Vimeo, colando o link.',
   vsl: 'Uma VSL criada aqui no Studio, com player e medição próprios.',
   button: 'Um convite para a pessoa dar o próximo passo.',
   icon: 'Um símbolo para reforçar uma ideia rapidamente.',
-  'bar-chart': 'Barras para comparar números lado a lado.',
-  'donut-chart': 'Uma rosca para mostrar partes de um total.',
   form: 'Um formulário completo para receber contatos.',
   input: 'Uma pergunta com espaço para a pessoa escrever a resposta.',
-  'hero-section': 'O topo da página pronto: título, texto e formulário juntos.',
-  'benefits-section': 'Uma faixa pronta para listar o que você entrega.',
-  'testimonials-section': 'Uma faixa pronta para mostrar o que seus clientes dizem.',
-  'faq-section': 'Uma faixa pronta com as dúvidas mais comuns.',
-  'contact-section': 'Uma faixa pronta de fechamento, com convite para falar com você.',
 };
 
 export const blocks = [
@@ -298,12 +290,9 @@ export const blocks = [
   ['heading', 'Título', 'Conteúdo', '<h2>Seu próximo grande título</h2>'],
   ['text', 'Texto', 'Conteúdo', '<p>Uma mensagem simples para apresentar sua solução.</p>'],
   ['image', 'Imagem', 'Conteúdo', { type: 'image' }],
-  ['embedded-video', 'Vídeo do YouTube ou Vimeo', 'Mídia', '<div class="alva-embed-video" data-alva-video-empty="true"><iframe src="about:blank" title="Vídeo incorporado" loading="lazy" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe><p class="alva-embed-video-placeholder">Cole aqui o link do vídeo no YouTube ou Vimeo.</p></div>'],
   ['vsl', 'VSL do Studio', 'Mídia', { type: 'vsl', publicId: '', attributes: { 'data-alva-vsl': '' } }],
   ['button', 'Botão', 'Conteúdo', '<a href="#contato" class="cta">Quero saber mais ↗</a>'],
   ['icon', 'Ícone', 'Conteúdo', '<span class="material-symbols-outlined" aria-hidden="true">star</span>'],
-  ['bar-chart', 'Gráfico de barras', 'Gráficos', '<div class="alva-chart alva-chart-bars"><div><i style="--value:72%"></i><small>Visitas</small></div><div><i style="--value:48%"></i><small>Contatos</small></div><div><i style="--value:86%"></i><small>Vendas</small></div></div>'],
-  ['donut-chart', 'Gráfico circular', 'Gráficos', '<div class="alva-chart"><div class="alva-donut alva-donut-background" data-alva-chart-data="[[&quot;Visitas&quot;,52],[&quot;Contatos&quot;,26],[&quot;Vendas&quot;,22]]"><strong>Resultados</strong></div></div>'],
   ['form', 'Formulário', 'Captação', form()],
   [
     'input',
@@ -311,19 +300,4 @@ export const blocks = [
     'Captação',
     '<label>Novo campo<input name="novo_campo" type="text" placeholder="Digite aqui"></label>',
   ],
-  [
-    'hero-section',
-    'Abertura com formulário',
-    'Faixas prontas',
-    `<section class="hero"><div class="hero-grid"><div><p class="kicker">[SUA SOLUÇÃO]</p><h1>Seu próximo grande título.</h1><p class="lead">Apresente sua proposta em uma frase clara.</p></div>${form()}</div></section>`,
-  ],
-  ['benefits-section', 'Benefícios', 'Faixas prontas', benefits],
-  [
-    'testimonials-section',
-    'Depoimentos · carrossel',
-    'Faixas prontas',
-    '<section class="testimonials"><p class="kicker">EXPERIÊNCIAS REAIS</p><h2>[O que seus clientes dizem]</h2><div class="alva-carousel"><div class="alva-carousel-track"><figure class="alva-testimonial"><span class="alva-stars" aria-label="cinco estrelas">★★★★★</span><blockquote><p>[Insira um depoimento real e autorizado. Este espaço é um placeholder.]</p></blockquote><figcaption>[Nome e identificação autorizados]</figcaption></figure><figure class="alva-testimonial"><span class="alva-stars" aria-label="cinco estrelas">★★★★★</span><blockquote><p>[Outro depoimento real e autorizado. Este espaço é um placeholder.]</p></blockquote><figcaption>[Nome e empresa]</figcaption></figure><figure class="alva-testimonial"><span class="alva-stars" aria-label="cinco estrelas">★★★★★</span><blockquote><p>[Um terceiro relato real e autorizado. Este espaço é um placeholder.]</p></blockquote><figcaption>[Nome e cargo]</figcaption></figure></div><div class="alva-carousel-nav"><button type="button" class="alva-carousel-button" data-carousel="prev" aria-label="Depoimento anterior">‹</button><button type="button" class="alva-carousel-button" data-carousel="next" aria-label="Próximo depoimento">›</button></div></div></section>',
-  ],
-  ['faq-section', 'Perguntas frequentes', 'Faixas prontas', faq],
-  ['contact-section', 'Contato', 'Faixas prontas', contact],
 ];

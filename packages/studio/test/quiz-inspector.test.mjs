@@ -137,72 +137,7 @@ test('item semântico da árvore seleciona a escolha visual e abre seu inspector
   });
 });
 
-test('biblioteca adapta hero/contact tanto no clique quanto no drop para submissão única', async () => {
-  await withUi(async ({ getEditor, getInitOptions }) => {
-    const puts = [];
-    const source = record();
-    const ui = createFormsUI({ api: apiFor(source, puts), toast: () => {}, can: () => true, getProjectId: () => source.projectId, mediaEnabled: () => false });
-    await ui.openForm(source.id);
-    const editor = getEditor();
-    const click = getInitOptions().blockManager.appendOnClick;
-    for (const id of ['hero-section', 'contact-section']) {
-      click(editor.BlockManager.get(id));
-      assert.doesNotMatch(editor.getHtml(), /<form\b|\baction=|\bonsubmit=|type="submit"/i, `${id} via clique`);
-      const canvas = { version: 1, editorState: editor.getProjectData(), html: editor.getHtml(), css: editor.getCss() };
-      const normalized = normalizeFormInput({ headerElements: [], steps: [{ id: 'screen', title: 'Screen', elements: [], canvas }], completion: { title: 'Ok', message: 'Ok' }, webhook: '' });
-      assert.ok(normalized.steps[0].elements.every((element) => element.id));
-    }
-    for (const id of ['hero-section', 'contact-section']) {
-      const [dropped] = editor.getWrapper().append(editor.BlockManager.get(id).get('content'));
-      editor.trigger('block:drag:stop', dropped);
-      assert.doesNotMatch(editor.getHtml(), /<form\b|\baction=|\bonsubmit=|type="submit"/i, `${id} via drag`);
-    }
-  });
-});
 
-test('vídeo incorporado usa iframe HTTPS, preserva canvas no save/reabertura e entra na prévia publicada', async () => {
-  await withUi(async ({ document, getEditor, getInitOptions }) => {
-    const puts = [];
-    const source = record();
-    const ui = createFormsUI({ api: apiFor(source, puts), toast: () => {}, can: () => true, getProjectId: () => source.projectId, mediaEnabled: () => false });
-    await ui.openForm(source.id);
-    let editor = getEditor();
-    getInitOptions().blockManager.appendOnClick(editor.BlockManager.get('embedded-video'));
-    const wrapper = descendants(editor.getWrapper()).find((component) => String(component.getAttributes?.().class || '').split(/\s+/).includes('alva-embed-video'));
-    assert.ok(wrapper, 'catálogo deve inserir o wrapper do vídeo');
-    const treeVideo = [...document.querySelectorAll('.fe-tree button')].find((button) => button.textContent.includes('Vídeo incorporado'));
-    assert.ok(treeVideo, 'a árvore deve expor apenas o vídeo sem o iframe técnico');
-    treeVideo.click();
-    await settled();
-    assert.equal(editor.getSelected(), wrapper, 'a árvore mantém o wrapper selecionado');
-    change(document, 'Endereço do vídeo', 'https://video.example.test/embed/quiz-1');
-    change(document, 'Título do vídeo', 'Demonstração comercial');
-    await settled();
-    assert.match(editor.getHtml(), /class="alva-embed-video"/);
-    assert.match(editor.getHtml(), /src="https:\/\/video\.example\.test\/embed\/quiz-1"/);
-    assert.match(editor.getHtml(), /title="Demonstração comercial"/);
-    document.querySelector('#form-save').click();
-    await settled();
-    assert.equal(puts.length, 1);
-    const normalized = normalizeFormInput(puts[0]);
-    const canvas = normalized.steps[0].canvas;
-    assert.match(canvas.html, /https:\/\/video\.example\.test\/embed\/quiz-1/);
-    const published = renderDynamicForm({ ...normalized, id: source.id, name: source.name }, '/api/forms/preview');
-    assert.match(published, /<iframe[^>]+src="https:\/\/video\.example\.test\/embed\/quiz-1"/);
-    await ui.openForm(source.id);
-    await settled();
-    editor = getEditor();
-    const reopenedWrapper = descendants(editor.getWrapper()).find((component) => String(component.getAttributes?.().class || '').split(/\s+/).includes('alva-embed-video'));
-    editor.select(reopenedWrapper);
-    editor.trigger('component:selected', reopenedWrapper);
-    await settled();
-    change(document, 'Endereço do vídeo', 'javascript:alert(1)');
-    await settled();
-    const control = [...document.querySelectorAll('.fe-properties label')].find((row) => row.firstElementChild?.textContent === 'Endereço do vídeo')?.querySelector('input');
-    assert.match(control.validationMessage, /HTTPS/);
-    assert.doesNotMatch(editor.getHtml(), /javascript:/i);
-  });
-});
 
 test('frame do canvas recebe CSP e fonte pelo payload window do GrapesJS, sem CSS Landing ao inserir bloco', async () => {
   await withUi(async ({ document, getEditor, getInitOptions }) => {
@@ -359,26 +294,6 @@ test('blocos de escolha inseridos pelo catálogo usam opções editáveis e esqu
   });
 });
 
-test('gráfico do quiz preserva vínculos de cálculos por linha', async () => {
-  await withUi(async ({ getEditor, getInitOptions }) => {
-    const source = record();
-    const ui = createFormsUI({ api: apiFor(source, []), toast: () => {}, can: () => true, getProjectId: () => source.projectId, mediaEnabled: () => false });
-    await ui.openForm(source.id);
-    const editor = getEditor();
-    getInitOptions().blockManager.appendOnClick(editor.BlockManager.get('bar-chart'));
-    await settled();
-    const chart = descendants(editor.getWrapper()).find((component) => String(component.getAttributes?.().class || '').split(/\s+/).includes('alva-chart-bars'));
-    assert.ok(chart);
-    editor.select(chart); editor.trigger('component:selected', chart);
-    await settled();
-    const sourceSelect = [...document.querySelectorAll('.fe-properties label')].find((row) => row.firstElementChild?.textContent === 'Fonte')?.querySelector('select');
-    assert.ok(sourceSelect);
-    sourceSelect.value = 'calc_total';
-    sourceSelect.dispatchEvent(new document.defaultView.Event('change', { bubbles: true }));
-    await settled();
-    assert.deepEqual(JSON.parse(chart.getAttributes()['data-alva-chart-bindings']), ['calc_total', null, null]);
-  });
-});
 
 test('rótulo de campo atualiza o modelo e a view montada sem recriar o input', async () => {
   await withUi(async ({ document, getEditor, getInitOptions }) => {

@@ -25,7 +25,7 @@ async function comEditor(callback) {
 test('uma seção nova entra ao lado da atual, nunca dentro dela', async () => {
   await comEditor((editor) => {
     const wrapper = editor.getWrapper();
-    const primeira = wrapper.append(catalog.get('benefits-section').content)[0];
+    const primeira = wrapper.append(catalog.get('section').content)[0];
     const dentro = filhos(primeira)[0];
 
     // com um elemento de dentro selecionado, a seção nova ainda é irmã
@@ -51,8 +51,8 @@ test('excluir uma seção não leva as outras junto', async () => {
   await comEditor((editor) => {
     const wrapper = editor.getWrapper();
     const topo = wrapper.append('<header class="topo"></header>')[0];
-    const abertura = wrapper.append(catalog.get('hero-section').content)[0];
-    const beneficios = wrapper.append(catalog.get('benefits-section').content)[0];
+    const abertura = wrapper.append(catalog.get('section').content)[0];
+    const beneficios = wrapper.append(catalog.get('section').content)[0];
 
     abertura.remove();
     const restantes = filhos(wrapper);

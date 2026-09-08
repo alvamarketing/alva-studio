@@ -286,27 +286,3 @@ test('regras e cálculos usam catálogo do canvas, salvam e passam pela normaliz
   });
 });
 
-test('atualiza regras e cálculos ao alterar o canvas sem trocar de tela', async () => {
-  await withCanvasDom(async (document, getEditor) => {
-    const ui = formsUi(legacyForm(), []);
-    await ui.openForm('quiz-lifecycle');
-    const editor = getEditor();
-    const flow = () => document.querySelector('[data-quiz-flow-editor]');
-    const addRule = () => [...flow().querySelectorAll('button')].find((button) => button.textContent === 'Adicionar regra');
-    assert.equal(addRule().disabled, true, 'sem escolha o botão fica indisponível');
-    editor.getWrapper().append(editor.BlockManager.get('quiz-single-choice').get('content'));
-    editor.trigger('update');
-    await settled();
-    assert.equal(addRule().disabled, false, 'a nova escolha entra no catálogo sem trocar de tela');
-    [...flow().querySelectorAll('button')].find((button) => button.textContent === 'Adicionar cálculo').click();
-    await settled();
-    editor.getWrapper().append(editor.BlockManager.get('bar-chart').get('content'));
-    editor.trigger('update');
-    const chart = editor.getWrapper().components().models.find((component) => String(component.getAttributes?.().class || '').includes('alva-chart-bars')) || editor.getWrapper().find('.alva-chart-bars')[0];
-    editor.select(chart); editor.trigger('component:selected', chart);
-    await settled();
-    const source = [...document.querySelectorAll('.fe-properties label')].find((row) => row.firstElementChild?.textContent === 'Fonte')?.querySelector('select');
-    assert.ok(source);
-    assert.ok([...source.options].some((option) => option.textContent === 'Novo cálculo'), 'o gráfico lê cálculo criado nesta mesma montagem');
-  });
-});

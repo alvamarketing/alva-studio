@@ -138,18 +138,10 @@ test('normalização tolera canvas vazio e blocos mantêm contrato de quatro pos
   assert.equal(normalizeForms({ getWrapper: () => ({ find: () => [] }) }), 0);
   assert.equal(new Set(blocks.map((block) => block[0])).size, blocks.length);
   for (const block of blocks) assert.equal(block.length, 4);
-  for (const id of [
-    'form',
-    'hero-section',
-    'benefits-section',
-    'testimonials-section',
-    'faq-section',
-    'contact-section',
-  ])
+  for (const id of ['form', 'section', 'columns', 'vsl'])
     assert.ok(blocks.find((block) => block[0] === id));
   assert.match(blocks.find((block) => block[0] === 'form')[3], /class="alva-form"/);
-  assert.match(blocks.find((block) => block[0] === 'testimonials-section')[3], /placeholder/);
-  for (const id of ['icon', 'bar-chart', 'donut-chart']) assert.ok(blocks.find((block) => block[0] === id));
+  assert.ok(blocks.find((block) => block[0] === 'icon'));
   assert.match(templateCss, /data-alva-motion/);
   assert.match(templateCss, /prefers-reduced-motion/);
 });

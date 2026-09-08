@@ -10,7 +10,7 @@ test('todo bloco da biblioteca explica o que faz', () => {
 
 test('as descrições falam de resultado, não de html', () => {
   assert.match(blockDescriptions.input, /respost|escrev|digit/i);
-  assert.match(blockDescriptions['hero-section'], /topo|abertura|primeira/i);
+  assert.match(blockDescriptions.section, /faixa|seção|assunto/i);
   assert.match(blockDescriptions.columns, /lado a lado|colunas/i);
   for (const texto of Object.values(blockDescriptions)) {
     assert.doesNotMatch(texto, /<[a-z]+>|\bdiv\b|\bsection\b|\bcss\b|\bhtml\b/i, `descrição técnica demais: ${texto}`);

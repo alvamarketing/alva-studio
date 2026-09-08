@@ -505,8 +505,6 @@ test('blocos usam ícones da fonte do editor, um distinto por bloco', async () =
 
 test('landing pages oferecem ícones, gráficos e movimento por elemento', async () => {
   assert.equal(blockIcons.icon, 'star');
-  assert.equal(blockIcons['bar-chart'], 'bar_chart');
-  assert.equal(blockIcons['donut-chart'], 'donut_large');
   const source = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
   assert.match(source, /Movimento/);
   assert.match(source, /data-alva-motion/);

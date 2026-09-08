@@ -20,19 +20,11 @@ export const blockIcons = {
   heading: 'title',
   text: 'notes',
   image: 'image',
-  'embedded-video': 'smart_display',
   vsl: 'play_circle',
   button: 'smart_button',
   icon: 'star',
-  'bar-chart': 'bar_chart',
-  'donut-chart': 'donut_large',
   form: 'list_alt',
   input: 'text_fields',
-  'hero-section': 'branding_watermark',
-  'benefits-section': 'checklist',
-  'testimonials-section': 'format_quote',
-  'faq-section': 'help',
-  'contact-section': 'mail',
 };
 
 export const VSL_ATTRIBUTE = 'data-alva-vsl';
