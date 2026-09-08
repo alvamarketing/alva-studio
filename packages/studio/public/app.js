@@ -126,6 +126,9 @@ function updateVslNavigation() {
     videosFilter.hidden = !mediaPipelineEnabled;
     if (videosFilter.hidden && projectContentFilter === 'videos') projectContentFilter = 'all';
   }
+  // A tela de VSL existia sem nenhum caminho até ela: só chegava quem digitasse #/vsl.
+  const navVsl = $('#nav-vsl');
+  if (navVsl) navVsl.hidden = !mediaPipelineEnabled;
 }
 // O diálogo trata de dois assuntos. Quem vem do formulário quer o recebimento das
 // respostas; quem vem do cabeçalho quer a página inteira.
@@ -2244,6 +2247,7 @@ $('#project-settings-form').onsubmit = action(async (event) => {
     button.disabled = false;
   }
 });
+$('#nav-vsl').onclick = () => setDashboardView('vsl');
 $('#home-history-all').onclick = () => setDashboardView('history');
 $('#open-analytics').onclick = action(async () => {
   const projectId = dashboardState().currentProject?.id;

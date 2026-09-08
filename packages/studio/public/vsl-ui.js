@@ -125,10 +125,12 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
       const saved = current
         ? await api(`/projects/${projectId}/videos/${current.id}`, 'PUT', { ...collect(), lockVersion: current.lockVersion })
         : await api(`/projects/${projectId}/videos`, 'POST', collect());
-      current = saved; toast('VSL salva.'); await load();
+      current = saved; showForm(saved); toast('VSL salva.'); await load();
     };
     field(form(), 'publish').onclick = async () => {
-      if (!current || !vslUiAccessPolicy({ hasVideo: true, can: (capability) => currentShell()?.can?.(capability) ?? false }).canPublish) return;
+      if (!current) throw new Error('Salve a VSL antes de publicar.');
+      if (!vslUiAccessPolicy({ hasVideo: true, can: (capability) => currentShell()?.can?.(capability) ?? false }).canPublish)
+        throw new Error('Você não tem permissão para publicar VSLs neste projeto.');
       const projectId = currentShell().state().currentProject.id;
       await api(`/projects/${projectId}/videos/${current.id}/publish`, 'POST', { lockVersion: current.lockVersion });
       toast('VSL publicada.'); await load();
