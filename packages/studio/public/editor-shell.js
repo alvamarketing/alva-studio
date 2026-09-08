@@ -1,4 +1,4 @@
-import { blocks, normalizeCharts, normalizeForms, templateCss } from './templates.js';
+import { blocks, normalizeCharts, normalizeForms, runtimeCss, templateCss } from './templates.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 import { materialSymbolsFontCss } from './quiz-elements.js';
 
@@ -259,7 +259,9 @@ export function renderVslReferences(html, { publicOrigin } = {}) {
 export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin } = {}) {
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escapeText(title) +
-    '</title><style>' + materialSymbolsFontCss(publicOrigin) + css +
+    // A página publicada leva o comportamento junto: sem isso, uma página antiga vai ao ar
+    // sem movimento e com o ícone encolhido, do mesmo jeito que aparecia no editor.
+    '</title><style>' + materialSymbolsFontCss(publicOrigin) + (css.includes('data-alva-motion') ? '' : runtimeCss) + css +
     '</style></head><body>' +
     renderVslReferences(html, { publicOrigin }) +
     '<script>' +
@@ -1470,6 +1472,9 @@ export function createFriendlyEditor({
     // starter sheet after it would reset body/background and field styling.
     if (quizCanvas) return;
     const existingCss = editor.getCss();
+    // O comportamento entra sempre: uma página salva antes destas regras existirem também
+    // precisa de movimento, ícone e gráficos funcionando.
+    if (!existingCss.includes('data-alva-motion')) editor.addStyle(runtimeCss);
     if (/--alva-block-base\s*:\s*1/.test(existingCss) || existingCss.includes('.hero-grid')) return;
     // Fill the blank page with block defaults, preserving every user declaration.
     const custom = editor.Css.getAll().map((rule) => ({ rule, style: { ...rule.getStyle() } }));
@@ -2353,6 +2358,9 @@ export function createFriendlyEditor({
     render();
   });
   editor.on('load', () => {
+    // O css de sistema entrava só ao inserir um bloco. Uma página já pronta abria sem
+    // movimento e com o ícone encolhido até alguém adicionar algo.
+    blockStyles();
     if (componentWithClass(editor.getWrapper(), 'alva-chart-bars') || componentWithClass(editor.getWrapper(), 'alva-donut')) normalizeCharts(editor);
     render();
   });
