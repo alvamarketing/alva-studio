@@ -145,6 +145,28 @@ export class ProjectIntegrationRepository {
     return this.database.transaction ? this.database.transaction(run) : run(this.database);
   }
 
+  // A credencial é da empresa e existe antes de qualquer projeto estar apontado. É o que
+  // permite criar o projeto na Vercel — o passo anterior a haver o que configurar.
+  async companyCredentials({ companyId }) {
+    const { rows } = await this.database.query(
+      `SELECT encrypted_value
+         FROM company_secrets
+        WHERE company_id = $1 AND provider = $2 AND secret_name = 'access_token'
+        ORDER BY key_version DESC LIMIT 1`,
+      [companyId, this.provider],
+    );
+    if (!rows[0]) return null;
+    const { rows: config } = await this.database.query(
+      `SELECT configuration FROM project_integrations
+        WHERE company_id = $1 AND provider = $2 ORDER BY updated_at DESC LIMIT 1`,
+      [companyId, this.provider],
+    );
+    return {
+      token: (this.vault || new SecretVault()).decrypt(rows[0].encrypted_value),
+      teamId: config[0]?.configuration?.teamId || '',
+    };
+  }
+
   async credentials({ companyId, projectId }) {
     const configuration = await this.queryIntegration({ companyId, projectId });
     if (!configuration || configuration.connectionStatus !== 'configured') return null;

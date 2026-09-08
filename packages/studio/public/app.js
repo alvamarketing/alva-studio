@@ -2057,6 +2057,19 @@ $('#publication-connection-form').onsubmit = action(async (event) => {
   toast('Conexão Vercel salva.');
   await renderProject();
 });
+$('#publication-sync').onclick = action(async () => {
+  const projectId = studioShell.state().currentProject?.id;
+  const nome = $('#publication-connection-form').elements.vercelProjectId.value.trim();
+  if (!nome) throw new Error('Informe o nome do projeto na Vercel.');
+  if (!(await confirmarAcao({
+    titulo: `Criar “${nome}” na Vercel?`,
+    descricao: `As páginas deste projeto passam a subir como rotas de ${nome}.vercel.app. Se já existir um projeto com esse nome na sua conta, ele será usado.`,
+    confirmar: 'Criar na Vercel',
+  }))) return;
+  const resultado = await api(`/projects/${projectId}/publication/vercel/sync`, 'POST', { vercelProjectId: nome });
+  toast(resultado.created ? `Projeto ${resultado.vercelProjectId} criado na Vercel.` : `Projeto ${resultado.vercelProjectId} já existia e foi conectado.`);
+  await renderProject();
+});
 $('#publication-domain-form').onsubmit = action(async (event) => {
   event.preventDefault();
   const projectId = studioShell.state().currentProject?.id;

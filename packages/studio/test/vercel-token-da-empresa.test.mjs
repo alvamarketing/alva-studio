@@ -92,3 +92,19 @@ test('salvar a credencial da empresa não apaga o projeto que já estava configu
   assert.equal(cred.token, 'token-2', 'trocar o token da empresa vale para todos');
   assert.equal(cred.vercelProjectId, 'taian', 'e não desfaz a configuração do projeto');
 });
+
+test('a credencial da empresa é legível antes de o projeto estar configurado', async (t) => {
+  const { company, projeto, repo } = await palco(t);
+  const a = await projeto('Campanha A', 'campanha-a');
+  await repo.save({ companyId: company, projectId: a, token: 'token-da-empresa', teamId: 'team_alva' });
+  // sincronizar é justamente o passo anterior a existir projeto na Vercel: exigir
+  // conexão completa aqui deixaria a pessoa sem como dar o primeiro passo
+  const cred = await repo.companyCredentials({ companyId: company });
+  assert.equal(cred.token, 'token-da-empresa');
+  assert.equal(cred.teamId, 'team_alva');
+});
+
+test('sem token da empresa não há credencial nenhuma', async (t) => {
+  const { company, repo } = await palco(t);
+  assert.equal(await repo.companyCredentials({ companyId: company }), null);
+});

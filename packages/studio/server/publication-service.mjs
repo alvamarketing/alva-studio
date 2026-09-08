@@ -30,6 +30,12 @@ export class PublicationService {
     await this.tracking.assertReady({ companyId: input.companyId, projectId: input.projectId, environment, engines: this.trackingRequiredEngines });
   }
 
+  // Criar o projeto na Vercel acontece antes de existir integração configurada, então
+  // recebe a credencial da empresa direto em vez de resolver pelo projeto.
+  async ensureProject(credentials, name) {
+    return this.publisherFactory(credentials).ensureProject(name);
+  }
+
   async publisher(scope) {
     const credentials = await this.integrations.credentials(scope);
     if (!credentials) throw fail('Conecte a Vercel neste projeto antes de publicar.', 409);

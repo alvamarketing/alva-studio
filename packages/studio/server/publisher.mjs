@@ -22,7 +22,7 @@ export class Publisher {
     this.token = token; this.teamId = teamId; this.fetcher = fetcher; this.retryLimit = retryLimit; this.retryDelay = retryDelay; this.timeoutMs = timeoutMs;
   }
   get connected() { return Boolean(this.token); }
-  async request(path, body, { safe = !body } = {}) {
+  async request(path, body, { safe = !body, allow404 = false } = {}) {
     if (!this.token) throw fail('Conecte a Vercel nas configurações para publicar.', 400);
     const url = new URL('https://api.vercel.com' + path);
     if (this.teamId) url.searchParams.set('teamId', this.teamId);
@@ -41,12 +41,26 @@ export class Publisher {
       if (response.ok) {
         try { return await response.json(); } catch { throw fail('A Vercel devolveu uma resposta inválida.', 502); }
       }
+      if (allow404 && response.status === 404) return null;
       if (!safe || !transientStatus(response.status) || attempt >= this.retryLimit)
         throw fail(`A Vercel recusou a solicitação (${response.status}). Verifique a conta e as permissões.`, 502);
       lastError = fail(`Vercel ${response.status}`, 502);
       await new Promise((resolve) => setTimeout(resolve, retryAfter(response, this.retryDelay * 2 ** attempt)));
     }
     throw lastError || fail('Não foi possível concluir a publicação.', 502);
+  }
+  // Cria o projeto na Vercel, ou adota o que já está lá com esse nome. Adotar é
+  // deliberado: recusar deixaria a pessoa presa entre um nome que não pode usar e um
+  // projeto que ela mesma criou antes. O nome vira o endereço — nome.vercel.app — e as
+  // páginas do projeto entram como rotas dele.
+  async ensureProject(name) {
+    const nome = String(name ?? '').trim();
+    if (!nome || nome.length > 100 || !/^[a-z0-9][a-z0-9-]*$/.test(nome))
+      throw fail('Use um nome do projeto com letras minúsculas, números e hífens.', 400);
+    const existente = await this.request('/v9/projects/' + encodeURIComponent(nome), null, { allow404: true });
+    if (existente) return { created: false, id: existente.id || '', name: existente.name || nome };
+    const criado = await this.request('/v10/projects', { name: nome });
+    return { created: true, id: criado?.id || '', name: criado?.name || nome };
   }
   async testConnection() {
     const { user } = await this.request('/v2/user');

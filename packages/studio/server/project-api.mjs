@@ -450,6 +450,16 @@ export function createProjectApi({
             ? await integrations.disconnect({ companyId: context.companyId, projectId })
             : await integrations.save({ companyId: context.companyId, projectId, ...input }));
         }
+        if (method === 'POST' && value === 'sync') {
+          const input = await body(req);
+          // O projeto ainda não está configurado quando se sincroniza pela primeira vez:
+          // a credencial vem da empresa, que é de quem ela é.
+          const conta = await integrations.companyCredentials({ companyId: context.companyId });
+          if (!conta) throw fail('Conecte a conta Vercel em Configurações antes de criar o projeto.', 409);
+          const projeto = await publication.ensureProject(conta, input.vercelProjectId);
+          const salvo = await integrations.save({ companyId: context.companyId, projectId, vercelProjectId: projeto.name });
+          return json({ ...salvo, created: projeto.created, vercelProjectId: projeto.name });
+        }
         if (method === 'POST') {
           await body(req);
           const credentials = await integrations.credentials({ companyId: context.companyId, projectId });
