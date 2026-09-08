@@ -1170,7 +1170,7 @@ function renderList() {
       label +
       '</span></div><p>' +
       escape(p.domain || 'Domínio ainda não conectado') +
-      `</p><div class="card-actions">${editable ? '<button class="edit">Editar página ↗</button><button class="duplicate" title="Duplicar página">Duplicar</button><button class="delete" title="Excluir página">Excluir</button>' : '<span class="read-only">Somente leitura</span>'}</div></div>`;
+      `</p><div class="card-actions">${editable ? '<button class="card-action alva-tooltip edit" type="button" data-tooltip="Editar página" aria-label="Editar página"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button><button class="card-action alva-tooltip duplicate" type="button" data-tooltip="Duplicar página" aria-label="Duplicar página"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button><button class="card-action alva-tooltip delete fe-danger" type="button" data-tooltip="Excluir página" aria-label="Excluir página"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>' : '<span class="read-only">Somente leitura</span>'}</div></div>`;
     if (editable) {
       card.querySelector('.edit').onclick = action(() => openPage(p.id));
       card.querySelector('.duplicate').onclick = action(async () => {

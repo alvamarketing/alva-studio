@@ -1110,16 +1110,6 @@ main {
   gap: 6px;
   margin-top: 19px;
 }
-.card-actions button {
-  font-size: var(--text-sm);
-  padding: 8px 10px;
-}
-.card-actions button:first-child {
-  flex: 1;
-}
-.card-actions button:last-child {
-  color: var(--alva-danger);
-}
 .empty {
   grid-column: 1/-1;
   border: 1px dashed var(--alva-blue-light);
@@ -1886,4 +1876,60 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   background: var(--alva-negative);
   border-color: var(--alva-negative);
   filter: brightness(0.93);
+}
+
+/* Rótulo ao passar o mouse, disponível em qualquer lugar. A regra do cabeçalho do
+   editor nasceu escopada a ele; fora dali o balão simplesmente não aparecia. */
+.alva-tooltip {
+  position: relative;
+}
+.alva-tooltip[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--alva-ink);
+  color: var(--alva-white);
+  box-shadow: var(--shadow-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--motion),
+    visibility var(--motion);
+}
+.alva-tooltip[data-tooltip]:hover::after,
+.alva-tooltip[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Ações do cartão: mesma caixa para as três, para nenhuma parecer mais importante
+   que a outra por causa da largura do texto. */
+.card-action {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  color: var(--alva-muted);
+}
+.card-action .material-symbols-outlined {
+  font-size: var(--icon-md);
+}
+.card-action:hover:not(:disabled) {
+  color: var(--alva-blue);
+}
+.card-action.fe-danger:hover:not(:disabled) {
+  border-color: var(--alva-negative);
+  color: var(--alva-negative);
 }
