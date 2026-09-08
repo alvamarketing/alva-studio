@@ -221,3 +221,14 @@ test('restaurar parent após undo trunca redo sem skip e o preserva com skip', (
     run(child, true);
   }
 });
+
+test('o agrupador sem componente ocupa as mesmas colunas das outras seções', async () => {
+  const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
+  const grupo = fonte.slice(fonte.indexOf('const appendSyntheticGroup'), fonte.indexOf('const appendSyntheticGroup') + 700);
+  // a linha de seção tem cinco colunas: arrastar, recolher, ícone, rótulo e contagem.
+  // Faltando o vazio do recolher, tudo andava uma casa e o rótulo caía na coluna do
+  // ícone, de 22px, virando "El..." em vez de "Elementos soltos"
+  const vazios = grupo.match(/<span aria-hidden="true"><\/span>/g) || [];
+  assert.equal(vazios.length, 2, 'faltando um vazio, o rótulo cai na coluna do ícone');
+  assert.match(grupo, /--fe-tree-level/, 'sem o nível o recuo vira um calc inválido');
+});

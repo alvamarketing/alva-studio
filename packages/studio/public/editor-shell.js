@@ -1594,8 +1594,9 @@ export function createFriendlyEditor({
     const appendSyntheticGroup = ({ label, count }) => {
       const item = document.createElement('div');
       item.className = 'fe-tree-item fe-tree-section fe-tree-synthetic';
+      item.style.setProperty('--fe-tree-level', '1');
       item.setAttribute('role', 'presentation');
-      item.innerHTML = `<span aria-hidden="true"></span><span class="fe-tree-icon material-symbols-outlined" aria-hidden="true">folder</span><span class="fe-tree-label"></span><small>${count}</small>`;
+      item.innerHTML = `<span aria-hidden="true"></span><span aria-hidden="true"></span><span class="fe-tree-icon material-symbols-outlined" aria-hidden="true">folder</span><span class="fe-tree-label"></span><small>${count}</small>`;
       item.querySelector('.fe-tree-label').textContent = label;
       tree.append(item);
     };
