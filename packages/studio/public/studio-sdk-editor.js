@@ -160,13 +160,62 @@ export function layoutDoEditor() {
   };
 }
 
+// As categorias de estilo vêm do código do SDK, não do dicionário: ficavam em inglês e
+// todas fechadas, obrigando a abrir uma por uma para achar o ajuste.
+export const NOMES_DE_SETOR = {
+  general: 'Geral',
+  layout: 'Disposição',
+  flex: 'Alinhamento',
+  dimension: 'Tamanho',
+  size: 'Tamanho',
+  space: 'Espaçamento',
+  position: 'Posição',
+  typography: 'Texto',
+  decorations: 'Bordas e sombra',
+  background: 'Fundo',
+  borders: 'Bordas',
+  effects: 'Efeitos',
+  extra: 'Avançado',
+};
+
+// Quem clica num título quer mexer no texto; quem clica numa seção, no fundo. Abrir a
+// categoria certa poupa a pessoa de caçar entre oito seções fechadas.
+export function setorPrioritario(tag) {
+  const nome = String(tag || '').toLowerCase();
+  if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a', 'button', 'label', 'small', 'li'].includes(nome)) return 'typography';
+  if (['section', 'div', 'main', 'header', 'footer', 'article', 'aside'].includes(nome)) return 'background';
+  if (['img', 'video', 'iframe'].includes(nome)) return 'dimension';
+  return null;
+}
+
+// Os setores do SDK vêm com prefixo — gs-typography, gs-background — e o do GrapesJS
+// puro, sem. Normalizar aqui deixa o mapa de nomes valer nos dois.
+export const idDoSetor = (id) => String(id || '').replace(/^gs-/, '');
+
+export function aparenciaPlugin(editor) {
+  const renomear = () => {
+    for (const setor of editor.StyleManager.getSectors()) {
+      const traduzido = NOMES_DE_SETOR[idDoSetor(setor.get('id'))];
+      if (traduzido) setor.set('name', traduzido);
+    }
+  };
+  const priorizar = () => {
+    const alvo = setorPrioritario(editor.getSelected()?.get?.('tagName'));
+    if (!alvo) return;
+    for (const setor of editor.StyleManager.getSectors()) setor.set('open', idDoSetor(setor.get('id')) === alvo);
+  };
+  if (editor.onReady) editor.onReady(renomear);
+  else renomear();
+  editor.on('component:selected', priorizar);
+}
+
 export function studioEditorOptions({ pageId, nomeDaPagina = '', carregar, salvar, root = '#studio-sdk-root' } = {}) {
   return {
     root,
     licenseKey: '',
     customTheme: alvaStudioTheme(),
     project: { type: 'web' },
-    plugins: [alvaStylePlugin],
+    plugins: [alvaStylePlugin, aparenciaPlugin],
     i18n: { locales: { en: traducaoDoEditor() } },
     layout: { default: layoutDoEditor() },
     storage: {
