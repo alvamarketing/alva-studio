@@ -74,7 +74,7 @@ test('o foco começa em cancelar: destruir precisa ser deliberado', async () => 
 });
 
 test('nenhuma ação do Studio depende mais do confirm() do navegador', async () => {
-  for (const arquivo of ['app.js', 'forms.js', 'owner.js']) {
+  for (const arquivo of ['app.js', 'owner.js']) {
     const fonte = await readFile(new URL(`../public/${arquivo}`, import.meta.url), 'utf8');
     const nativos = [...fonte.matchAll(/(?:^|[^.\w])(?:window\.)?(confirm|alert|prompt)\(/g)]
       .filter((achado) => !/dashboardContextFlow|\.confirm\(/.test(fonte.slice(Math.max(0, achado.index - 30), achado.index + 10)));

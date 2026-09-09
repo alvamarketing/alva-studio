@@ -210,25 +210,6 @@ test('landing page sem page.write mantém catálogo, edição, ordem e exclusão
   assert.deepEqual(editableControls.map((control) => control.disabled), [false, false]);
 });
 
-test('preview da VSL mantém iframe fora do botão de seleção', async () => {
-  const { previewVslElementMarkup } = await import('../public/forms.js');
-  const markup = previewVslElementMarkup({
-    element: { type: 'vsl', title: 'Oferta', publicId: 'public-vsl' },
-    index: 0,
-    options: { vslEmbedUrls: new Map([['public-vsl', 'https://studio.test/embed/v/public-vsl']]) },
-  });
-  assert.match(markup, /<button[^>]*data-preview-element="0"/);
-  assert.match(markup, /<iframe[^>]+src="https:\/\/studio\.test\/embed\/v\/public-vsl"/);
-  assert.doesNotMatch(markup, /<button[^>]*>[^]*<iframe[^]*<\/button>/);
-  const headerMarkup = previewVslElementMarkup({
-    element: { type: 'vsl', title: 'Topo', publicId: 'public-vsl' },
-    index: 1,
-    header: true,
-    options: { vslEmbedUrls: new Map([['public-vsl', 'https://studio.test/embed/v/public-vsl']]) },
-  });
-  assert.match(headerMarkup, /data-preview-header="1"/);
-  assert.doesNotMatch(headerMarkup, /<button[^>]*>[^]*<iframe[^]*<\/button>/);
-});
 
 test('guard read-only restaura mutações programáticas reais do GrapesJS', async () => {
   const editor = grapesjs.init({ headless: true, storageManager: false });

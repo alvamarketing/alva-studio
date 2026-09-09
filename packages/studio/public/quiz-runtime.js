@@ -121,8 +121,23 @@ export function quizRuntimeScript({ destino = '' } = {}) {
     if (proxima === etapas.length - 1) await enviar();
   };
 
+  // O quiz é montado no editor de páginas, com botões comuns. Por isso qualquer botão da
+  // etapa avança; a marcação explícita continua valendo para quem quiser ser exato, e
+  // links que levam para fora seguem levando.
+  const avanca = (alvo) => {
+    const marcado = alvo.closest('[data-alva-quiz-next]');
+    if (marcado) return marcado;
+    const botao = alvo.closest('button, a, [role="button"]');
+    if (!botao) return null;
+    if (botao.tagName === 'A') {
+      const href = botao.getAttribute('href') || '';
+      return href === '' || href.startsWith('#') ? botao : null;
+    }
+    return botao;
+  };
+
   corpo.addEventListener('click', (evento) => {
-    const botao = evento.target.closest('[data-alva-quiz-next]');
+    const botao = avanca(evento.target);
     if (!botao) return;
     const etapa = botao.closest('section');
     if (!etapa || etapa !== etapas[atual]) return;

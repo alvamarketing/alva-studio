@@ -102,3 +102,35 @@ test('quiz sem destino configurado não tenta enviar para lugar nenhum', async (
   assert.deepEqual(visiveis(document), ['c']);
   dom.window.close();
 });
+
+// Quem monta o quiz no editor de páginas arrasta um botão comum. Exigir uma marcação que
+// só existe no HTML deixaria o quiz publicado preso na primeira etapa, sem saída visível.
+test('um botão comum da seção também avança, sem marcação nenhuma', async () => {
+  const dom = await abrir(`
+    <section id="a"><h1>Abertura</h1><button>Começar</button></section>
+    <section id="b"><h2>Fim</h2></section>`);
+  const { document } = dom.window;
+  document.querySelector('#a button').click();
+  assert.deepEqual(visiveis(document), ['b']);
+  dom.window.close();
+});
+
+test('link de âncora dentro da etapa avança em vez de rolar a página', async () => {
+  const dom = await abrir(`
+    <section id="a"><a class="cta" href="#b">Quero começar</a></section>
+    <section id="b"><h2>Fim</h2></section>`);
+  const { document } = dom.window;
+  document.querySelector('#a a').click();
+  assert.deepEqual(visiveis(document), ['b']);
+  dom.window.close();
+});
+
+test('link para fora continua saindo da página', async () => {
+  const dom = await abrir(`
+    <section id="a"><a href="https://exemplo.test/outro">Política de privacidade</a><button>Continuar</button></section>
+    <section id="b"><h2>Fim</h2></section>`);
+  const { document } = dom.window;
+  document.querySelector('#a a').click();
+  assert.deepEqual(visiveis(document), ['a'], 'clicar num link externo não pode pular a etapa');
+  dom.window.close();
+});

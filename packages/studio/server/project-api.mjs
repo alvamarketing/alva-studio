@@ -64,6 +64,7 @@ function pageInput(input = {}) {
     template: input.template,
     editorState: input.editorState,
     renderedHtml: input.renderedHtml,
+    kind: input.kind,
     lockVersion: input.lockVersion,
   };
 }
@@ -630,6 +631,8 @@ export function createProjectApi({
             template: input.template,
             editorState: input.editorState ?? input.project,
             renderedHtml: input.renderedHtml ?? input.html,
+            // A marca vem do botão que abriu o editor: Páginas cria página, Quizzes cria quiz.
+            kind: input.kind,
             companyId: context.companyId,
             projectId,
             actorId: context.user.id,

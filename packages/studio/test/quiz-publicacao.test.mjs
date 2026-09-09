@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPageExportHtml } from '../public/editor-shell.js';
@@ -36,4 +37,11 @@ test('o título e o conteúdo continuam sendo os da página', () => {
   assert.match(html, /<title>Meu quiz<\/title>/);
   assert.match(html, /\.hero\{color:red\}/);
   assert.match(html, /<section id="a">/);
+});
+
+test('o app publica com a mecânica quando a página está marcada como quiz', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  // Sem passar a marca adiante, um quiz sobe como landing rolável: todas as etapas de uma
+  // vez, sem botão que leve à seguinte.
+  assert.match(app, /quiz: page\?\.kind === 'quiz'/);
 });

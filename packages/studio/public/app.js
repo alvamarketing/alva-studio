@@ -3,15 +3,15 @@ import { templates, getTemplate, normalizeForms, syncFormDelivery } from './temp
 import { buildPageExportHtml, createFriendlyEditor } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
-import { createFormsUI } from './forms.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
+import { conteudoDaLista, contagemDaLista, textosDaLista } from './quiz-mecanica.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
 const viewRouter = createViewRouter({ onNavigate: ({ view, settingsTab }) => abrirView(view, { settingsTab, fromHistory: true }) });
@@ -20,6 +20,9 @@ const escape = (value) =>
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
   );
+// Quiz e landing page são a mesma coisa no editor; o que muda é a marca. Esta variável
+// diz qual das duas a tela de conteúdo está mostrando agora.
+let tipoDeConteudo = 'page';
 let editor,
   page,
   pages = [],
@@ -30,7 +33,6 @@ let editor,
   toastTimer,
   saving,
   ownerUI,
-  formsUI,
   studioShell,
   dashboardContextFlow,
   dashboardStateOverride,
@@ -149,7 +151,9 @@ function setDashboardView(view, { settingsTab = 'account', fromHistory = false }
     settings: '#settings-view',
     project: '#project-view',
     pages: '#pages-view',
-    forms: '#forms-view',
+    // Quizzes mora na tela de páginas; a entrada continua separada só para a navegação e o
+    // endereço não mudarem para quem já tem o link.
+    forms: '#pages-view',
     vsl: '#vsl-view',
     analytics: '#analytics-view',
     tracking: '#tracking-view',
@@ -157,7 +161,7 @@ function setDashboardView(view, { settingsTab = 'account', fromHistory = false }
     publication: '#publication-view',
   };
   if (view !== 'settings') ownerUI?.closeSettings({ notify: false });
-  for (const [name, selector] of Object.entries(sections)) $(selector).hidden = name !== view;
+  for (const [selector, escondida] of Object.entries(secoesEscondidas(sections, view))) $(selector).hidden = escondida;
   closeMobileDrawer();
   syncSidebarContext(view);
   setActiveNavigation(view);
@@ -184,7 +188,7 @@ function dashboardState() {
 }
 function renderDashboardState(state) {
   dashboardStateOverride = state;
-  const activeView = Object.entries({ home: '#studio-home', company: '#company-view', history: '#history-view', settings: '#settings-view', project: '#project-view', pages: '#pages-view', forms: '#forms-view', vsl: '#vsl-view' }).find(([, selector]) => !$(selector).hidden)?.[0] || 'home';
+  const activeView = Object.entries({ home: '#studio-home', company: '#company-view', history: '#history-view', settings: '#settings-view', project: '#project-view', pages: '#pages-view', vsl: '#vsl-view' }).find(([, selector]) => !$(selector).hidden)?.[0] || 'home';
   syncSidebarContext(activeView);
   setActiveNavigation(activeView);
   updateVslNavigation();
@@ -543,6 +547,9 @@ function exportHtml() {
     html: editor.getHtml(),
     js: editor.getJs(),
     publicOrigin: window.location.origin,
+    // O que separa o quiz da landing na publicação é esta marca: com ela o HTML sai com o
+    // script que mostra uma etapa por vez.
+    quiz: page?.kind === 'quiz',
   });
 }
 function projectEmpty(title, text) {
@@ -802,9 +809,10 @@ function renderProjectContent(model) {
       edit.className = 'project-content-open';
       edit.textContent = 'Continuar';
       edit.onclick = action(() => {
-        if (item.kind === 'page') return openPage(item.id);
         if (item.kind === 'video') { setDashboardView('vsl'); return vslUI.editById(item.id); }
-        return formsUI.openForm(item.id);
+        // Quiz e página abrem o mesmo editor; a marca só decide de qual lista ele veio.
+        tipoDeConteudo = item.kind === 'form' ? 'quiz' : 'page';
+        return openPage(item.id);
       });
       row.append(icon, details, edit);
     } else {
@@ -1133,19 +1141,19 @@ async function loadList() {
   return pageList.refresh();
 }
 function renderList() {
+  const textos = textosDaLista(tipoDeConteudo);
   const search = $('#search').value.toLocaleLowerCase('pt-BR');
-  const filtered = pages.filter((p) => p.name.toLocaleLowerCase('pt-BR').includes(search));
-  $('#page-count').textContent = pages.length + ' ' + (pages.length === 1 ? 'página' : 'páginas');
+  const doTipo = conteudoDaLista(pages, tipoDeConteudo);
+  const filtered = doTipo.filter((p) => p.name.toLocaleLowerCase('pt-BR').includes(search));
+  $('#page-count').textContent = contagemDaLista(doTipo.length, tipoDeConteudo);
   const list = $('#page-list');
   list.replaceChildren();
   if (!filtered.length) {
     list.innerHTML =
       '<div class="empty"><div class="empty-icon">↗</div><h2>' +
-      (!pages.length ? 'Sua próxima campanha começa aqui.' : 'Nenhuma página encontrada.') +
+      (!doTipo.length ? textos.vazio : textos.naoEncontrado) +
       '</h2><p>' +
-      (!pages.length
-        ? 'Escolha um modelo, dê a sua cara e prepare a publicação.<br>A primeira landing page está a um clique.'
-        : 'Tente buscar por outro nome.') +
+      (!doTipo.length ? textos.ajudaVazio : 'Tente buscar por outro nome.') +
       '</p></div>';
     return;
   }
@@ -1171,7 +1179,7 @@ function renderList() {
       label +
       '</span></div><p>' +
       escape(p.domain || 'Domínio ainda não conectado') +
-      `</p><div class="card-actions">${editable ? '<button class="card-action alva-tooltip edit" type="button" data-tooltip="Editar página" aria-label="Editar página"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button><button class="card-action alva-tooltip duplicate" type="button" data-tooltip="Duplicar página" aria-label="Duplicar página"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button><button class="card-action alva-tooltip delete fe-danger" type="button" data-tooltip="Excluir página" aria-label="Excluir página"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>' : '<span class="read-only">Somente leitura</span>'}</div></div>`;
+      `</p><div class="card-actions">${editable ? `<button class="card-action alva-tooltip edit" type="button" data-tooltip="Editar ${textos.singular}" aria-label="Editar ${textos.singular}"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button><button class="card-action alva-tooltip duplicate" type="button" data-tooltip="Duplicar ${textos.singular}" aria-label="Duplicar ${textos.singular}"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button><button class="card-action alva-tooltip delete fe-danger" type="button" data-tooltip="Excluir ${textos.singular}" aria-label="Excluir ${textos.singular}"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>` : '<span class="read-only">Somente leitura</span>'}</div></div>`;
     if (editable) {
       card.querySelector('.edit').onclick = action(() => openPage(p.id));
       card.querySelector('.duplicate').onclick = action(async () => {
@@ -1180,7 +1188,7 @@ function renderList() {
         toast('Cópia criada. O domínio foi deixado em branco.');
       });
       card.querySelector('.delete').onclick = action(async () => {
-        if (!(await confirmarAcao({ titulo: 'Excluir “' + p.name + '”?', descricao: 'A página sai deste Studio. Uma publicação existente na Vercel continua no ar.', confirmar: 'Excluir página', perigo: true }))) return;
+        if (!(await confirmarAcao({ titulo: 'Excluir “' + p.name + '”?', descricao: `${tipoDeConteudo === 'quiz' ? 'O quiz sai' : 'A página sai'} deste Studio. Uma publicação existente na Vercel continua no ar.`, confirmar: `Excluir ${textos.singular}`, perigo: true }))) return;
         await api('/pages/' + p.id, 'DELETE', {});
         await loadList();
       });
@@ -1229,17 +1237,26 @@ async function openPage(id) {
       vslLoadError = 'Não foi possível carregar as VSLs. Tente novamente.';
     }
   }
+  // Quem abre um quiz pelo painel do projeto não passou pela lista: a marca da própria
+  // página é que diz de onde ela veio e para onde o botão de voltar leva.
+  tipoDeConteudo = page.kind === 'quiz' ? 'quiz' : 'page';
+  const textos = textosDaLista(tipoDeConteudo);
   loading = true;
   dirty = false;
   change = 0;
   $('#dashboard').hidden = true;
   $('#editing').hidden = false;
+  $('#back').setAttribute('aria-label', `Voltar para ${textos.voltar.toLocaleLowerCase('pt-BR')}`);
+  $('#back').title = textos.voltar;
+  $('#back').dataset.tooltip = textos.voltar;
+  $('#page-name').setAttribute('aria-label', textos.nomeDoConteudo);
   $('#page-name').value = page.name;
   $('#save-state').textContent = 'Salvo neste computador';
   if (editor) editor.destroy();
   const template = getTemplate(page.template) || getTemplate('services');
   editor = createFriendlyEditor({
     container: '#editor',
+    headerContext: textos.contexto,
     project: page.project,
     html: template.html,
     css: template.css,
@@ -1256,8 +1273,13 @@ async function openPage(id) {
   syncPagePublishControl();
 }
 $('#new-page').onclick = () => {
+  const textos = textosDaLista(tipoDeConteudo);
+  const dialogo = $('#create-dialog');
+  dialogo.querySelector('.eyebrow').textContent = textos.comecar;
+  dialogo.querySelector('label').firstChild.textContent = textos.nomeDoConteudo;
+  dialogo.querySelector('button.primary').textContent = textos.criar;
   renderTemplates();
-  $('#create-dialog').showModal();
+  dialogo.showModal();
 };
 $('#create-form').onsubmit = action(async (event) => {
   event.preventDefault();
@@ -1265,7 +1287,7 @@ $('#create-form').onsubmit = action(async (event) => {
   button.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(event.target));
-    const p = await api('/pages', 'POST', data);
+    const p = await api('/pages', 'POST', { ...data, kind: tipoDeConteudo });
     $('#create-dialog').close();
     event.target.reset();
     await openPage(p.id);
@@ -1294,7 +1316,9 @@ $('#back').onclick = action(async () => {
   $('#editing').hidden = true;
   $('#dashboard').hidden = false;
   await returnToProject(projectId);
-  setDashboardView('project');
+  // O botão promete a lista de onde a pessoa veio; devolvê-la à visão geral do projeto
+  // fazia com que ela tivesse de procurar o caminho de novo.
+  await mostrarConteudo(tipoDeConteudo);
 });
 $('#preview').onclick = action(async () => {
   await save();
@@ -1491,7 +1515,6 @@ function resetPageList() {
 async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
-formsUI = createFormsUI({ api, toast, onReturnToProject: returnToProject, can: (capability) => studioShell?.can(capability), getProjectId: () => studioShell?.state().currentProject?.id, publicOrigin: window.location.origin, mediaEnabled: () => mediaPipelineEnabled });
 const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
 contextBoundary = createStudioContextBoundary({
   savePage: save,
@@ -1503,8 +1526,6 @@ contextBoundary = createStudioContextBoundary({
     $('#editing').hidden = true;
   },
   clearPageList: resetPageList,
-  closeFormEditor: () => formsUI.closeEditor(),
-  resetForms: () => formsUI.reset(),
 });
 studioShell = createStudioShell({
   api,
@@ -1519,7 +1540,6 @@ studioShell = createStudioShell({
     if (!$('#company-view').hidden) await renderCompany();
     if (!$('#project-view').hidden) await renderProject();
     if (!$('#pages-view').hidden && state.currentProject) await loadList();
-    if (!$('#forms-view').hidden && state.currentProject) await formsUI.showForms();
     if (!$('#vsl-view').hidden && state.currentProject) await vslUI.reload();
   },
 });
@@ -2098,17 +2118,28 @@ $('#mcp-key-form').onsubmit = action(async (event) => {
   $('#mcp-key-status').textContent = `Copie agora e guarde em local seguro: ${result.token}`;
   toast('Chave MCP criada. O segredo aparece somente agora.');
 });
-async function abrirPaginas() {
+// Páginas e Quizzes abrem a mesma tela. Manter duas telas era manter dois editores, e é
+// justamente isso que a marca resolveu: o quiz é a página com etapas.
+async function mostrarConteudo(tipo) {
   if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
-  setDashboardView('pages');
+  tipoDeConteudo = tipo;
+  const textos = textosDaLista(tipo);
+  setDashboardView(tipo === 'quiz' ? 'forms' : 'pages');
+  $('#pages-eyebrow').textContent = textos.eyebrow;
+  $('#pages-title').innerHTML = `${escape(textos.titulo)}<span class="accent">.</span>`;
+  $('#pages-subtitle').textContent = textos.descricao;
+  $('#new-page').textContent = textos.botao;
+  $('#search').placeholder = textos.busca;
+  $('#search').setAttribute('aria-label', `Buscar ${textos.plural}`);
+  $('#pages-footer').firstChild.textContent = `${textos.rodape} `;
   $('#new-page').hidden = !studioShell.can('page.write');
-  formsUI.showPages();
   await loadList();
 }
+async function abrirPaginas() {
+  await mostrarConteudo('page');
+}
 async function abrirFormularios() {
-  if (!studioShell.state().currentProject) throw new Error('Escolha ou crie um projeto antes de acessar seus conteúdos.');
-  setDashboardView('forms');
-  await formsUI.showForms();
+  await mostrarConteudo('quiz');
 }
 $('#nav-pages').onclick = action(abrirPaginas);
 $('#nav-forms').onclick = action(abrirFormularios);
@@ -2346,7 +2377,6 @@ ownerUI = createOwnerUI({
     resetPageList();
     $('#editing').hidden = true;
     $('#dashboard').hidden = true;
-    formsUI.reset();
     companyOverviewRequest++;
     $('#project-switcher').replaceChildren();
   },

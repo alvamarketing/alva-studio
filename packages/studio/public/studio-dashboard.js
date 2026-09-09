@@ -67,6 +67,16 @@ export function projectCardCounts(overview = {}) {
   };
 }
 
+// Duas entradas de navegação podem apontar para a mesma seção — Páginas e Quizzes são a
+// mesma tela. Decidir por seletor, e não por nome de view, evita que a segunda entrada
+// esconda o que a primeira acabou de mostrar.
+export function secoesEscondidas(secoes = {}, view = '') {
+  const alvo = secoes[view];
+  const visibilidade = {};
+  for (const seletor of Object.values(secoes)) visibilidade[seletor] = seletor !== alvo;
+  return visibilidade;
+}
+
 export function filterProjectContent(content = [], filter = 'all') {
   const kind = filter === 'pages' ? 'page' : filter === 'forms' ? 'form' : filter === 'videos' ? 'video' : '';
   return kind ? content.filter((item) => item.kind === kind) : [...content];

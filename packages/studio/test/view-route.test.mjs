@@ -102,3 +102,11 @@ test('agentes e publicação têm endereço próprio e exigem projeto', () => {
   assert.equal(viewToRestore({ view: 'agents' }, { hasProject: false }), 'home');
   assert.equal(viewToRestore({ view: 'publication' }, { hasProject: true }), 'publication');
 });
+
+// O endereço é o que a pessoa copia e manda para alguém. "formularios" ficou de um produto
+// que não existe mais; o endereço passa a dizer quiz, sem quebrar quem guardou o antigo.
+test('a tela de quizzes tem endereço próprio e ainda atende o antigo', () => {
+  assert.equal(viewToHash('forms'), '#/quizzes');
+  assert.equal(hashToView('#/quizzes').view, 'forms');
+  assert.equal(hashToView('#/formularios').view, 'forms');
+});

@@ -115,16 +115,22 @@ export class ProjectRepository {
     const [counts, content, domain, integrationRows] = await Promise.all([
       this.database.query(
         `SELECT
+           -- Um quiz é uma página marcada. O painel separa os dois porque quem monta
+           -- procura pelo cartão que abriu: Páginas ou Quizzes.
            (SELECT count(*)::int FROM pages page
-            WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL) AS pages,
-           (SELECT count(*)::int FROM forms form
-            WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL) AS forms,
+            WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL
+              AND page.kind = 'page') AS pages,
+           (SELECT count(*)::int FROM pages page
+            WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL
+              AND page.kind = 'quiz') AS forms,
            (SELECT count(*)::int FROM pages page
             WHERE page.company_id = $1 AND page.project_id = $2
-              AND page.deleted_at IS NULL AND page.published_version_id IS NOT NULL) AS "publishedPages",
-           (SELECT count(*)::int FROM forms form
-            WHERE form.company_id = $1 AND form.project_id = $2
-              AND form.deleted_at IS NULL AND form.published_version_id IS NOT NULL) AS "publishedForms",
+              AND page.deleted_at IS NULL AND page.kind = 'page'
+              AND page.published_version_id IS NOT NULL) AS "publishedPages",
+           (SELECT count(*)::int FROM pages page
+            WHERE page.company_id = $1 AND page.project_id = $2
+              AND page.deleted_at IS NULL AND page.kind = 'quiz'
+              AND page.published_version_id IS NOT NULL) AS "publishedForms",
            ((SELECT count(*)::int FROM form_submissions submission
              JOIN forms form ON form.id = submission.form_id
              WHERE submission.company_id = $1 AND submission.project_id = $2 AND form.deleted_at IS NULL)
@@ -141,7 +147,7 @@ export class ProjectRepository {
       ),
       this.database.query(
         `SELECT * FROM (
-           SELECT page.id, 'page' AS kind, page.name, route.path AS route,
+           SELECT page.id, CASE WHEN page.kind = 'quiz' THEN 'form' ELSE 'page' END AS kind, page.name, route.path AS route,
                   (page.published_version_id IS NOT NULL) AS published, page.updated_at,
                   (SELECT count(*)::int FROM page_submissions submission WHERE submission.page_id = page.id) AS submission_count
            FROM pages page
@@ -151,17 +157,6 @@ export class ProjectRepository {
             AND route.project_id = page.project_id
             AND route.deleted_at IS NULL
            WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL
-           UNION ALL
-           SELECT form.id, 'form' AS kind, form.name, route.path AS route,
-                  (form.published_version_id IS NOT NULL) AS published, form.updated_at,
-                  (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = form.id) AS submission_count
-           FROM forms form
-           JOIN project_routes route
-             ON route.id = form.route_id
-            AND route.company_id = form.company_id
-            AND route.project_id = form.project_id
-            AND route.deleted_at IS NULL
-           WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL
            UNION ALL
            SELECT video.id, 'video' AS kind, video.name, NULL AS route,
                   (video.published_version_id IS NOT NULL) AS published, video.updated_at,

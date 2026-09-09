@@ -1086,9 +1086,10 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   assert.equal(response.status, 200);
   let overview = await response.json();
   assert.equal(overview.project.id, records.projectA.id);
-  assert.deepEqual(overview.counts, { pages: 2, forms: 1, publishedPages: 1, publishedForms: 1, submissions: 1 });
+  // O formulário do editor antigo continua no banco e as respostas dele continuam contando,
+  // mas ele saiu da biblioteca: hoje quiz é uma página marcada.
+  assert.deepEqual(overview.counts, { pages: 2, forms: 0, publishedPages: 1, publishedForms: 0, submissions: 1 });
   assert.deepEqual(overview.content.map(({ id, kind, name, route, published, submissionCount }) => ({ id, kind, name, route, published, submissionCount })), [
-    { id: form.id, kind: 'form', name: 'Contato publicado', route: '/contato', published: true, submissionCount: 1 },
     { id: draftPage.id, kind: 'page', name: 'Página em rascunho', route: '/rascunho', published: false, submissionCount: 0 },
     { id: publishedPage.id, kind: 'page', name: 'Página publicada', route: '/publicada', published: true, submissionCount: 0 },
   ]);

@@ -4,7 +4,6 @@ import { normalizeQuizCanvas, renderQuizCanvas, scopeCanvasCss } from '../server
 import { normalizeFormInput } from '../server/form-store.mjs';
 import { validateFormAnswers } from '../server/form-answer-validation.mjs';
 import { parseFragment } from 'parse5';
-import { canvasSnapshot, seedQuizCanvas } from '../public/quiz-canvas-seed.js';
 
 const model = {
   pages: [{ frames: [{ component: { tagName: 'section', components: [
@@ -110,34 +109,4 @@ test('usa títulos de heading irmão e semântica booleana do HTML', () => {
   const state = { pages: [{ frames: [{ component: { tagName: 'section', components: [{ tagName: 'div', attributes: { 'data-element-id': 'whats' }, components: [{ tagName: 'h3', components: [{ type: 'textnode', content: 'Seu WhatsApp' }] }, { tagName: 'input', attributes: { name: 'whatsapp', type: 'tel', required: 'false' } }] }] } }] }] };
   const result = normalizeQuizCanvas({ version: 1, editorState: state, html: '<section><div data-element-id="whats"><h3>Seu WhatsApp</h3><input name="whatsapp" type="tel" required="false"></div></section>', css: '' });
   assert.deepEqual(result.fields.map(({ id, type, title, required }) => ({ id, type, title, required })), [{ id: 'whatsapp', type: 'phone', title: 'Seu WhatsApp', required: true }]);
-});
-
-test('seed real preserva required de múltipla escolha e pergunta visual no schema derivado', async () => {
-  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
-  const dom = new JSDOM('<!doctype html>');
-  const previous = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
-  Object.assign(globalThis, { window: dom.window, document: dom.window.document, DOMParser: dom.window.DOMParser, Node: dom.window.Node });
-  const { default: grapesjs } = await import('grapesjs');
-  const seeded = seedQuizCanvas([
-    { id: 'servicos', type: 'multiple_choice', title: 'Quais serviços você procura?', options: ['Tráfego', 'Landing'], required: true, icon: 'checklist' },
-    { id: 'canal', type: 'image_choice', title: 'Como prefere conversar?', options: [{ label: 'WhatsApp', imageUrl: '', icon: 'chat' }, { label: 'Ligação', imageUrl: '', icon: 'call' }], required: true, icon: 'gallery_thumbnail' },
-  ]);
-  const editor = grapesjs.init({ headless: true, storageManager: false, components: seeded.html, style: seeded.css });
-  try {
-    const canvas = canvasSnapshot(editor);
-    const normalized = normalizeQuizCanvas(canvas);
-    assert.deepEqual(normalized.fields.map(({ id, type, title, required }) => ({ id, type, title, required })), [
-      { id: 'servicos', type: 'multiple_choice', title: 'Quais serviços você procura?', required: true },
-      { id: 'canal', type: 'image_choice', title: 'Como prefere conversar?', required: true },
-    ]);
-    const form = normalizeFormInput({ headerElements: [], steps: [{ id: 'tela', title: 'Tela', elements: [], canvas }], completion: { title: 'Ok', message: 'Ok' }, webhook: '' });
-    assert.throws(() => validateFormAnswers(form, { answers: { canal: 'WhatsApp' } }), /Quais serviços você procura/);
-    assert.deepEqual(validateFormAnswers(form, { answers: { servicos: ['Tráfego'], canal: 'WhatsApp' } }).servicos, ['Tráfego']);
-    const changedHtml = canvas.html.replace('data-quiz-required="true"', 'data-quiz-required="false"');
-    assert.throws(() => normalizeQuizCanvas({ ...canvas, html: changedHtml }), /divergentes/);
-  } finally {
-    editor.destroy();
-    Object.assign(globalThis, previous);
-    dom.window.close();
-  }
 });

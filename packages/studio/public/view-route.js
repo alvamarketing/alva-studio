@@ -5,14 +5,17 @@ const ROUTES = {
   settings: 'configuracoes',
   project: 'projeto',
   pages: 'paginas',
-  forms: 'formularios',
+  forms: 'quizzes',
   vsl: 'vsl',
   analytics: 'analytics',
   tracking: 'rastreamento',
   agents: 'agentes',
   publication: 'publicacao',
 };
-const VIEWS = Object.fromEntries(Object.entries(ROUTES).map(([view, slug]) => [slug, view]));
+// Endereços antigos continuam abrindo a tela nova: quem guardou o link de "formularios"
+// não descobre uma página inicial no lugar do quiz.
+const APELIDOS = { formularios: 'forms' };
+const VIEWS = { ...APELIDOS, ...Object.fromEntries(Object.entries(ROUTES).map(([view, slug]) => [slug, view])) };
 const DEFAULT_SETTINGS_TAB = 'account';
 
 export function viewToHash(view, { settingsTab = DEFAULT_SETTINGS_TAB } = {}) {

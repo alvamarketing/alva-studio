@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyticsPanelModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel } from '../public/studio-dashboard.js';
+import { analyticsPanelModel, applyDashboardNavigation, secoesEscondidas, canCreateProject, createAuthenticatedApi, createDashboardContextFlow, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, isProjectSlug, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel } from '../public/studio-dashboard.js';
 
 const htmlPath = new URL('../public/index.html', import.meta.url);
 const appPath = new URL('../public/app.js', import.meta.url);
@@ -431,19 +431,12 @@ test('analista pode ler e exportar leads, enquanto quem não tem submission.read
   assert.match(html, /data-project-filter="leads"[^>]*>Leads/);
 });
 
-test('publicação nos editores declara bloqueio acionável para quem não pode publicar', async () => {
-  const [html, app, forms] = await Promise.all([
-    readFile(htmlPath, 'utf8'),
-    readFile(appPath, 'utf8'),
-    readFile(new URL('../public/forms.js', import.meta.url), 'utf8'),
-  ]);
+test('publicação no editor declara bloqueio acionável para quem não pode publicar', async () => {
+  const [html, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(appPath, 'utf8')]);
   assert.match(html, /id="publish"[^>]+aria-describedby="publish-help"/);
   assert.match(html, /id="publish-help"[^>]*role="status"/);
-  assert.match(html, /id="form-public-link"[^>]+aria-describedby="form-public-link-help"/);
   assert.match(app, /deployment\.publish/);
   assert.match(app, /Você não tem permissão para publicar/);
-  assert.match(forms, /deployment\.publish/);
-  assert.match(forms, /form-public-link-help/);
 });
 
 test('ações de conteúdo respeitam as capacidades de escrita por tipo', () => {
@@ -565,7 +558,7 @@ test('filtros permanecem disponíveis para o estado interno, mas não duplicam a
   assert.match(html, /id="project-content-filter"[^>]*hidden/);
   assert.match(css, /#project-content-filter\[hidden\]\s*\{\s*display:none !important/);
   assert.match(app, /\$\('#project-content-all'\)\.onclick/);
-  assert.match(app, /setDashboardView\('pages'\)/);
+  assert.match(app, /mostrarConteudo\('page'\)/);
   assert.match(css, /#dashboard > aside\.is-open\s*\{\s*transform:\s*translateX\(0\)/);
   assert.doesNotMatch(css, /\.mobile-menu,\.mobile-drawer-backdrop\s*\{\s*display\s*:\s*none !important/);
 });
@@ -578,3 +571,22 @@ test('ações de cabeçalho levam para superfícies reais do projeto', async () 
   assert.doesNotMatch(app, /\$\('#project-settings-action'\)\.onclick = \(\) => setDashboardView\('settings'\)/);
 });
 
+
+// Páginas e Quizzes são a mesma seção com dois nomes de navegação. Ao esconder as seções
+// uma por uma, o segundo nome apagava o que o primeiro tinha acabado de mostrar — e a tela
+// ficava em branco sem erro nenhum no console.
+test('duas entradas de navegação para a mesma seção não se anulam', () => {
+  const secoes = { home: '#home', pages: '#pages', forms: '#pages', vsl: '#vsl' };
+  assert.deepEqual(secoesEscondidas(secoes, 'forms'), { '#home': true, '#pages': false, '#vsl': true });
+  assert.deepEqual(secoesEscondidas(secoes, 'pages'), { '#home': true, '#pages': false, '#vsl': true });
+  assert.deepEqual(secoesEscondidas(secoes, 'home'), { '#home': false, '#pages': true, '#vsl': true });
+});
+
+test('uma view desconhecida esconde tudo, em vez de deixar duas telas à mostra', () => {
+  assert.deepEqual(secoesEscondidas({ home: '#home', pages: '#pages' }, 'nada'), { '#home': true, '#pages': true });
+});
+
+test('sair do editor devolve para a lista de onde a pessoa veio', async () => {
+  const app = await readFile(appPath, 'utf8');
+  assert.match(app, /await mostrarConteudo\(tipoDeConteudo\);/);
+});

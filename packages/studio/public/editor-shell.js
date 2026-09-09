@@ -1053,12 +1053,15 @@ export function createFriendlyEditor({
   const pageHeader = decorateHeader && headerSelector ? document.querySelector(headerSelector) : null;
   if (pageHeader) {
     pageHeader.classList.add('landing-editor-header');
-    if (!pageHeader.querySelector('.fe-editor-context')) {
-      const context = document.createElement('span');
+    // O mesmo cabeçalho serve página e quiz, e o editor é recriado sem recarregar a tela:
+    // reescrever o texto todas as vezes evita anunciar "Landing" com um quiz aberto.
+    let context = pageHeader.querySelector('.fe-editor-context');
+    if (!context) {
+      context = document.createElement('span');
       context.className = 'fe-editor-context';
-      context.textContent = `${headerContext} ·`;
       pageHeader.querySelector('#page-name')?.before(context);
     }
+    context.textContent = `${headerContext} ·`;
     if (!pageHeader.querySelector('.fe-saved-mark')) {
       const mark = document.createElement('span');
       mark.className = 'fe-saved-mark material-symbols-outlined';

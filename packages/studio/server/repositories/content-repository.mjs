@@ -65,6 +65,13 @@ function routeConflict(error) {
   return error;
 }
 
+// Um quiz é uma página com uma marca: mesmo editor, mesmos elementos, mesmo salvamento.
+function pageKindOf(value) {
+  const kind = String(value ?? 'page');
+  if (!['page', 'quiz'].includes(kind)) throw fail(`Tipo de página desconhecido: ${kind}`, 400);
+  return kind;
+}
+
 function pageRecord(row) {
   return {
     id: row.id,
@@ -73,6 +80,7 @@ function pageRecord(row) {
     name: row.name,
     route: row.route,
     template: row.template,
+    kind: row.kind || 'page',
     editorState: row.editor_state,
     renderedHtml: row.rendered_html,
     lockVersion: row.lock_version,
@@ -342,21 +350,24 @@ export class ContentRepository {
     }
   }
 
-  async createPage({ companyId, projectId, actorId, name, route: routeValue, template, editorState = {}, renderedHtml = '', client: suppliedClient = null }) {
+  async createPage({ companyId, projectId, actorId, name, route: routeValue, template, editorState = {}, renderedHtml = '', kind = 'page', client: suppliedClient = null }) {
     const pageName = requiredName(name, 'Nome da página');
     const pageRoute = route(routeValue);
     const state = normalizePageCaptureIds(json(editorState, 'Estado do editor'));
     const html = validRenderedHtml(renderedHtml);
     const pageTemplate = optionalTemplate(template);
+    // Só dois tipos existem; recusar aqui evita uma página órfã, que não apareceria nem
+    // na lista de páginas nem na de quizzes.
+    const pageKind = pageKindOf(kind);
     try {
       const create = async (client) => {
         await authorizedProject(client, { companyId, projectId, actorId, capability: 'page.write' });
         const routeId = await createRoute(client, { companyId, projectId, path: pageRoute, contentType: 'page' });
         const { rows } = await client.query(
-          `INSERT INTO pages (company_id, project_id, route_id, name, template, editor_state, rendered_html, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+          `INSERT INTO pages (company_id, project_id, route_id, name, template, editor_state, rendered_html, created_by, kind)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
            RETURNING *`,
-          [companyId, projectId, routeId, pageName, pageTemplate, JSON.stringify(state), html, actorId],
+          [companyId, projectId, routeId, pageName, pageTemplate, JSON.stringify(state), html, actorId, pageKind],
         );
         return pageRecord({ ...rows[0], route: pageRoute });
       };

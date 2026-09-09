@@ -13,7 +13,7 @@ const acoesDoCartao = (fonte) => {
   return fonte.slice(inicio, fonte.indexOf('</div>', inicio) + 6);
 };
 
-for (const [arquivo, itens] of [['app.js', 'página'], ['forms.js', 'formulário']]) {
+for (const [arquivo, itens] of [['app.js', 'página']]) {
   test(`as ações do cartão de ${itens} são ícone com rótulo ao passar o mouse`, async () => {
     const acoes = acoesDoCartao(await ler(arquivo));
     for (const classe of ['edit', 'duplicate', 'delete']) {
@@ -35,7 +35,7 @@ test('o rótulo ao passar o mouse funciona fora do cabeçalho do editor', async 
 });
 
 test('o ícone sozinho não deixa a ação sem nome', async () => {
-  for (const arquivo of ['app.js', 'forms.js']) {
+  for (const arquivo of ['app.js']) {
     const acoes = acoesDoCartao(await ler(arquivo));
     const rotulos = [...acoes.matchAll(/aria-label="([^"]+)"/g)].map((achado) => achado[1]);
     assert.equal(rotulos.length, 3, `${arquivo}: as três ações precisam de nome`);

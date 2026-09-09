@@ -72,3 +72,57 @@ export function secoesSemAvanco(secoes = [], { ultimaEncerra = false } = {}) {
     })
     .map((secao) => secao.id);
 }
+
+// A lista de Quizzes é a lista de Páginas com outro filtro. Quem foi criada antes da marca
+// existir é página: sem esse padrão, o Studio esconderia o trabalho antigo de todo mundo.
+export function conteudoDaLista(paginas = [], tipo = 'page') {
+  return (Array.isArray(paginas) ? paginas : []).filter((pagina) => (pagina?.kind || 'page') === tipo);
+}
+
+const TEXTOS = {
+  page: {
+    eyebrow: 'BIBLIOTECA VISUAL',
+    titulo: 'Landing pages',
+    descricao: 'Monte, edite e publique. Um espaço para cada campanha.',
+    botao: '＋ Nova landing page',
+    busca: 'Buscar uma página…',
+    singular: 'página',
+    plural: 'páginas',
+    contexto: 'Landing',
+    voltar: 'Minhas páginas',
+    nomeDoConteudo: 'Nome da página',
+    comecar: 'UMA NOVA CAMPANHA',
+    criar: 'Criar página',
+    rodape: 'Feito para tirar suas campanhas do papel.',
+    vazio: 'Sua próxima campanha começa aqui.',
+    ajudaVazio: 'Escolha um modelo, dê a sua cara e prepare a publicação.<br>A primeira landing page está a um clique.',
+    naoEncontrado: 'Nenhuma página encontrada.',
+  },
+  quiz: {
+    eyebrow: 'PERGUNTAS EM ETAPAS',
+    titulo: 'Quizzes',
+    descricao: 'Cada seção é uma etapa. O botão da seção leva à seguinte, até o encerramento.',
+    botao: '＋ Novo quiz',
+    busca: 'Buscar um quiz…',
+    singular: 'quiz',
+    plural: 'quizzes',
+    contexto: 'Quiz',
+    voltar: 'Meus quizzes',
+    nomeDoConteudo: 'Nome do quiz',
+    comecar: 'UM NOVO QUIZ',
+    criar: 'Criar quiz',
+    rodape: 'Uma pergunta por vez é o que mantém alguém respondendo até o fim.',
+    vazio: 'Seu primeiro quiz começa aqui.',
+    ajudaVazio: 'Um quiz é uma página em etapas: cada seção é uma pergunta e o botão leva à seguinte.<br>Monte no mesmo editor das páginas.',
+    naoEncontrado: 'Nenhum quiz encontrado.',
+  },
+};
+
+export function textosDaLista(tipo = 'page') {
+  return TEXTOS[tipo] || TEXTOS.page;
+}
+
+export function contagemDaLista(quantidade, tipo = 'page') {
+  const textos = textosDaLista(tipo);
+  return `${quantidade} ${quantidade === 1 ? textos.singular : textos.plural}`;
+}
