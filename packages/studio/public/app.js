@@ -386,23 +386,44 @@ function updateLeadsFilter() {
 function renderLeadsControls(projectId) {
   const controls = $('#project-leads-controls');
   const form = $('#project-leads-form');
-  const knownForms = new Map(leadForms.map((form) => [form.id, form.name || 'Formulário sem nome']));
-  for (const row of leadsRows) if (row.formId) knownForms.set(row.formId, row.formName || 'Formulário sem nome');
+  const knownSources = new Map();
+  const addSource = (source) => {
+    const sourceKind = source?.sourceKind || 'form';
+    const sourceId = source?.sourceId || source?.formId || '';
+    if (!sourceId) return;
+    const captureId = source?.captureId || '';
+    const key = JSON.stringify({ sourceKind, sourceId, captureId });
+    if (!knownSources.has(key)) knownSources.set(key, {
+      sourceKind,
+      sourceId,
+      captureId,
+      sourceName: source?.sourceName || source?.formName || '',
+      sourcePath: source?.sourcePath || '',
+      captureName: source?.captureName || '',
+    });
+  };
+  for (const source of leadSources) addSource(source);
+  for (const source of leadForms) addSource({ sourceKind: 'form', sourceId: source.id, sourceName: source.name });
+  for (const row of leadsRows) addSource(row);
   form.replaceChildren();
   const all = document.createElement('option');
   all.value = '';
-  all.textContent = 'Todos os formulários';
+  all.textContent = 'Todas as origens';
   form.append(all);
-  for (const [id, name] of knownForms) {
+  for (const [key, source] of knownSources) {
     const option = document.createElement('option');
-    option.value = id;
-    option.textContent = name;
+    option.value = key;
+    const kind = source.sourceKind === 'page' ? 'Landing page' : 'Quiz';
+    const name = source.sourceName || (source.sourceKind === 'page' ? 'Página sem nome' : 'Quiz sem nome');
+    const capture = source.captureName || (source.captureId ? `Captura ${source.captureId}` : '');
+    option.textContent = [kind, name, capture].filter(Boolean).join(' · ');
     form.append(option);
   }
-  form.value = leadsFormId;
+  form.value = leadsSource ? JSON.stringify(leadsSource) : (leadsFormId ? JSON.stringify({ sourceKind: 'form', sourceId: leadsFormId, captureId: '' }) : '');
   const exportLink = $('#project-leads-export');
-  exportLink.href = leadsCsvUrl(projectId, leadsFormId);
-  exportLink.hidden = !leadsFormId;
+  const selectedSource = leadsSource || (leadsFormId ? { sourceKind: 'form', sourceId: leadsFormId } : null);
+  exportLink.href = leadsCsvUrl(projectId, selectedSource);
+  exportLink.hidden = !selectedSource?.sourceId;
   $('#project-leads-next').hidden = !leadsNextCursor;
   controls.hidden = false;
 }
@@ -422,13 +443,23 @@ function leadsResponseIsCurrent(request, state) {
     && state.currentProject?.id === current.currentProject?.id
     && state.currentCompany?.id === current.currentCompany?.id;
 }
+function legacyLeadSources(overview, rows) {
+  const sources = [];
+  for (const item of overview?.content || []) if (item.kind === 'form') sources.push({ sourceKind: 'form', sourceId: item.id, sourceName: item.name });
+  for (const row of rows) if (row.formId) sources.push({ sourceKind: 'form', sourceId: row.formId, sourceName: row.formName });
+  return sources;
+}
 async function loadProjectLeads({ append = false } = {}) {
   const state = dashboardState();
   if (!state.currentProject || !studioShell?.can?.('submission.read')) return;
   const request = ++leadsRequest;
   const cursor = append ? leadsNextCursor : null;
   const params = new URLSearchParams({ limit: '25' });
-  if (leadsFormId) params.set('formId', leadsFormId);
+  if (leadsSource?.sourceKind && leadsSource.sourceId) {
+    params.set('sourceKind', leadsSource.sourceKind);
+    params.set('sourceId', leadsSource.sourceId);
+    if (leadsSource.captureId) params.set('captureId', leadsSource.captureId);
+  } else if (leadsFormId) params.set('formId', leadsFormId);
   if (cursor) params.set('cursor', cursor);
   const list = clear($('#project-content-list'));
   if (append) for (const row of leadsRows) list.append(createLeadRow(row));
@@ -440,10 +471,13 @@ async function loadProjectLeads({ append = false } = {}) {
       api(`/projects/${state.currentProject.id}/overview`).catch(() => null),
     ]);
     if (!leadsResponseIsCurrent(request, state)) return;
-    const rows = (result.items || []).map(normalizeLeadRow);
+    const payload = result.projectSubmissions || result;
+    const rows = (payload.items || []).map(normalizeLeadRow);
     leadsRows = append ? [...leadsRows, ...rows] : rows;
     leadForms = (overview?.content || []).filter((item) => item.kind === 'form');
-    leadsNextCursor = result.nextCursor || null;
+    if (Array.isArray(payload.sources) && payload.sources.length) leadSources = payload.sources;
+    else if (!leadSources.length) leadSources = legacyLeadSources(overview, rows);
+    leadsNextCursor = payload.nextCursor || null;
     renderLeadRows(state.currentProject.id);
     const model = leadsListModel({ rows: leadsRows });
     $('#project-status').dataset.state = model.status;
@@ -463,13 +497,18 @@ function createLeadRow(row) {
   const item = document.createElement('article');
   item.className = 'project-lead-row';
   const header = document.createElement('header');
-  const formName = document.createElement('strong');
-  formName.textContent = row.formName || 'Formulário';
+  const source = document.createElement('strong');
+  source.textContent = row.sourceName || row.formName || (row.sourceKind === 'page' ? 'Landing page' : 'Quiz');
+  const context = document.createElement('span');
+  context.textContent = row.captureName || row.captureId || (row.sourceKind === 'page' ? 'Landing page' : 'Quiz');
   const submittedAt = document.createElement('span');
-  submittedAt.textContent = row.submittedAt || 'Data não informada';
+  const parsedDate = row.submittedAt ? new Date(row.submittedAt) : null;
+  submittedAt.textContent = parsedDate && !Number.isNaN(parsedDate.valueOf())
+    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(parsedDate)
+    : 'Data não informada';
   const delivery = document.createElement('span');
   delivery.textContent = row.deliveryLabel;
-  header.append(formName, submittedAt, delivery);
+  header.append(source, context, submittedAt, delivery);
   const answers = document.createElement('dl');
   for (const answer of row.answers) {
     const field = document.createElement('dt');

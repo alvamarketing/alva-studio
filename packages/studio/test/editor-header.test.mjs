@@ -6,6 +6,7 @@ const htmlPath = new URL('../public/index.html', import.meta.url);
 const cssPath = new URL('../public/styles.css', import.meta.url);
 const ownerCssPath = new URL('../public/owner.css', import.meta.url);
 const ownerJsPath = new URL('../public/owner.js', import.meta.url);
+const appPath = new URL('../public/app.js', import.meta.url);
 
 test('ações do editor usam ícones com nome acessível e ajuda no hover', async () => {
   const html = await readFile(htmlPath, 'utf8');
@@ -103,11 +104,14 @@ test('rodapé do menu concentra configurações, aparência e recolhimento', asy
 });
 
 test('quizzes permanecem como destino principal do menu', async () => {
-  const html = await readFile(htmlPath, 'utf8');
+  const [html, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(appPath, 'utf8')]);
   const sidebar = html.match(/<section id="dashboard"[\s\S]*?<\/aside>/)?.[0] || '';
+  assert.match(sidebar, /id="nav-home"/);
+  assert.match(sidebar, /id="nav-project"/);
   assert.match(sidebar, /id="nav-pages"/);
   assert.match(sidebar, /id="nav-forms"/);
   assert.match(sidebar, /Quizzes/);
   assert.match(sidebar, /Páginas/);
-  assert.match(sidebar, /Histórico/);
+  assert.match(html, /id="home-activity-title">Histórico<\/h2>/);
+  assert.match(app, /nav-vsl'\)\.hidden = !studioShell\?\.can\?\.\('video\.read'\)/);
 });

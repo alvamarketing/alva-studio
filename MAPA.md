@@ -6,7 +6,7 @@
 - `packages/cli/`: ferramentas originais de compilação.
 - `packages/studio/`: aplicação Alva Studio, editor e publicação.
 - `docs/`: documentação original do GrapesJS e referências de projeto do Alva Studio.
-  - `wireframes/`: protótipos navegáveis usados como referência visual.
+  - `wireframes/`: protótipos navegáveis usados como referência visual, incluindo o modo local de revisão compartilhado (`prototype-review.js` e `prototype-review.css`).
   - `superpowers/specs/`: decisões de arquitetura aprovadas.
   - `superpowers/plans/`: planos executáveis derivados das especificações.
 - `scripts/`: scripts originais do monorepo.
