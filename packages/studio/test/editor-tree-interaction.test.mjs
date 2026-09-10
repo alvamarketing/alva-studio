@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -102,7 +103,6 @@ test('drag sobre span usa clientY do item para distinguir antes/depois', () => {
 });
 
 test('listeners reais movem Logo depois de Menu com dataTransfer protegido e target span', async () => {
-  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
   const dom = new JSDOM('<!doctype html><button id="source"><span>Logo</span></button><button id="target"><span>Menu</span></button>');
   const sourceItem = dom.window.document.querySelector('#source');
   const targetItem = dom.window.document.querySelector('#target');

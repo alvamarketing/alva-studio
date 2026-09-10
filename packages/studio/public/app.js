@@ -1267,6 +1267,7 @@ async function openPage(id) {
     mediaEnabled: () => mediaPipelineEnabled,
     publicOrigin: window.location.origin,
     can: (capability) => studioShell?.can?.(capability),
+    quizCanvas: page.kind === 'quiz',
   });
   loading = false;
   if (!page.project || editor.__alvaMigrated) markDirty();
@@ -1611,7 +1612,7 @@ function pintarAnalyticsView(summary, { phase = 'ready', message = '' } = {}) {
   status.textContent = phase === 'loading' ? 'Carregando dados…' : phase === 'error' ? message : '';
   status.dataset.state = phase;
   $('#analytics-view-source').textContent = summary?.source === 'umami'
-    ? 'Comportamento e aquisição medidos pelo Umami.'
+    ? 'Comportamento e aquisição medidos pelo Analytics.'
     : 'Comportamento e aquisição medidos pelo coletor legado · migração pendente.';
   const metrics = clear($('#analytics-view-metrics'));
   for (const metric of analyticsMetricsModel(phase === 'ready' ? summary : null)) {
@@ -1990,7 +1991,7 @@ function pintarJornada(evento) {
   const passos = [
     ['1', 'Registrado no Studio', new Date(evento.receivedAt).toLocaleString('pt-BR')],
     ['2', 'Consentimento aplicado', `${evento.consentLabel} · hashes gerados no servidor`],
-    ['3', 'Recebido pelo NVS', `${evento.total} ${evento.total === 1 ? 'entrega enfileirada' : 'entregas enfileiradas'}`],
+    ['3', 'Recebido pelo Rastreamento', `${evento.total} ${evento.total === 1 ? 'entrega enfileirada' : 'entregas enfileiradas'}`],
     ['4', 'Destinos concluídos', entregues.length ? `${evento.delivered} de ${evento.total} · ${entregues.join(', ')}` : 'Nenhum destino concluído'],
   ];
   for (const [ordem, nome, detalhe] of passos) {

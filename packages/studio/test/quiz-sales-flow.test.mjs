@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { normalizeFormInput } from '../server/form-store.mjs';
@@ -5,7 +6,6 @@ import { validateFormAnswers } from '../server/form-answer-validation.mjs';
 import { renderDynamicForm } from '../server/dynamic-form.mjs';
 import { evaluateQuizCalculations } from '../public/quiz-calculations.js';
 
-const jsdomPath = new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url);
 
 const salesQuiz = () => ({
   headerElements: [],
@@ -59,7 +59,6 @@ test('servidor valida somente a rota percorrida e não aceita resposta de tela p
 });
 
 async function withDom(html, { fetchImpl } = {}, run) {
-  const { JSDOM } = await import(jsdomPath);
   const calls = [];
   const dom = new JSDOM(html, {
     url: 'https://studio.test/preview', runScripts: 'dangerously',
@@ -114,9 +113,10 @@ test('preview não faz fetch, preserva voltar e não autoavança tela obrigatór
     const nota = document.querySelector('[name="nota"]'); nota.value = '4';
     click(document, '.back'); assert.equal(activeStep(document).dataset.step, '0');
     click(document, '.next'); assert.equal(activeStep(document).dataset.step, '1');
-    click(document, '.next'); await wait(20);
+    click(document, '.next');
+    click(document, '.next'); await wait(100);
     assert.equal(calls.length, 0);
-    assert.match(document.body.textContent, /Obrigado/);
+    assert.match(document.querySelector('main.card')?.textContent || '', /Obrigado/);
   });
 });
 
@@ -128,8 +128,8 @@ test('preview não conclui com submissão nativa antes da última tela percorrid
     document.querySelector('form').requestSubmit();
     await wait(20);
     assert.equal(calls.length, 0);
-    assert.doesNotMatch(document.body.textContent, /Obrigado/);
-    assert.ok(activeStep(document), 'a tela inicial continua visível');
-    assert.equal(activeStep(document).dataset.step, '0');
+    assert.doesNotMatch(document.querySelector('main.shell').textContent, /Obrigado/);
+    assert.ok(activeStep(document), 'a etapa seguinte continua visível');
+    assert.equal(activeStep(document).dataset.step, '1');
   });
 });

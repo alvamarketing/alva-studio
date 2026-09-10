@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import grapesjs from 'grapesjs';
@@ -9,7 +10,6 @@ const filhos = (model) => model?.components?.().models || [];
 const tagOf = (model) => String(model?.get?.('tagName') || '').toLowerCase();
 
 async function comEditor(callback) {
-  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
   const dom = new JSDOM('<!doctype html>');
   const anterior = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, DOMParser: dom.window.DOMParser, Node: dom.window.Node });

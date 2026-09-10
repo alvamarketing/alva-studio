@@ -385,6 +385,9 @@ export function createApp({
   const publishing = new Set();
   const files = {
     '/': ['public/index.html', 'text/html'],
+    '/third-party-licenses.html': ['public/third-party-licenses.html', 'text/html'],
+    '/third-party-notices.txt': ['public/third-party-notices.txt', 'text/plain'],
+    '/material-symbols-outlined.LICENSE': ['public/material-symbols-outlined.LICENSE', 'text/plain'],
     '/owner.js': ['public/owner.js', 'text/javascript'],
     '/owner.css': ['public/owner.css', 'text/css'],
     '/editor-shell.js': ['public/editor-shell.js', 'text/javascript'],

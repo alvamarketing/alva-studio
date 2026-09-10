@@ -9,6 +9,14 @@ package-lock.json
 style/.sass-cache/
 stats.json
 .npmrc
+.claude/launch.json
+
+# Local credentials and runtime state; examples remain versionable.
+**/.env
+**/.env.*
+!**/.env.example
+**/.env.bak*
+**/.data/
 
 img/
 images/

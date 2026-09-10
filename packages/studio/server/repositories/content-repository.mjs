@@ -16,6 +16,15 @@ function fail(message, statusCode) {
   return error;
 }
 
+const PAGE_CAPTURE_EVENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function requestedTrackingEventId(input) {
+  const value = input?.trackingEventId;
+  if (value === undefined) return null;
+  if (typeof value !== 'string' || !PAGE_CAPTURE_EVENT_ID.test(value)) throw fail('Identificador de envio inválido.', 400);
+  return value;
+}
+
 function requiredName(value, label) {
   const name = String(value ?? '').trim();
   if (!name || name.length > 100) throw fail(`${label} inválido.`, 400);
@@ -956,20 +965,38 @@ export class ContentRepository {
       const capture = rows[0].capture_schema?.forms?.find((item) => item?.captureId === captureId);
       if (!capture) throw fail('Captura publicada não encontrada.', 404);
       const answers = validatePageCaptureAnswers(capture, input);
-      const inserted = await client.query(
-        `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id, tracking_event_id, submitted_at`,
-        [companyId, projectId, pageId, pageVersionId, captureId, JSON.stringify(answers)],
-      );
-      const submission = inserted.rows[0];
+      const retryEventId = requestedTrackingEventId(input);
+      const inserted = retryEventId
+        ? await client.query(
+          `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers, tracking_event_id)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7) ON CONFLICT (tracking_event_id) DO NOTHING
+           RETURNING id, tracking_event_id, submitted_at`,
+          [companyId, projectId, pageId, pageVersionId, captureId, JSON.stringify(answers), retryEventId],
+        )
+        : await client.query(
+          `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id, tracking_event_id, submitted_at`,
+          [companyId, projectId, pageId, pageVersionId, captureId, JSON.stringify(answers)],
+        );
+      const repeated = retryEventId && !inserted.rows.length;
+      const submission = repeated
+        ? (await client.query(
+          `SELECT id, tracking_event_id, submitted_at, answers FROM page_submissions
+           WHERE company_id = $1 AND project_id = $2 AND page_id = $3 AND page_version_id = $4 AND capture_id = $5 AND tracking_event_id = $6`,
+          [companyId, projectId, pageId, pageVersionId, captureId, retryEventId],
+        )).rows[0]
+        : inserted.rows[0];
+      if (!submission) throw fail('Identificador de envio já pertence a outra captura.', 409);
+      if (repeated && JSON.stringify(submission.answers) !== JSON.stringify(answers))
+        throw fail('A nova tentativa não corresponde à captura original.', 409);
       const environment = await this.publicationEnvironment(client, { companyId, projectId, origin });
       if (!environment) throw fail('Origem publicada obrigatória para conversões.', 403);
-      if (this.commercialOutbox) {
+      if (!repeated && this.commercialOutbox) {
         const consentState = this.commercialConsentResolver ? await this.commercialConsentResolver({ companyId, projectId, environment, origin, publicationId, subjectId }) : 'pending';
         await this.commercialOutbox.enqueue(client, { companyId, projectId, environment, trackingEventId: submission.tracking_event_id, eventName: 'lead', consentState, answers, attribution, at: submission.submitted_at });
       }
-      if (capture.webhook) await this.webhookDeliveries.enqueue(client, { companyId, projectId, pageId, pageSubmissionId: submission.id, url: capture.webhook, event: { eventId: submission.tracking_event_id, event: 'page.submitted', companyId, projectId, pageId, pageVersionId, captureId, submittedAt: submission.submitted_at, answers } });
-      return { id: submission.id, eventId: submission.tracking_event_id, answers, submittedAt: submission.submitted_at };
+      if (!repeated && capture.webhook) await this.webhookDeliveries.enqueue(client, { companyId, projectId, pageId, pageSubmissionId: submission.id, url: capture.webhook, event: { eventId: submission.tracking_event_id, event: 'page.submitted', companyId, projectId, pageId, pageVersionId, captureId, submittedAt: submission.submitted_at, answers } });
+      return { id: submission.id, eventId: submission.tracking_event_id, answers: repeated ? submission.answers : answers, submittedAt: submission.submitted_at };
     });
   }
 

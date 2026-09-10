@@ -43,6 +43,10 @@ e precisa estar disponível tanto no `studio-web` para o gate de publicação
 quanto no worker de provisionamento. As flags `UMAMI_RUNTIME_ENABLED`,
 `NVS_RUNTIME_ENABLED` e `TRACKING_PROVISION_ENABLED` exigem valor literal
 `true` e continuam desligadas até aceite operacional.
+`VERCEL_MASTER_KEY` é a chave mestra não vazia do cofre que cifra os tokens de
+integração Vercel no Studio. Gere uma chave aleatória longa, guarde-a no cofre
+do ambiente e mantenha o mesmo valor entre reinícios; ela não é o token da
+Vercel e nunca entra no navegador, snapshots ou publicação.
 
 ## Cobrança Asaas V1
 
@@ -61,6 +65,29 @@ ambientes. Um evento em revisão requer inspeção do pedido e da resposta do
 provedor no banco, sem tentar liberar entitlement manualmente.
 
 ## Subir e verificar
+
+### Ordem do primeiro staging
+
+1. Prepare um arquivo de ambiente no cofre do staging a partir de
+   `runtime/.env.example`, incluindo `VERCEL_MASTER_KEY` e os demais valores
+   exigidos pelo Compose. Use uma chave aleatória longa para o cofre Vercel e
+   preserve-a entre reinícios; não é o token da Vercel.
+2. Suba a composição com `runtime/compose.yaml` e confirme `/health/live` e
+   `/health/ready`. Mantenha `MEDIA_PIPELINE_ENABLED=false` e
+   `ASAAS_ENVIRONMENT=sandbox`; não configure chaves de produção neste ensaio.
+3. Crie a primeira conta pelo comando existente
+   `pnpm --ignore-workspace bootstrap:owner`, fornecendo `DATABASE_URL`,
+   `OWNER_NAME` e `OWNER_EMAIL` no ambiente do processo; a senha entra pelo
+   stdin e nunca por argumento ou arquivo versionado.
+4. Em seguida, habilite no staging de teste as flags de provisionamento e dos
+   motores (`UMAMI_RUNTIME_ENABLED`, `NVS_RUNTIME_ENABLED` e
+   `TRACKING_PROVISION_ENABLED`), cadastre uma propriedade de teste e conecte
+   a Vercel de teste no Studio. Use somente URLs HTTPS de staging e publique
+   uma prévia.
+5. Faça uma visita com UTM, envie um lead de teste e observe a chegada no
+   Studio em Analytics e Rastreamento. Qualquer envio para Meta Test Events
+   exige aceite operacional separado e explícito; não é consequência de ligar
+   o staging.
 
 O `studio-web` aplica as migrações antes de abrir a porta. Consulte
 `/health/live` para processo vivo e `/health/ready` para processo com

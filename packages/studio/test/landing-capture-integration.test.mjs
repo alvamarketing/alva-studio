@@ -95,3 +95,49 @@ test('prévia real promove produção por contentHash e bloqueia conteúdo alter
   await content.publishPage({ companyId: company.id, projectId: project.id, actorId: user.id, pageId: page.id, lockVersion: changed.lockVersion });
   await assert.rejects(() => service.production({ companyId: company.id, projectId: project.id, requestedBy: user.id, expectedRevision: 2, confirmed: true, previewRunId: preview.id }), /nova prévia/i);
 });
+
+test('quiz publicado confirma captura versionada antes da conclusão', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString }); await migrate(database);
+  const owner = (await database.query("INSERT INTO users (email,password_hash,display_name) VALUES ('quiz-capture@alva.test','hash','Owner') RETURNING id")).rows[0];
+  const company = (await database.query("INSERT INTO companies (name,slug) VALUES ('Quiz Acme','quiz-acme') RETURNING id")).rows[0];
+  const project = (await database.query("INSERT INTO projects (company_id,name,slug,created_by) VALUES ($1,'Diagnóstico','diagnostico',$2) RETURNING id", [company.id, owner.id])).rows[0];
+  await database.query("INSERT INTO company_memberships (company_id,user_id,role,joined_at) VALUES ($1,$2,'owner',now())", [company.id, owner.id]);
+  await database.query("INSERT INTO project_domains (company_id,project_id,environment,domain,is_canonical,verification_status) VALUES ($1,$2,'production','quiz.example.test',true,'verified')", [company.id, project.id]);
+  const captureId = '11111111-1111-4111-8111-111111111111';
+  const state = { components: [{ tagName: 'form', attributes: { 'data-alva-capture-id': captureId, 'data-alva-quiz-capture': 'true' }, components: [
+    { tagName: 'section', components: [{ tagName: 'label', components: [{ type: 'textnode', content: 'E-mail' }, { tagName: 'input', attributes: { name: 'email', type: 'email', required: '' } }] }, { tagName: 'button', components: [{ type: 'textnode', content: 'Continuar' }] }] },
+    { tagName: 'section', components: [{ tagName: 'h2', components: [{ type: 'textnode', content: 'Obrigado' }] }] },
+  ] }] };
+  const { buildPageExportHtml } = await import('../public/editor-shell.js');
+  const renderedHtml = buildPageExportHtml({ title: 'Quiz', quiz: true, html: `<form data-alva-capture-id="${captureId}" data-alva-quiz-capture="true" action="#"><section><input name="email"><button data-alva-quiz-next>Continuar</button></section><section><h2>Obrigado</h2></section></form>` });
+  const content = new ContentRepository(database, { publicOrigin: 'https://studio.example.test' });
+  const page = await content.createPage({ companyId: company.id, projectId: project.id, actorId: owner.id, name: 'Quiz', route: '/quiz', kind: 'quiz', editorState: state, renderedHtml });
+  const version = await content.publishPage({ companyId: company.id, projectId: project.id, actorId: owner.id, pageId: page.id, lockVersion: page.lockVersion });
+  const snapshot = await buildPublishableSnapshot({ database, companyId: company.id, projectId: project.id, publicOrigin: 'https://studio.example.test', environment: 'production' });
+  const artifact = runtimeGatewayArtifacts(snapshot.files, { publicationId: 'quiz-capture-run', snapshotHash: snapshot.hash, environment: 'production', runtimeOrigin: 'https://studio.example.test', runtimeHmacSecret: 'root-secret-only-at-studio', runtimeBootstrap: false });
+  const published = artifact.files.find((file) => file.file === 'quiz/index.html').data;
+  const action = published.match(/action="([^"]+)"/)?.[1];
+  assert.equal(action, `/api/public/pages/quiz/captures/${captureId}/submissions`);
+  const manifest = buildRuntimeManifest({ publicationId: 'quiz-capture-run', snapshotHash: snapshot.hash, origin: 'https://quiz.example.test', domain: 'quiz.example.test', environment: 'production', contents: snapshot.manifest.map(({ path, type, contentId, versionId, captureIds }) => ({ path, type, contentId, versionId, captureIds: captureIds || [] })) });
+  await new PublicationRuntimeRepository(database).saveManifest({ companyId: company.id, projectId: project.id, manifest });
+  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: false, nvsRuntime: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
+  await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { await new Promise((resolve) => app.close(resolve)); await database.close(); });
+  const body = Buffer.from(JSON.stringify({ answers: { email: 'lead@quiz.test' }, trackingEventId: '33333333-3333-4333-8333-333333333333' })); const timestamp = Math.floor(Date.now() / 1000); const nonce = 'quiz-capture-submit-1';
+  const key = derivePublicationRuntimeKey('root-secret-only-at-studio', { publicationId: manifest.publicationId, snapshotHash: manifest.snapshotHash, environment: manifest.environment });
+  const headers = { Host: 'studio.example.test', Origin: 'https://quiz.example.test', 'Content-Type': 'application/json', 'x-alva-runtime-gateway': '1', 'x-alva-public-host': 'quiz.example.test', 'x-alva-publication-id': manifest.publicationId, 'x-alva-runtime-environment': 'production', 'x-alva-runtime-timestamp': String(timestamp), 'x-alva-runtime-nonce': nonce, 'x-alva-runtime-signature': signRuntimeRequest({ method: 'POST', path: action, publicationId: manifest.publicationId, environment: manifest.environment, timestamp, nonce, body }, key) };
+  const result = await http(`http://127.0.0.1:${app.address().port}`, action, { headers, body });
+  assert.equal(result.status, 200, result.text);
+  const retryNonce = 'quiz-capture-submit-2';
+  const retryHeaders = { ...headers, 'x-alva-runtime-nonce': retryNonce, 'x-alva-runtime-signature': signRuntimeRequest({ method: 'POST', path: action, publicationId: manifest.publicationId, environment: manifest.environment, timestamp, nonce: retryNonce, body }, key) };
+  assert.equal((await http(`http://127.0.0.1:${app.address().port}`, action, { headers: retryHeaders, body })).status, 200);
+  const submissions = (await database.query('SELECT page_version_id,capture_id,answers,tracking_event_id FROM page_submissions'));
+  assert.equal(submissions.rows.length, 1, 'retry com mesmo trackingEventId não cria outro lead');
+  const submission = submissions.rows[0];
+  assert.equal(submission.page_version_id, version.id); assert.equal(submission.capture_id, captureId); assert.deepEqual(submission.answers, { email: 'lead@quiz.test' }); assert.equal(submission.tracking_event_id, '33333333-3333-4333-8333-333333333333');
+  const changedBody = Buffer.from(JSON.stringify({ answers: { email: 'other@quiz.test' }, trackingEventId: '33333333-3333-4333-8333-333333333333' }));
+  const changedNonce = 'quiz-capture-submit-3';
+  const changedHeaders = { ...headers, 'x-alva-runtime-nonce': changedNonce, 'x-alva-runtime-signature': signRuntimeRequest({ method: 'POST', path: action, publicationId: manifest.publicationId, environment: manifest.environment, timestamp, nonce: changedNonce, body: changedBody }, key) };
+  assert.equal((await http(`http://127.0.0.1:${app.address().port}`, action, { headers: changedHeaders, body: changedBody })).status, 409, 'mesmo ID não pode reaproveitar outra resposta');
+});

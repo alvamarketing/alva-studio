@@ -9,7 +9,7 @@ on:
 jobs:
   publish-docs:
     runs-on: ubuntu-latest
-    if: "startsWith(github.event.head_commit.message, 'Release GrapesJS docs:')"
+    if: ${{ false }}
     permissions:
       contents: write
     steps:

@@ -29,7 +29,7 @@ test('valida somente rota recalculada e rejeita resposta forjada de tela pulada'
 });
 
 test('runner público e prévia seguem salto, voltar e poda de rota', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const source = { ...normalizeFormInput(quiz()), id: 'runtime', name: 'Runtime' };
   const { renderDynamicForm } = await import('../server/dynamic-form.mjs');
   for (const preview of [false, true]) {
@@ -55,7 +55,7 @@ test('runner público e prévia seguem salto, voltar e poda de rota', async () =
 
 
 test('rota $complete envia sem expor telas posteriores e timer não ignora obrigatório', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const { renderDynamicForm } = await import('../server/dynamic-form.mjs');
   const source = normalizeFormInput({ ...quiz(), steps: [
     { ...quiz().steps[0], timer: 1, branching: { rules: [], defaultNextScreenId: '$complete' } },
@@ -90,7 +90,7 @@ test('binding de gráfico novo no canvas é validado sem metadata legada', () =>
 });
 
 test('runtime atualiza gráficos canônicos de canvas sem quebrar classe ou valores manuais', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const { renderDynamicForm } = await import('../server/dynamic-form.mjs');
   const binding = '[null,"dobro"]';
   const html = `<div class="alva-chart alva-chart-bars" data-alva-chart-bindings='${binding}'><div><i style="--value:5%"></i><small>Manual</small></div><div><i style="--value:0%"></i><small>Calculado</small></div></div><div class="alva-chart" data-alva-chart-bindings='${binding}'><div class="alva-donut" data-alva-chart-data="[[&quot;Manual&quot;,5],[&quot;Calculado&quot;,0]]"><strong>Resultados</strong></div></div>`;
@@ -108,7 +108,7 @@ test('runtime atualiza gráficos canônicos de canvas sem quebrar classe ou valo
 });
 
 test('clique final envia rota com campo required pulado sem validação nativa global', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const { renderDynamicForm } = await import('../server/dynamic-form.mjs');
   const sent = [];
   const dom = new JSDOM(renderDynamicForm({ ...normalizeFormInput(quiz()), id: 'send', name: 'Send' }, '/submit'), { runScripts: 'dangerously', url: 'https://studio.test/', beforeParse(window) {
@@ -125,7 +125,7 @@ test('clique final envia rota com campo required pulado sem validação nativa g
 });
 
 test('autoavanço atrasado não avança novamente após Continuar manual', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const { renderDynamicForm } = await import('../server/dynamic-form.mjs');
   const source = normalizeFormInput({ ...quiz(), steps: [{ ...quiz().steps[0], autoAdvance: true }, ...quiz().steps.slice(1)] });
   const sent = [];
@@ -140,7 +140,7 @@ test('autoavanço atrasado não avança novamente após Continuar manual', async
 
 
 test('requestSubmit segue rota antes da conclusão na prévia', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const { renderDynamicForm } = await import('../server/dynamic-form.mjs');
   const dom = new JSDOM(renderDynamicForm({ ...normalizeFormInput(quiz()), id: 'preview-submit', name: 'Prévia' }, '/submit', { preview: true }), { runScripts: 'dangerously', url: 'https://studio.test/', beforeParse(window) { window.CSS = { escape: (value) => String(value) }; } });
   const radio = dom.window.document.querySelector('input[value="Outro"]'); radio.checked = true;

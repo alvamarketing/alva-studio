@@ -1,7 +1,7 @@
 ---
 no: certificacao_comercial_v1
 status: pendente
-atualizado_em: 2026-09-06
+atualizado_em: 2026-09-10
 ---
 
 # Certificação comercial V1
@@ -119,6 +119,8 @@ Esta aprovação cobre a revisão visual local. Vercel staging, Asaas Sandbox e
 a certificação comercial final continuam sujeitos às pendências externas.
 
 ## Fechamento local da V1
+
+O estado consolidado de homologação pré-publicação em 2026-09-10 está registrado em [`homologacao-pre-publicacao-2026-09-10.md`](homologacao-pre-publicacao-2026-09-10.md). A suíte completa atual passou com 989/989 testes, sem skip, em 94,9s; a imagem final foi construída e validada com dependências de produção, sem `.env`, `.data`, `test` ou `jsdom`. A certificação deste arquivo permanece pendente até as homologações externas e a conexão de ramificação do quiz serem concluídas.
 
 Em 2026-09-06, a suíte completa final pós-correções passou com **523/523**
 testes. `git diff --check`, sintaxe dos scripts shell, configuração do Compose

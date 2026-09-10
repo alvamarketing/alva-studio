@@ -157,6 +157,11 @@ test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens 
   assert.match(compose, /PIXELS_ENABLED: \$\{PIXELS_ENABLED:-false\}/);
   assert.match(compose, /PUBLICATION_RUNTIME_HMAC_SECRET: \$\{PUBLICATION_RUNTIME_HMAC_SECRET:-\}/);
   assert.match(compose, /TRACKING_MASTER_KEY: \$\{TRACKING_MASTER_KEY:\?Defina TRACKING_MASTER_KEY no ambiente do Coolify\}/);
+  assert.match(compose, /VERCEL_MASTER_KEY: \$\{VERCEL_MASTER_KEY:\?Defina VERCEL_MASTER_KEY no ambiente do Coolify\}/);
+  const envExample = await readFile(join(root, 'runtime/.env.example'), 'utf8');
+  assert.match(envExample, /^VERCEL_MASTER_KEY=\S+$/m);
+  const indexSource = await readFile(join(root, 'packages/studio/server/index.mjs'), 'utf8');
+  assert.match(indexSource, /process\.env\.VERCEL_MASTER_KEY/);
   assert.match(compose, /dockerfile: runtime\/Dockerfile\.umami/);
   assert.match(compose, /UMAMI_USERNAME: \$\{UMAMI_USERNAME:\?Defina UMAMI_USERNAME no ambiente do Coolify\}/);
   assert.match(compose, /mariadb:11\.4@sha256:611a2fcc5fa7c6ceb8644c6f74b25ede004ff6c3a6b38c8f8c23d3bbf6c26430/);

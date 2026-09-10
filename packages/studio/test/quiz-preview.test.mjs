@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../server/index.mjs';
@@ -65,8 +66,6 @@ test('prévia autenticada renderiza rascunho e conclui localmente sem POST, lead
   assert.match(nonce || '', /^[a-z0-9]+$/i);
   assert.match(html, new RegExp(`<script nonce="${nonce}">`));
   assert.doesNotMatch(html, /tracker\.js|api\/public\/collect/);
-
-  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
   let fetchCalls = 0;
   const dom = new JSDOM(payload.html, {
     runScripts: 'dangerously',

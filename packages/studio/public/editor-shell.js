@@ -328,17 +328,20 @@ export function panelToggleState(estado = {}, lado) {
 // Onde uma seção inteira deve nascer. Subir até a primeira <section> não basta: numa
 // página que já tem seções aninhadas, isso aninharia mais uma. Sobe até a seção de mais
 // alto nível e devolve o lugar ao lado dela, no corpo da página.
-export function sectionInsertionTarget(selected, wrapper) {
+export function sectionInsertionTarget(selected, wrapper, { quizCapture = false } = {}) {
   const tag = (model) => String(model?.get?.('tagName') || '').toLowerCase();
-  if (!selected || selected === wrapper) return { target: wrapper, at: undefined };
+  const isCapture = (model) => quizCapture && tag(model) === 'form' && model?.getAttributes?.()['data-alva-quiz-capture'] === 'true';
+  const capture = componentChildren(wrapper).find(isCapture);
+  const root = capture || wrapper;
+  if (!selected || selected === wrapper || selected === capture) return { target: root, at: undefined };
   let atual = selected;
   let secaoDeTopo = null;
   while (atual && atual !== wrapper) {
     if (tag(atual) === 'section') secaoDeTopo = atual;
     atual = atual.parent?.();
   }
-  if (!secaoDeTopo) return { target: wrapper, at: undefined };
-  return { target: secaoDeTopo.parent?.() ?? wrapper, at: secaoDeTopo.index() + 1 };
+  if (!secaoDeTopo) return { target: root, at: undefined };
+  return { target: secaoDeTopo.parent?.() ?? root, at: secaoDeTopo.index() + 1 };
 }
 
 // Seções recolhidas da árvore. Guardamos só quem está fechado: assim uma seção nova
@@ -698,6 +701,71 @@ function componentChildren(component) {
   return children?.models || [];
 }
 
+// Um quiz publicado usa a mesma captura de página da landing. O formulário fica só como
+// contêiner sem caixa visual; assim o schema congelado contém todos os campos das etapas
+// e o snapshot consegue trocar a action pelo gateway assinado.
+export function ensureQuizCapture(editor, uuid = () => globalThis.crypto?.randomUUID?.()) {
+  const wrapper = editor?.getWrapper?.();
+  if (!wrapper) return false;
+  const tag = (component) => String(component?.get?.('tagName') || '').toLowerCase();
+  const forms = [];
+  const visit = (component) => {
+    if (!component) return;
+    if (tag(component) === 'form') forms.push(component);
+    componentChildren(component).forEach(visit);
+  };
+  componentChildren(wrapper).forEach(visit);
+  const roots = componentChildren(wrapper).slice();
+  if (roots.length === 1 && tag(roots[0]) === 'form' && roots[0].getAttributes?.()['data-alva-quiz-capture'] === 'true') return false;
+
+  const seenNames = new Map();
+  const fields = [];
+  const visitFields = (component) => {
+    const currentTag = tag(component);
+    if (['input', 'select', 'textarea'].includes(currentTag)) fields.push(component);
+    componentChildren(component).forEach(visitFields);
+  };
+  roots.forEach(visitFields);
+  for (const field of fields) {
+    const attrs = field.getAttributes?.() || {};
+    const name = String(attrs.name || '').trim();
+    if (!name) continue;
+    const type = String(attrs.type || '').toLowerCase();
+    const previous = seenNames.get(name);
+    if (previous && !['radio', 'checkbox'].includes(type))
+      throw new Error(`O campo “${name}” aparece mais de uma vez no quiz. Renomeie-o antes de salvar.`);
+    seenNames.set(name, type);
+  }
+  const source = forms[0];
+  const sourceAttrs = source?.getAttributes?.() || {};
+  const captureId = String(sourceAttrs['data-alva-capture-id'] || '').trim() || uuid();
+  if (!captureId) throw new Error('Não foi possível identificar a captura do quiz.');
+  const classes = String(sourceAttrs.class || '').split(/\s+/).filter(Boolean);
+  const attributes = {
+    ...sourceAttrs,
+    class: [...new Set([...classes, 'alva-form'])].join(' '),
+    'data-alva-capture-id': captureId,
+    'data-alva-quiz-capture': 'true',
+    method: 'post',
+    action: sourceAttrs.action || '#',
+  };
+
+  // Formulários de templates antigos viram grupos visuais: conservar classe, estilo e
+  // filhos evita alterar a aparência, mas deixa só o novo form raiz como contrato HTML.
+  for (const form of forms) {
+    const visualAttrs = { ...(form.getAttributes?.() || {}) };
+    for (const key of ['action', 'method', 'onsubmit', 'data-alva-capture-id', 'data-alva-quiz-capture']) delete visualAttrs[key];
+    form.set?.('tagName', 'div');
+    form.set?.('attributes', visualAttrs);
+  }
+  const capture = wrapper.append({ tagName: 'form', attributes })?.[0];
+  if (!capture) throw new Error('Não foi possível preparar a captura do quiz.');
+  capture.addStyle?.({ display: 'contents' });
+  componentChildren(wrapper).slice().filter((component) => component !== capture)
+    .forEach((component, index) => component.move?.(capture, { at: index }));
+  return true;
+}
+
 function componentTreeId(component) {
   return String(component?.cid || component?.getId?.() || component?.get?.('id') || '');
 }
@@ -941,7 +1009,7 @@ export function editorialLabel(component) {
   return editorialFallbacks.has(fallback) ? fallback : 'Elemento';
 }
 
-export function editorialTreeEntries(wrapper, selected) {
+export function editorialTreeEntries(wrapper, selected, { quizCapture = false } = {}) {
   const sections = [];
   const addSection = (component) => {
     if (sections.some((section) => section.component === component)) return;
@@ -950,7 +1018,9 @@ export function editorialTreeEntries(wrapper, selected) {
   const scanSections = (component) => {
     for (const child of componentChildren(component)) {
       const tag = tagOf(child);
-      if (['section', 'nav', 'footer'].includes(tag)) {
+      if (quizCapture && tag === 'form' && componentAttributes(child)['data-alva-quiz-capture'] === 'true') {
+        scanSections(child);
+      } else if (['section', 'nav', 'footer'].includes(tag)) {
         addSection(child);
         if (tag === 'section') scanSections(child);
       } else scanSections(child);
@@ -964,6 +1034,10 @@ export function editorialTreeEntries(wrapper, selected) {
       for (const child of componentChildren(component)) {
         const tag = tagOf(child);
         if (['section', 'footer'].includes(tag) || (tag === 'nav' && child !== section.component)) continue;
+        if (quizCapture && tag === 'form' && componentAttributes(child)['data-alva-quiz-capture'] === 'true') {
+          visit(child, inNav);
+          continue;
+        }
         const label = editorialElementLabel(child, { inNav: inNav || tagOf(section.component) === 'nav' });
         if (label) {
           section.elements.push({ component: child, label });
@@ -1449,13 +1523,16 @@ export function createFriendlyEditor({
     editor.setComponents(html);
     editor.setStyle(css);
   }
+  const beforeMigration = temProjetoSalvo(project) ? JSON.stringify(editor.getProjectData()) : null;
   // Old saved canvases predate the image-choice heading rule. Prefix it so an
   // explicit user rule in the existing stylesheet still wins, and do it while
   // loading so opening alone never marks the form dirty or sends a PUT.
   if (quizCanvas && !hasQuizImageChoiceHeadingCss(editor.getCss()))
     editor.setStyle(`${quizImageChoiceHeadingCss}\n${editor.getCss()}`);
-  const beforeMigration = temProjetoSalvo(project) ? JSON.stringify(editor.getProjectData()) : null;
-  if (!quizCanvas) normalizeForms(editor);
+  if (quizCanvas) {
+    ensureQuizCapture(editor);
+    normalizeForms(editor);
+  } else normalizeForms(editor);
   const lockComponent = (component) => {
     component?.set?.({ draggable: false, editable: false, droppable: false }, { silent: true });
     componentChildren(component).forEach(lockComponent);
@@ -1505,9 +1582,11 @@ export function createFriendlyEditor({
   function openLibraryFor(component) {
     if (!interactionPolicy.canAdd) return;
     if (component) editor.select(component, { scroll: false });
-    const library = $('.fe-library');
-    library.open = true;
-    library.scrollIntoView({ block: 'nearest' });
+    // Os atalhos da árvore abrem a mesma aba Elementos do clique manual, sem deixar
+    // a biblioteca escondida atrás de Estrutura ou Conteúdo.
+    abaDoPainel = 'elementos';
+    syncAbasDoPainel();
+    $('.fe-blocks')?.scrollIntoView?.({ block: 'nearest' });
   }
   function renderTree() {
     const wrapper = editor.getWrapper();
@@ -1520,7 +1599,7 @@ export function createFriendlyEditor({
       componentChildren(component).forEach(collect);
     };
     componentChildren(wrapper).forEach(collect);
-    const sections = editorialTreeEntries(wrapper, editor.getSelected()).map((section) => ({
+    const sections = editorialTreeEntries(wrapper, editor.getSelected(), { quizCapture: quizCanvas }).map((section) => ({
       ...section,
       elements: section.elements.filter(({ component }) => mediaEnabled() || !(component?.is?.('vsl') || component?.get?.('type') === 'vsl')),
     }));
@@ -1664,7 +1743,7 @@ export function createFriendlyEditor({
     const selectedChartTarget = chartInsertionTarget(selected, wrapper);
     // Whole sections belong next to the section being edited, never inside a paragraph.
     if (structure) {
-      ({ target, at } = sectionInsertionTarget(selected, wrapper));
+      ({ target, at } = sectionInsertionTarget(selected, wrapper, { quizCapture: quizCanvas }));
     } else if (selectedChartTarget) {
       ({ target, at } = selectedChartTarget);
     } else {

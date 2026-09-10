@@ -14,3 +14,5 @@
 - `ui-preferences.js`: preferências locais de aparência e largura do menu.
 - `forms.js` e `forms.css`: catálogo rico, ícones, movimentos, editor por etapas, prévia e consulta de respostas dos formulários dinâmicos.
 - `leads-ui.js`: normalização de linhas, estados de carregamento/erro/vazio, rótulos de entrega e URL de exportação CSV por projeto e formulário.
+- `third-party-notices.txt`: fonte original versionada dos avisos de terceiros exibidos pelo Studio.
+- `third-party-licenses.html`: apresentação documental derivada dos avisos legais, usando os tokens visuais existentes.

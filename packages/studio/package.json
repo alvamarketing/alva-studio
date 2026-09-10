@@ -19,5 +19,8 @@
     "parse5": "8.0.1",
     "pg": "^8.23.0",
     "postcss": "8.5.26"
+  },
+  "devDependencies": {
+    "jsdom": "27.4.0"
   }
 }

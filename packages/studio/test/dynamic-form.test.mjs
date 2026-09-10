@@ -295,7 +295,7 @@ test('runner isola telas externas do canvas, coleta select múltiplo e mantém u
 });
 
 test('runner real em DOM navega duas telas canvas e envia select múltiplo', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const canvas = (id, html, editorState) => ({ id, version: 1, html, css: '', editorState });
   const optionNodes = [{ tagName: 'option', attributes: { value: 'A' } }, { tagName: 'option', attributes: { value: 'B' } }];
   const selectHtml = '<section class="screen"><select name="interesses" multiple><option value="A">A</option><option value="B">B</option></select></section>';
@@ -334,7 +334,7 @@ test('runner real em DOM navega duas telas canvas e envia select múltiplo', asy
 });
 
 test('runner valida grupo data-quiz-required com qualquer checkbox selecionado', async () => {
-  const { JSDOM } = await import('../../core/node_modules/jsdom/lib/api.js');
+  const { JSDOM } = await import('jsdom');
   const html = renderDynamicForm({
     ...form,
     steps: [{ id: 'perfil', type: 'multiple_choice', title: 'Perfil', required: false, options: ['A', 'B'] }],

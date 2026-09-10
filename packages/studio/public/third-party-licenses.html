@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Licenças de terceiros · Alva Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body { margin: 0; min-height: 100vh; background: var(--alva-cloud); color: var(--alva-ink); font-family: var(--font-sans); }
+      .legal-page { width: min(900px, calc(100% - 40px)); margin: 0 auto; padding: 48px 0 64px; }
+      .legal-page .brand { display: inline-flex; color: var(--alva-ink); text-decoration: none; margin-bottom: 48px; }
+      .legal-page .brand-symbol { width: 18px; height: 25px; margin-right: 8px; }
+      .legal-page h1 { margin: 12px 0; font-size: var(--text-6xl); letter-spacing: -2px; }
+      .legal-page .intro { max-width: 680px; color: var(--alva-muted); font-size: var(--text-lg); line-height: 1.7; }
+      .legal-card { margin-top: 32px; padding: 28px; border: 1px solid var(--alva-line); border-radius: var(--radius-lg); background: var(--alva-white); box-shadow: var(--shadow-soft); }
+      .legal-card h2 { margin: 0 0 8px; font-size: var(--text-2xl); }
+      .legal-card h3 { margin: 26px 0 8px; font-size: var(--text-xl); }
+      .legal-card p { color: var(--alva-muted); line-height: 1.65; }
+      .legal-card pre { margin: 18px 0 0; padding: 20px; overflow: auto; border: 1px solid var(--alva-line); border-radius: var(--radius-sm); background: var(--alva-cloud); color: var(--alva-ink); font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+      .legal-status { display: inline-block; padding: 5px 9px; border-radius: var(--radius-pill); background: var(--alva-warning-bg); color: var(--alva-warning); font-size: var(--text-sm); font-weight: 600; }
+      @media (max-width: 600px) { .legal-page { width: min(100% - 28px, 900px); padding-top: 28px; } .legal-page h1 { font-size: var(--text-5xl); } .legal-card { padding: 20px; } }
+    </style>
+  </head>
+  <body>
+    <main class="legal-page">
+      <a class="brand" href="/" aria-label="Voltar ao Alva Studio"><strong>ALVA</strong><span>Studio</span></a>
+      <div class="eyebrow">ALVA STUDIO · TRANSPARÊNCIA</div>
+      <h1>Licenças de terceiros<span class="accent">.</span></h1>
+      <p class="intro">Esta página registra as atribuições dos componentes de Analytics e Rastreamento distribuídos com o Alva Studio. Ela cobre somente os motores identificados abaixo; os demais avisos permanecem junto das respectivas dependências.</p>
+      <section class="legal-card" aria-labelledby="umami-title">
+        <h2 id="umami-title">Umami</h2>
+        <p><strong>Versão:</strong> 3.3.1<br /><strong>Licença:</strong> MIT<br /><strong>Origem:</strong> <a href="https://github.com/umami-software/umami/tree/v3.3.1" target="_blank" rel="noopener">repositório oficial do Umami</a></p>
+        <pre>MIT License
+
+Copyright (c) 2022 Umami Software, Inc. &lt;hello@umami.is&gt;
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.</pre>
+      </section>
+      <section class="legal-card" aria-labelledby="nvs-title">
+        <h2 id="nvs-title">NVS Track Core</h2>
+        <p><strong>Versão:</strong> 0.3.10<br /><strong>Origem:</strong> snapshot local versionado do projeto <code>nvs-track-core</code>, commit <code>dd8a6fdf5f3d65d26d381f5a002d2ed8ac13b7f7</code>.</p>
+        <span class="legal-status">Autorização informada</span>
+        <p>Componente utilizado com autorização do autor, conforme informado pelo responsável pelo Alva Studio. Os termos de redistribuição da licença não estão documentados neste snapshot.</p>
+      </section>
+      <section class="legal-card" aria-labelledby="other-notices-title">
+        <h2 id="other-notices-title">Outros avisos</h2>
+        <p>O Material Symbols Outlined é acompanhado pelo aviso e pela licença Apache-2.0 em <a href="/material-symbols-outlined.LICENSE">material-symbols-outlined.LICENSE</a>. Outros avisos de dependências permanecem nos arquivos distribuídos com cada dependência.</p>
+        <p><a href="/third-party-notices.txt">Baixar avisos em texto simples</a></p>
+      </section>
+    </main>
+  </body>
+</html>

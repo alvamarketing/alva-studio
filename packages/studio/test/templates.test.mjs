@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -171,7 +172,6 @@ test('normalização de gráficos repara circular sem fundo e preserva fundo per
 });
 
 test('normalização real do GrapesJS preserva CSS customizado e repara somente o fallback legado', async () => {
-  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
   const dom = new JSDOM('<!doctype html>');
   const previous = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
   globalThis.window = dom.window;

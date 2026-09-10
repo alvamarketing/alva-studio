@@ -24,7 +24,8 @@ export const quizRuntimeCss = `
 `;
 
 export function quizRuntimeScript({ destino = '' } = {}) {
-  // O destino sai daqui como texto: quem publica decide para onde as respostas vão.
+  // O snapshot publicado reescreve a action da captura para o gateway assinado. O runtime
+  // usa essa action, sem transformar o webhook do editor em endpoint público.
   return `(()=>{
   const corpo = document.body;
   // Sem a marca, esta é uma landing comum e o runtime não encosta nela.
@@ -32,8 +33,12 @@ export function quizRuntimeScript({ destino = '' } = {}) {
   const etapas = [...document.querySelectorAll('section')];
   if (etapas.length < 2) return;
 
-  const destino = ${JSON.stringify(destino)};
+  const destinoConfigurado = ${JSON.stringify(destino)};
   const respostas = {};
+  const captura = document.querySelector('form[data-alva-capture-id]');
+  // Uma tentativa conserva o mesmo identificador mesmo quando a rede falha depois de
+  // receber a requisição; o gateway devolve a mesma captura sem duplicar a conversão.
+  const trackingEventId = globalThis.crypto?.randomUUID?.() || '';
   let atual = 0;
 
   const barra = document.createElement('div');
@@ -60,29 +65,35 @@ export function quizRuntimeScript({ destino = '' } = {}) {
   };
 
   const guardar = (etapa) => {
+    const nomes = new Set();
+    const valores = {};
     for (const campo of camposDa(etapa)) {
       if (!campo.name) continue;
+      nomes.add(campo.name);
       if (campo.type === 'checkbox') {
-        if (!campo.checked) continue;
-        respostas[campo.name] = [...(respostas[campo.name] || []), campo.value];
+        if (campo.checked) (valores[campo.name] ||= []).push(campo.value);
       } else if (campo.type === 'radio') {
-        if (campo.checked) respostas[campo.name] = campo.value;
+        if (campo.checked) valores[campo.name] = campo.value;
       } else {
         const valor = String(campo.value || '').trim();
-        if (valor !== '') respostas[campo.name] = valor;
+        if (valor !== '') valores[campo.name] = valor;
       }
     }
+    // Voltar e editar uma etapa substitui seu grupo inteiro; retries nunca acumulam
+    // checkbox e um rádio desmarcado não deixa a resposta anterior escondida.
+    nomes.forEach((nome) => delete respostas[nome]);
+    Object.assign(respostas, valores);
   };
 
-  const avisar = (etapa, campo) => {
+  const avisar = (etapa, campo, mensagem = 'Responda para continuar.') => {
     let aviso = etapa.querySelector('[data-alva-quiz-erro]');
     if (!aviso) {
       aviso = document.createElement('p');
       aviso.setAttribute('data-alva-quiz-erro', '');
       aviso.setAttribute('role', 'alert');
-      (campo?.closest('label') || etapa).after(aviso);
+      etapa.append(aviso);
     }
-    aviso.textContent = 'Responda para continuar.';
+    aviso.textContent = mensagem;
     campo?.focus?.();
   };
 
@@ -96,16 +107,23 @@ export function quizRuntimeScript({ destino = '' } = {}) {
     if (foco && foco.focus) try { foco.focus({ preventScroll: true }); } catch {}
   };
 
-  const enviar = async () => {
-    if (!destino) return;
+  const enviar = async (etapa) => {
+    const destino = destinoConfigurado || captura?.getAttribute('action') || '';
+    if (!destino || destino === '#') {
+      avisar(etapa, null, 'Este quiz ainda não tem uma captura publicada.');
+      return false;
+    }
     try {
-      await fetch(destino, {
+      const resposta = await fetch(destino, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: respostas }),
+        body: JSON.stringify({ answers: respostas, ...(trackingEventId ? { trackingEventId } : {}) }),
       });
+      if (!resposta.ok) throw new Error('Resposta inválida do servidor.');
+      return true;
     } catch {
-      // A pessoa já chegou ao fim: não vale segurar a tela por causa do envio.
+      avisar(etapa, null, 'Não foi possível enviar suas respostas. Tente novamente.');
+      return false;
     }
   };
 
@@ -116,9 +134,10 @@ export function quizRuntimeScript({ destino = '' } = {}) {
     guardar(etapa);
     const proxima = atual + 1;
     if (proxima >= etapas.length) return;
+    // A etapa final só aparece depois da captura confirmada. Em falha, a pessoa fica na
+    // etapa atual e pode tentar novamente sem perder as respostas preenchidas.
+    if (proxima === etapas.length - 1 && !await enviar(etapa)) return;
     mostrar(proxima);
-    // O envio acontece ao chegar na última etapa, que é a de encerramento.
-    if (proxima === etapas.length - 1) await enviar();
   };
 
   // O quiz é montado no editor de páginas, com botões comuns. Por isso qualquer botão da
@@ -143,6 +162,12 @@ export function quizRuntimeScript({ destino = '' } = {}) {
     if (!etapa || etapa !== etapas[atual]) return;
     evento.preventDefault();
     avancar(etapa);
+  });
+  // Enter num campo do form raiz deve passar pela mesma validação e confirmação do botão.
+  // Sem isso o navegador enviaria a action nativa antes de completar as etapas.
+  captura?.addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    avancar(etapas[atual]);
   });
 
   mostrar(0);

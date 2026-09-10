@@ -44,3 +44,12 @@ test('escolher um elemento na árvore ou no canvas abre a aba Conteúdo', () => 
   const selecao = fonte.slice(fonte.indexOf('function selectTreeItem('), fonte.indexOf('function selectTreeItem(') + 500);
   assert.match(selecao, /syncAbasDoPainel/);
 });
+
+
+test('atalhos da árvore abrem a aba Elementos do workspace atual', () => {
+  const abrir = fonte.slice(fonte.indexOf('function openLibraryFor('), fonte.indexOf('function openLibraryFor(') + 700);
+  assert.match(abrir, /abaDoPainel = 'elementos'/);
+  assert.match(abrir, /syncAbasDoPainel\(\)/);
+  assert.match(abrir, /\.fe-blocks/);
+  assert.doesNotMatch(abrir, /\.fe-library/);
+});

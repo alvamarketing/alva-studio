@@ -1,3 +1,4 @@
+import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -68,7 +69,6 @@ test('heading troca somente a tag e ícone é reconhecido pelas classes do model
 });
 
 test('controles DOM do inspector respeitam a permissão e o popover de movimento', async () => {
-  const { JSDOM } = await import(new URL('../../../node_modules/.pnpm/jsdom@27.4.0/node_modules/jsdom/lib/api.js', import.meta.url));
   const dom = new JSDOM('<div class="fe-properties"><textarea aria-label="Texto"></textarea><div class="fe-heading-levels"><button>H1</button><button>H2</button><button>H3</button></div><input aria-label="Cor"><select aria-label="Alinhamento"><option>À esquerda</option></select><div class="fe-element-actions"><button>Mover</button></div></div>');
   try {
     const root = dom.window.document.querySelector('.fe-properties');
