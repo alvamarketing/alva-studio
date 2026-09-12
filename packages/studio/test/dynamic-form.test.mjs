@@ -218,9 +218,15 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // .alva-texto e o @media que ajusta o padding da seção), que compõem quizElementCss e
   // por isso entram no <style> deste formulário — nenhuma delas tem seletor usado pelo
   // quiz, então nada muda no que a pessoa vê ou preenche; só cresce o CSS morto embutido.
+  //
+  // Tamanho mudou de novo em 2026-09-12 (catalogo-elementos.js, Tarefa 5 do catálogo de
+  // elementos): a folha ganhou .answer-wrap, a regra que falta para a lista e o campo de
+  // texto solto acharem diagramação. Mesma razão: entra em elementosCss, que compõe
+  // quizElementCss, e cresce o CSS morto embutido no formulário — nenhum seletor do quiz
+  // usa .answer-wrap, então nada muda no que a pessoa vê ou preenche.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 27684);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '78fc60e00ce056a2c56f5302d3f376b94b9ed4e1cb5b7874f85d6722450276e7');
+  assert.equal(html.length, 27783);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '43436b80b5a66c29f998bf911926b8413d06b9bbfc77f905dbceeb4847c6d4e4');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {

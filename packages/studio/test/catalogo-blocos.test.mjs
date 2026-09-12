@@ -6,7 +6,13 @@ import { catalogo } from '../public/catalogo-elementos.js';
 const porId = new Map(blocks.map(([id, rotulo, grupo, conteudo]) => [id, { rotulo, grupo, conteudo }]));
 
 test('todo elemento do catálogo vira bloco do editor', () => {
+  // A partir da Tarefa 5, o catálogo também carrega elementos que só existem no
+  // canvas do quiz (id com prefixo "quiz-", exceto os de escolha, que nem vêm do
+  // catálogo): esses viram bloco em quizBlocks, dentro de editor-shell.js, não neste
+  // `blocks` de página — arrastar "Escala" para uma landing page não faz sentido.
+  // Esta prova continua cobrindo todo elemento pensado para a página geral.
   for (const elemento of catalogo) {
+    if (elemento.id.startsWith('quiz-')) continue;
     const bloco = porId.get(elemento.id);
     assert.ok(bloco, `o bloco ${elemento.id} sumiu do catálogo do editor`);
     assert.equal(bloco.rotulo, elemento.nome);

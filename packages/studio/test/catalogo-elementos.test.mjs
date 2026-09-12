@@ -72,3 +72,20 @@ test('elementoPorId acha e devolve indefinido para o que não existe', () => {
   assert.equal(elementoPorId('heading')?.nome, 'Título');
   assert.equal(elementoPorId('inexistente'), undefined);
 });
+
+test('lista, escala e arquivo nascem com a classe do sistema', () => {
+  assert.match(elementoPorId('quiz-select').render(), /class="answer"/);
+  assert.match(elementoPorId('quiz-range').render(), /class="scale"/);
+  assert.match(elementoPorId('quiz-file').render(), /class="upload"/);
+});
+
+test('a escala mostra o valor escolhido', () => {
+  const html = elementoPorId('quiz-range').render();
+  assert.match(html, /<output/, 'sem output a pessoa move o controle e não sabe onde parou');
+});
+
+test('a área de envio diz o que aceita em português', () => {
+  const html = elementoPorId('quiz-file').render();
+  assert.doesNotMatch(html, /Choose File/i);
+  assert.match(html, /Escolher arquivo|Envie/i);
+});
