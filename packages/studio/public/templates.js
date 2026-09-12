@@ -1,4 +1,6 @@
 // Original catalog. Copy is deliberately editable; no performance claims or testimonials are invented.
+import { catalogo } from './catalogo-elementos.js';
+
 export const formCss = `
 .alva-form{--alva-form-base:1;--form-bg:#ffffff;--form-fg:#213c34;--form-muted:#5c7067;--field-bg:#f8faf7;--field-border:#cbd5cc;--button-bg:#d7ec95;--button-fg:#203a32;box-sizing:border-box;display:block;width:100%;min-width:0;margin:0;padding:32px;background:var(--form-bg);color:var(--form-fg);border-radius:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;text-align:left}
 .alva-form[data-theme="dark"]{--form-bg:#203c34;--form-fg:#f6f8f0;--form-muted:#c6d4cb;--field-bg:#f9fbf7;--field-border:#98afa0}
@@ -262,37 +264,33 @@ export function getTemplate(id) {
 // O que cada peça faz, em uma linha, na língua de quem monta a página — não na de quem
 // escreve html. É o texto que aparece embaixo do nome na biblioteca.
 export const blockDescriptions = {
-  section: 'Uma faixa nova da página, para separar um assunto do outro.',
+  ...Object.fromEntries(catalogo.map((elemento) => [elemento.id, elemento.descricao])),
   columns: 'Dois espaços lado a lado, para comparar ou dividir o conteúdo.',
-  heading: 'Um título para anunciar o que vem a seguir.',
-  text: 'Um parágrafo para explicar sua ideia.',
   image: 'Uma foto ou ilustração, enviada do seu computador.',
   vsl: 'Uma VSL criada aqui no Studio, com player e medição próprios.',
-  button: 'Um convite para a pessoa dar o próximo passo.',
-  icon: 'Um símbolo para reforçar uma ideia rapidamente.',
   form: 'Um formulário completo para receber contatos.',
   input: 'Uma pergunta com espaço para a pessoa escrever a resposta.',
 };
 
+const doCatalogo = (id) => {
+  const elemento = catalogo.find((item) => item.id === id);
+  return [elemento.id, elemento.nome, elemento.grupo, elemento.render()];
+};
+
 export const blocks = [
-  [
-    'section',
-    'Seção',
-    'Estrutura',
-    '<section style="padding:60px 7%;min-height:140px"><h2>Uma nova seção</h2><p>Conte sua história aqui.</p></section>',
-  ],
+  doCatalogo('section'),
   [
     'columns',
     'Duas colunas',
     'Estrutura',
     '<div style="display:flex;flex-wrap:wrap;gap:24px;padding:30px"><div style="flex:1;min-width:240px;min-height:100px"><h3>Primeira coluna</h3></div><div style="flex:1;min-width:240px;min-height:100px"><h3>Segunda coluna</h3></div></div>',
   ],
-  ['heading', 'Título', 'Conteúdo', '<h2>Seu próximo grande título</h2>'],
-  ['text', 'Texto', 'Conteúdo', '<p>Uma mensagem simples para apresentar sua solução.</p>'],
+  doCatalogo('heading'),
+  doCatalogo('text'),
   ['image', 'Imagem', 'Conteúdo', { type: 'image' }],
   ['vsl', 'VSL do Studio', 'Mídia', { type: 'vsl', publicId: '', attributes: { 'data-alva-vsl': '' } }],
-  ['button', 'Botão', 'Conteúdo', '<a href="#contato" class="cta">Quero saber mais ↗</a>'],
-  ['icon', 'Ícone', 'Conteúdo', '<span class="material-symbols-outlined" aria-hidden="true">star</span>'],
+  doCatalogo('button'),
+  doCatalogo('icon'),
   ['form', 'Formulário', 'Captação', form()],
   [
     'input',
