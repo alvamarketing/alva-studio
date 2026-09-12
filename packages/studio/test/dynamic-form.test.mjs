@@ -212,9 +212,15 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // vencia com a mesma especificidade). Os dois moveram para o @media de
   // catalogo-elementos.js, junto da base — mesmo texto, posição diferente, por isso só o
   // hash muda, não o tamanho.
+  //
+  // Tamanho mudou de novo em 2026-09-12 (catalogo-elementos.js, Tarefa 3 do catálogo de
+  // elementos): elementosCss ganhou três regras novas (.alva-secao, .alva-titulo,
+  // .alva-texto e o @media que ajusta o padding da seção), que compõem quizElementCss e
+  // por isso entram no <style> deste formulário — nenhuma delas tem seletor usado pelo
+  // quiz, então nada muda no que a pessoa vê ou preenche; só cresce o CSS morto embutido.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 27514);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '069183c10a1ccd1d25c3c2542789bb5a8fced023bbbbb4b804226b1486e6f17d');
+  assert.equal(html.length, 27684);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '78fc60e00ce056a2c56f5302d3f376b94b9ed4e1cb5b7874f85d6722450276e7');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
