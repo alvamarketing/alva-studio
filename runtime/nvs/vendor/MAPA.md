@@ -1,4 +1,4 @@
-# Dependência NVS vendorada
+# Dependência NVS
 
-- `VENDOR.md`: origem, contrato, exclusões e hash de reprodução do snapshot.
-- `nvs-core/`: snapshot literal e imutável do NVS Track Core 0.3.10, com manifesto gerado de exclusões.
+- `VENDOR.md`: repositório de origem, contrato, exclusões e hash de reprodução.
+- `nvs-core/`: submódulo do NVS Track Core 0.3.10. Um clone comum o deixa vazio; `git submodule update --init` o traz.
