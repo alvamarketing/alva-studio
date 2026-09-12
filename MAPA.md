@@ -7,10 +7,11 @@
 - `packages/studio/`: aplicação Alva Studio, editor e publicação.
 - `docs/`: documentação original do GrapesJS e referências de projeto do Alva Studio.
   - `wireframes/`: protótipos navegáveis usados como referência visual.
-  - `superpowers/specs/`: decisões de arquitetura aprovadas.
-  - `superpowers/plans/`: planos executáveis derivados das especificações.
+  - `specs/`: decisões de arquitetura aprovadas.
+  - `plans/`: planos executáveis derivados das especificações.
 - `scripts/`: scripts originais do monorepo.
 - `runtime/`: composição Docker/Coolify do Studio e runbooks operacionais, com bancos e motores internos isolados.
+  - `nvs/vendor/nvs-core/`: submódulo do NVS Track Core; um clone comum o deixa vazio.
 - `produto/`: especificação e sequência de desenvolvimento do Alva Studio.
 - `.estado/`: registros curtos dos gates de validação das fundações do produto.
 
