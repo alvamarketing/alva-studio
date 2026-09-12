@@ -8,7 +8,7 @@
 
 **Stack:** JavaScript ESM, GrapesJS 0.23.6, `node:test` com `jsdom`.
 
-**Spec:** `docs/superpowers/specs/2026-09-12-catalogo-e-jornada-design.md`
+**Spec:** `docs/specs/2026-09-12-catalogo-e-jornada-design.md`
 
 **Alcance deste plano:** Blocos 1 e 2 da spec. Os Blocos 3 (casca de três colunas), 4 (Jornada) e 5 (mecânica) recebem planos próprios depois que este entrar, porque cada um precisa produzir software funcionando sozinho e um plano único aqui passaria de cinquenta tarefas.
 
