@@ -199,9 +199,15 @@ test('renderiza VSL com embed absoluto resolvido e fallback acessível sem expor
 });
 
 test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte', () => {
+  // O número mudou em 2026-09-12 (catalogo-elementos.js): as regras de elemento saíram
+  // de quiz-elements.js com uma paleta própria em variáveis --alva-el-*, então os nomes
+  // de variável dentro do <style> ficaram mais longos e o CSS ganhou um segundo :root.
+  // Conferido regra a regra (conjunto normalizado, sem nome de variável): 129 antes, 130
+  // depois, nenhuma perdida — a única nova é o :root da paleta do módulo novo. O visual
+  // não muda; só o texto do CSS embutido, por isso o hash e o tamanho são outros.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 27131);
-  assert.equal(createHash('sha256').update(html).digest('hex'), 'd68bbae11308eb10f8705382d9e1d6030712edcafd961642c7a7d4a48e1602b1');
+  assert.equal(html.length, 27514);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '94fc1515cdad256e25c3f388c0e18112c5557ae1fba886ed8e913eea47cf3dcb');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
