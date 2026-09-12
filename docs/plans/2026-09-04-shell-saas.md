@@ -193,7 +193,7 @@ git commit -m "feat: aplica Home e Empresa ao shell SaaS"
 - Modify: `packages/studio/test/studio-dashboard.test.mjs`
 - Modify: `packages/studio/test/forms-ui.test.mjs`
 - Modify: `produto/grafo.yaml`
-- Create: `.estado/shell-saas.md`
+- Create: `.estado/shell_saas.md`
 
 **Interfaces:**
 - Consumes: `GET /api/projects/:id/overview`, listas reais de páginas/formulários e callbacks existentes para abrir os editores.
@@ -223,11 +223,11 @@ Expected: exit 0. Abrir o app em 1440×900 e 390×844; verificar Home, Empresa, 
 
 - [ ] **Step 6: Registrar o gate**
 
-Marcar `shell_saas` como `feito` em `produto/grafo.yaml` somente após a suíte e homologação. Registrar contagem de testes, viewports e limitações reais em `.estado/shell-saas.md`.
+Marcar `shell_saas` como `feito` em `produto/grafo.yaml` somente após a suíte e homologação. Registrar contagem de testes, viewports e limitações reais em `.estado/shell_saas.md`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/studio/public/index.html packages/studio/public/styles.css packages/studio/public/app.js packages/studio/public/forms.js packages/studio/test/studio-dashboard.test.mjs packages/studio/test/forms-ui.test.mjs produto/grafo.yaml .estado/shell-saas.md
+git add packages/studio/public/index.html packages/studio/public/styles.css packages/studio/public/app.js packages/studio/public/forms.js packages/studio/test/studio-dashboard.test.mjs packages/studio/test/forms-ui.test.mjs produto/grafo.yaml .estado/shell_saas.md
 git commit -m "feat: conclui o painel SaaS por projeto"
 ```

@@ -58,6 +58,27 @@ ou a qualidade necessária para concluir a tarefa.
   modelo atual não conseguiu resolver. Preferência ou conveniência não contam
   como insuficiência demonstrada.
 
+## Onde cada documento mora
+
+Escrever no lugar errado é barato para quem escreve e caro para quem procura.
+Este é o mapa; `MAPA.md` tem a estrutura completa do repositório.
+
+- **`docs/specs/`** — decisões de arquitetura aprovadas. Uma spec explica o
+  problema e a escolha, e é ela que o código cita quando alguém pergunta por quê.
+- **`docs/plans/`** — planos executáveis derivados das specs, tarefa a tarefa.
+- **`docs/wireframes/`** — os protótipos navegáveis; o contrato visual está aqui.
+- **`.estado/<id>.md`** — a certificação de cada nó: o que foi conferido, por
+  quem, com qual evidência.
+
+Até 12/09/2026 specs e planos moravam em `docs/superpowers/`, com o nome da
+ferramenta que os gerou. Não escreva mais ali: a pasta foi removida e recriá-la
+espalha a documentação em dois lugares. O rastro de execução do SDD
+(`.superpowers/`) não é versionado — é da ferramenta, não do produto.
+
+O Core do NVS em `runtime/nvs/vendor/nvs-core/` é um submódulo. Um clone comum
+o deixa vazio; `git submodule update --init` o traz, e sem ele a imagem do
+runtime não constrói.
+
 ## Regra de fidelidade visual
 
 A referência única de interface do Alva Studio é

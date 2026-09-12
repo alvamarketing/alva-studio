@@ -345,7 +345,7 @@ git commit -m "feat: expõe empresas e projetos com sessões persistentes"
 - Modify: `packages/studio/test/MAPA.md`
 - Modify: `produto/briefing.md`
 - Modify: `produto/grafo.yaml`
-- Create: `.estado/fundacao-saas.md`
+- Create: `.estado/fundacao_saas.md`
 
 **Interfaces:**
 - Consumes: todas as entregas anteriores.
@@ -371,11 +371,11 @@ Expected: exit 0.
 
 - [ ] **Step 5: Registrar estado comprovado**
 
-`.estado/fundacao-saas.md` usa `status: feito` somente depois do gate verde e registra o comando executado.
+`.estado/fundacao_saas.md` usa `status: feito` somente depois do gate verde e registra o comando executado.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/studio/README.md packages/studio/MAPA.md packages/studio/server/MAPA.md packages/studio/test/MAPA.md produto docs/specs docs/plans .estado/fundacao-saas.md MAPA.md
+git add packages/studio/README.md packages/studio/MAPA.md packages/studio/server/MAPA.md packages/studio/test/MAPA.md produto docs/specs docs/plans .estado/fundacao_saas.md MAPA.md
 git commit -m "docs: registra fundacao SaaS do Alva Studio"
 ```
