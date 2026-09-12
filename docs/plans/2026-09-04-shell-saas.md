@@ -8,7 +8,7 @@
 
 **Tech Stack:** JavaScript ESM, HTML/CSS, Node.js 22, PostgreSQL, `node:test` e os editores GrapesJS existentes.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-alva-studio-saas-design.md`; referência visual: `docs/wireframes/alva-studio-ui-reference.html`.
+**Spec:** `docs/specs/2026-09-04-alva-studio-saas-design.md`; referência visual: `docs/wireframes/alva-studio-ui-reference.html`.
 
 ## Global Constraints
 

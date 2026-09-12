@@ -10,7 +10,7 @@
 
 **Tech Stack V2:** Cloudflare R2, FFmpeg e HLS para mídia própria.
 
-**Spec:** `docs/superpowers/specs/2026-09-06-runtime-comercial-completo-design.md`
+**Spec:** `docs/specs/2026-09-06-runtime-comercial-completo-design.md`
 
 ## Global Constraints
 

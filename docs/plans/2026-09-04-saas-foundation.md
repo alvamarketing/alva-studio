@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node.js 22+, JavaScript ESM, PostgreSQL, `pg`, HTML/CSS/JavaScript nativos, GrapesJS 0.23.6 e `node:test`.
 
-**Spec:** `docs/superpowers/specs/2026-09-04-alva-studio-saas-design.md`
+**Spec:** `docs/specs/2026-09-04-alva-studio-saas-design.md`
 
 ## Global Constraints
 
@@ -376,6 +376,6 @@ Expected: exit 0.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/studio/README.md packages/studio/MAPA.md packages/studio/server/MAPA.md packages/studio/test/MAPA.md produto docs/superpowers .estado/fundacao-saas.md MAPA.md
+git add packages/studio/README.md packages/studio/MAPA.md packages/studio/server/MAPA.md packages/studio/test/MAPA.md produto docs/specs docs/plans .estado/fundacao-saas.md MAPA.md
 git commit -m "docs: registra fundacao SaaS do Alva Studio"
 ```

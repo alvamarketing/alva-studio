@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node.js 22, JavaScript ESM, GrapesJS 0.23.6, DOM nativo, CSS e node:test.
 
-**Spec:** docs/superpowers/specs/2026-09-04-alva-studio-saas-design.md (6.2, 6.3, 7, 9 e 10), docs/wireframes/alva-studio-ui-reference.html, produto/grafo.yaml (editores_saas) e docs/superpowers/plans/2026-09-04-shell-saas.md.
+**Spec:** docs/specs/2026-09-04-alva-studio-saas-design.md (6.2, 6.3, 7, 9 e 10), docs/wireframes/alva-studio-ui-reference.html, produto/grafo.yaml (editores_saas) e docs/plans/2026-09-04-shell-saas.md.
 
 ## Global Constraints
 

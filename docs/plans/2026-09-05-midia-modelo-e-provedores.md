@@ -8,7 +8,7 @@
 
 **Tech Stack:** JavaScript ESM, Node.js 22, PostgreSQL, `node:test`, HTML/CSS/JS sem framework adicional.
 
-**Spec:** `docs/superpowers/specs/2026-09-05-midia-provedores-e-r2-design.md`, seções 1, 2, 4 e 5; `produto/grafo.yaml`, nós `midia_modelo_dados` e `player_provedores`.
+**Spec:** `docs/specs/2026-09-05-midia-provedores-e-r2-design.md`, seções 1, 2, 4 e 5; `produto/grafo.yaml`, nós `midia_modelo_dados` e `player_provedores`.
 
 ## Global Constraints
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** JavaScript ESM, Node.js 22, PostgreSQL, `node:test`, sem framework adicional.
 
-**Spec:** `docs/superpowers/specs/2026-09-05-superadmin-global-design.md`, seções "Cofre global", "O que fica obrigatoriamente no ambiente", "Superfície `/api/platform/*`" e "Auditoria e isolamento"; fases 1, 2 (sem tela) e 3.
+**Spec:** `docs/specs/2026-09-05-superadmin-global-design.md`, seções "Cofre global", "O que fica obrigatoriamente no ambiente", "Superfície `/api/platform/*`" e "Auditoria e isolamento"; fases 1, 2 (sem tela) e 3.
 
 ## Global Constraints
 

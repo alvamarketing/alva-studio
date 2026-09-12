@@ -35,4 +35,5 @@ grapesjs-*.tgz
 _index.html
 docs/.vuepress/dist
 dist/
+.superpowers/
 .worktrees/

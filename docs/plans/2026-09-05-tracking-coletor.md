@@ -8,7 +8,7 @@
 
 **Tech Stack:** JavaScript ESM, Node.js 22, PostgreSQL, `node:test`, HTML/CSS/JS sem framework adicional.
 
-**Spec:** `docs/superpowers/specs/2026-09-05-tracking-analytics-design.md`, seções B e D; `produto/grafo.yaml`, nó `tracking_coletor`.
+**Spec:** `docs/specs/2026-09-05-tracking-analytics-design.md`, seções B e D; `produto/grafo.yaml`, nó `tracking_coletor`.
 
 ## Global Constraints
 

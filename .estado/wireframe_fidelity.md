@@ -2,7 +2,7 @@
 
 - Estado: concluído e aprovado em 2026-09-06.
 - Referência canônica: `docs/wireframes/alva-studio-ui-reference.html`.
-- Plano: `docs/superpowers/plans/2026-09-06-wireframe-fidelity-plan.md`.
+- Plano: `docs/plans/2026-09-06-wireframe-fidelity-plan.md`.
 - Decisão: o wireframe é contrato visual, não inspiração.
 - Blocos concluídos: design system/Home/Projeto; landing; quiz; configurações e listas.
 

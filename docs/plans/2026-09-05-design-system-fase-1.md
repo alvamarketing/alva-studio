@@ -8,7 +8,7 @@
 
 **Tech Stack:** CSS puro com custom properties, JavaScript ESM sem framework, `node:test`, Material Symbols Outlined já autorizado pela CSP.
 
-**Spec:** `docs/superpowers/specs/2026-09-05-design-system.md`; nó `design_system` proposto lá na §6.
+**Spec:** `docs/specs/2026-09-05-design-system.md`; nó `design_system` proposto lá na §6.
 
 ## Global Constraints
 

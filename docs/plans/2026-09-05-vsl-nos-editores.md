@@ -8,7 +8,7 @@
 
 **Tech Stack:** JavaScript ESM, GrapesJS, DOM nativo, PostgreSQL, `node:test`, player MP4/HLS já existente.
 
-**Spec:** `docs/superpowers/specs/2026-09-05-vsl-player-design.md` e `docs/superpowers/plans/2026-09-05-midia-vsl.md`
+**Spec:** `docs/specs/2026-09-05-vsl-player-design.md` e `docs/plans/2026-09-05-midia-vsl.md`
 
 ## Global Constraints
 
