@@ -205,9 +205,16 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // Conferido regra a regra (conjunto normalizado, sem nome de variável): 129 antes, 130
   // depois, nenhuma perdida — a única nova é o :root da paleta do módulo novo. O visual
   // não muda; só o texto do CSS embutido, por isso o hash e o tamanho são outros.
+  //
+  // Hash atualizado de novo no mesmo dia: o override de .chart-donut/.donut dentro de
+  // @media(max-width:600px) tinha ficado em quiz-elements.js enquanto a base foi para
+  // catalogo-elementos.js, invertendo a cascata (base depois do override no texto final
+  // vencia com a mesma especificidade). Os dois moveram para o @media de
+  // catalogo-elementos.js, junto da base — mesmo texto, posição diferente, por isso só o
+  // hash muda, não o tamanho.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
   assert.equal(html.length, 27514);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '94fc1515cdad256e25c3f388c0e18112c5557ae1fba886ed8e913eea47cf3dcb');
+  assert.equal(createHash('sha256').update(html).digest('hex'), '069183c10a1ccd1d25c3c2542789bb5a8fced023bbbbb4b804226b1486e6f17d');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
