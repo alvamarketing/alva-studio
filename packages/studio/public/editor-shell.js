@@ -2,6 +2,18 @@ import { blockDescriptions, blocks, normalizeCharts, normalizeForms, runtimeCss,
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 import { materialSymbolsFontCss } from './quiz-elements.js';
+import { elementosCss } from './catalogo-elementos.js';
+
+// Qual folha entra no canvas. Era um if dentro do editor, e por isso o quiz ficou sem
+// folha nenhuma quando virou página: ninguém conseguia afirmar essa decisão num teste.
+export function folhasDoCanvas({ quizCanvas = false, cssExistente = '' } = {}) {
+  const jaTemModelo = /--alva-block-base\s*:\s*1/.test(cssExistente) || cssExistente.includes('.hero-grid');
+  const jaTemElementos = cssExistente.includes('--alva-el-accent');
+  const folhas = [];
+  if (!jaTemElementos) folhas.push(elementosCss);
+  if (!jaTemModelo) folhas.push(templateCss);
+  return { folhas, normalizarFormularios: true, quizCanvas };
+}
 
 const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -1707,12 +1719,9 @@ export function createFriendlyEditor({
     tree.append(addSection);
   }
   function formStyles() {
-    if (!quizCanvas) normalizeForms(editor);
+    if (folhasDoCanvas({ quizCanvas }).normalizarFormularios) normalizeForms(editor);
   }
   function blockStyles() {
-    // Quiz canvases already carry their own scoped CSS. Adding the Landing
-    // starter sheet after it would reset body/background and field styling.
-    if (quizCanvas) return;
     const existingCss = editor.getCss();
     // O comportamento entra sempre: uma página salva antes destas regras existirem também
     // precisa de movimento, ícone e gráficos funcionando.
@@ -1720,10 +1729,12 @@ export function createFriendlyEditor({
     // versão anterior, senão a página congela na primeira que pegou.
     const versaoNaPagina = Number(existingCss.match(/--alva-runtime\s*:\s*(\d+)/)?.[1] || 0);
     if (versaoNaPagina < RUNTIME_CSS_VERSION) editor.addStyle(runtimeCss);
-    if (/--alva-block-base\s*:\s*1/.test(existingCss) || existingCss.includes('.hero-grid')) return;
-    // Fill the blank page with block defaults, preserving every user declaration.
+    const { folhas } = folhasDoCanvas({ quizCanvas, cssExistente: existingCss });
+    if (!folhas.length) return;
+    // Preserva cada declaração de quem editou: a folha entra por baixo, não por cima.
     const custom = editor.Css.getAll().map((rule) => ({ rule, style: { ...rule.getStyle() } }));
-    editor.addStyle(templateCss + ':root{--alva-block-base:1}');
+    folhas.forEach((folha) => editor.addStyle(folha));
+    if (folhas.includes(templateCss)) editor.addStyle(':root{--alva-block-base:1}');
     custom.forEach(({ rule, style }) => rule.addStyle(style));
   }
   function insertBlock(block) {

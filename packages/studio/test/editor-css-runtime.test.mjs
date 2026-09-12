@@ -20,8 +20,10 @@ test('o editor reaplica o css de sistema mesmo em página antiga', async () => {
   const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
   const corpo = fonte.slice(fonte.indexOf('function blockStyles('), fonte.indexOf('function insertBlock('));
   assert.match(corpo, /runtimeCss/);
-  // o retorno antecipado não pode pular o css de sistema
-  assert.ok(corpo.indexOf('runtimeCss') < corpo.indexOf('.hero-grid'), 'sistema entra antes da checagem de página antiga');
+  // o retorno antecipado não pode pular o css de sistema: a checagem de página antiga
+  // (modelo já aplicado ou não) mora dentro de folhasDoCanvas desde que o quiz passou a
+  // receber folha também, mas runtimeCss precisa continuar entrando antes dela.
+  assert.ok(corpo.indexOf('runtimeCss') < corpo.indexOf('folhasDoCanvas'), 'sistema entra antes da checagem de página antiga');
 });
 
 test('a página exportada leva o css de sistema', async () => {
