@@ -395,6 +395,7 @@ export function createApp({
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],
     '/quiz-elements.js': ['public/quiz-elements.js', 'text/javascript'],
+    '/catalogo-elementos.js': ['public/catalogo-elementos.js', 'text/javascript'],
     '/quiz-navigation.js': ['public/quiz-navigation.js', 'text/javascript'],
     '/quiz-calculations.js': ['public/quiz-calculations.js', 'text/javascript'],
     '/editor-workspace.js': ['public/editor-workspace.js', 'text/javascript'],
