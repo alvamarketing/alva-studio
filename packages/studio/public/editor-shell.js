@@ -2,7 +2,7 @@ import { blockDescriptions, blocks, formCss, normalizeCharts, normalizeForms, ru
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
 import { materialSymbolsFontCss, quizCanvasCss } from './quiz-elements.js';
-import { elementosCss, elementoPorId } from './catalogo-elementos.js';
+import { blocoDoCatalogo, elementosCss } from './catalogo-elementos.js';
 
 // Qual folha entra no canvas. Era um if dentro do editor, e por isso o quiz ficou sem
 // folha nenhuma quando virou página: ninguém conseguia afirmar essa decisão num teste.
@@ -1254,17 +1254,13 @@ export function createFriendlyEditor({
     const requiredAttribute = type === 'multiple_choice' ? ` data-quiz-required="${required}"` : '';
     return `<div class="choices${visual ? ' image-choices' : ''}" data-quiz-type="${type}" data-quiz-question="${escapeText(question)}"${requiredAttribute}><p>${escapeText(question)}</p>${['Opção 1', 'Opção 2'].map((label, index) => quizChoiceOptionMarkup({ type, name, label, index: index + 1, required })).join('')}</div>`;
   };
-  const doCatalogoQuiz = (id) => {
-    const elemento = elementoPorId(id);
-    return [elemento.id, elemento.nome, elemento.grupo, elemento.render()];
-  };
   const quizBlocks = quizCanvas ? [
     ['quiz-single-choice', 'Escolha única', 'Captação', quizChoiceBlockMarkup({ type: 'single_choice', question: 'Nova pergunta', name: 'campo_escolha' })],
     ['quiz-multiple-choice', 'Múltipla escolha', 'Captação', quizChoiceBlockMarkup({ type: 'multiple_choice', question: 'Nova pergunta', name: 'campo_multiplas' })],
     ['quiz-image-choice', 'Escolha visual', 'Captação', quizChoiceBlockMarkup({ type: 'image_choice', question: 'Nova escolha visual', name: 'campo_visual' })],
-    doCatalogoQuiz('quiz-select'),
-    doCatalogoQuiz('quiz-range'),
-    doCatalogoQuiz('quiz-file'),
+    blocoDoCatalogo('quiz-select'),
+    blocoDoCatalogo('quiz-range'),
+    blocoDoCatalogo('quiz-file'),
   ] : [];
   const quizSafeContent = (id, content) => quizCanvas && ['hero-section', 'contact-section'].includes(id)
     ? `<section class="${id === 'hero-section' ? 'hero' : 'contact'}"><div><h2>Vamos conversar?</h2><p>Conte como podemos ajudar.</p><label>Seu nome<input type="text" name="campo_nome"></label><label>E-mail<input type="email" name="campo_email"></label><label>WhatsApp<input type="tel" name="campo_telefone"></label></div></section>`

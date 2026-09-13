@@ -254,9 +254,18 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // .custom-cta, não .cta, então nenhum elemento deste HTML casa com o seletor novo e
   // nada muda no que a pessoa vê — mas o botão do quiz publicado, que casa, passa a ter
   // com que se desenhar.
+  //
+  // Tamanho mudou de novo em 2026-09-12 (onda final do catálogo, limpeza b): as duas
+  // variáveis da paleta que estavam declaradas e contornadas — --alva-el-surface e
+  // --alva-el-accent-soft — passaram a ser usadas no lugar dos literais #fff e #eef4ff
+  // que estavam escritos a poucos caracteres delas, em .answer, .choice, .choice:hover e
+  // .donut:before. Em background-color e não no atalho background, pelo mesmo motivo da
+  // moldura. Os valores das variáveis são exatamente esses literais, então o formulário
+  // publicado pinta a mesma cor; só o texto do CSS é outro, e a promessa da paleta (um
+  // modelo claro e um escuro sem segunda folha) deixa de ser falsa.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 29015);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '8a0f978dd34f62122917edf89db08d3bd3d69f571d35fe13e2ffaef6233a3784');
+  assert.equal(html.length, 29112);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '4973a1e211e41e0883ea177deb7a9e539e89032abf92e887faa40266259556fd');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {

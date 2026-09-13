@@ -1,5 +1,5 @@
 // Original catalog. Copy is deliberately editable; no performance claims or testimonials are invented.
-import { catalogo } from './catalogo-elementos.js';
+import { blocoDoCatalogo, catalogo } from './catalogo-elementos.js';
 
 export const formCss = `
 .alva-form{--alva-form-base:1;--form-bg:#ffffff;--form-fg:#213c34;--form-muted:#5c7067;--field-bg:#f8faf7;--field-border:#cbd5cc;--button-bg:#d7ec95;--button-fg:#203a32;box-sizing:border-box;display:block;width:100%;min-width:0;margin:0;padding:32px;background:var(--form-bg);color:var(--form-fg);border-radius:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;text-align:left}
@@ -271,25 +271,20 @@ export const blockDescriptions = {
   form: 'Um formulário completo para receber contatos.',
 };
 
-const doCatalogo = (id) => {
-  const elemento = catalogo.find((item) => item.id === id);
-  return [elemento.id, elemento.nome, elemento.grupo, elemento.render()];
-};
-
 export const blocks = [
-  doCatalogo('section'),
+  blocoDoCatalogo('section'),
   [
     'columns',
     'Duas colunas',
     'Estrutura',
     '<div style="display:flex;flex-wrap:wrap;gap:24px;padding:30px"><div style="flex:1;min-width:240px;min-height:100px"><h3>Primeira coluna</h3></div><div style="flex:1;min-width:240px;min-height:100px"><h3>Segunda coluna</h3></div></div>',
   ],
-  doCatalogo('heading'),
-  doCatalogo('text'),
+  blocoDoCatalogo('heading'),
+  blocoDoCatalogo('text'),
   ['image', 'Imagem', 'Conteúdo', { type: 'image' }],
   ['vsl', 'VSL do Studio', 'Mídia', { type: 'vsl', publicId: '', attributes: { 'data-alva-vsl': '' } }],
-  doCatalogo('button'),
-  doCatalogo('icon'),
+  blocoDoCatalogo('button'),
+  blocoDoCatalogo('icon'),
   ['form', 'Formulário', 'Captação', form()],
-  doCatalogo('input'),
+  blocoDoCatalogo('input'),
 ];
