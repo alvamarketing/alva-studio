@@ -6,6 +6,7 @@ import postcss from 'postcss';
 import { elementosCss, catalogo, elementoPorId } from '../public/catalogo-elementos.js';
 import { quizElementCss } from '../public/quiz-elements.js';
 import { templateCss, formCss } from '../public/templates.js';
+import { folhasDoCanvas } from '../public/editor-shell.js';
 
 test('a folha dos elementos desenha peças, não a página', () => {
   assert.match(elementosCss, /\.choice\{/);
@@ -27,8 +28,6 @@ test('os formulários dinâmicos publicados continuam com a folha inteira', () =
   assert.match(quizElementCss, /body\{/);
   assert.match(quizElementCss, /\.funnel-header\{/);
 });
-
-const folhaDoSistema = elementosCss + templateCss;
 
 test('todo elemento do catálogo declara identidade completa', () => {
   assert.ok(catalogo.length > 0);
@@ -53,12 +52,33 @@ test('o seletor de um elemento é sempre uma classe', () => {
   }
 });
 
-test('nenhum elemento nasce sem regra que o alcance', () => {
+// Onde cada elemento pode ser solto. A paleta do quiz é `[...blocks, ...quizBlocks]`
+// (editor-shell.js), então tudo que tem registro: 'pagina' também é arrastável DENTRO de
+// um quiz; só o registro: 'quiz' é exclusivo. A prova abaixo confere essa afirmação no
+// fonte, para a tabela não virar convenção esquecida.
+const canvasesDoElemento = (elemento) => elemento.registro === 'quiz' ? [true] : [false, true];
+const nomeDoCanvas = (quizCanvas) => quizCanvas ? 'quiz' : 'landing';
+
+test('a paleta do quiz soma os blocos de página aos do quiz', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
+  assert.match(fonte, /blocks: \[\.\.\.blocks, \.\.\.quizBlocks\]/, 'se a paleta do quiz mudar, a tabela canvasesDoElemento precisa mudar junto');
+});
+
+test('nenhum elemento nasce sem regra que o alcance, em nenhum canvas onde é arrastável', () => {
+  // Esta prova já foi `elementosCss + templateCss`, uma união que nenhum canvas recebe: a
+  // landing veste elementosCss+templateCss, o quiz veste quizCanvasCss. Com a união, o
+  // `button` passava verde porque .cta morava em templateCss — folha que o quiz não
+  // recebe — enquanto no quiz ele nascia sem regra nenhuma. Perguntar por canvas, usando
+  // o mesmo folhasDoCanvas que o editor usa, é o que fecha esse buraco.
   for (const elemento of catalogo) {
-    assert.ok(
-      folhaDoSistema.includes(`${elemento.seletor}{`) || folhaDoSistema.includes(`${elemento.seletor},`) || folhaDoSistema.includes(`${elemento.seletor} `),
-      `${elemento.id} declara o seletor ${elemento.seletor}, que não abre regra em nenhuma folha`,
-    );
+    for (const quizCanvas of canvasesDoElemento(elemento)) {
+      const folha = folhasDoCanvas({ quizCanvas, cssExistente: '' }).folhas.join('');
+      assert.ok(
+        folha.includes(`${elemento.seletor}{`) || folha.includes(`${elemento.seletor},`) || folha.includes(`${elemento.seletor} `),
+        `${elemento.id} declara o seletor ${elemento.seletor}, que não abre regra em nenhuma folha do canvas de ${nomeDoCanvas(quizCanvas)}`,
+      );
+    }
   }
 });
 

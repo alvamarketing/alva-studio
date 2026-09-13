@@ -244,9 +244,19 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // longhands pintam exatamente a mesma moldura que o atalho pintava. Nada muda no que a
   // pessoa vê; só o texto do CSS, em .answer, .choice, .choice-key, .countdown e nas três
   // regras de estado (.answer:focus, .alva-form .answer:focus, .choice:hover/:checked).
+  //
+  // Tamanho mudou de novo em 2026-09-12 (onda final do catálogo): .cta saiu de
+  // templateCss e entrou em elementosCss, porque o botão é elemento do catálogo e a
+  // paleta do quiz é [...blocks, ...quizBlocks] — ele podia ser solto num quiz e não
+  // encontrava regra em nenhuma folha do canvas do quiz nem em runtimeCss. elementosCss
+  // compõe quizElementCss, então a regra chega também a este <style> embutido. Aqui ela
+  // é regra viva, não morta: um passo do tipo 'cta' do formulário dinâmico usa
+  // .custom-cta, não .cta, então nenhum elemento deste HTML casa com o seletor novo e
+  // nada muda no que a pessoa vê — mas o botão do quiz publicado, que casa, passa a ter
+  // com que se desenhar.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 28844);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '35eb07a552853b64ec629cdf41abd9670ced4c6f6e26b504828c8925a0568b41');
+  assert.equal(html.length, 29015);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '8a0f978dd34f62122917edf89db08d3bd3d69f571d35fe13e2ffaef6233a3784');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
