@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { elementosCss, catalogo, elementoPorId } from '../public/catalogo-elementos.js';
 import { quizElementCss } from '../public/quiz-elements.js';
-import { templateCss } from '../public/templates.js';
+import { templateCss, formCss } from '../public/templates.js';
 
 test('a folha dos elementos desenha peças, não a página', () => {
   assert.match(elementosCss, /\.choice\{/);
@@ -92,6 +92,16 @@ test('o campo de texto solto encontra regra fora do formulário', () => {
   const html = elementoPorId('input').render();
   assert.match(html, /class="answer-wrap"/);
   assert.match(html, /class="answer"/);
+});
+
+test('o campo aninhado dentro do formulário devolve o foco ao tratamento do formulário', () => {
+  // .answer:focus (0,2,0) sozinho vazava para dentro de .alva-form: formCss só cobre
+  // :focus-visible (outline), não :focus puro, então um clique deixava o campo aninhado
+  // com borda e brilho diferentes dos irmãos do mesmo formulário. A correção precisa
+  // vencer por especificidade — .alva-form .answer:focus é (0,3,0) — e reusar os mesmos
+  // valores que .alva-form input já tem em repouso (formCss), não inventar cor nova.
+  assert.match(formCss, /var\(--field-border\)/, 'o token que a correção reusa precisa existir em formCss');
+  assert.match(elementosCss, /\.alva-form \.answer:focus\{border-color:var\(--field-border\);box-shadow:none\}/);
 });
 
 test('a área de envio diz o que aceita em português', () => {

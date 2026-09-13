@@ -224,9 +224,17 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // texto solto acharem diagramação. Mesma razão: entra em elementosCss, que compõe
   // quizElementCss, e cresce o CSS morto embutido no formulário — nenhum seletor do quiz
   // usa .answer-wrap, então nada muda no que a pessoa vê ou preenche.
+  //
+  // Tamanho mudou de novo em 2026-09-12 (catalogo-elementos.js, rodada 1 da Tarefa 6 do
+  // catálogo de elementos): a folha ganhou .alva-form .answer:focus, a correção para o
+  // campo de texto solto não vazar o foco do .answer avulso quando arrastado para dentro
+  // de um formulário (o vazamento era real, achado pela revisão em navegador). Mesma
+  // razão de sempre: entra em elementosCss, que compõe quizElementCss, e cresce o CSS
+  // morto embutido no formulário público do quiz — o quiz não usa .alva-form, então
+  // nenhum seletor novo se aplica lá e nada muda no que a pessoa vê ou preenche.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 27783);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '43436b80b5a66c29f998bf911926b8413d06b9bbfc77f905dbceeb4847c6d4e4');
+  assert.equal(html.length, 27857);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '31e193b83615aebba1860e931116a1402938e5ad382362bddabf6548fc352f76');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
