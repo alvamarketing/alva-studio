@@ -2,7 +2,7 @@ import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import grapesjs from 'grapesjs';
-import { folhasDoCanvas } from '../public/editor-shell.js';
+import { folhasDoCanvas, podarFolhaDeFormulario } from '../public/editor-shell.js';
 import { formCss, getTemplate, normalizeForms, templateCss } from '../public/templates.js';
 import { elementosCss } from '../public/catalogo-elementos.js';
 import { quizCanvasCss } from '../public/quiz-elements.js';
@@ -121,4 +121,82 @@ test('o modelo semeia o quiz sem a folha do formulário', async () => {
   const semFormulario = getTemplate('services').css.split(formCss).join('');
   assert.ok(!semFormulario.includes('.alva-form label'), 'a poda tira o que achata o cartão');
   assert.ok(semFormulario.includes('.hero-grid'), 'e deixa o resto do modelo de pé');
+});
+
+const comDom = (corpo) => {
+  const dom = new JSDOM('<!doctype html>');
+  const anterior = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document, DOMParser: dom.window.DOMParser, Node: dom.window.Node });
+  try {
+    return corpo();
+  } finally {
+    Object.assign(globalThis, anterior);
+    dom.window.close();
+  }
+};
+
+// Um projeto como o banco tem hoje: salvo pela main, com formCss GRAVADO dentro. Não dá
+// para fabricar isso por string, porque o projeto guarda regras, não texto — é justamente
+// por isso que a poda por substring do modelo (css.split(formCss)) não alcança este caso.
+const projetoSalvoComFormCss = (html) => comDom(() => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  try {
+    editor.setComponents(html);
+    editor.addStyle(formCss);
+    editor.addStyle(elementosCss);
+    return JSON.parse(JSON.stringify(editor.getProjectData()));
+  } finally {
+    editor.destroy();
+  }
+});
+
+const cssAoReabrir = (projeto, { quizCanvas }) => comDom(() => {
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  try {
+    editor.loadProjectData(projeto);
+    if (quizCanvas) podarFolhaDeFormulario(editor);
+    return editor.getCss();
+  } finally {
+    editor.destroy();
+  }
+});
+
+const quizHtml = '<form class="alva-form" data-alva-quiz-capture="true"><div class="choices"><label class="choice"><input type="radio" name="q"><span class="choice-key">1</span><span>Opção 1</span></label></div></form>';
+const landingHtml = '<main><form class="alva-form"><label>Seu nome<input type="text" name="campo_nome"></label></form></main>';
+
+test('quiz salvo com formCss dentro reabre sem ele, e o cartão de escolha volta a ser cartão', () => {
+  // Na main, abrir OU salvar um quiz chamava normalizeForms(editor), que injeta formCss
+  // assim que encontra um <form> — e a raiz de todo quiz é um. Todo quiz salvo desde que
+  // quiz virou página carrega a folha dentro do projeto. folhasDoCanvas acrescenta a
+  // folha certa mas não remove a gravada: `.alva-form label` (0,1,1) continua vencendo
+  // `.choice` (0,1,0) e o cartão reabre achatado. Por isso a poda é ao CARREGAR.
+  const projeto = projetoSalvoComFormCss(quizHtml);
+  const antes = cssAoReabrir(projeto, { quizCanvas: false });
+  assert.ok(antes.includes('.alva-form label'), 'o projeto de partida precisa mesmo ter formCss gravado');
+
+  const depois = cssAoReabrir(projeto, { quizCanvas: true });
+  assert.ok(!depois.includes('.alva-form label'), 'a folha gravada continuaria achatando o cartão de escolha');
+  assert.ok(!/\.alva-form input/.test(depois), 'a folha gravada continuaria devolvendo o "Choose File" nativo');
+  assert.ok(!/(^|})\.alva-form\s*\{/.test(depois), 'a regra raiz da folha do formulário também sai');
+  assert.match(depois, /\.choice\{[^}]*display:flex/, 'o cartão de escolha continua desenhado');
+  assert.ok(depois.includes('--alva-el-accent'), 'a poda tira só a folha do formulário, não a dos elementos');
+});
+
+test('landing salva com formCss dentro mantém o seu', () => {
+  // A landing tem formulário de verdade — é o bloco "Formulário" — e formCss é a folha
+  // que o desenha. Podar lá tiraria a diagramação do formulário da página.
+  const projeto = projetoSalvoComFormCss(landingHtml);
+  const css = cssAoReabrir(projeto, { quizCanvas: false });
+  assert.ok(css.includes('.alva-form label'), 'a landing precisa da folha do formulário');
+  assert.ok(/\.alva-form input/.test(css), 'a landing precisa da folha do formulário');
+});
+
+test('a poda do formCss gravado acontece ao carregar um quiz, e só ele', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
+  for (const chamada of fonte.matchAll(/podarFolhaDeFormulario\(editor\)/g)) {
+    const contexto = fonte.slice(Math.max(0, chamada.index - 200), chamada.index);
+    assert.match(contexto, /quizCanvas/, 'toda poda é condicionada a quizCanvas: na landing ela tiraria a folha do formulário de verdade');
+  }
+  assert.match(fonte, /temProjetoSalvo\(project\)\) podarFolhaDeFormulario\(editor\)/, 'a poda é do projeto SALVO — a semente do modelo já sai podada em setStyle');
 });

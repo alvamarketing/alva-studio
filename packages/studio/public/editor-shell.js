@@ -29,6 +29,37 @@ export function folhasDoCanvas({ quizCanvas = false, cssExistente = '' } = {}) {
   return { folhas, normalizarFormularios: true, quizCanvas };
 }
 
+// Quiz salvo antes desta branch tem formCss GRAVADO dentro do projeto: na base, abrir ou
+// salvar um quiz chamava normalizeForms(editor), que injeta a folha assim que encontra um
+// <form> — e a raiz de todo quiz é um. folhasDoCanvas acrescenta a folha certa ao canvas,
+// mas não remove a que já está gravada, e `.alva-form label` (0,1,1) continua vencendo
+// `.choice` (0,1,0): o cartão de escolha reabre achatado.
+//
+// A poda do modelo (`css.split(formCss).join('')`, na semente) não alcança este caso: o
+// projeto salvo guarda REGRAS, não o texto da folha, e o GrapesJS as reserializa ao
+// gravar (`margin:0` vira também as quatro longhands, `,` ganha espaço). Por isso a poda
+// aqui é por seletor: sai a regra cujo seletor formCss declara.
+//
+// O preço: se alguém tiver estilizado à mão, no quiz, um seletor que formCss também
+// declara — `.alva-form` é o único plausível, já que é a raiz da captura —, esse ajuste
+// sai junto. Vale a troca: essa regra escrita à mão é hipotética, e o cartão achatado é
+// o estado real de todo quiz salvo até hoje.
+const semEspaco = (texto) => String(texto || '').replace(/\s+/g, '');
+
+export function seletoresDaFolhaDeFormulario(folha = formCss) {
+  return new Set(folha.split('}')
+    .map((bloco) => bloco.split('{')[0].trim())
+    .filter((seletor) => seletor && !seletor.startsWith('@'))
+    .map(semEspaco));
+}
+
+export function podarFolhaDeFormulario(editor, folha = formCss) {
+  const seletores = seletoresDaFolhaDeFormulario(folha);
+  const podadas = editor.Css.getAll().filter((regra) => seletores.has(semEspaco(regra.selectorsToString?.())));
+  podadas.forEach((regra) => editor.Css.remove(regra));
+  return podadas.length;
+}
+
 const svg = (body) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 // Nomes do Material Symbols, a mesma fonte que o editor já carrega. Caracteres soltos
@@ -1566,6 +1597,10 @@ export function createFriendlyEditor({
   // loading so opening alone never marks the form dirty or sends a PUT.
   if (quizCanvas && !hasQuizImageChoiceHeadingCss(editor.getCss()))
     editor.setStyle(`${quizImageChoiceHeadingCss}\n${editor.getCss()}`);
+  // O formCss gravado no projeto sai ao carregar, não ao salvar: a poda vem depois de
+  // beforeMigration de propósito, para contar como migração e o projeto ser regravado
+  // limpo de uma vez, em vez de ser podado de novo a cada abertura.
+  if (quizCanvas && temProjetoSalvo(project)) podarFolhaDeFormulario(editor);
   if (quizCanvas) ensureQuizCapture(editor);
   // Quem normaliza formulário no quiz é ensureQuizCapture, acima: normalizeForms traria
   // formCss junto e desfaria o cartão de escolha e o campo de arquivo.
