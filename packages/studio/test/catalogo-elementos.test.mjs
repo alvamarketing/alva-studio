@@ -35,6 +35,10 @@ test('todo elemento do catálogo declara identidade completa', () => {
     assert.ok(elemento.grupo, `grupo de ${elemento.id}`);
     assert.ok(elemento.seletor, `seletor de ${elemento.id}`);
     assert.equal(typeof elemento.render, 'function', `render de ${elemento.id}`);
+    // registro diz onde o elemento mora: 'pagina' entra em blocks (templates.js), 'quiz'
+    // entra em quizBlocks (editor-shell.js). Sem essa declaração, um elemento novo podia
+    // escapar da prova de catalogo-blocos.test.mjs sem que nada acusasse.
+    assert.ok(['pagina', 'quiz'].includes(elemento.registro), `registro de ${elemento.id} precisa ser 'pagina' ou 'quiz', não ${elemento.registro}`);
   }
 });
 
