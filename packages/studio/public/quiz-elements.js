@@ -119,4 +119,11 @@ const vslCss = '.vsl-embed{width:100%;aspect-ratio:16/9;min-height:220px;overflo
 export const quizElementCss = chromeCss + elementosCss + vslCss;
 // Canvas lives inside the public quiz chrome. Keep component tokens while
 // neutralising the document-level backdrop that would otherwise repeat per step.
-export const quizCanvasCss = `${quizElementCss}body{min-height:0;padding:0;background:transparent;animation:none}.shell,.card,.actions,.screen{max-width:none;margin:0;padding:0;background:transparent;box-shadow:none}`;
+//
+// O fundo e a tinta do canvas saem repetidos aqui no <body>, em longhand, e não valem só
+// pela herança do :root de chromeCss. Motivo: o GrapesJS reserializa esta folha ao
+// injetá-la no canvas e descarta atalho com var() — `:root{background:var(--cloud)}` é
+// atalho e some, então o canvas do quiz abriria branco em vez de #f7f9fd. Nenhum valor
+// novo: --cloud e --ink são os mesmos tokens que o quiz publicado usa, e a família é a
+// mesma linha do :root acima. Achado D4 do gate visual de 2026-09-12.
+export const quizCanvasCss = `${quizElementCss}body{min-height:0;padding:0;background-image:none;background-color:var(--cloud);color:var(--ink);font-family:Inter,system-ui,sans-serif;animation:none}.shell,.card,.actions,.screen{max-width:none;margin:0;padding:0;background:transparent;box-shadow:none}`;

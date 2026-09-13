@@ -1,15 +1,29 @@
-import { blockDescriptions, blocks, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
+import { blockDescriptions, blocks, formCss, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
-import { materialSymbolsFontCss } from './quiz-elements.js';
+import { materialSymbolsFontCss, quizCanvasCss } from './quiz-elements.js';
 import { elementosCss, elementoPorId } from './catalogo-elementos.js';
 
 // Qual folha entra no canvas. Era um if dentro do editor, e por isso o quiz ficou sem
 // folha nenhuma quando virou página: ninguém conseguia afirmar essa decisão num teste.
+//
+// O quiz não recebe a folha da landing, e isso não é detalhe: templateCss termina em
+// ${formCss}, e a raiz de todo quiz é <form class="alva-form"> (posta por
+// ensureQuizCapture). Com ela dentro, `.alva-form label{display:block}` (0,1,1) vence
+// `.choice{display:flex}` (0,1,0) e o cartão de escolha vira rádio, número e rótulo
+// empilhados; `.alva-form input{display:block}` vence o [hidden] do navegador e o
+// controle nativo "Choose File" reaparece. Era o aviso que o comentário removido na
+// Tarefa 1 dava, e continuava verdadeiro. O quiz veste quizCanvasCss — a pele do quiz
+// publicado, que já traz a folha dos elementos dentro — e por isso também dispensa
+// normalizeForms, que injeta o mesmo formCss por conta própria quando acha um <form>.
 export function folhasDoCanvas({ quizCanvas = false, cssExistente = '' } = {}) {
   const jaTemModelo = /--alva-block-base\s*:\s*1/.test(cssExistente) || cssExistente.includes('.hero-grid');
   const jaTemElementos = cssExistente.includes('--alva-el-accent');
   const folhas = [];
+  if (quizCanvas) {
+    if (!cssExistente.includes('--cloud')) folhas.push(quizCanvasCss);
+    return { folhas, normalizarFormularios: false, quizCanvas };
+  }
   if (!jaTemElementos) folhas.push(elementosCss);
   if (!jaTemModelo) folhas.push(templateCss);
   return { folhas, normalizarFormularios: true, quizCanvas };
@@ -1537,7 +1551,14 @@ export function createFriendlyEditor({
   if (temProjetoSalvo(project)) editor.loadProjectData(project);
   else {
     editor.setComponents(html);
-    editor.setStyle(css);
+    // A folha do modelo semeia a página nova, mas no quiz ela chega com formCss dentro — o
+    // modelo "Página em branco" É formCss, e os outros terminam nele. E a raiz do quiz é um
+    // <form class="alva-form"> de captura, não um formulário visível: com formCss dentro,
+    // `.alva-form label{display:block}` achata o cartão de escolha e `.alva-form input`
+    // devolve o "Choose File" nativo. Sai por substring exata porque as duas pontas vêm do
+    // mesmo módulo; o resto do modelo continua, para um quiz feito a partir de um modelo de
+    // página não abrir sem diagramação nenhuma.
+    editor.setStyle(quizCanvas ? css.split(formCss).join('') : css);
   }
   const beforeMigration = temProjetoSalvo(project) ? JSON.stringify(editor.getProjectData()) : null;
   // Old saved canvases predate the image-choice heading rule. Prefix it so an
@@ -1545,10 +1566,10 @@ export function createFriendlyEditor({
   // loading so opening alone never marks the form dirty or sends a PUT.
   if (quizCanvas && !hasQuizImageChoiceHeadingCss(editor.getCss()))
     editor.setStyle(`${quizImageChoiceHeadingCss}\n${editor.getCss()}`);
-  if (quizCanvas) {
-    ensureQuizCapture(editor);
-    normalizeForms(editor);
-  } else normalizeForms(editor);
+  if (quizCanvas) ensureQuizCapture(editor);
+  // Quem normaliza formulário no quiz é ensureQuizCapture, acima: normalizeForms traria
+  // formCss junto e desfaria o cartão de escolha e o campo de arquivo.
+  formStyles();
   const lockComponent = (component) => {
     component?.set?.({ draggable: false, editable: false, droppable: false }, { silent: true });
     componentChildren(component).forEach(lockComponent);

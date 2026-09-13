@@ -1,6 +1,6 @@
 import { flushChanges } from './save-cycle.js';
 import { templates, getTemplate, normalizeForms, syncFormDelivery } from './templates.js';
-import { buildPageExportHtml, createFriendlyEditor } from './editor-shell.js';
+import { buildPageExportHtml, createFriendlyEditor, folhasDoCanvas } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
@@ -1097,7 +1097,11 @@ async function saveOnce() {
   if (!page || !dirty) return page;
   loading = true;
   try {
-    normalizeForms(editor);
+    // Terceiro caminho pelo qual formCss chegava ao quiz: salvar. normalizeForms injeta a
+    // folha do formulário assim que acha um <form>, e a raiz do quiz é o <form> de
+    // captura — a folha entrava aqui e ficava salva no projeto, achatando o cartão de
+    // escolha na reabertura. Quem decide é folhasDoCanvas, como no editor.
+    if (folhasDoCanvas({ quizCanvas: page.kind === 'quiz' }).normalizarFormularios) normalizeForms(editor);
     editor.getWrapper().find('form').forEach((form) => syncFormDelivery(form, page.webhook));
   } finally {
     loading = false;
