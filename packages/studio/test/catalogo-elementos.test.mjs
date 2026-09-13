@@ -133,7 +133,7 @@ test('a área de envio diz o que aceita em português', () => {
   assert.match(html, /Escolher arquivo|Envie/i);
 });
 
-test('nenhuma moldura sai em atalho com var(), porque o atalho não sobrevive ao GrapesJS', () => {
+test('nenhum atalho com var() na folha, porque o atalho não sobrevive ao GrapesJS', () => {
   // O GrapesJS reserializa a folha ao injetá-la no canvas (editor.addStyle). Um ATALHO
   // com var() vira pending-substitution no CSSOM do navegador: serializa vazio e some.
   // `border:1px solid var(--alva-el-line)` sumia inteiro de .answer, .choice e
@@ -141,19 +141,34 @@ test('nenhuma moldura sai em atalho com var(), porque o atalho não sobrevive ao
   // sobrevivia. Sem border-style o estado escolhido, que só troca border-color, não tinha
   // o que colorir: a moldura azul nunca aparecia. Achado D3 do gate de 2026-09-12.
   //
+  // A prova é sobre a CLASSE do defeito, não sobre a borda: todo atalho com var() dentro
+  // cai igual. Por isso a lista abaixo cobre também font, margin e padding — para o
+  // próximo elemento nascer protegido em vez de redescobrir isto num gate visual.
+  //
+  // `background` fica de FORA, embora sofra do mesmo defeito: a folha já tem seis regras
+  // que o usam com var() dentro — .custom-cta, .timer-toggle, .legend i, .bar-row b,
+  // .statement-line e .donut. Nenhuma delas é elemento do catálogo (são peças do
+  // formulário dinâmico e dos gráficos do quiz, que vão cruas para dentro de um <style>
+  // e nunca passam pelo GrapesJS), e expandi-las não é o assunto desta onda. Registrado
+  // no relatório da onda final para quem for migrar essas peças para o catálogo.
+  //
   // A prova é sobre o TEXTO da folha, e não sobre um round-trip, de propósito: em jsdom o
   // atalho com var() sobrevive, então um round-trip aqui passaria verde com o defeito de
   // volta. Longhand com var() sobrevive nos dois.
   // border-color, border-width e border-style também são atalhos — das quatro faces — e
   // também somem com var() dentro: medido no Chrome, `border-color:var(--alva-el-line)`
   // não chegava ao canvas e a moldura caía em currentColor.
-  const atalhos = new Set(['border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-width', 'border-style', 'border-color']);
+  const atalhos = new Set([
+    'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+    'border-width', 'border-style', 'border-color',
+    'font', 'margin', 'padding',
+  ]);
   const culpados = [];
   postcss.parse(elementosCss).walkDecls((declaracao) => {
     if (atalhos.has(declaracao.prop) && declaracao.value.includes('var('))
       culpados.push(`${declaracao.parent.selector}{${declaracao.prop}:${declaracao.value}}`);
   });
-  assert.deepEqual(culpados, [], 'expanda em border-width/border-style/border-color');
+  assert.deepEqual(culpados, [], 'expanda o atalho em longhand: com var() dentro, ele não chega ao canvas');
 });
 
 test('cartão de escolha, campo e crachá declaram border-style, que é o que o estado colore', () => {
