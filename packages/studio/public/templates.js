@@ -269,7 +269,6 @@ export const blockDescriptions = {
   image: 'Uma foto ou ilustração, enviada do seu computador.',
   vsl: 'Uma VSL criada aqui no Studio, com player e medição próprios.',
   form: 'Um formulário completo para receber contatos.',
-  input: 'Uma pergunta com espaço para a pessoa escrever a resposta.',
 };
 
 const doCatalogo = (id) => {
@@ -292,10 +291,5 @@ export const blocks = [
   doCatalogo('button'),
   doCatalogo('icon'),
   ['form', 'Formulário', 'Captação', form()],
-  [
-    'input',
-    'Campo de texto',
-    'Captação',
-    '<label>Novo campo<input name="novo_campo" type="text" placeholder="Digite aqui"></label>',
-  ],
+  doCatalogo('input'),
 ];

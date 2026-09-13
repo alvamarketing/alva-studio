@@ -88,6 +88,12 @@ test('a escala mostra o valor escolhido', () => {
   assert.match(html, /<output/, 'sem output a pessoa move o controle e não sabe onde parou');
 });
 
+test('o campo de texto solto encontra regra fora do formulário', () => {
+  const html = elementoPorId('input').render();
+  assert.match(html, /class="answer-wrap"/);
+  assert.match(html, /class="answer"/);
+});
+
 test('a área de envio diz o que aceita em português', () => {
   const html = elementoPorId('quiz-file').render();
   assert.doesNotMatch(html, /Choose File/i);
