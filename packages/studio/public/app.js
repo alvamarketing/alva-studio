@@ -1,6 +1,6 @@
 import { flushChanges } from './save-cycle.js';
 import { templates, getTemplate, normalizeForms, syncFormDelivery } from './templates.js';
-import { buildPageExportHtml, createFriendlyEditor, folhasDoCanvas } from './editor-shell.js';
+import { buildPageExportHtml, createFriendlyEditor, documentoDeModelo, folhasDoCanvas } from './editor-shell.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
@@ -1447,15 +1447,7 @@ window.addEventListener('beforeunload', (event) => {
     event.returnValue = '';
   }
 });
-function templateDocument(template) {
-  return (
-    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>' +
-    template.css +
-    '</style></head><body>' +
-    template.html +
-    '</body></html>'
-  );
-}
+const templateDocument = (template) => documentoDeModelo(template);
 let templateCategory = 'Todos';
 function renderTemplates() {
   const selected = $('#create-form').elements.template.value || 'services';

@@ -2,9 +2,9 @@ import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import grapesjs from 'grapesjs';
-import { folhasDoCanvas, podarFolhaDeFormulario } from '../public/editor-shell.js';
-import { formCss, getTemplate, normalizeForms, templateCss } from '../public/templates.js';
-import { elementosCss } from '../public/catalogo-elementos.js';
+import { documentoDeModelo, folhasDoCanvas, podarFolhaDeFormulario } from '../public/editor-shell.js';
+import { formCss, getTemplate, normalizeForms, templateCss, templates } from '../public/templates.js';
+import { catalogo, elementosCss } from '../public/catalogo-elementos.js';
 import { quizCanvasCss } from '../public/quiz-elements.js';
 
 test('o canvas do quiz veste a pele do quiz publicado, não a da landing', () => {
@@ -199,4 +199,32 @@ test('a poda do formCss gravado acontece ao carregar um quiz, e só ele', async 
     assert.match(contexto, /quizCanvas/, 'toda poda é condicionada a quizCanvas: na landing ela tiraria a folha do formulário de verdade');
   }
   assert.match(fonte, /temProjetoSalvo\(project\)\) podarFolhaDeFormulario\(editor\)/, 'a poda é do projeto SALVO — a semente do modelo já sai podada em setStyle');
+});
+
+test('a miniatura do modelo veste as mesmas folhas que o canvas da landing', () => {
+  // A galeria de modelos e o cartão da página desenham uma prévia com `template.css`
+  // dentro de um <style>. Enquanto .cta morou em templateCss isso bastava; quando a
+  // regra mudou para elementosCss, a miniatura passou a mostrar o botão como texto cru,
+  // ainda que o canvas o desenhasse certo. Prévia que mente sobre o modelo é pior do que
+  // prévia nenhuma: é por ela que a pessoa escolhe. Por isso o documento de prévia
+  // compõe as folhas pelo MESMO folhasDoCanvas que o editor usa.
+  for (const modelo of templates) {
+    const documento = documentoDeModelo(modelo);
+    for (const elemento of catalogo) {
+      if (elemento.registro !== 'pagina') continue;
+      const classe = elemento.seletor.slice(1);
+      if (!new RegExp(`class="[^"]*\\b${classe}\\b`).test(modelo.html)) continue;
+      assert.ok(
+        documento.includes(`${elemento.seletor}{`) || documento.includes(`${elemento.seletor},`) || documento.includes(`${elemento.seletor} `),
+        `a prévia do modelo ${modelo.id} usa ${elemento.seletor} e não traz regra para ele`,
+      );
+    }
+  }
+});
+
+test('o documento de prévia é montado pelo app a partir de folhasDoCanvas', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const fonte = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(fonte, /documentoDeModelo/, 'a prévia não pode remontar as folhas por conta própria');
+  assert.ok(!/'<style>'\s*\+\s*\n?\s*template\.css/.test(fonte), 'a prévia não injeta template.css sozinho');
 });

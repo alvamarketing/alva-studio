@@ -29,8 +29,21 @@ export function folhasDoCanvas({ quizCanvas = false, cssExistente = '' } = {}) {
   return { folhas, normalizarFormularios: true, quizCanvas };
 }
 
+// A miniatura do modelo — na galeria "Como vamos começar?" e no cartão da página — é um
+// documento solto, fora do editor, e por isso precisa compor as folhas pelo mesmo
+// folhasDoCanvas que o canvas usa. Enquanto .cta morou em templateCss, injetar
+// `template.css` sozinho bastava por acidente; assim que a regra mudou para elementosCss,
+// a miniatura passou a mostrar o botão como texto cru enquanto o canvas o desenhava
+// certo. Prévia que mente sobre o modelo é pior do que prévia nenhuma: é por ela que a
+// pessoa escolhe. A semente vem primeiro e as folhas do sistema depois, na mesma ordem em
+// que o editor as aplica (setStyle da semente, blockStyles no load).
+export function documentoDeModelo({ css = '', html = '' } = {}) {
+  const folhas = [css, ...folhasDoCanvas({ quizCanvas: false, cssExistente: css }).folhas];
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>${folhas.join('')}</style></head><body>${html}</body></html>`;
+}
+
 // Quiz salvo antes desta branch tem formCss GRAVADO dentro do projeto: na base, abrir ou
-// salvar um quiz chamava normalizeForms(editor), que injeta a folha assim que encontra um
+// salvar um quiz chamava normalizeForms, que injeta a folha assim que encontra um
 // <form> — e a raiz de todo quiz é um. folhasDoCanvas acrescenta a folha certa ao canvas,
 // mas não remove a que já está gravada, e `.alva-form label` (0,1,1) continua vencendo
 // `.choice` (0,1,0): o cartão de escolha reabre achatado.
