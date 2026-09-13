@@ -195,3 +195,64 @@ sete achados acima aparece nela.
 - Wireframe servido a partir de `docs/wireframes/` deste mesmo worktree.
 - Conta inicial criada com `bootstrap-owner.mjs`, credenciais locais e
   descartáveis, junto com o banco.
+
+---
+
+# Correção do gate — D1, D2, D3 e D4 (2026-09-12)
+
+Quatro dos sete achados corrigidos. D5, D6 e D7 ficam para outro plano.
+Relatório completo em
+`.superpowers/sdd/2026-09-12-catalogo-de-elementos/correcao-gate-report.md`.
+
+## D3 · a moldura descartada pelo serializador
+
+`catalogo-elementos.js`: toda moldura declarada com `var()` saiu do atalho e
+passou a longhand. A varredura do arquivo achou oito declarações, não as três
+que o gate nomeou — `.countdown` tinha a mesma moldura e as três regras de
+estado tinham `border-color` solto.
+
+A correção prescrita não bastava: **`border-color` também é atalho**, das quatro
+faces, e também vira pending-substitution com `var()` dentro. Medido no Chrome,
+chegava ao canvas só `border-width` e `border-style`, e a moldura caía em
+`currentColor`. A cor sai agora pelas quatro longhands de face.
+
+Medido no canvas depois da correção: `.choice` em repouso
+`1px solid rgb(220,229,241)`; sob o cursor `1px solid rgb(40,110,234)` — a
+moldura azul, que é o mesmo bloco de declarações de `:has(input:checked)`.
+
+## D1, D2 e D4 · a folha da landing no canvas do quiz
+
+O canvas do quiz passou a receber `quizCanvasCss` — a pele do quiz publicado,
+com a folha dos elementos dentro — e nada da landing. O canvas da landing não
+mudou (conferido: Arial, `#faf9f5`, `#203a32`, `.hero-grid` de pé).
+
+**Eram três caminhos para `formCss`, não um.** Corrigir `blockStyles()` sozinho
+não resolvia:
+
+1. `blockStyles()` → `templateCss`, que termina em `${formCss}`;
+2. `normalizeForms(editor)`, que injeta `formCss` por conta própria assim que
+   acha um `<form>` — e a raiz do quiz é um. Era chamado no `load` do editor e
+   **no salvamento** (`app.js`), gravando a folha dentro do projeto;
+3. a semente do modelo: "Página em branco" **é** `formCss` puro.
+
+Os três passam a consultar `folhasDoCanvas`.
+
+`quizCanvasCss` precisou de ajuste pelo mesmo motivo de D3: `chromeCss` pinta o
+fundo com `:root{background:var(--cloud)}`, atalho que o GrapesJS descarta, e o
+canvas abriria branco. O `<body>` do canvas declara fundo, tinta e família em
+longhand, com os mesmos tokens do quiz publicado.
+
+Medido no canvas, depois de salvar e reabrir: `.choice` em `flex`, escolha visual
+em `grid`, `input[type=file]` em `none` com retângulo 0×0, corpo em
+`Inter, system-ui` sobre `rgb(247,249,253)` com tinta `rgb(17,24,39)`, e nenhuma
+regra `.alva-form` além da do próprio catálogo. O `rendered_html` salvo confirma,
+com o contrato de captura inteiro.
+
+Capturas: `correcao-gate-quiz-canvas-desktop.png`,
+`correcao-gate-quiz-canvas-mobile-390.png`,
+`correcao-gate-landing-inalterada-desktop.png`.
+
+## Suíte
+
+`node --test packages/studio/test/*.test.mjs` → **1021 aprovados, 0 falhas**
+(1012 antes; nove provas novas, escritas antes da correção).
