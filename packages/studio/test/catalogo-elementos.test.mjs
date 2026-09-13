@@ -1,5 +1,8 @@
+import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import grapesjs from 'grapesjs';
+import postcss from 'postcss';
 import { elementosCss, catalogo, elementoPorId } from '../public/catalogo-elementos.js';
 import { quizElementCss } from '../public/quiz-elements.js';
 import { templateCss, formCss } from '../public/templates.js';
@@ -101,11 +104,69 @@ test('o campo aninhado dentro do formulário devolve o foco ao tratamento do for
   // vencer por especificidade — .alva-form .answer:focus é (0,3,0) — e reusar os mesmos
   // valores que .alva-form input já tem em repouso (formCss), não inventar cor nova.
   assert.match(formCss, /var\(--field-border\)/, 'o token que a correção reusa precisa existir em formCss');
-  assert.match(elementosCss, /\.alva-form \.answer:focus\{border-color:var\(--field-border\);box-shadow:none\}/);
+  assert.match(elementosCss, /\.alva-form \.answer:focus\{border-top-color:var\(--field-border\);border-right-color:var\(--field-border\);border-bottom-color:var\(--field-border\);border-left-color:var\(--field-border\);box-shadow:none\}/);
 });
 
 test('a área de envio diz o que aceita em português', () => {
   const html = elementoPorId('quiz-file').render();
   assert.doesNotMatch(html, /Choose File/i);
   assert.match(html, /Escolher arquivo|Envie/i);
+});
+
+test('nenhuma moldura sai em atalho com var(), porque o atalho não sobrevive ao GrapesJS', () => {
+  // O GrapesJS reserializa a folha ao injetá-la no canvas (editor.addStyle). Um ATALHO
+  // com var() vira pending-substitution no CSSOM do navegador: serializa vazio e some.
+  // `border:1px solid var(--alva-el-line)` sumia inteiro de .answer, .choice e
+  // .choice-key — no canvas e no rendered_html — enquanto .upload, com cor literal,
+  // sobrevivia. Sem border-style o estado escolhido, que só troca border-color, não tinha
+  // o que colorir: a moldura azul nunca aparecia. Achado D3 do gate de 2026-09-12.
+  //
+  // A prova é sobre o TEXTO da folha, e não sobre um round-trip, de propósito: em jsdom o
+  // atalho com var() sobrevive, então um round-trip aqui passaria verde com o defeito de
+  // volta. Longhand com var() sobrevive nos dois.
+  // border-color, border-width e border-style também são atalhos — das quatro faces — e
+  // também somem com var() dentro: medido no Chrome, `border-color:var(--alva-el-line)`
+  // não chegava ao canvas e a moldura caía em currentColor.
+  const atalhos = new Set(['border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-width', 'border-style', 'border-color']);
+  const culpados = [];
+  postcss.parse(elementosCss).walkDecls((declaracao) => {
+    if (atalhos.has(declaracao.prop) && declaracao.value.includes('var('))
+      culpados.push(`${declaracao.parent.selector}{${declaracao.prop}:${declaracao.value}}`);
+  });
+  assert.deepEqual(culpados, [], 'expanda em border-width/border-style/border-color');
+});
+
+test('cartão de escolha, campo e crachá declaram border-style, que é o que o estado colore', () => {
+  const regras = new Map();
+  postcss.parse(elementosCss).walkRules((regra) => { if (!regras.has(regra.selector)) regras.set(regra.selector, regra); });
+  for (const seletor of ['.answer', '.choice', '.choice-key']) {
+    const declaracoes = new Map(regras.get(seletor).nodes.map((no) => [no.prop, no.value]));
+    assert.equal(declaracoes.get('border-width'), '1px', `${seletor} sem border-width`);
+    assert.equal(declaracoes.get('border-style'), 'solid', `${seletor} sem border-style: o estado escolhido não tem o que colorir`);
+    for (const face of ['top', 'right', 'bottom', 'left'])
+      assert.equal(declaracoes.get(`border-${face}-color`), 'var(--alva-el-line)', `${seletor} sem border-${face}-color`);
+  }
+});
+
+test('a moldura sobrevive a uma ida e volta pelo GrapesJS de verdade', () => {
+  const dom = new JSDOM('<!doctype html>');
+  const anterior = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document, DOMParser: dom.window.DOMParser, Node: dom.window.Node });
+  const editor = grapesjs.init({ headless: true, storageManager: false });
+  try {
+    editor.setComponents('<input class="answer"><label class="choice"><span class="choice-key">1</span></label>');
+    editor.addStyle(elementosCss);
+    const css = editor.getCss();
+    for (const seletor of ['.answer', '.choice', '.choice-key']) {
+      const regra = css.match(new RegExp(`[};]${seletor.slice(1)}\\{[^}]*\\}`))?.[0] || css.match(new RegExp(`\\${seletor}\\{[^}]*\\}`))[0];
+      assert.match(regra, /border-style:\s*solid/, `${seletor} perdeu border-style na serialização`);
+      assert.match(regra, /border-width:\s*1px/, `${seletor} perdeu border-width na serialização`);
+      for (const face of ['top', 'right', 'bottom', 'left'])
+        assert.match(regra, new RegExp(`border-${face}-color:\\s*var\\(--alva-el-line\\)`), `${seletor} perdeu border-${face}-color na serialização`);
+    }
+  } finally {
+    editor.destroy();
+    Object.assign(globalThis, anterior);
+    dom.window.close();
+  }
 });

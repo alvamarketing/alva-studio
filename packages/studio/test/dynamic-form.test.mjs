@@ -232,9 +232,21 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // razão de sempre: entra em elementosCss, que compõe quizElementCss, e cresce o CSS
   // morto embutido no formulário público do quiz — o quiz não usa .alva-form, então
   // nenhum seletor novo se aplica lá e nada muda no que a pessoa vê ou preenche.
+  //
+  // Tamanho mudou de novo em 2026-09-12 (correção do achado D3 do gate visual): toda
+  // moldura declarada com var() saiu do atalho e passou a longhand — border-width,
+  // border-style e as QUATRO faces de cor. Motivo medido no Chrome: o serializador do
+  // GrapesJS descarta qualquer atalho cujo valor tenha var(), e border-color também é
+  // atalho (das quatro faces), então `border:1px solid var(--alva-el-line)` sumia inteiro
+  // e `border-color:var(--alva-el-accent)` do estado escolhido sumia junto — o canvas do
+  // editor ficava sem moldura e sem o sinal de "esta é a escolhida". Aqui, no formulário
+  // publicado, o CSS vai cru dentro de um <style> e nunca passa pelo GrapesJS: as
+  // longhands pintam exatamente a mesma moldura que o atalho pintava. Nada muda no que a
+  // pessoa vê; só o texto do CSS, em .answer, .choice, .choice-key, .countdown e nas três
+  // regras de estado (.answer:focus, .alva-form .answer:focus, .choice:hover/:checked).
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 27857);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '31e193b83615aebba1860e931116a1402938e5ad382362bddabf6548fc352f76');
+  assert.equal(html.length, 28844);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '35eb07a552853b64ec629cdf41abd9670ced4c6f6e26b504828c8925a0568b41');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
