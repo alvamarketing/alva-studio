@@ -92,10 +92,10 @@ export const catalogo = [
     render: () => '<label class="answer-wrap">Nova pergunta<select class="answer" name="campo_lista"><option value="Opção 1">Opção 1</option><option value="Opção 2">Opção 2</option></select></label>' },
   { id: 'quiz-range', nome: 'Escala', grupo: 'Captação', icone: 'linear_scale', seletor: '.scale', registro: 'quiz',
     descricao: 'Uma nota de um a dez, movendo um controle.',
-    render: () => '<div class="scale"><span>1</span><input type="range" name="campo_escala" min="1" max="10" value="5" oninput="this.nextElementSibling.value=this.value"><output>5</output></div>' },
+    render: () => '<label class="answer-wrap">Como você avalia?<span class="scale"><span>1</span><input type="range" name="campo_escala" min="1" max="10" value="5" oninput="this.nextElementSibling.value=this.value"><output>5</output></span></label>' },
   { id: 'quiz-file', nome: 'Arquivo', grupo: 'Captação', icone: 'upload_file', seletor: '.upload', registro: 'quiz',
     descricao: 'Um espaço para a pessoa enviar um arquivo.',
-    render: () => '<label class="upload"><span class="material-symbols-outlined" aria-hidden="true">upload_file</span><span>Escolher arquivo</span><input type="file" name="campo_arquivo" hidden></label>' },
+    render: () => '<label class="answer-wrap">Envie um arquivo<span class="upload"><span class="material-symbols-outlined" aria-hidden="true">upload_file</span><span>Escolher arquivo</span><input type="file" name="campo_arquivo" hidden></span></label>' },
 ];
 
 export const elementoPorId = (id) => catalogo.find((elemento) => elemento.id === id);
