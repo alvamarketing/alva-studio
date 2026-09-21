@@ -548,6 +548,43 @@ export function setComponentText(model, value) {
   model?.components?.(components);
   return components;
 }
+// O desenho e a imagem ocupam a mesma linha do cartão da Escolha visual: um entra no lugar
+// do outro. Anexar a <img> no fim criava uma terceira linha e deixava o desenho onde estava.
+export function aplicarImagemDaOpcao(cartao, valor = '') {
+  if (!cartao) return;
+  const url = String(valor || '').trim();
+  // find() consulta o DOM renderizado e não existe sem canvas; a árvore de componentes existe sempre.
+  const partes = componentDescendants(cartao);
+  const entrada = partes.find((parte) => tagOf(parte) === 'input');
+  const imagem = partes.find((parte) => tagOf(parte) === 'img');
+  const desenho = partes.find((parte) => componentHasClass(parte, 'choice-visual'));
+  entrada?.addAttributes({ 'data-quiz-image': url });
+  if (url) {
+    if (imagem) {
+      imagem.set?.('src', url);
+      imagem.addAttributes({ src: url });
+      return;
+    }
+    const nova = { tagName: 'img', type: 'image', attributes: { src: url, alt: '' } };
+    const [criada] = desenho ? desenho.replaceWith(nova) : cartao.append(nova, { at: entrada ? entrada.index() + 1 : 0 });
+    criada?.set?.('src', url);
+    return;
+  }
+  if (!imagem) return;
+  const icone = String(entrada?.getAttributes?.()['data-quiz-icon'] || 'image');
+  imagem.replaceWith({ tagName: 'span', classes: ['choice-visual', 'material-symbols-outlined'], components: [{ type: 'textnode', content: icone }] });
+}
+
+// Desenho e imagem da opção não têm controles próprios: o que troca a imagem mora na
+// Escolha visual. O texto da opção segue selecionável, para edição direta no cartão.
+export function alvoDaSelecao(componente) {
+  if (!componente || !(tagOf(componente) === 'img' || componentHasClass(componente, 'choice-visual'))) return componente;
+  let atual = componente.parent?.();
+  if (!componentHasClass(atual, 'choice-image')) return componente;
+  while (atual && componentAttributes(atual)['data-quiz-type'] !== 'image_choice') atual = atual.parent?.();
+  return atual || componente;
+}
+
 export function setTextNodeContent(model, value) {
   const text = String(value ?? '');
   model?.set?.('content', text);
@@ -2197,7 +2234,6 @@ export function createFriendlyEditor({
       };
       const choiceLabel = (option) => ancestor(option, 'label');
       const choiceText = (label) => descendants(label).find((node) => tagOf(node) === 'span' && !isMaterialIcon(node) && !componentHasClass(node, 'choice-key'));
-      const choiceImage = (label) => descendants(label).find((node) => tagOf(node) === 'img');
       const choiceIcon = (label) => descendants(label).find((node) => tagOf(node) === 'span' && isMaterialIcon(node));
       const quiz = section('Pergunta e opções');
       field(quiz, quizType === 'image_choice' ? 'Escolha visual' : 'Pergunta', attrs['data-quiz-question'] || '', (value) => {
@@ -2226,12 +2262,27 @@ export function createFriendlyEditor({
         });
         if (quizType === 'image_choice') {
           field(quiz, `Imagem ${index + 1}`, option.getAttributes?.()['data-quiz-image'] || '', (value) => {
-            option.addAttributes({ 'data-quiz-image': value });
-            const label = choiceLabel(option);
-            let image = choiceImage(label);
-            if (!image && value) image = label?.append?.(`<img src="${escapeText(value)}" alt="">`)?.[0];
-            if (image) { image.set?.('src', value); image.addAttributes({ src: value }); }
-          });
+            aplicarImagemDaOpcao(choiceLabel(option), value);
+          }, { placeholder: 'https://… ou envie abaixo' });
+          // Quem monta um quiz raramente tem o endereço de uma imagem; tem o arquivo no computador.
+          const envio = field(quiz, `Enviar imagem ${index + 1}`, '', () => {}, { type: 'file' });
+          envio.accept = 'image/png,image/jpeg,image/webp,image/gif';
+          envio.onchange = () => {
+            if (!interactionPolicy.canEdit) return;
+            const arquivo = envio.files[0];
+            if (!arquivo) return;
+            if (!/^image\/(png|jpeg|webp|gif)$/.test(arquivo.type) || arquivo.size > 5 * 1024 * 1024) {
+              announce('Escolha PNG, JPG, WebP ou GIF de até 5 MB.');
+              return;
+            }
+            const leitor = new FileReader();
+            leitor.onload = () => {
+              aplicarImagemDaOpcao(choiceLabel(option), leitor.result);
+              announce('Imagem adicionada.');
+              render();
+            };
+            leitor.readAsDataURL(arquivo);
+          };
           const label = choiceLabel(option);
           const existingIcon = choiceIcon(label);
           const currentIcon = option.getAttributes?.()['data-quiz-icon']
@@ -2770,6 +2821,11 @@ export function createFriendlyEditor({
   cleanup.push(bindInspectorRepaintOnFocusout(props, () => {
     repaint = setTimeout(render, 100);
   }));
+  // Desenho e imagem da opção levam à Escolha visual, onde a imagem de fato se troca.
+  editor.on('component:selected', (componente) => {
+    const alvo = alvoDaSelecao(componente);
+    if (alvo && alvo !== componente) editor.select(alvo);
+  });
   editor.on('component:selected component:deselected', render);
   // Clicar direto no canvas também é escolher um elemento para editar.
   editor.on('component:selected', () => syncAbasDoPainel({ selecionou: true }));
