@@ -27,15 +27,24 @@ test('a folha da landing não entra no quiz, porque a raiz do quiz é um .alva-f
   assert.ok(!folha.includes('.alva-form input'), 'nada no quiz redesenha o input escondido');
 });
 
-test('o canvas do quiz declara a tipografia e o fundo do quiz publicado', () => {
+test('o quiz novo nasce na página branca aprovada, não numa caixa', () => {
+  // Aprovado pelo Taian em 2026-09-21, depois de recusar a etapa dentro de um cartão:
+  // página 100% branca, coluna centralizada, nada em volta da etapa. A coluna mora na
+  // SEÇÃO, e não no <form>, porque a raiz de captura nasce com display:contents.
   const folha = folhasDoCanvas({ quizCanvas: true, cssExistente: '' }).folhas.join('');
-  // Em longhand de propósito: o GrapesJS descarta atalho com var(), e era por isso que
-  // `:root{background:var(--cloud)}` sozinho não pintava o canvas. Achado D4.
-  assert.match(folha, /background-color:var\(--cloud\)/);
-  assert.match(folha, /color:var\(--ink\)/);
-  assert.match(folha, /font-family:Inter,system-ui,sans-serif/);
-  assert.match(folha, /--cloud:#f7f9fd/);
-  assert.match(folha, /--ink:#111827/);
+  assert.match(folha, /body\{[^}]*background-color:#ffffff/);
+  // chromeCss pinta o :root de --cloud; sem isto a página fica cinza abaixo do conteúdo.
+  assert.match(folha, /:root\{[^}]*background-color:#ffffff/);
+  assert.match(folha, /body\{[^}]*font-family:"Instrument Sans"/);
+  const secao = folha.match(/\[data-alva-quiz-capture\]>section\{([^}]*)\}/)?.[1] || '';
+  assert.match(secao, /max-width:440px/, 'a etapa não vira coluna');
+  assert.match(secao, /margin:0 auto/, 'a coluna não fica no centro');
+  assert.doesNotMatch(secao, /box-shadow:0|border:1px|background-color/, 'a etapa voltou a ser caixa');
+  // O foco do campo dentro da captura usava --field-border, que só existe em formCss.
+  assert.match(folha, /--field-border:#286EEA/);
+  // `.alva-form` é podado do projeto ao reabrir o quiz (podarFolhaDeFormulario): a pele
+  // não pode depender dele, senão some na segunda abertura.
+  assert.ok(![...folha.matchAll(/(?:^|\})([^{}@]+)\{/g)].some((m) => m[1].includes('.alva-form') && !m[1].includes('.answer:focus')), 'a pele depende de .alva-form');
 });
 
 test('a landing continua exatamente como estava', () => {
@@ -87,7 +96,7 @@ test('a pele do quiz sobrevive ao GrapesJS sem trazer a folha do formulário', (
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, DOMParser: dom.window.DOMParser, Node: dom.window.Node });
   const editor = grapesjs.init({ headless: true, storageManager: false });
   try {
-    editor.setComponents('<form class="alva-form" data-alva-quiz-capture="true"><div class="choices"><label class="choice"><input type="radio" name="q"><span class="choice-key">1</span><span>Opção 1</span></label></div><label class="upload"><span>Escolher arquivo</span><input type="file" name="arq" hidden></label></form>');
+    editor.setComponents('<form class="alva-form" data-alva-quiz-capture="true"><section><div class="choices"><label class="choice"><input type="radio" name="q"><span class="choice-key">1</span><span>Opção 1</span></label></div><label class="upload"><span>Escolher arquivo</span><input type="file" name="arq" hidden></label></section></form>');
     const { folhas, normalizarFormularios } = folhasDoCanvas({ quizCanvas: true, cssExistente: editor.getCss() });
     folhas.forEach((folha) => editor.addStyle(folha));
     if (normalizarFormularios) normalizeForms(editor);
@@ -95,8 +104,10 @@ test('a pele do quiz sobrevive ao GrapesJS sem trazer a folha do formulário', (
     assert.ok(!css.includes('.alva-form label'), 'formCss entrou no quiz e achataria o cartão');
     assert.ok(!/\.alva-form input/.test(css), 'formCss entrou e o "Choose File" voltaria');
     assert.match(css, /\.choice\{[^}]*display:flex/, 'o cartão de escolha continua sendo cartão');
-    assert.ok(css.includes('--cloud:#f7f9fd'), 'a paleta do quiz publicado chega ao canvas');
-    assert.match(css, /background-color:var\(--cloud\)/, 'o fundo do quiz publicado sobrevive à serialização');
+    assert.ok(css.includes('--cloud:#f7f9fd'), 'a marca de que a pele já foi aplicada chega ao canvas');
+    // O GrapesJS devolve a cor normalizada pelo CSSOM, em rgb().
+    assert.match(css, /body\{[^}]*background-color:rgb\(255, 255, 255\)/, 'o fundo branco do quiz sobrevive à serialização');
+    assert.match(css, /\[data-alva-quiz-capture\] ?> ?section\{[^}]*max-width:440px/, 'a coluna do quiz sobrevive à serialização');
     // A segunda passada é o que acontece a cada bloco inserido: não pode reaplicar nada.
     assert.deepEqual(folhasDoCanvas({ quizCanvas: true, cssExistente: css }).folhas, []);
   } finally {

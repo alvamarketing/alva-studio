@@ -117,13 +117,28 @@ const chromeCss = `:root{--accent:#286eea;--accent2:#8a63ff;--ink:#111827;--mute
 const vslCss = '.vsl-embed{width:100%;aspect-ratio:16/9;min-height:220px;overflow:hidden;border:1px solid var(--line);border-radius:20px;background:#111}.vsl-embed-frame{display:block;width:100%;height:100%;min-height:220px;border:0}.vsl-embed-fallback{display:grid;place-items:center;padding:24px;background:#edf3fc;color:var(--muted);text-align:center}' + embedVideoCss + '.screen-element[data-motion=fade-up]{animation:elementFadeUp .55s both}.screen-element[data-motion=slide-left]{animation:elementSlideLeft .55s both}.screen-element[data-motion=zoom-in]{animation:elementZoomIn .5s both}.screen-element[data-motion=float]{animation:elementFloat 3.4s ease-in-out infinite}@keyframes elementFadeUp{from{opacity:0;transform:translateY(20px)}}@keyframes elementSlideLeft{from{opacity:0;transform:translateX(34px)}}@keyframes elementZoomIn{from{opacity:0;transform:scale(.96)}}@keyframes elementFloat{50%{transform:translateY(-6px)}}@media(prefers-reduced-motion:reduce){.screen-element[data-motion]{animation:none!important}.vsl-embed{scroll-behavior:auto}}';
 
 export const quizElementCss = chromeCss + elementosCss + vslCss;
-// Canvas lives inside the public quiz chrome. Keep component tokens while
-// neutralising the document-level backdrop that would otherwise repeat per step.
+// A pele do quiz — aprovada pelo Taian em 2026-09-21 no quiz de diagnóstico, depois de
+// recusar a etapa dentro de um cartão ("não tem que parecer uma caixa"): página 100%
+// branca, uma coluna centralizada, e nada em volta da etapa. Moldura só nos elementos
+// (opção, campo, escala), nunca no container.
 //
-// O fundo e a tinta do canvas saem repetidos aqui no <body>, em longhand, e não valem só
-// pela herança do :root de chromeCss. Motivo: o GrapesJS reserializa esta folha ao
-// injetá-la no canvas e descarta atalho com var() — `:root{background:var(--cloud)}` é
-// atalho e some, então o canvas do quiz abriria branco em vez de #f7f9fd. Nenhum valor
-// novo: --cloud e --ink são os mesmos tokens que o quiz publicado usa, e a família é a
-// mesma linha do :root acima. Achado D4 do gate visual de 2026-09-12.
-export const quizCanvasCss = `${quizElementCss}body{min-height:0;padding:0;background-image:none;background-color:var(--cloud);color:var(--ink);font-family:Inter,system-ui,sans-serif;animation:none}.shell,.card,.actions,.screen{max-width:none;margin:0;padding:0;background:transparent;box-shadow:none}`;
+// Ela entra por cima de quizElementCss, que continua sendo também a folha do formulário
+// dinâmico antigo — por isso chromeCss não muda e o fundo com gradiente, a fonte Inter e
+// os orbes são neutralizados aqui, e não apagados lá.
+//
+// Três restrições que moldam os seletores:
+// - A coluna mora na SEÇÃO. A raiz de captura nasce com display:contents
+//   (ensureQuizCaptureRoot), então largura posta no <form> não desenha nada.
+// - Nenhum seletor usa .alva-form: ao reabrir um quiz salvo, podarFolhaDeFormulario tira
+//   do projeto toda regra cujo seletor formCss declara, e a pele sumiria na 2ª abertura.
+//   O escopo é o atributo [data-alva-quiz-capture], que só a raiz do quiz tem.
+// - Cor em literal ou var() puro, nunca var() dentro de atalho ou de gradiente: o
+//   serializador do GrapesJS descarta esses valores (achados D3 e D4 de 2026-09-12).
+//
+// --cloud continua declarado (vem de chromeCss): é por ele que folhasDoCanvas sabe que o
+// quiz já recebeu a pele e não a reaplica. Um quiz salvo antes desta pele fica com a
+// antiga — reaplicar por cima não adianta, porque blockStyles devolve as declarações
+// salvas por cima das novas.
+const quizPeleCss = `:root{background-image:none;background-color:#ffffff;font-family:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;--alva-el-line:#E7ECF3;--alva-el-accent-soft:#EEF4FF;--field-border:#286EEA}body{min-height:0;margin:0;padding:0 16px;background-image:none;background-color:#ffffff;color:#101828;font-family:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;animation:none}.shell,.card,.actions,.screen{max-width:none;margin:0;padding:0;background:transparent;box-shadow:none}[data-alva-quiz-capture]>section{display:flex;flex-direction:column;gap:14px;max-width:440px;min-height:0;margin:0 auto;padding:28px 0 48px;animation:alva-quiz-entra .45s cubic-bezier(.22,1,.36,1) both}[data-alva-quiz-capture] h1{margin:0;font-size:30px;line-height:1.12;letter-spacing:-.025em;font-weight:600;text-wrap:balance}[data-alva-quiz-capture] h2{margin:0;font-size:23px;line-height:1.18;letter-spacing:-.02em;font-weight:600;text-wrap:balance}[data-alva-quiz-capture] section>p{margin:0;font-size:15px;line-height:1.55;color:#667085}[data-alva-quiz-capture] .description{margin:0;text-align:left;font-size:15px}[data-alva-quiz-capture] .choices{gap:10px}[data-alva-quiz-capture] .choices>p{grid-column:1/-1;margin:0 0 4px;font-size:15px;font-weight:600;color:#101828}[data-alva-quiz-capture] .choice{position:relative;padding:15px 16px;font-size:15px;font-weight:500;color:#101828}[data-alva-quiz-capture] .choice input{position:absolute;opacity:0;pointer-events:none}[data-alva-quiz-capture] .choice:has(input:focus-visible){box-shadow:0 0 0 3px rgba(40,110,234,.25)}[data-alva-quiz-capture] .choice-key{flex:none;font-weight:600;color:#1655C9;transition:.15s}[data-alva-quiz-capture] .choice:has(input:checked) .choice-key{background-color:#286EEA;border-top-color:#286EEA;border-right-color:#286EEA;border-bottom-color:#286EEA;border-left-color:#286EEA;color:#ffffff}[data-alva-quiz-capture] .image-choices{grid-template-columns:1fr 1fr}[data-alva-quiz-capture] .choice.choice-image{padding:0;gap:0;grid-template-rows:92px auto;align-content:start}[data-alva-quiz-capture] .choice-image .choice-visual,[data-alva-quiz-capture] .choice-image img{width:100%;height:92px}[data-alva-quiz-capture] .choice-visual{font-size:40px}[data-alva-quiz-capture] .choice-image>span:last-child{padding:12px 14px;font-weight:600;font-size:14px}[data-alva-quiz-capture] .choice-image:has(input:checked){box-shadow:0 0 0 3px rgba(40,110,234,.18)}[data-alva-quiz-capture] .cta{justify-content:center;width:100%;margin-top:6px;padding:17px 22px;border-radius:14px;font-family:inherit;font-size:16px}[data-alva-quiz-capture] .answer-wrap{margin:0;font-size:13px}[data-alva-quiz-capture] .answer{margin-top:7px;padding:15px 16px;border-radius:14px;box-shadow:none;font-family:inherit;font-size:16px}[data-alva-quiz-capture] .answer::placeholder{color:#98A2B3}[data-alva-quiz-capture] .scale{padding:18px 16px;border:1px solid #E7ECF3;border-radius:16px;font-size:14px;font-weight:500;color:#667085}[data-alva-quiz-capture] .scale output{width:48px;height:48px;border-radius:14px;font-size:20px;font-weight:700}[data-alva-quiz-capture] .element-icon{margin:0;width:48px;height:48px}[data-alva-quiz-capture] .video{border-radius:16px}@keyframes alva-quiz-entra{from{opacity:0;transform:translateY(12px)}}@media(prefers-reduced-motion:reduce){[data-alva-quiz-capture]>section{animation:none}}`;
+
+export const quizCanvasCss = quizElementCss + quizPeleCss;
