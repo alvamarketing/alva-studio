@@ -16,12 +16,20 @@ import { blocoDoCatalogo, elementosCss } from './catalogo-elementos.js';
 // Tarefa 1 dava, e continuava verdadeiro. O quiz veste quizCanvasCss — a pele do quiz
 // publicado, que já traz a folha dos elementos dentro — e por isso também dispensa
 // normalizeForms, que injeta o mesmo formCss por conta própria quando acha um <form>.
-export function folhasDoCanvas({ quizCanvas = false, cssExistente = '' } = {}) {
+// Regras de elemento que todo quiz com a pele precisa ter. A marca --cloud diz que a pele
+// foi aplicada um dia, não que continua inteira: a reabertura de quiz apagava as regras de
+// classe sem uso na página (ver garantirTituloDaEscolhaVisual) e o --cloud, que mora no
+// :root, sobrevivia. Quem sabe as regras que existem é o gerenciador de CSS — getCss()
+// omite as de classe sem uso —, então quem chama passa os seletores de lá.
+const regrasDoQuiz = ['.cta', '.choice', '.choice-key', '.answer', '.answer-wrap', '.scale', '.upload'];
+
+export function folhasDoCanvas({ quizCanvas = false, cssExistente = '', seletoresExistentes = null } = {}) {
   const jaTemModelo = /--alva-block-base\s*:\s*1/.test(cssExistente) || cssExistente.includes('.hero-grid');
   const jaTemElementos = cssExistente.includes('--alva-el-accent');
   const folhas = [];
   if (quizCanvas) {
-    if (!cssExistente.includes('--cloud')) folhas.push(quizCanvasCss);
+    const peleIncompleta = seletoresExistentes && regrasDoQuiz.some((seletor) => !seletoresExistentes.has(seletor));
+    if (!cssExistente.includes('--cloud') || peleIncompleta) folhas.push(quizCanvasCss);
     return { folhas, normalizarFormularios: false, quizCanvas };
   }
   if (!jaTemElementos) folhas.push(elementosCss);
@@ -409,6 +417,18 @@ export function panelToggleState(estado = {}, lado) {
 // Onde uma seção inteira deve nascer. Subir até a primeira <section> não basta: numa
 // página que já tem seções aninhadas, isso aninharia mais uma. Sobe até a seção de mais
 // alto nível e devolve o lugar ao lado dela, no corpo da página.
+// Onde entra um bloco do quiz quando nada está selecionado: na última etapa, e não na raiz
+// da página. Na raiz ele ficava FORA do <form> do quiz — sem a pele (rádio nativo à mostra),
+// sem a coluna (largura toda) e fora das etapas que o runtime percorre.
+export function destinoPadraoNoQuiz(wrapper) {
+  const filhos = (componente) => componente?.components?.().models || [];
+  const raiz = filhos(wrapper).find((componente) => String(componente.get?.('tagName') || '').toLowerCase() === 'form'
+    && componente.getAttributes?.()['data-alva-quiz-capture'] === 'true');
+  if (!raiz) return wrapper;
+  const etapas = filhos(raiz).filter((componente) => String(componente.get?.('tagName') || '').toLowerCase() === 'section');
+  return etapas.at(-1) || raiz;
+}
+
 export function sectionInsertionTarget(selected, wrapper, { quizCapture = false } = {}) {
   const tag = (model) => String(model?.get?.('tagName') || '').toLowerCase();
   const isCapture = (model) => quizCapture && tag(model) === 'form' && model?.getAttributes?.()['data-alva-quiz-capture'] === 'true';
@@ -540,7 +560,19 @@ const materialIconChoicesFor = (value) => {
     : materialIconChoices;
 };
 const quizImageChoiceHeadingCss = '.image-choices>:is(h1,h2,h3,p){grid-column:1/-1}';
-const hasQuizImageChoiceHeadingCss = (css) => /\.image-choices\s*>\s*:is\(\s*h1\s*,\s*h2\s*,\s*h3\s*,\s*p\s*\)\s*\{[^}]*grid-column\s*:\s*1\s*\/\s*-1\s*;?[^}]*\}/.test(String(css || ''));
+// Achado em 2026-09-21: esta checagem procurava o TEXTO grid-column:1/-1 em getCss(), e no
+// navegador o GrapesJS grava grid-column-start/grid-column-end. Ela nunca achava, e a
+// correção fazia setStyle(regra + getCss()) a cada abertura — getCss() só devolve regras de
+// classe em uso e setStyle substitui o CSS inteiro. Resultado: toda reabertura de quiz
+// apagava o estilo dos elementos que ainda não estavam na página e regravava o projeto
+// assim; o que se arrastava depois entrava cru. Agora a pergunta vai ao gerenciador de CSS,
+// e a regra entra somada, nunca reescrevendo o resto.
+export function garantirTituloDaEscolhaVisual(editor) {
+  const alvo = semEspaco(quizImageChoiceHeadingCss.split('{')[0]);
+  if (editor.Css.getAll().some((regra) => semEspaco(regra.selectorsToString?.()) === alvo)) return false;
+  editor.addStyle(quizImageChoiceHeadingCss);
+  return true;
+}
 export function setHeadingLevel(model, level) {
   if (!/^h[1-3]$/.test(String(level))) return false;
   model?.set?.('tagName', level);
@@ -1652,11 +1684,8 @@ export function createFriendlyEditor({
     editor.setStyle(quizCanvas ? css.split(formCss).join('') : css);
   }
   const beforeMigration = temProjetoSalvo(project) ? JSON.stringify(editor.getProjectData()) : null;
-  // Old saved canvases predate the image-choice heading rule. Prefix it so an
-  // explicit user rule in the existing stylesheet still wins, and do it while
-  // loading so opening alone never marks the form dirty or sends a PUT.
-  if (quizCanvas && !hasQuizImageChoiceHeadingCss(editor.getCss()))
-    editor.setStyle(`${quizImageChoiceHeadingCss}\n${editor.getCss()}`);
+  // Quiz salvo antes da regra do título da escolha visual a recebe ao abrir.
+  if (quizCanvas) garantirTituloDaEscolhaVisual(editor);
   // O formCss gravado no projeto sai ao carregar, não ao salvar: a poda vem depois de
   // beforeMigration de propósito, para contar como migração e o projeto ser regravado
   // limpo de uma vez, em vez de ser podado de novo a cada abertura.
@@ -1849,7 +1878,8 @@ export function createFriendlyEditor({
     // versão anterior, senão a página congela na primeira que pegou.
     const versaoNaPagina = Number(existingCss.match(/--alva-runtime\s*:\s*(\d+)/)?.[1] || 0);
     if (versaoNaPagina < RUNTIME_CSS_VERSION) editor.addStyle(runtimeCss);
-    const { folhas } = folhasDoCanvas({ quizCanvas, cssExistente: existingCss });
+    const seletoresExistentes = new Set(editor.Css.getAll().map((regra) => regra.selectorsToString?.()));
+    const { folhas } = folhasDoCanvas({ quizCanvas, cssExistente: existingCss, seletoresExistentes });
     if (!folhas.length) return;
     // Preserva cada declaração de quem editou: a folha entra por baixo, não por cima.
     const custom = editor.Css.getAll().map((rule) => ({ rule, style: { ...rule.getStyle() } }));
@@ -1869,7 +1899,7 @@ export function createFriendlyEditor({
     const structure = ['section', 'columns'].includes(id) || id.endsWith('-section') || id.startsWith('section-');
     blockStyles();
     if (id === 'bar-chart' || id === 'donut-chart') normalizeCharts(editor);
-    let target = selected || wrapper;
+    let target = selected || (quizCanvas ? destinoPadraoNoQuiz(wrapper) : wrapper);
     let at;
     const selectedChartTarget = chartInsertionTarget(selected, wrapper);
     // Whole sections belong next to the section being edited, never inside a paragraph.
@@ -1936,6 +1966,11 @@ export function createFriendlyEditor({
   editor.on('block:drag:stop', (component) => {
     if (!interactionPolicy.canAdd) return;
     if (component) {
+      // Solto no vazio do canvas, o bloco cai na raiz da página, fora do quiz.
+      if (quizCanvas && component.parent?.() === editor.getWrapper()) {
+        const destino = destinoPadraoNoQuiz(editor.getWrapper());
+        if (destino !== editor.getWrapper() && destino !== component) component.move?.(destino, {});
+      }
       blockStyles();
       if (quizCanvas) {
         const fieldsOf = (model) => {

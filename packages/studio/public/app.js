@@ -1,7 +1,7 @@
 import { flushChanges } from './save-cycle.js';
 import { templates, getTemplate, normalizeForms, syncFormDelivery } from './templates.js';
 import { buildPageExportHtml, createFriendlyEditor, documentoDeModelo, embutirFonteDeIcones, folhasDoCanvas } from './editor-shell.js';
-import { materialSymbolsFontUrl } from './quiz-elements.js';
+import { inicioDoQuiz, materialSymbolsFontUrl } from './quiz-elements.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
@@ -1259,7 +1259,7 @@ async function openPage(id) {
   $('#page-name').value = page.name;
   $('#save-state').textContent = 'Salvo neste computador';
   if (editor) editor.destroy();
-  const template = getTemplate(page.template) || getTemplate('services');
+  const template = page.kind === 'quiz' ? inicioDoQuiz : (getTemplate(page.template) || getTemplate('services'));
   editor = createFriendlyEditor({
     container: '#editor',
     headerContext: textos.contexto,
@@ -1285,7 +1285,13 @@ $('#new-page').onclick = () => {
   dialogo.querySelector('.eyebrow').textContent = textos.comecar;
   dialogo.querySelector('label').firstChild.textContent = textos.nomeDoConteudo;
   dialogo.querySelector('button.primary').textContent = textos.criar;
-  renderTemplates();
+  // Quiz não começa de modelo de landing: a galeria some e ele nasce com uma etapa.
+  const quiz = tipoDeConteudo === 'quiz';
+  $('#template-filter').hidden = quiz;
+  $('#template-gallery').hidden = quiz;
+  $('#create-form').elements.template.value = quiz ? '' : 'services';
+  $('#create-form').elements.name.placeholder = quiz ? 'Ex.: Diagnóstico de vendas' : 'Ex.: LP Alva Marketing';
+  if (!quiz) renderTemplates();
   dialogo.showModal();
 };
 $('#create-form').onsubmit = action(async (event) => {
