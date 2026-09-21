@@ -52,7 +52,7 @@ test('quiz que já perdeu o estilo dos elementos recebe a pele de volta', () => 
   // folhasDoCanvas nunca mais reaplicaria.
   comEditor((editor) => {
     editor.setComponents('<form data-alva-quiz-capture="true"><section><a class="cta">Ir</a></section></form>');
-    editor.addStyle(':root{--cloud:#f7f9fd}[data-alva-quiz-capture]>section{max-width:440px}');
+    editor.addStyle(':root{--cloud:#f7f9fd;--alva-quiz-corpo:1}[data-alva-quiz-capture]>section{max-width:440px}');
     const cssExistente = editor.getCss();
     assert.deepEqual(folhasDoCanvas({ quizCanvas: true, cssExistente }).folhas, [], 'premissa: pela marca, nada seria reaplicado');
     const { folhas } = folhasDoCanvas({ quizCanvas: true, cssExistente, seletoresExistentes: new Set(seletores(editor)) });

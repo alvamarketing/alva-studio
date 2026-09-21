@@ -78,8 +78,25 @@ test('uma página que já tem a folha dos elementos não a recebe de novo', () =
 });
 
 test('um quiz já vestido não recebe a pele de novo', () => {
-  const { folhas } = folhasDoCanvas({ quizCanvas: true, cssExistente: ':root{--cloud:#f7f9fd}' });
+  const { folhas } = folhasDoCanvas({ quizCanvas: true, cssExistente: ':root{--cloud:#f7f9fd;--alva-quiz-corpo:1}' });
   assert.deepEqual(folhas, []);
+});
+
+test('o corpo do quiz tem largura de celular, e quiz já salvo ganha só isso', async () => {
+  // Pedido do Taian em 2026-09-21: "deixa o body fixo, num tamanho que faz sentido para
+  // celular". Centralizar filho por filho deixava escapar o que ficava fora das regras — um
+  // botão solto aparecia colado à esquerda da tela.
+  const { corpoDoQuizCss } = await import('../public/quiz-elements.js');
+  assert.match(corpoDoQuizCss, /body\{[^}]*max-width:440px[^}]*margin-left:auto[^}]*margin-right:auto/);
+  // Com o corpo estreito, o que fica dos lados é o fundo do <html>. Quiz vestido antes da
+  // pele branca tem esse fundo cinza, e a página voltava a parecer uma caixa.
+  assert.match(corpoDoQuizCss, /:root\{[^}]*background-color:#ffffff/);
+  const novo = folhasDoCanvas({ quizCanvas: true, cssExistente: '' }).folhas.join('');
+  assert.ok(novo.includes(corpoDoQuizCss), 'o quiz novo nasce sem o corpo de celular');
+  // Quiz vestido antes desta regra recebe o corpo e nada além: reaplicar a pele inteira
+  // mexeria no visual de quiz já aprovado (o de diagnóstico tem folha própria).
+  const { folhas } = folhasDoCanvas({ quizCanvas: true, cssExistente: ':root{--cloud:#f7f9fd}body{margin:0}' });
+  assert.deepEqual(folhas, [corpoDoQuizCss]);
 });
 
 test('ninguém chama normalizeForms no quiz por fora de folhasDoCanvas', async () => {

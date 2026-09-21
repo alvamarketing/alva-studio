@@ -1,7 +1,7 @@
 import { blockDescriptions, blocks, formCss, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
-import { materialSymbolsFontCss, materialSymbolsFontUrl, quizCanvasCss } from './quiz-elements.js';
+import { corpoDoQuizCss, materialSymbolsFontCss, materialSymbolsFontUrl, quizCanvasCss } from './quiz-elements.js';
 import { blocoDoCatalogo, elementosCss } from './catalogo-elementos.js';
 
 // Qual folha entra no canvas. Era um if dentro do editor, e por isso o quiz ficou sem
@@ -30,6 +30,9 @@ export function folhasDoCanvas({ quizCanvas = false, cssExistente = '', seletore
   if (quizCanvas) {
     const peleIncompleta = seletoresExistentes && regrasDoQuiz.some((seletor) => !seletoresExistentes.has(seletor));
     if (!cssExistente.includes('--cloud') || peleIncompleta) folhas.push(quizCanvasCss);
+    // Quiz vestido antes do corpo de celular recebe só ele: a pele inteira de novo mexeria
+    // no visual de quiz já aprovado.
+    else if (!cssExistente.includes('--alva-quiz-corpo')) folhas.push(corpoDoQuizCss);
     return { folhas, normalizarFormularios: false, quizCanvas };
   }
   if (!jaTemElementos) folhas.push(elementosCss);
