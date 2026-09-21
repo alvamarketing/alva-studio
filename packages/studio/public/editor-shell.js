@@ -432,6 +432,34 @@ export function destinoPadraoNoQuiz(wrapper) {
   return etapas.at(-1) || raiz;
 }
 
+// A etapa que recebe o próximo bloco: a que contém a seleção, ou a última. É a mesma regra
+// de insertBlock, e o canvas a destaca para a pessoa ver onde o elemento vai entrar.
+export function etapaAtivaDoQuiz(selecionado, wrapper) {
+  const ehEtapa = (componente) => tagOf(componente) === 'section'
+    && componentAttributes(componente.parent?.())['data-alva-quiz-capture'] === 'true';
+  let atual = selecionado && selecionado !== wrapper ? selecionado : null;
+  while (atual && !ehEtapa(atual)) atual = atual.parent?.();
+  if (atual) return atual;
+  const destino = destinoPadraoNoQuiz(wrapper);
+  return ehEtapa(destino) ? destino : null;
+}
+
+// Cada etapa do quiz aparece no canvas como uma página própria, com nome — pedido do Taian
+// em 2026-09-21: "como se fossem mini páginas, para a pessoa ter certeza que está colocando
+// no lugar certo". Só no editor: mora na folha do canvas, que não vai para a página. O
+// rótulo usa ::after porque o ::before já é o nome do elemento selecionado.
+// O destaque é só contorno e rótulo, nunca fundo, margem ou padding: o painel lê o estilo
+// calculado do elemento, e um destaque com fundo aparecia lá como "Cor de fundo #f7faff" da
+// seção — quem editasse gravaria a cor do editor na página. O contorno fica para dentro
+// (offset negativo) para duas etapas seguidas não dividirem a mesma linha.
+export const etapasNoCanvasCss = `
+  [data-alva-quiz-capture] { counter-reset: alva-etapa; }
+  [data-alva-quiz-capture] > section { counter-increment: alva-etapa; position: relative; outline: 1px dashed #c3cfe0; outline-offset: -4px; }
+  [data-alva-quiz-capture] > section::after { content: 'Etapa ' counter(alva-etapa); position: absolute; left: 10px; top: 10px; padding: 4px 7px; border-radius: 6px; background: #ffffff; box-shadow: 0 0 0 1px #e7ecf3; font: 700 9px/1 "Instrument Sans", system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #667085; pointer-events: none; z-index: 2; }
+  [data-alva-quiz-capture] > section.alva-etapa-ativa { outline: 2px solid #286eea; }
+  [data-alva-quiz-capture] > section.alva-etapa-ativa::after { content: 'Etapa ' counter(alva-etapa) ' · os elementos entram aqui'; color: #ffffff; background: #286eea; box-shadow: none; }
+`;
+
 export function sectionInsertionTarget(selected, wrapper, { quizCapture = false } = {}) {
   const tag = (model) => String(model?.get?.('tagName') || '').toLowerCase();
   const isCapture = (model) => quizCapture && tag(model) === 'form' && model?.getAttributes?.()['data-alva-quiz-capture'] === 'true';
@@ -623,12 +651,37 @@ export function aplicarImagemDaOpcao(cartao, valor = '') {
 
 // Desenho e imagem da opção não têm controles próprios: o que troca a imagem mora na
 // Escolha visual. O texto da opção segue selecionável, para edição direta no cartão.
+// A escolha do quiz é uma peça só. Clicar no rádio, no cartão da opção, no número ou na
+// imagem selecionava a peça de dentro, e o painel mostrava "Campo" em vez de "Pergunta e
+// opções" — relato do Taian em 2026-09-21: "eu clico nele e ele vira aquela seção de
+// campo". Só o texto da opção e o da pergunta continuam selecionáveis, para editar no lugar.
+const grupoDeEscolha = (componente) => {
+  let atual = componente;
+  while (atual && !componentAttributes(atual)['data-quiz-type']) atual = atual.parent?.();
+  return atual || null;
+};
+const textoEditavelDaEscolha = (componente) => ['span', 'p'].includes(tagOf(componente))
+  && !componentHasClass(componente, 'choice-key') && !componentHasClass(componente, 'choice-visual') && !isMaterialIcon(componente);
+
 export function alvoDaSelecao(componente) {
-  if (!componente || !(tagOf(componente) === 'img' || componentHasClass(componente, 'choice-visual'))) return componente;
-  let atual = componente.parent?.();
-  if (!componentHasClass(atual, 'choice-image')) return componente;
-  while (atual && componentAttributes(atual)['data-quiz-type'] !== 'image_choice') atual = atual.parent?.();
-  return atual || componente;
+  if (!componente) return componente;
+  const grupo = grupoDeEscolha(componente);
+  if (!grupo || grupo === componente || textoEditavelDaEscolha(componente)) return componente;
+  return grupo;
+}
+
+// Arrastar uma opção levava a peça para fora do grupo, e ela virava um campo solto. As
+// peças de dentro não se arrastam, não somem sozinhas e não recebem outro elemento; quem
+// adiciona e tira opção é o painel "Pergunta e opções".
+export function travarGruposDeEscolha(raiz) {
+  const visitar = (componente, dentro) => {
+    const grupo = !dentro && componentAttributes(componente)['data-quiz-type'];
+    // silent: travar não é editar — sem isso, abrir o quiz já o marcaria como alterado.
+    if (grupo) componente.set?.({ droppable: false }, { silent: true });
+    else if (dentro) componente.set?.({ draggable: false, removable: false, copyable: false, droppable: false }, { silent: true });
+    componentChildren(componente).forEach((filho) => visitar(filho, dentro || Boolean(grupo)));
+  };
+  visitar(raiz, false);
 }
 
 export function setTextNodeContent(model, value) {
@@ -1626,7 +1679,7 @@ export function createFriendlyEditor({
         .material-symbols-outlined { font-family: 'Material Symbols Outlined' !important; font-weight: normal !important; font-style: normal !important; }
         .alva-editor-selected { outline: 2px solid #286eea !important; outline-offset: 7px !important; }
         .alva-editor-selected[data-alva-editor-label]::before { content: attr(data-alva-editor-label); position: absolute; z-index: 2147483647; right: -7px; top: -28px; padding: 5px 8px; border-radius: 6px 6px 0 0; background: #286eea; color: #fff; font: 700 9px/1 Inter, system-ui, sans-serif; letter-spacing: 0; white-space: nowrap; }
-      `;
+      ` + (quizCanvas ? etapasNoCanvasCss : '');
       doc.head.append(editorSelection);
     }
   };
@@ -1721,6 +1774,10 @@ export function createFriendlyEditor({
       element.classList.remove('alva-editor-selected');
       element.removeAttribute('data-alva-editor-label');
     });
+    if (quizCanvas) {
+      doc.querySelectorAll('.alva-etapa-ativa').forEach((element) => element.classList.remove('alva-etapa-ativa'));
+      etapaAtivaDoQuiz(model, editor.getWrapper())?.getEl?.()?.classList.add('alva-etapa-ativa');
+    }
     if (!model || model.is?.('wrapper')) return;
     const element = model.getEl?.();
     if (!element) return;
@@ -1955,6 +2012,7 @@ export function createFriendlyEditor({
         field.addAttributes?.({ name });
       });
     }
+    if (quizCanvas) added.forEach((componente) => travarGruposDeEscolha(componente));
     if (added[0]) editor.select(added[0], { scroll: true });
     announce(`${block.get('label')} adicionado. Ajuste o conteúdo no painel lateral.`);
   }
@@ -1969,6 +2027,7 @@ export function createFriendlyEditor({
   editor.on('block:drag:stop', (component) => {
     if (!interactionPolicy.canAdd) return;
     if (component) {
+      if (quizCanvas) travarGruposDeEscolha(component);
       // Solto no vazio do canvas, o bloco cai na raiz da página, fora do quiz.
       if (quizCanvas && component.parent?.() === editor.getWrapper()) {
         const destino = destinoPadraoNoQuiz(editor.getWrapper());
@@ -2895,6 +2954,7 @@ export function createFriendlyEditor({
     // O css de sistema entrava só ao inserir um bloco. Uma página já pronta abria sem
     // movimento e com o ícone encolhido até alguém adicionar algo.
     blockStyles();
+    if (quizCanvas) travarGruposDeEscolha(editor.getWrapper());
     if (componentWithClass(editor.getWrapper(), 'alva-chart-bars') || componentWithClass(editor.getWrapper(), 'alva-donut')) normalizeCharts(editor);
     render();
   });
