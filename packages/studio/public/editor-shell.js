@@ -39,7 +39,7 @@ export function folhasDoCanvas({ quizCanvas = false, cssExistente = '' } = {}) {
 // que o editor as aplica (setStyle da semente, blockStyles no load).
 export function documentoDeModelo({ css = '', html = '' } = {}) {
   const folhas = [css, ...folhasDoCanvas({ quizCanvas: false, cssExistente: css }).folhas];
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>${folhas.join('')}</style></head><body>${html}</body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"><style>${folhas.join('')}</style></head><body>${html}</body></html>`;
 }
 
 // Quiz salvo antes desta branch tem formCss GRAVADO dentro do projeto: na base, abrir ou
@@ -337,7 +337,7 @@ const carouselScript = "document.querySelectorAll('.alva-carousel').forEach(func
 // Quiz e landing saem da mesma página e do mesmo editor. O que os separa na publicação é
 // a marca no corpo e o script que mostra uma seção por vez — não outro gerador de HTML.
 export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin, quiz = false, quizDestino = '' } = {}) {
-  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
+  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"><title>' +
     escapeText(title) +
     // A página publicada leva o comportamento junto: sem isso, uma página antiga vai ao ar
     // sem movimento e com o ícone encolhido, do mesmo jeito que aparecia no editor.
@@ -1514,6 +1514,9 @@ export function createFriendlyEditor({
     height: '100%',
     width: 'auto',
     storageManager: false,
+    // A fonte da marca precisa existir dentro do iframe do canvas; o CSS injetado
+    // por addStyle não carrega webfont sozinho.
+    canvas: { styles: ['https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap'] },
     noticeOnUnload: false,
     fromElement: false,
     panels: { defaults: [] },

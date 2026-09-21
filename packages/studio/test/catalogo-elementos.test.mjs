@@ -5,7 +5,7 @@ import grapesjs from 'grapesjs';
 import postcss from 'postcss';
 import { elementosCss, catalogo, elementoPorId } from '../public/catalogo-elementos.js';
 import { quizElementCss } from '../public/quiz-elements.js';
-import { templateCss, formCss } from '../public/templates.js';
+import { templateCss, formCss, templates } from '../public/templates.js';
 import { folhasDoCanvas } from '../public/editor-shell.js';
 
 test('a folha dos elementos desenha peças, não a página', () => {
@@ -203,5 +203,31 @@ test('a moldura sobrevive a uma ida e volta pelo GrapesJS de verdade', () => {
     editor.destroy();
     Object.assign(globalThis, anterior);
     dom.window.close();
+  }
+});
+
+test('nenhum modelo disputa um seletor com o catálogo', () => {
+  // O editor acrescenta elementosCss DEPOIS da folha do modelo (a semente já traz
+  // templateCss, então folhasDoCanvas só empurra os elementos). Mesma especificidade,
+  // vence quem vem por último: a regra do catálogo apaga a do modelo sem avisar. Foi
+  // assim que `.countdown` do lançamento — cartão escuro no herói escuro — virou o
+  // cartão branco largo do catálogo na página PUBLICADA, não só na miniatura.
+  //
+  // A saída não é renomear: o contador continua sendo o elemento do catálogo, para
+  // herdar painel e propriedades. O modelo que quiser outra pele pesa mais no seletor
+  // (`.launch-hero .countdown`). Este teste é o alarme para a próxima vez.
+  const seletores = (css) => {
+    const fora = new Set();
+    for (const bloco of String(css).matchAll(/(?:^|\}|\{)\s*([^{}@]+?)\s*\{/g))
+      for (const parte of bloco[1].split(','))
+        if (parte.trim().startsWith('.')) fora.add(parte.trim());
+    return fora;
+  };
+  const doCatalogo = seletores(elementosCss);
+  const daBase = seletores(templateCss);
+  for (const modelo of templates) {
+    const proprios = [...seletores(modelo.css)].filter((s) => !daBase.has(s));
+    const choque = proprios.filter((s) => doCatalogo.has(s));
+    assert.deepEqual(choque, [], `o modelo ${modelo.id} declara ${choque.join(', ')} com a mesma força do catálogo: o catálogo vence e a pele do modelo some`);
   }
 });

@@ -7,7 +7,7 @@ import { chartPalette } from '../public/editor-shell.js';
 test('as barras leem cor e altura de variáveis, para poderem ser ajustadas', () => {
   assert.match(runtimeCss, /\.alva-chart-bars\{[^}]*height:var\(--alva-chart-height,230px\)/);
   assert.match(runtimeCss, /\.alva-chart-bars i\{[^}]*var\(--alva-bar-from,#286eea\)/);
-  assert.match(runtimeCss, /var\(--alva-bar-to,#80d6c2\)/);
+  assert.match(runtimeCss, /var\(--alva-bar-to,#5B8CFF\)/);
 });
 
 test('a paleta do gráfico circular sai das cores escolhidas, com o padrão de sempre', () => {

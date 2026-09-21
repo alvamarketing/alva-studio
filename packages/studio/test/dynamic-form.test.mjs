@@ -264,8 +264,16 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // publicado pinta a mesma cor; só o texto do CSS é outro, e a promessa da paleta (um
   // modelo claro e um escuro sem segunda folha) deixa de ser falsa.
   const html = renderDynamicForm(form, '/api/public/forms/123/submit');
-  assert.equal(html.length, 29112);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '4973a1e211e41e0883ea177deb7a9e539e89032abf92e887faa40266259556fd');
+  // O tamanho e o hash mudaram porque a folha da saída inteira passou a ser a marca Alva:
+  // Instrument Sans, azul #286EEA e a escala Precision Light no lugar do Arial e do bege.
+  //
+  // E encolheram 10 bytes na conferência visual dessa repintura: o espaço reservado do
+  // vídeo tinha altura própria e fundo claro dentro de uma moldura 16/9 escura, então
+  // aparecia como uma faixa clara em cima de outra escura, com o texto ilegível. Agora
+  // ele cobre a moldura inteira (position:absolute;inset:0) e lê sobre o escuro, o que
+  // troca duas declarações por uma.
+  assert.equal(html.length, 29318);
+  assert.equal(createHash('sha256').update(html).digest('hex'), '9741b5c8efff84f9136e83b4413cd24b7e13ce1c174f6e0746237b56749687b9');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {
