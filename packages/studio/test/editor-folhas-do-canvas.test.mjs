@@ -40,6 +40,13 @@ test('o quiz novo nasce na página branca aprovada, não numa caixa', () => {
   assert.match(secao, /max-width:440px/, 'a etapa não vira coluna');
   assert.match(secao, /margin:0 auto/, 'a coluna não fica no centro');
   assert.doesNotMatch(secao, /box-shadow:0|border:1px|background-color/, 'a etapa voltou a ser caixa');
+  // A entrada da etapa não pode partir de opacity:0: se a animação não roda (aba em
+  // segundo plano, iframe sem quadros, miniatura), a etapa fica invisível. Achado com a
+  // prévia do Studio em 2026-09-21: a etapa ficou com opacidade 0 e a animação parada
+  // no tempo zero.
+  const entrada = folha.match(/@keyframes alva-quiz-entra\{([^}]*\})\}/)?.[1] || '';
+  assert.ok(entrada, 'a entrada da etapa sumiu');
+  assert.doesNotMatch(entrada, /opacity/, 'a etapa volta a nascer invisível');
   // O foco do campo dentro da captura usava --field-border, que só existe em formCss.
   assert.match(folha, /--field-border:#286EEA/);
   // `.alva-form` é podado do projeto ao reabrir o quiz (podarFolhaDeFormulario): a pele

@@ -1,6 +1,7 @@
 import { flushChanges } from './save-cycle.js';
 import { templates, getTemplate, normalizeForms, syncFormDelivery } from './templates.js';
-import { buildPageExportHtml, createFriendlyEditor, documentoDeModelo, folhasDoCanvas } from './editor-shell.js';
+import { buildPageExportHtml, createFriendlyEditor, documentoDeModelo, embutirFonteDeIcones, folhasDoCanvas } from './editor-shell.js';
+import { materialSymbolsFontUrl } from './quiz-elements.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
@@ -540,8 +541,9 @@ function markDirty() {
   clearTimeout(timer);
   timer = setTimeout(() => save().catch((e) => toast(e.message)), 1500);
 }
-function exportHtml() {
+function exportHtml({ previa = false } = {}) {
   return buildPageExportHtml({
+    previa,
     title: $('#page-name').value.trim(),
     css: editor.getCss(),
     html: editor.getHtml(),
@@ -1325,9 +1327,25 @@ $('#back').onclick = action(async () => {
   // fazia com que ela tivesse de procurar o caminho de novo.
   await mostrarConteudo(tipoDeConteudo);
 });
+// Buscada uma vez, fora do sandbox da prévia; ver embutirFonteDeIcones.
+let fonteDeIconesEmbutida = null;
+function fonteDeIcones() {
+  fonteDeIconesEmbutida ||= fetch(materialSymbolsFontUrl(window.location.origin))
+    .then((resposta) => (resposta.ok ? resposta.blob() : Promise.reject(new Error('fonte indisponível'))))
+    .then((blob) => new Promise((resolver, falhar) => {
+      const leitor = new FileReader();
+      leitor.onload = () => resolver(String(leitor.result).replace(/^data:[^;,]*/, 'data:font/woff2'));
+      leitor.onerror = falhar;
+      leitor.readAsDataURL(blob);
+    }))
+    // Sem a fonte, a prévia abre mesmo assim, com os ícones em texto; a próxima tenta de novo.
+    .catch(() => { fonteDeIconesEmbutida = null; return ''; });
+  return fonteDeIconesEmbutida;
+}
 $('#preview').onclick = action(async () => {
   await save();
-  $('#preview-dialog iframe').srcdoc = exportHtml();
+  const dados = await fonteDeIcones();
+  $('#preview-dialog iframe').srcdoc = embutirFonteDeIcones(exportHtml({ previa: true }), window.location.origin, dados);
   $('#preview-dialog').showModal();
 });
 $('#download').onclick = action(async () => {

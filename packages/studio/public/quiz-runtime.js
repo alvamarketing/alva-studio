@@ -23,7 +23,7 @@ export const quizRuntimeCss = `
 }
 `;
 
-export function quizRuntimeScript({ destino = '' } = {}) {
+export function quizRuntimeScript({ destino = '', previa = false } = {}) {
   // O snapshot publicado reescreve a action da captura para o gateway assinado. O runtime
   // usa essa action, sem transformar o webhook do editor em endpoint público.
   return `(()=>{
@@ -34,6 +34,9 @@ export function quizRuntimeScript({ destino = '' } = {}) {
   if (etapas.length < 2) return;
 
   const destinoConfigurado = ${JSON.stringify(destino)};
+  // Na prévia do Studio as respostas de teste não viram lead: o quiz vai até o fim sem
+  // enviar nada.
+  const previa = ${previa ? 'true' : 'false'};
   const respostas = {};
   const captura = document.querySelector('form[data-alva-capture-id]');
   // Uma tentativa conserva o mesmo identificador mesmo quando a rede falha depois de
@@ -108,6 +111,7 @@ export function quizRuntimeScript({ destino = '' } = {}) {
   };
 
   const enviar = async (etapa) => {
+    if (previa) return true;
     const destino = destinoConfigurado || captura?.getAttribute('action') || '';
     if (!destino || destino === '#') {
       avisar(etapa, null, 'Este quiz ainda não tem uma captura publicada.');

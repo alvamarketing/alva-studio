@@ -1,7 +1,7 @@
 import { blockDescriptions, blocks, formCss, normalizeCharts, normalizeForms, runtimeCss, RUNTIME_CSS_VERSION, templateCss } from './templates.js';
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeWorkspacePanel, workspaceKeyAction, workspaceState } from './editor-workspace.js';
-import { materialSymbolsFontCss, quizCanvasCss } from './quiz-elements.js';
+import { materialSymbolsFontCss, materialSymbolsFontUrl, quizCanvasCss } from './quiz-elements.js';
 import { blocoDoCatalogo, elementosCss } from './catalogo-elementos.js';
 
 // Qual folha entra no canvas. Era um if dentro do editor, e por isso o quiz ficou sem
@@ -334,9 +334,20 @@ export function renderVslReferences(html, { publicOrigin } = {}) {
 // acompanha a página apenas quando há um carrossel nela.
 const carouselScript = "document.querySelectorAll('.alva-carousel').forEach(function(c){var t=c.querySelector('.alva-carousel-track');if(!t)return;c.querySelectorAll('[data-carousel]').forEach(function(b){b.addEventListener('click',function(){var card=t.querySelector('.alva-testimonial');var step=card?card.getBoundingClientRect().width+20:t.clientWidth;t.scrollBy({left:b.dataset.carousel==='next'?step:-step,behavior:'smooth'})})})});";
 
+// A prévia roda num iframe com sandbox (origem opaca), e o Chrome trata esse iframe como
+// rede pública: ele não alcança servidor local, nem a fonte de ícones do próprio Studio.
+// Medido em 2026-09-21: dentro do sandbox até um fetch no-cors ao servidor que hospeda a
+// página falha, enquanto o Google Fonts responde; os ícones saíam como texto. Num Studio
+// em domínio público a fonte carregaria, mas a prévia não pode depender de onde o Studio
+// roda: quem abre a prévia busca a fonte fora do sandbox e ela entra embutida.
+export function embutirFonteDeIcones(html, origem, dados) {
+  if (!dados) return html;
+  return String(html).replaceAll(materialSymbolsFontUrl(origem), dados);
+}
+
 // Quiz e landing saem da mesma página e do mesmo editor. O que os separa na publicação é
 // a marca no corpo e o script que mostra uma seção por vez — não outro gerador de HTML.
-export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin, quiz = false, quizDestino = '' } = {}) {
+export function buildPageExportHtml({ title = '', css = '', html = '', js = '', publicOrigin, quiz = false, quizDestino = '', previa = false } = {}) {
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"><title>' +
     escapeText(title) +
     // A página publicada leva o comportamento junto: sem isso, uma página antiga vai ao ar
@@ -346,7 +357,7 @@ export function buildPageExportHtml({ title = '', css = '', html = '', js = '', 
     renderVslReferences(html, { publicOrigin }) +
     '<script>' +
     (html.includes('alva-carousel') ? carouselScript : '') +
-    (quiz ? quizRuntimeScript({ destino: quizDestino || '' }) : '') +
+    (quiz ? quizRuntimeScript({ destino: quizDestino || '', previa }) : '') +
     js +
     '</script></body></html>';
 }

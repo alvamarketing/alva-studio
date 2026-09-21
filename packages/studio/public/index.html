@@ -635,10 +635,14 @@
     </dialog>
     <dialog id="preview-dialog">
       <div class="preview-header">
-        <strong>Prévia da página</strong><span>Formulários e scripts não executam nesta prévia.</span
+        <strong>Prévia da página</strong><span>O quiz funciona como publicado. Nada que você preencher aqui é enviado.</span
         ><button data-close>Fechar</button>
       </div>
-      <iframe title="Prévia da landing page" sandbox=""></iframe>
+      <!-- allow-scripts sem allow-same-origin: o script da página roda numa origem opaca,
+           sem alcançar o DOM, os cookies nem a API do Studio (a API recusa Origin: null).
+           Sem allow-forms, formulário nativo não envia; sem allow-top-navigation, a página
+           não tira o Studio da tela. -->
+      <iframe title="Prévia da landing page" sandbox="allow-scripts"></iframe>
     </dialog>
     <div id="toast" role="status" hidden></div>
     <script src="/vendor/grapes.min.js"></script>
