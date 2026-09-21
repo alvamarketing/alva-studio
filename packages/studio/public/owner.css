@@ -108,6 +108,43 @@
   font-size: var(--text-sm);
   margin-top: 25px;
 }
+/* O caminho para o outro modo do portão: presente sempre, com peso de link e não de
+   ação principal — quem chega quer entrar, trocar de modo é a exceção. */
+.access-panel .access-switch {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--alva-blue-strong);
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+.access-panel .access-switch:hover {
+  border-color: var(--alva-blue);
+  background: var(--alva-cloud);
+}
+.access-panel .access-note {
+  margin-top: 13px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--alva-cloud);
+  color: var(--alva-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+/* Azul a 45% de opacidade continua parecendo botão ativo; desligado precisa sair da
+   cor de ação, senão a pessoa clica e não entende por que nada acontece. */
+.access-panel .primary[disabled] {
+  background: var(--alva-line);
+  border-color: var(--alva-line);
+  color: var(--alva-soft);
+  box-shadow: none;
+  cursor: not-allowed;
+}
 .form-error {
   font-size: var(--text-md) !important;
   color: var(--alva-danger) !important;

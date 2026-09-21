@@ -42,7 +42,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   host.innerHTML = `
     <section class="access-gate" id="access-gate" aria-label="Acesso ao Alva Studio" hidden>
       <div class="access-story"><a class="brand" href="/" aria-label="Alva Studio"><svg class="brand-symbol" aria-hidden="true" viewBox="0 0 720.5 1000"><use href="#alva-symbol"></use></svg><strong>ALVA</strong><span>Studio</span></a><div><span class="eyebrow">SEU ESPAÇO DE CRIAÇÃO</span><h1>Suas ideias.<br>Sua próxima<br><em>campanha.</em></h1><p>Crie páginas com a sua cara.<br>Do primeiro bloco à publicação.</p></div><small>ALVA MARKETING / STUDIO</small></div>
-      <div class="access-panel"><form id="access-form"><span class="eyebrow" id="access-eyebrow">BEM-VINDO DE VOLTA</span><h2 id="access-title">Entre no seu Studio.</h2><p id="access-description">Use a conta que você criou para acessar suas páginas.</p><label id="access-name-label" hidden>Seu nome<input name="name" autocomplete="name" maxlength="100"></label><label>E-mail<input name="email" type="email" autocomplete="username" required maxlength="254" placeholder="voce@empresa.com.br"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label><label id="access-confirm-label" hidden>Confirme a senha<input name="confirmation" type="password" autocomplete="new-password" maxlength="256"></label><p class="form-error" id="access-error" role="alert"></p><button class="primary" id="access-submit">Entrar</button><p class="access-footnote" id="access-footnote">Suas páginas ficam disponíveis após entrar.</p></form></div>
+      <div class="access-panel"><form id="access-form"><span class="eyebrow" id="access-eyebrow">BEM-VINDO DE VOLTA</span><h2 id="access-title">Entre no seu Studio.</h2><p id="access-description">Use a conta que você criou para acessar suas páginas.</p><label id="access-name-label" hidden>Seu nome<input name="name" autocomplete="name" maxlength="100"></label><label>E-mail<input name="email" type="email" autocomplete="username" required maxlength="254" placeholder="voce@empresa.com.br"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label><label id="access-confirm-label" hidden>Confirme a senha<input name="confirmation" type="password" autocomplete="new-password" maxlength="256"></label><p class="form-error" id="access-error" role="alert"></p><p class="access-note" id="access-note" hidden></p><button class="primary" id="access-submit">Entrar</button><p class="access-footnote" id="access-footnote">Suas páginas ficam disponíveis após entrar.</p><button type="button" class="access-switch" id="access-switch">Criar uma conta</button></form></div>
     </section>
     <dialog id="owner-dialog" class="owner-dialog"><header class="owner-header"><div><span class="eyebrow">CONFIGURAÇÕES</span><h2>Empresa e equipe<span class="accent">.</span></h2><p class="owner-context"><span aria-hidden="true">✓</span> Conta <strong id="owner-company-name">Alva Marketing</strong></p></div><div class="owner-header-actions"><button type="button" class="primary" id="owner-save">Salvar alterações</button></div></header>
     <section id="panel-account" role="tabpanel"><form id="account-form"><p class="owner-description">Estes são os dados de acesso do dono do aplicativo.</p><div class="owner-two-col"><label>Seu nome<input name="name" required maxlength="100" autocomplete="name"></label><label>E-mail de acesso<input name="email" type="email" required maxlength="254" autocomplete="username"></label></div><label>Senha atual<input name="currentPassword" type="password" required autocomplete="current-password" placeholder="Confirme para salvar alterações" maxlength="256"></label><details class="owner-password"><summary>Trocar minha senha</summary><div class="owner-two-col"><label>Nova senha<input name="newPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="Pelo menos 12 caracteres"></label><label>Confirme a nova senha<input name="confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div></details><p class="form-error" id="account-error" role="alert"></p><div class="owner-form-actions"><button class="primary">Salvar minha conta</button></div></form><section class="owner-publication" aria-labelledby="account-publication-title"><div><strong id="account-publication-title">Publicação</strong><p>Conecte a Vercel para publicar páginas e configurar domínios por projeto.</p></div><button type="button" id="account-publication" aria-controls="account-publication-settings" aria-expanded="false">Configurar publicação</button></section><section id="account-publication-settings" class="owner-publication-settings" aria-labelledby="account-publication-settings-title" hidden><div class="vercel-intro"><div class="vercel-symbol" aria-hidden="true">▲</div><div><h3 id="account-publication-settings-title" tabindex="-1">Conecte sua conta Vercel</h3><p>Configure uma vez. Publique cada página em seu próprio projeto e domínio.</p></div></div><p class="connection" id="owner-vercel-status" role="status">Carregando conexão…</p><form id="vercel-form"><label>Token de acesso da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole seu token de acesso" maxlength="1024"></label><p class="help">O token fica protegido no servidor e não aparece nas páginas. <a href="https://vercel.com/account/tokens" target="_blank" rel="noopener noreferrer">Criar um token na Vercel ↗</a></p><label>Identificador da equipe <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off" maxlength="120"></label><p class="help">Preencha se você publica por uma equipe. Para uma conta pessoal, deixe em branco.</p><p class="form-error" id="vercel-error" role="alert"></p><div class="owner-form-actions"><button type="button" id="vercel-test">Testar conexão salva</button><button class="primary">Salvar conexão</button></div></form><div class="owner-session"><p>O domínio e o destino do formulário são configurados dentro de cada página.</p><button type="button" id="vercel-disconnect">Desconectar</button></div></section><div class="owner-session"><div><strong>Sessão de acesso</strong><p>Encerre o acesso neste navegador quando terminar.</p></div><button type="button" id="owner-logout">Sair da conta</button></div></section></dialog>`;
@@ -223,27 +223,48 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     updateSettingsSidebar(tab);
   }
   const loadSettings = createSettingsLoader({ api, canManageIntegration });
+  // O portão mostrava um modo OU o outro, decidido só pelo servidor, e quem caísse no
+  // lado errado não tinha como sair dali — nem como saber em qual dos dois estava. O
+  // botão troca de lado sem recarregar nem chamar o servidor.
+  //
+  // Criar conta, porém, só existe no primeiro acesso: /api/setup recusa com 409 assim
+  // que há um usuário (session-service.mjs). Levar a pessoa a um formulário condenado
+  // seria o botão bonito que só falha depois que ela preencheu tudo; por isso, num
+  // Studio que já tem dono, esse lado do portão mostra o motivo e desliga o envio.
+  let setupDisponivel = false;
+  function aplicarModoDeAcesso(setup) {
+    const condenado = setup && !setupDisponivel;
+    gate.dataset.setup = String(setup);
+    $('#access-title').textContent = setup ? 'Crie sua conta de dono.' : 'Entre no seu Studio.';
+    $('#access-eyebrow').textContent = setup ? 'PRIMEIRO ACESSO' : 'BEM-VINDO DE VOLTA';
+    $('#access-description').textContent = setup
+      ? 'Defina seu acesso para administrar o aplicativo. Suas páginas existentes serão preservadas.'
+      : 'Use sua conta para continuar criando suas páginas.';
+    $('#access-name-label').hidden = !setup;
+    $('#access-confirm-label').hidden = !setup;
+    accessForm.elements.name.required = setup;
+    accessForm.elements.confirmation.required = setup;
+    accessForm.elements.password.minLength = setup ? 12 : 1;
+    accessForm.elements.password.autocomplete = setup ? 'new-password' : 'current-password';
+    $('#access-submit').textContent = setup ? 'Criar conta e começar ↗' : 'Entrar no Studio ↗';
+    $('#access-footnote').textContent = setup
+      ? 'Escolha uma senha com pelo menos 12 caracteres.'
+      : 'Seu acesso é pessoal. Mantenha sua senha em segurança.';
+    $('#access-note').hidden = !condenado;
+    $('#access-note').textContent = condenado
+      ? 'Este Studio já tem uma conta de dono. Criar conta acontece uma única vez, no primeiro acesso.'
+      : '';
+    $('#access-submit').disabled = condenado;
+    $('#access-switch').textContent = setup ? 'Já tenho conta · Entrar' : 'Criar uma conta';
+    $('#access-error').textContent = '';
+  }
   function showAccess(setupRequired = false) {
     restoreSettingsShell();
     if (dialog.open) dialog.close();
     gate.hidden = false;
-    gate.dataset.setup = String(setupRequired);
     document.body.classList.add('access-locked');
-    $('#access-title').textContent = setupRequired ? 'Crie sua conta de dono.' : 'Entre no seu Studio.';
-    $('#access-eyebrow').textContent = setupRequired ? 'PRIMEIRO ACESSO' : 'BEM-VINDO DE VOLTA';
-    $('#access-description').textContent = setupRequired
-      ? 'Defina seu acesso para administrar o aplicativo. Suas páginas existentes serão preservadas.'
-      : 'Use sua conta para continuar criando suas páginas.';
-    $('#access-name-label').hidden = !setupRequired;
-    $('#access-confirm-label').hidden = !setupRequired;
-    accessForm.elements.name.required = setupRequired;
-    accessForm.elements.confirmation.required = setupRequired;
-    accessForm.elements.password.minLength = setupRequired ? 12 : 1;
-    accessForm.elements.password.autocomplete = setupRequired ? 'new-password' : 'current-password';
-    $('#access-submit').textContent = setupRequired ? 'Criar conta e começar ↗' : 'Entrar no Studio ↗';
-    $('#access-footnote').textContent = setupRequired
-      ? 'Escolha uma senha com pelo menos 12 caracteres.'
-      : 'Seu acesso é pessoal. Mantenha sua senha em segurança.';
+    setupDisponivel = Boolean(setupRequired);
+    aplicarModoDeAcesso(setupDisponivel);
   }
   function hideAccess() {
     gate.hidden = true;
@@ -275,6 +296,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       buttons.forEach((button) => (button.disabled = false));
     }
   }
+  $('#access-switch').onclick = () => aplicarModoDeAcesso(gate.dataset.setup !== 'true');
   accessForm.onsubmit = async (event) => {
     event.preventDefault();
     await busy(accessForm, $('#access-error'), async () => {
