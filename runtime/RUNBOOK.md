@@ -5,6 +5,18 @@ expõem portas. O Compose usa sua rede padrão, preservando o egress necessário
 para o Studio e workers. Em Coolify, configure o proxy somente para
 `studio-web` e não crie rotas públicas para bancos ou painéis dos motores.
 
+## Na máquina
+
+`runtime/subir-local.sh` sobe Studio, workers, os três bancos, Umami, NVS e um
+proxy HTTPS local, esperando todos ficarem saudáveis; `--parar` derruba sem
+apagar dados. Na primeira vez ele gera `runtime/.env` (fora do git) com
+segredos aleatórios e as flags comerciais desligadas. O Studio fica em
+`https://studio.localhost:8443`: o certificado é do próprio Caddy, então o
+navegador avisa na primeira visita. A tela de primeiro acesso não cria a conta
+quando `PUBLIC_ORIGIN` está definido; use o bootstrap dentro do container:
+
+    printf '<senha>' | docker exec -i -e OWNER_NAME=… -e OWNER_EMAIL=… alva-studio-studio-web-1 node server/bootstrap-owner.mjs
+
 ## Variáveis
 
 Copie `runtime/.env.example` para um cofre/variáveis do ambiente e substitua

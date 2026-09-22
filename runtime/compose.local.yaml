@@ -1,0 +1,17 @@
+# Só para rodar na máquina. Em produção o Coolify faz o papel deste proxy.
+#
+# O Studio exige PUBLIC_ORIGIN em HTTPS e emite o cookie de sessão com Secure, então
+# http://127.0.0.1:4178 não autentica. O Caddy termina o TLS com um certificado próprio
+# (--internal-certs) em https://studio.localhost:8443 — o navegador avisa que o
+# certificado não é confiável na primeira visita, porque ele não vem de uma autoridade
+# pública. A porta 8443, e não a 443, evita pedir permissão de administrador no macOS.
+services:
+  local-proxy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from https://studio.localhost:8443 --to http://studio-web:4178 --internal-certs
+    depends_on:
+      studio-web:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:8443:8443

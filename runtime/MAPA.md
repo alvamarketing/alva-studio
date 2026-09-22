@@ -1,5 +1,6 @@
 # Runtime Docker/Coolify
 
+- `subir-local.sh` e `compose.local.yaml`: o runtime inteiro na máquina com um comando — gera `.env` local com segredos aleatórios e põe um proxy HTTPS (Caddy) em `https://studio.localhost:8443`, no papel que o Coolify faz em produção.
 - `compose.yaml`: serviços do runtime comercial, incluindo workers de webhook, cobrança, provisionamento de tracking e outbox NVS, isolamento por portas, volumes persistentes e health checks.
 - `Dockerfile.studio`: imagem Node do Studio, web e workers.
 - `Dockerfile.umami` e `umami-bootstrap.mjs`: imagem Umami pinada e bootstrap idempotente da credencial técnica antes do servidor aceitar conexões.
