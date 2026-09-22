@@ -9,7 +9,11 @@ para o Studio e workers. Em Coolify, configure o proxy somente para
 
 `runtime/subir-local.sh` sobe Studio, workers, os três bancos, Umami, NVS e um
 proxy HTTPS local, esperando todos ficarem saudáveis; `--parar` derruba sem
-apagar dados. Na primeira vez ele gera `runtime/.env` (fora do git) com
+apagar dados. `--tunel` abre também um túnel rápido da Cloudflare
+(`compose.tunel.yaml`, sem conta) e grava o endereço `https://….trycloudflare.com`
+como `PUBLIC_ORIGIN`: é o que permite a uma página publicada na internet mandar
+visita e lead para o Studio local. O endereço muda a cada subida, e enquanto o
+túnel está de pé o `studio.localhost` deixa de autenticar. Na primeira vez ele gera `runtime/.env` (fora do git) com
 segredos aleatórios e as flags comerciais desligadas. O Studio fica em
 `https://studio.localhost:8443`: o certificado é do próprio Caddy, então o
 navegador avisa na primeira visita. A tela de primeiro acesso não cria a conta

@@ -1,0 +1,14 @@
+# Só para teste: dá ao Studio local um endereço HTTPS público, para que uma página
+# publicada na internet consiga mandar visita e lead de volta para ele. Sem isso o
+# navegador bloqueia — página pública não alcança servidor em localhost.
+#
+# É o túnel rápido da Cloudflare: não pede conta e muda de endereço a cada subida.
+# subir-local.sh --tunel lê o endereço novo e o grava como PUBLIC_ORIGIN.
+services:
+  tunel:
+    image: cloudflare/cloudflared:2024.12.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://studio-web:4178
+    depends_on:
+      studio-web:
+        condition: service_healthy
