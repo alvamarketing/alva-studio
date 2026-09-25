@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Sobe o Alva Studio na máquina com um comando: Studio, worker, Postgres e o proxy
-# HTTPS local. Na primeira vez gera runtime/.env com segredos aleatórios — o arquivo
+# Sobe o Alva Studio na máquina com um comando: Studio, worker e Postgres. O
+# endereço é https://alva.orb.local — domínio e certificado vêm do OrbStack, em que
+# o Mac já confia, então não há proxy no meio nem aviso de certificado. Na primeira vez gera runtime/.env com segredos aleatórios — o arquivo
 # fica fora do git e é reaproveitado nas próximas.
 #
 # Umami e NVS não sobem por padrão. Eles não são o Studio, e montar uma página não
@@ -24,7 +25,7 @@ base=(docker compose --project-name alva-studio ${perfis[@]+"${perfis[@]}"} -f "
 # parar precisa enxergar todo perfil, senão Umami e NVS ficam de pé sem ninguém notar
 todos=(docker compose --project-name alva-studio --profile analytics --profile tracking -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml" -f "$pasta/compose.tunel.yaml")
 com_tunel=("${base[@]}" -f "$pasta/compose.tunel.yaml")
-origem_local="https://studio.localhost:8443"
+origem_local="https://alva.orb.local"
 
 if [[ "${1:-}" == "--parar" ]]; then
   "${todos[@]}" down --remove-orphans
