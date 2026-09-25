@@ -1,21 +1,33 @@
 #!/usr/bin/env bash
-# Sobe o Alva Studio inteiro na máquina com um comando: Studio, workers, os três
-# bancos, Umami, NVS e o proxy HTTPS local. Na primeira vez gera runtime/.env com
-# segredos aleatórios — o arquivo fica fora do git e é reaproveitado nas próximas.
+# Sobe o Alva Studio na máquina com um comando: Studio, worker, Postgres e o proxy
+# HTTPS local. Na primeira vez gera runtime/.env com segredos aleatórios — o arquivo
+# fica fora do git e é reaproveitado nas próximas.
 #
-# Uso: runtime/subir-local.sh           sobe (ou atualiza) tudo em https://studio.localhost:8443
-#      runtime/subir-local.sh --tunel   idem, e abre um endereço público de teste
-#                                       (túnel da Cloudflare) que vira o PUBLIC_ORIGIN
-#      runtime/subir-local.sh --parar   derruba os serviços, preservando os dados
+# Umami e NVS não sobem por padrão. Eles não são o Studio, e montar uma página não
+# depende deles: peça com --analytics e --tracking quando o trabalho for esse.
+#
+# Uso: runtime/subir-local.sh              sobe (ou atualiza) em https://studio.localhost:8443
+#      runtime/subir-local.sh --analytics  idem, com o Umami junto
+#      runtime/subir-local.sh --tracking   idem, com o NVS junto
+#      runtime/subir-local.sh --tunel      idem, e abre um endereço público de teste
+#                                          (túnel da Cloudflare) que vira o PUBLIC_ORIGIN
+#      runtime/subir-local.sh --parar      derruba os serviços, preservando os dados
 set -euo pipefail
 
 pasta="$(cd "$(dirname "$0")" && pwd)"
-base=(docker compose --project-name alva-studio -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml")
+perfis=()
+for argumento in "$@"; do
+  [[ "$argumento" == "--analytics" ]] && perfis+=(--profile analytics)
+  [[ "$argumento" == "--tracking" ]] && perfis+=(--profile tracking)
+done
+base=(docker compose --project-name alva-studio ${perfis[@]+"${perfis[@]}"} -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml")
+# parar precisa enxergar todo perfil, senão Umami e NVS ficam de pé sem ninguém notar
+todos=(docker compose --project-name alva-studio --profile analytics --profile tracking -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml" -f "$pasta/compose.tunel.yaml")
 com_tunel=("${base[@]}" -f "$pasta/compose.tunel.yaml")
 origem_local="https://studio.localhost:8443"
 
 if [[ "${1:-}" == "--parar" ]]; then
-  "${com_tunel[@]}" down
+  "${todos[@]}" down --remove-orphans
   exit 0
 fi
 
@@ -59,7 +71,7 @@ ENV
   echo "runtime/.env criado com segredos novos."
 fi
 
-if [[ "${1:-}" != "--tunel" ]]; then
+if [[ " $* " != *" --tunel "* ]]; then
   gravar_origem "$origem_local"
   "${base[@]}" up -d --build --wait --remove-orphans
   echo

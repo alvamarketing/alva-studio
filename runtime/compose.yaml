@@ -1,4 +1,4 @@
-name: alva-studio-runtime
+name: alva-studio
 
 services:
   studio-web:
