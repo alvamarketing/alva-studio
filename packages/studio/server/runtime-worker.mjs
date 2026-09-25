@@ -36,7 +36,14 @@ export async function startRuntimeWorker({
   nvsRuntimeEnabled = process.env.NVS_RUNTIME_ENABLED === 'true',
   log = console.log,
 } = {}) {
-  if (!['webhook', 'tracking', 'media', 'billing'].includes(role)) throw new Error('Papel de worker inválido.');
+  // Um processo pode assumir mais de um papel: os blocos abaixo nunca dependeram uns dos
+  // outros, e quatro containers rodando o mesmo arquivo era custo sem contrapartida.
+  // 'media' saiu da lista porque nunca teve bloco de trabalho — só migrava e batia heartbeat.
+  const papeis = String(role ?? '').split(',').map((papel) => papel.trim()).filter(Boolean);
+  const conhecidos = ['webhook', 'tracking', 'billing'];
+  if (!papeis.length || papeis.some((papel) => !conhecidos.includes(papel)))
+    throw new Error(`Papel de worker inválido: ${role}. Use ${conhecidos.join(', ')} — vários separados por vírgula.`);
+  const assume = (papel) => papeis.includes(papel);
   if (typeof connectionString !== 'string' || !connectionString) throw new Error('DATABASE_URL é obrigatória para o worker.');
   if (!Number.isFinite(intervalMs) || intervalMs < 1_000) throw new Error('Intervalo de heartbeat inválido.');
   if (!Number.isFinite(webhookIntervalMs) || webhookIntervalMs < 1_000) throw new Error('Intervalo da fila de webhook inválido.');
@@ -50,28 +57,28 @@ export async function startRuntimeWorker({
   let closed = false;
   try {
     await migrateFn(database);
-    if (role === 'webhook') {
+    if (assume('webhook')) {
       webhookWorker = startWebhookWorkerFn({
         repository: webhookRepositoryFactory(database),
         intervalMs: webhookIntervalMs,
       });
     }
-    if (role === 'tracking' && trackingProvisionEnabled) {
+    if (assume('tracking') && trackingProvisionEnabled) {
       trackingWorker = startTrackingWorkerFn({
         repository: trackingRepositoryFactory(database),
         clients: trackingClientsFactory(),
       });
     }
-    if (role === 'tracking' && nvsRuntimeEnabled) {
+    if (assume('tracking') && nvsRuntimeEnabled) {
       commercialWorker = startCommercialWorkerFn({ repository: commercialRepositoryFactory(database), client: new NvsClient() });
     }
-    if (role === 'billing') {
+    if (assume('billing')) {
       billingWorker = startBillingWorkerFn({ repository: billingRepositoryFactory(database), clientFactory: billingClientFactory });
     }
     const heartbeat = async () => {
       await database.query('SELECT 1');
-      await writeFile(heartbeatFile, JSON.stringify({ role, at: new Date().toISOString() }), { mode: 0o600 });
-      log(JSON.stringify({ event: 'runtime.worker.heartbeat', role }));
+      await writeFile(heartbeatFile, JSON.stringify({ role: papeis.join(','), papeis, at: new Date().toISOString() }), { mode: 0o600 });
+      log(JSON.stringify({ event: 'runtime.worker.heartbeat', role: papeis.join(',') }));
     };
     await heartbeat();
     const runtime = {

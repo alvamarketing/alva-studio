@@ -117,9 +117,9 @@ publicação é preservado. O cancelamento troca o estado para
 `cancel_at_period_end` e preserva acesso até o período pago terminar.
 
 Configure o webhook Asaas em
-`POST /api/billing/webhook/asaas` com o token do mesmo ambiente. O processo
-`studio-billing-worker` é o único que consulta pagamentos/assinaturas no
-provedor e valida pagamento, referência externa, valor, moeda, ambiente,
+`POST /api/billing/webhook/asaas` com o token do mesmo ambiente. O `studio-worker`,
+no papel de cobrança (`--role=…,billing`), é o único que consulta
+pagamentos/assinaturas no provedor e valida pagamento, referência externa, valor, moeda, ambiente,
 cliente conhecido e assinatura antes de conceder entitlement. Falhas transitórias
 e órfãos usam retry com disponibilidade/backoff e limite de tentativas;
 divergências, reembolsos e chargebacks ficam em revisão e nunca liberam acesso.

@@ -45,82 +45,23 @@ services:
       context: ..
       dockerfile: runtime/Dockerfile.studio
     restart: unless-stopped
-    command: ["node", "server/runtime-worker.mjs", "--role=webhook"]
+    # Um processo, todos os papéis. Eram quatro containers rodando este mesmo arquivo com
+    # --role diferente, e os blocos de cada papel nunca dependeram uns dos outros. O papel
+    # 'media' saiu: não tinha bloco de trabalho, só migrava e batia heartbeat.
+    command: ["node", "server/runtime-worker.mjs", "--role=webhook,tracking,billing"]
     environment:
       DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
       WEBHOOK_WORKER_INTERVAL_MS: 5000
-    depends_on:
-      studio-postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
-      interval: 15s
-      timeout: 3s
-      retries: 3
-      start_period: 20s
-
-  studio-media-worker:
-    build:
-      context: ..
-      dockerfile: runtime/Dockerfile.studio
-    restart: unless-stopped
-    command: ["node", "server/runtime-worker.mjs", "--role=media"]
-    environment:
-      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
-      MEDIA_PIPELINE_ENABLED: "false"
-    depends_on:
-      studio-postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
-      interval: 15s
-      timeout: 3s
-      retries: 3
-      start_period: 20s
-
-  studio-billing-worker:
-    build:
-      context: ..
-      dockerfile: runtime/Dockerfile.studio
-    restart: unless-stopped
-    command: ["node", "server/runtime-worker.mjs", "--role=billing"]
-    environment:
-      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
       ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-sandbox}
       ASAAS_SANDBOX_API_KEY: ${ASAAS_SANDBOX_API_KEY:-}
       ASAAS_PRODUCTION_API_KEY: ${ASAAS_PRODUCTION_API_KEY:-}
-    depends_on:
-      studio-postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
-      interval: 15s
-      timeout: 3s
-      retries: 3
-      start_period: 20s
-
-  studio-tracking-worker:
-    build:
-      context: ..
-      dockerfile: runtime/Dockerfile.studio
-    restart: unless-stopped
-    command: ["node", "server/runtime-worker.mjs", "--role=tracking"]
-    environment:
-      DATABASE_URL: ${STUDIO_DATABASE_URL:?Defina STUDIO_DATABASE_URL no ambiente do Coolify}
       TRACKING_PROVISION_ENABLED: ${TRACKING_PROVISION_ENABLED:-false}
       NVS_RUNTIME_ENABLED: ${NVS_RUNTIME_ENABLED:-false}
       TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
-      UMAMI_INTERNAL_URL: http://umami:3000
-      UMAMI_USERNAME: ${UMAMI_USERNAME:?Defina UMAMI_USERNAME no ambiente do Coolify}
-      UMAMI_PASSWORD: ${UMAMI_PASSWORD:?Defina UMAMI_PASSWORD no ambiente do Coolify}
       NVS_INTERNAL_URL: http://nvs
       NVS_INTERNAL_HMAC_SECRET: ${NVS_INTERNAL_HMAC_SECRET:?Defina NVS_INTERNAL_HMAC_SECRET no ambiente do Coolify}
     depends_on:
       studio-postgres:
-        condition: service_healthy
-      umami:
-        condition: service_healthy
-      nvs:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "server/runtime-worker-healthcheck.mjs"]
@@ -145,6 +86,7 @@ services:
       retries: 12
 
   umami:
+    profiles: ["analytics"]
     build:
       context: ..
       dockerfile: runtime/Dockerfile.umami
@@ -165,6 +107,7 @@ services:
       start_period: 30s
 
   umami-postgres:
+    profiles: ["analytics"]
     image: postgres:16.6-alpine3.21@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
     restart: unless-stopped
     environment:
@@ -180,6 +123,7 @@ services:
       retries: 12
 
   nvs:
+    profiles: ["tracking"]
     build:
       context: ..
       dockerfile: runtime/Dockerfile.nvs
@@ -207,6 +151,7 @@ services:
       start_period: 10s
 
   nvs-outbox-worker:
+    profiles: ["tracking"]
     build:
       context: ..
       dockerfile: runtime/Dockerfile.nvs
@@ -225,6 +170,7 @@ services:
       NVS_OUTBOX_DELIVERY_ENABLED: ${NVS_OUTBOX_DELIVERY_ENABLED:-false}
 
   nvs-mariadb:
+    profiles: ["tracking"]
     image: mariadb:11.4@sha256:611a2fcc5fa7c6ceb8644c6f74b25ede004ff6c3a6b38c8f8c23d3bbf6c26430
     restart: unless-stopped
     environment:

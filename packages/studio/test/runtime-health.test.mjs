@@ -146,7 +146,7 @@ test('worker de tracking inicia a outbox comercial somente com a flag NVS litera
 
 test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens fixadas', async () => {
   const compose = await readFile(join(root, 'runtime/compose.yaml'), 'utf8');
-  for (const service of ['studio-web', 'studio-worker', 'studio-media-worker', 'studio-tracking-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])
+  for (const service of ['studio-web', 'studio-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])
     assert.match(compose, new RegExp(`^  ${service}:`, 'm'));
   assert.match(compose, /127\.0\.0\.1:4178:4178/);
   assert.match(compose, /PUBLIC_ORIGIN: \$\{PUBLIC_ORIGIN:\?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify\}/);
@@ -215,10 +215,10 @@ test('runbook e scripts tratam backup e restauração dos três bancos com confi
   assert.match(restore, /--project-name/);
   assert.match(backup, /mariadb-dump .* nvs/);
   assert.doesNotMatch(backup, /--all-databases/);
-  assert.match(restore, /writer_services='studio-web studio-worker studio-media-worker studio-billing-worker studio-tracking-worker umami nvs nvs-outbox-worker'/);
+  assert.match(restore, /writer_services='studio-web studio-worker umami nvs nvs-outbox-worker'/);
   assert.match(restore, /compose ps --status running -q/);
   assert.match(restore, /active_writers/);
-  assert.doesNotMatch(restore, /compose stop studio-web studio-worker studio-media-worker studio-tracking-worker umami nvs nvs-outbox-worker/);
+  assert.doesNotMatch(restore, /compose stop studio-web studio-worker umami nvs nvs-outbox-worker/);
   assert.match(restore, /pg_isready -U studio -d studio/);
   assert.match(restore, /pg_isready -U umami -d umami/);
   assert.match(restore, /mariadb-admin ping/);
@@ -228,4 +228,39 @@ test('runbook e scripts tratam backup e restauração dos três bancos com confi
   assert.match(localRestore, /backup\.sh/);
   assert.match(localRestore, /restore\.sh/);
   assert.match(localRestore, /studio-postgres umami-postgres nvs-mariadb/);
+});
+
+// Quatro containers rodavam o mesmo arquivo com --role diferente, e um deles, o de mídia,
+// não tinha bloco de trabalho nenhum: subia, migrava e batia heartbeat para sempre. Um
+// processo só com todos os papéis faz o mesmo serviço, porque os blocos já eram
+// independentes entre si.
+test('um worker só assume vários papéis ao mesmo tempo', async () => {
+  const iniciados = [];
+  const database = { query: async () => ({ rows: [] }), close: async () => {} };
+  const heartbeatFile = join(await mkdtemp(join(tmpdir(), 'alva-worker-')), 'heartbeat.json');
+  const runtime = await startRuntimeWorker({
+    role: 'webhook,tracking,billing',
+    connectionString: 'postgres://nao-registre-esta-url',
+    heartbeatFile,
+    createDatabaseFn: () => database,
+    migrateFn: async () => {},
+    webhookRepositoryFactory: () => ({}),
+    startWebhookWorkerFn: () => { iniciados.push('webhook'); return { stop() {} }; },
+    trackingRepositoryFactory: () => ({}),
+    trackingClientsFactory: () => ({}),
+    startTrackingWorkerFn: () => { iniciados.push('tracking'); return { stop() {} }; },
+    billingRepositoryFactory: () => ({}),
+    startBillingWorkerFn: () => { iniciados.push('billing'); return { stop() {} }; },
+    trackingProvisionEnabled: true,
+    log: () => {},
+  });
+  await runtime.close();
+  assert.deepEqual(iniciados.sort(), ['billing', 'tracking', 'webhook']);
+});
+
+test('o papel de mídia é recusado, porque nunca teve trabalho para fazer', async () => {
+  await assert.rejects(
+    () => startRuntimeWorker({ role: 'media', connectionString: 'postgres://x', log: () => {} }),
+    /papel de worker/i,
+  );
 });

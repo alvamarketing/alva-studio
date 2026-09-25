@@ -40,9 +40,10 @@ persistido. O gateway não expõe segredos. Cada evento entra em uma outbox
 transacional por propriedade, evento e destino; o envio externo permanece
 desligado por `NVS_OUTBOX_DELIVERY_ENABLED=false` até o provisionamento
 explícito de uma propriedade. O
-`studio-worker` executa a fila de webhooks fora do processo web. O
-`studio-media-worker` só registra heartbeat e conectividade PostgreSQL até a
-tarefa de mídia.
+`studio-worker` executa a fila de webhooks, o provisionamento de tracking e a
+reconsulta de cobrança fora do processo web, num processo só
+(`--role=webhook,tracking,billing`). Eram quatro containers rodando este mesmo
+arquivo, e o quarto — mídia — não tinha trabalho: só migrava e batia heartbeat.
 
 O Umami cria ou atualiza a conta técnica indicada por `UMAMI_USERNAME` e
 `UMAMI_PASSWORD` com a role mínima `user`, diretamente no banco, depois das
@@ -74,7 +75,7 @@ até homologar o sandbox e promover o plano de produção de `draft`.
 
 O proxy HTTPS entrega `POST /api/billing/webhook/asaas` ao `studio-web`.
 Essa rota só autentica o token em tempo constante e coloca o evento sanitizado
-na inbox, rejeitando corpo acima de 64 KB. `studio-billing-worker` reconsulta
+na inbox, rejeitando corpo acima de 64 KB. O `studio-worker`, no papel de cobrança, reconsulta
 o Asaas e só então atualiza pagamento, assinatura e entitlement. O worker usa
 a chave do ambiente declarado; não compartilhe uma chave entre os dois
 ambientes. Um evento em revisão requer inspeção do pedido e da resposta do

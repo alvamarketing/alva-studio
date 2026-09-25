@@ -10,7 +10,7 @@ project_name='alva-studio-runtime'
 confirmed=false
 writers_stopped=false
 active_writers=''
-writer_services='studio-web studio-worker studio-media-worker studio-billing-worker studio-tracking-worker umami nvs nvs-outbox-worker'
+writer_services='studio-web studio-worker umami nvs nvs-outbox-worker'
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --input-dir) [ "$#" -ge 2 ] || usage; input_dir=$2; shift 2 ;;
