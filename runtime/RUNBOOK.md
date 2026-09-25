@@ -1,13 +1,13 @@
 # Runtime Docker/Coolify
 
-Somente `studio-web` publica `127.0.0.1:4178`; bancos, Umami e NVS não
+Somente `studio-web` publica `127.0.0.1:4178`; bancos e NVS não
 expõem portas. O Compose usa sua rede padrão, preservando o egress necessário
 para o Studio e workers. Em Coolify, configure o proxy somente para
 `studio-web` e não crie rotas públicas para bancos ou painéis dos motores.
 
 ## Na máquina
 
-`runtime/subir-local.sh` sobe Studio, workers, os três bancos, Umami, NVS e um
+`runtime/subir-local.sh` sobe Studio, worker, Postgres e um
 proxy HTTPS local, esperando todos ficarem saudáveis; `--parar` derruba sem
 apagar dados. `--tunel` abre também um túnel rápido da Cloudflare
 (`compose.tunel.yaml`, sem conta) e grava o endereço `https://….trycloudflare.com`
@@ -31,7 +31,7 @@ não passe segredo por argumentos. `STUDIO_DATABASE_URL` usa a mesma senha de
 valor; forneça uma origem HTTPS explícita também em desenvolvimento e testes.
 
 As flags comerciais ficam literalmente em `false`: esta entrega não provisiona
-Umami, não envia eventos e não habilita pipeline de mídia. O NVS incorpora o
+eventos e não habilita pipeline de mídia. O NVS incorpora o
 Core 0.3.10 e aplica seu schema mais as migrações Alva antes de responder como
 pronto. As únicas APIs de controle são `/internal/v1/properties`,
 `/internal/v1/events` e `/internal/v1/status`; todas exigem HMAC SHA-256 sobre
@@ -45,8 +45,6 @@ reconsulta de cobrança fora do processo web, num processo só
 (`--role=webhook,tracking,billing`). Eram quatro containers rodando este mesmo
 arquivo, e o quarto — mídia — não tinha trabalho: só migrava e batia heartbeat.
 
-O Umami cria ou atualiza a conta técnica indicada por `UMAMI_USERNAME` e
-`UMAMI_PASSWORD` com a role mínima `user`, diretamente no banco, depois das
 migrações e antes de abrir o servidor. Essa role cria e consulta somente os
 websites que possui, como confirma o teste de contrato. O bootstrap usa hash
 bcrypt no PostgreSQL e remove apenas o usuário seed conhecido da imagem pinada;
@@ -57,7 +55,7 @@ imagem instala o cliente PostgreSQL `postgresql18-client=18.6-r0` sobre a base
 Alpine já pinada, deixando a ferramenta de bootstrap reproduzível.
 `TRACKING_MASTER_KEY` é exclusiva do control plane
 e precisa estar disponível tanto no `studio-web` para o gate de publicação
-quanto no worker de provisionamento. As flags `UMAMI_RUNTIME_ENABLED`,
+quanto no worker de provisionamento. As flags
 `NVS_RUNTIME_ENABLED` e `TRACKING_PROVISION_ENABLED` exigem valor literal
 `true` e continuam desligadas até aceite operacional.
 `VERCEL_MASTER_KEY` é a chave mestra não vazia do cofre que cifra os tokens de
@@ -97,7 +95,7 @@ provedor no banco, sem tentar liberar entitlement manualmente.
    `OWNER_NAME` e `OWNER_EMAIL` no ambiente do processo; a senha entra pelo
    stdin e nunca por argumento ou arquivo versionado.
 4. Em seguida, habilite no staging de teste as flags de provisionamento e dos
-   motores (`UMAMI_RUNTIME_ENABLED`, `NVS_RUNTIME_ENABLED` e
+   motores (`NVS_RUNTIME_ENABLED` e
    `TRACKING_PROVISION_ENABLED`), cadastre uma propriedade de teste e conecte
    a Vercel de teste no Studio. Use somente URLs HTTPS de staging e publique
    uma prévia.
@@ -117,14 +115,8 @@ curl --fail http://127.0.0.1:4178/health/ready
 ```
 
 Use nome de projeto isolado para não tocar serviços existentes. Confira os nove
-health checks antes de usar o runtime. Umami valida `/api/heartbeat` com status
-200; a prontidão NVS consulta o MariaDB e só aprova JSON com `status: ready`.
+health checks antes de usar o runtime.
 
-O contrato da imagem Umami 3.3.1 pode ser reproduzido sem segredos reais:
-
-```sh
-runtime/umami-contract-test.sh
-```
 
 Ele usa containers e volumes descartáveis, autentica a conta técnica, confirma
 que `POST /api/websites` aceita o UUID estável do binding e que `GET` devolve
@@ -146,12 +138,12 @@ runtime/restore.sh --env-file /caminho/runtime.env --project-name alva-runtime-t
 Para homologar persistência, crie uma linha descartável em cada banco, reinicie
 somente os três serviços de banco e confira as linhas. Depois faça backup,
 altere as linhas, restaure e confira os valores originais. Os volumes nomeados
-`studio-postgres-data`, `umami-postgres-data` e `nvs-mariadb-data` não devem
+`studio-postgres-data` e `nvs-mariadb-data` não devem
 ser removidos durante esse procedimento.
 
 A restauração não é atômica entre os três bancos. O script confirma hashes e a
 saúde dos três serviços, interrompe antes da primeira escrita somente os
-writers que já estavam ativos (`studio-web`, workers, `umami`, `nvs` e a fila
+writers que já estavam ativos (`studio-web`, worker, `nvs` e a fila
 NVS) e os religa por trap mesmo em falha. Uma falha durante a aplicação ainda
 exige restaurar novamente o mesmo backup nos três bancos. Antes de restaurar,
 gere um backup novo do estado atual para recuperação. O dump MariaDB usa
@@ -166,7 +158,7 @@ projeto Docker único e imagens já disponíveis, sem pull:
 runtime/backup-restore-local-test.sh
 ```
 
-Ele sobe apenas `studio-postgres`, `umami-postgres` e `nvs-mariadb`, cria uma
+Ele sobe apenas `studio-postgres` e `nvs-mariadb`, cria uma
 probe distinta em cada banco, executa `backup.sh`, altera as probes e executa
 `restore.sh --confirm-restore`. O runner valida `SHA256SUMS`, os três valores
 originais e que nenhum writer foi criado; o cleanup remove containers, volumes

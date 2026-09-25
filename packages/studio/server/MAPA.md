@@ -16,8 +16,8 @@
   - `migrations/009_vsl_published_lock.sql`: revisão do rascunho usada para o estado de alterações não publicadas.
   - `migrations/011_analytics_collector.sql`: websites, sessões, eventos, dados estruturados e agregados internos do coletor.
   - `migrations/012_analytics_websites.sql`: backfill e provisionamento automático do tracker público por projeto.
-  - `migrations/013_tracking_provisioning.sql`: bindings Umami/NVS por ambiente, destinos cifrados e fila transacional de provisionamento com lease.
-  - `migrations/014_umami_cutover.sql`: token público opaco por ambiente e marco de corte do coletor legado.
+  - `migrations/013_tracking_provisioning.sql`: bindings de destino por ambiente, destinos cifrados e fila transacional de provisionamento com lease.
+  - `migrations/014_umami_cutover.sql`: token público opaco por ambiente; o marco de corte ficou do tempo em que havia dois coletores.
   - `migrations/015_nvs_commercial_outbox.sql`: fila transacional de conversões NVS com deduplicação, lease, retry e auditoria sanitizada.
   - `migrations/017_asaas_billing.sql`: plano por ambiente, pedidos, assinatura, entitlement, inbox idempotente por evento Asaas, retry com disponibilidade e fila de revisão.
   - `migrations/018_agent_mcp.sql`: chaves MCP por projeto, operações idempotentes, limite persistente e vínculo de auditoria de agente.
@@ -28,7 +28,7 @@
 - `project-api.mjs`: API multiempresa, rotas de cobrança e administração de chaves MCP autenticadas, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
 - `mcp-server.mjs`: fronteira JSON-RPC MCP negociada, catálogo fechado de leitura/rascunho e respostas de erro seguras.
 - `asaas-client.mjs`, `billing-service.mjs`, `billing-webhook.mjs`, `billing-worker.mjs` e `billing-policy.mjs`: contrato recorrente hospedado, reconsulta assíncrona de pagamento/assinatura, inbox limitado/autenticado e gates transacionais 5/10/5.
-- `tracking-clients.mjs`, `tracking-provision-worker.mjs` e `commercial-events-worker.mjs`: clientes internos de Umami/NVS, provisionamento por projeto e entrega assíncrona de conversões comerciais.
+- `tracking-clients.mjs`, `tracking-provision-worker.mjs` e `commercial-events-worker.mjs`: clientes internos do NVS, provisionamento por projeto e entrega assíncrona de conversões comerciais.
 - `outbound-webhook.mjs`: entrega best-effort pós-persistência por HTTPS, com timeout, sem credenciais/cabeçalhos repassados, bloqueio de destinos locais/privados e status `delivered`/`failed`; fila, retry, idempotência e defesa contra DNS rebinding ficam no nó `worker_webhook`.
 - `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
 - `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.

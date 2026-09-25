@@ -8,7 +8,6 @@ export function billingRuntimeEnvironment(environment = process.env) {
 
 export function readRuntimeFlags(environment = process.env) {
   return Object.freeze({
-    umamiRuntime: enabled(environment, 'UMAMI_RUNTIME_ENABLED'),
     nvsRuntime: enabled(environment, 'NVS_RUNTIME_ENABLED'),
     pixels: enabled(environment, 'PIXELS_ENABLED'),
     mediaPipeline: enabled(environment, 'MEDIA_PIPELINE_ENABLED'),
@@ -18,14 +17,15 @@ export function readRuntimeFlags(environment = process.env) {
 
 export function requiredTrackingEngines(flags = readRuntimeFlags()) {
   return Object.freeze([
-    ...(flags.umamiRuntime === true ? ['umami'] : []),
     ...(flags.nvsRuntime === true ? ['nvs'] : []),
   ]);
 }
 
 export function publicRuntimeCapabilities(flags = readRuntimeFlags()) {
   return Object.freeze({
-    analytics: flags.umamiRuntime === true,
+    // O analytics é do próprio Studio desde que o Umami foi absorvido: deixou de ser
+    // uma capacidade que depende de um serviço externo estar no ar.
+    analytics: true,
     conversions: flags.nvsRuntime === true,
     pixels: flags.pixels === true,
     media: flags.mediaPipeline === true,

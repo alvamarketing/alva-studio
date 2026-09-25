@@ -152,9 +152,9 @@ export function overviewForRuntime(overview, runtimeFlags) {
     runtime,
     integrations: {
       ...overview.integrations,
-      // A flag só autoriza a futura integração; sem adaptador/provisionamento real,
-      // a configuração existente ainda descreve o coletor Node histórico.
-      analytics: 'pending',
+      // O analytics é do próprio Studio desde que o Umami foi absorvido: não há serviço
+      // externo para configurar, então ele nunca fica pendente.
+      analytics: 'configured',
     },
   };
 }
@@ -182,7 +182,6 @@ export function createProjectApi({
   videos,
   videoHosting = null,
     analytics,
-  umamiAnalytics,
   tracking,
   commercialOutbox,
   runtimeFlags,
@@ -373,14 +372,8 @@ export function createProjectApi({
       const search = new URL(req.url, 'http://localhost').searchParams;
       const { from, to } = analyticsRange(search.get('from'), search.get('to'));
       const environment = search.get('environment') || 'production';
-      const result = umamiAnalytics && runtimeFlags?.umamiRuntime
-        ? await umamiAnalytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to, environment })
-        : await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to });
-      return json({
-        ...result,
-        source: result.source || (umamiAnalytics && runtimeFlags?.umamiRuntime ? 'umami' : 'legacy'),
-        readOnly: false,
-      });
+      const result = await analytics.summary({ companyId: context.companyId, projectId, actorId: context.user.id, from, to });
+      return json({ ...result, source: 'alva', readOnly: false });
     }
 
     const analyticsCollection = path.match(/^\/api\/projects\/([^/]+)\/analytics\/(journey|events)$/);
@@ -396,8 +389,7 @@ export function createProjectApi({
         const eventos = await analytics.journeyEvents({ companyId: context.companyId, projectId, from, to });
         return json(buildJourneyGraph(eventos, { source: search.get('source') || '' }));
       }
-      if (!umamiAnalytics || !runtimeFlags?.umamiRuntime) return json([]);
-      return json(await umamiAnalytics.events(input));
+      return json(await analytics.events(input));
     }
 
     const project = path.match(/^\/api\/projects\/([^/]+)$/);

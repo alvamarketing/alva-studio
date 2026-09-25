@@ -12,10 +12,6 @@ services:
       PORT: 4178
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify}
       WEBHOOK_WORKER_ENABLED: "false"
-      UMAMI_RUNTIME_ENABLED: ${UMAMI_RUNTIME_ENABLED:-false}
-      UMAMI_INTERNAL_URL: http://umami:3000
-      UMAMI_USERNAME: ${UMAMI_USERNAME:?Defina UMAMI_USERNAME no ambiente do Coolify}
-      UMAMI_PASSWORD: ${UMAMI_PASSWORD:?Defina UMAMI_PASSWORD no ambiente do Coolify}
       NVS_RUNTIME_ENABLED: ${NVS_RUNTIME_ENABLED:-false}
       TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
       VERCEL_MASTER_KEY: ${VERCEL_MASTER_KEY:?Defina VERCEL_MASTER_KEY no ambiente do Coolify}
@@ -81,43 +77,6 @@ services:
       - studio-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U studio -d studio"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-
-  umami:
-    profiles: ["analytics"]
-    build:
-      context: ..
-      dockerfile: runtime/Dockerfile.umami
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://umami:${UMAMI_POSTGRES_PASSWORD:?Defina UMAMI_POSTGRES_PASSWORD no ambiente do Coolify}@umami-postgres:5432/umami
-      APP_SECRET: ${UMAMI_APP_SECRET:?Defina UMAMI_APP_SECRET no ambiente do Coolify}
-      UMAMI_USERNAME: ${UMAMI_USERNAME:?Defina UMAMI_USERNAME no ambiente do Coolify}
-      UMAMI_PASSWORD: ${UMAMI_PASSWORD:?Defina UMAMI_PASSWORD no ambiente do Coolify}
-    depends_on:
-      umami-postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/heartbeat').then((r) => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
-
-  umami-postgres:
-    profiles: ["analytics"]
-    image: postgres:16.6-alpine3.21@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: umami
-      POSTGRES_PASSWORD: ${UMAMI_POSTGRES_PASSWORD:?Defina UMAMI_POSTGRES_PASSWORD no ambiente do Coolify}
-      POSTGRES_DB: umami
-    volumes:
-      - umami-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -188,5 +147,4 @@ services:
 
 volumes:
   studio-postgres-data:
-  umami-postgres-data:
   nvs-mariadb-data:

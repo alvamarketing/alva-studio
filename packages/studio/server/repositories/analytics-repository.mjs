@@ -347,6 +347,17 @@ export class AnalyticsRepository {
     };
   }
 
+  // Os eventos nomeados da tela de Analytics. O leitor do Umami montava esta lista a
+  // partir do resumo — leads viram um evento "lead", cada marco de VSL vira o seu. Ao
+  // absorver o Umami, a derivação passa a morar aqui, sobre o próprio banco.
+  async events({ companyId, projectId, actorId, from, to } = {}) {
+    const resumo = await this.summary({ companyId, projectId, actorId, from, to });
+    return [
+      ...(resumo.conversions || []).map((linha) => ({ name: 'lead', total: Number(linha.total) || 0 })),
+      ...(resumo.vslFunnel || []).map((linha) => ({ name: linha.eventName, total: Number(linha.total) || 0 })),
+    ];
+  }
+
   // Retenção por VSL. O funil do resumo agrega o projeto inteiro, o que responde
   // "quanto se assiste aqui" mas não "onde esta VSL perde gente" — que é a pergunta de
   // quem vai reescrever o vídeo.

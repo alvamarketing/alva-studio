@@ -268,7 +268,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         return { status: 'passed' };
       },
       publication_rollback: async () => {
-        assert.deepEqual(readRuntimeFlags({}), { umamiRuntime: false, nvsRuntime: false, pixels: false, mediaPipeline: false, billingEnforcement: false });
+        assert.deepEqual(readRuntimeFlags({}), { nvsRuntime: false, pixels: false, mediaPipeline: false, billingEnforcement: false });
         assert.equal(fakePublicationCalls.some((call) => call.snapshotHash === 'a'.repeat(64)), true);
         return { status: 'passed' };
       },

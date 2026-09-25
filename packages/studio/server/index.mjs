@@ -34,10 +34,6 @@ import { RuntimeConsentGateway } from './runtime-consent-gateway.mjs';
 import { createRuntimeLoader } from './publication-runtime.mjs';
 import { resolveConsentState } from './conversion-consent-policy.mjs';
 import { runtimeManifest, verifiedRuntimeAttribution, verifyRuntimeGatewayEnvelope } from './runtime-gateway-security.mjs';
-import { UmamiClient } from './tracking-clients.mjs';
-import { UmamiAnalyticsClient } from './umami-analytics.mjs';
-import { UmamiAnalyticsReader } from './umami-analytics-reader.mjs';
-import { normalizeUmamiGatewayPayload } from './umami-gateway.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
 import { CloudflareStream } from './cloudflare-stream.mjs';
@@ -255,7 +251,6 @@ export function createApp({
   analyticsRetentionIntervalMs,
   collectLimiterOptions,
   runtimeFlags = readRuntimeFlags(),
-  umamiClient,
   runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET,
   billingOptions = {},
 } = {}) {
@@ -324,10 +319,6 @@ export function createApp({
     return resolveConsentState({ manifest, storedConsent });
   } : null;
   content = database ? new ContentRepository(database, { publicOrigin, commercialOutbox, commercialConsentResolver }) : null;
-  const umami = runtimeFlags.umamiRuntime && database ? (umamiClient || new UmamiClient()) : null;
-  const umamiAnalytics = runtimeFlags.umamiRuntime && database && tracking
-    ? new UmamiAnalyticsReader({ database, legacy: analytics, tracking, client: new UmamiAnalyticsClient() })
-    : null;
   const deployments = database ? new DeploymentRepository(database) : null;
   const publication = database
     ? new PublicationService({
@@ -363,7 +354,6 @@ export function createApp({
       videos,
       videoHosting,
       analytics,
-      umamiAnalytics,
       tracking,
       commercialOutbox,
       body,
@@ -470,7 +460,6 @@ export function createApp({
       const publicDomainRequest = Boolean((publicFormRequest || pageCaptureRequest) && domainScope);
       const publicProjectSubmission = Boolean((publicFormRequest || pageCaptureRequest) && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
       const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
-      const publicUmami = path === '/api/public/umami/send' && req.method === 'POST';
       const publicBillingWebhook = Boolean(billingRepository && path === '/api/billing/webhook/asaas');
       const publicMcp = Boolean(mcp && path === '/mcp');
       const publicRuntimeConsent = runtimeConsentGateway && path === '/_alva/consent' && ['GET', 'POST'].includes(req.method);
@@ -486,11 +475,11 @@ export function createApp({
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if ((publicMcp && origin && origin !== expectedOrigin) || (!publicMcp && !publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))))
+      if ((publicMcp && origin && origin !== expectedOrigin) || (!publicMcp && !publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))))
         throw error('Origem não permitida.', 403);
       // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
       const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
-      if (!publicMcp && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicUmami && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicMcp && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
@@ -553,7 +542,7 @@ export function createApp({
       }
       if (content && publicDomainRequest && !customDomainOriginAllowed(origin, effectiveHost))
         throw error('Origem não autorizada para este domínio.', 403);
-      if (analytics && content && publicCollect && !runtimeFlags.umamiRuntime) {
+      if (analytics && content && publicCollect) {
         if (req.method === 'OPTIONS') {
           // O preflight não traz tracker_public_id, portanto não pode abrir uma origem arbitrária.
           // O tracker usa text/plain (simple request); requests com preflight só continuam na origem
@@ -586,7 +575,7 @@ export function createApp({
           address: req.socket.remoteAddress,
           userAgent: req.headers['user-agent'],
         });
-        await analytics.ingest({
+        const registrado = await analytics.ingest({
           websiteId: website.websiteId,
           companyId: website.companyId,
           projectId: website.projectId,
@@ -603,31 +592,26 @@ export function createApp({
             eventData: event.event_data,
           },
         });
+        // O envio para os destinos de conversão saía do gateway do Umami. Com o Umami
+        // absorvido, é o coletor próprio que alimenta o outbox: sem isto, remover o
+        // gateway calaria Meta e TikTok sem ninguém perceber.
+        if (commercialOutbox && NVS_VSL_EVENTS.has(event.event_name)) {
+          const dados = event.event_data || {};
+          await database.transaction((client) => commercialOutbox.enqueue(client, {
+            companyId: website.companyId,
+            projectId: website.projectId,
+            environment: 'production',
+            trackingEventId: registrado.trackingEventId,
+            eventName: event.event_name,
+            params: {
+              ...(dados.publicId ? { content_id: dados.publicId } : {}),
+              ...(Number.isInteger(dados.value) ? { value: dados.value } : {}),
+            },
+          }));
+        }
         // Nenhuma resposta do coletor devolve conteúdo — só status, para não vazar nada ao visitante.
         res.writeHead(204);
         return res.end();
-      }
-      if (umami && tracking && content && publicUmami) {
-        if (!collectLimiter.allow({ ip: req.socket.remoteAddress })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
-        const raw = await collectBody(req);
-        let input;
-        try { input = JSON.parse(raw.toString('utf8')); } catch { throw error('Evento Umami inválido.', 400); }
-        const token = input?.payload?.website;
-        if (!collectLimiter.allow({ ip: req.socket.remoteAddress, trackerPublicId: token })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
-        const binding = await tracking.resolveUmamiPublicToken({ publicToken: token });
-        if (!binding) throw error('Não foi possível registrar o evento.', 403);
-        const website = await analytics.resolveWebsite({ trackerPublicId: token });
-        const allowedOrigins = website && origin ? await content.publicationOrigins({ companySlug: website.companySlug, projectSlug: website.projectSlug, environment: binding.environment }) : [];
-        if (!origin || !/^https:\/\//.test(origin) || !website || website.companyId !== binding.companyId || website.projectId !== binding.projectId || !allowedOrigins.includes(origin)) throw error('Não foi possível registrar o evento.', 403);
-        const normalized = normalizeUmamiGatewayPayload(input, { publicToken: token, remoteWebsiteId: binding.remoteWebsiteId });
-        await umami.sendPublicEvent(normalized);
-        const nvsEvent = commercialOutbox && nvsVslEvent(normalized, input);
-        if (nvsEvent) await database.transaction((client) => commercialOutbox.enqueue(client, {
-          companyId: binding.companyId, projectId: binding.projectId, environment: binding.environment,
-          trackingEventId: nvsEvent.trackingEventId, eventName: nvsEvent.eventName, params: nvsEvent.params,
-        }));
-        await tracking.confirmUmamiCutover({ companyId: binding.companyId, projectId: binding.projectId, environment: binding.environment });
-        res.writeHead(204); return res.end();
       }
       if (projectApi && path.startsWith('/api/') && !path.startsWith('/api/public/')) {
         const handled = await projectApi({ req, res, path, method: req.method, json });
@@ -830,12 +814,6 @@ export function createApp({
           const publisher = await getPublisher();
           return json(await publisher.domain(await store.get(id)));
         }
-      }
-      if (req.method === 'GET' && path === '/tracker.js' && umami) {
-        const script = await umami.publicScript();
-        res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-cache');
-        return res.end(`${script}\ndocument.addEventListener('alva:track',function(event){var detail=event&&event.detail;if(detail&&detail.name&&window.umami){var data=Object.assign({},detail.data);data.trackingEventId=crypto.randomUUID();window.umami.track(detail.name,data)}});`);
       }
       if (req.method === 'GET' && files[path]) {
         const [file, type] = files[path];

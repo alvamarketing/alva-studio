@@ -146,13 +146,12 @@ test('worker de tracking inicia a outbox comercial somente com a flag NVS litera
 
 test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens fixadas', async () => {
   const compose = await readFile(join(root, 'runtime/compose.yaml'), 'utf8');
-  for (const service of ['studio-web', 'studio-worker', 'studio-postgres', 'umami', 'umami-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])
+  for (const service of ['studio-web', 'studio-worker', 'studio-postgres', 'nvs', 'nvs-outbox-worker', 'nvs-mariadb'])
     assert.match(compose, new RegExp(`^  ${service}:`, 'm'));
   assert.match(compose, /127\.0\.0\.1:4178:4178/);
   assert.match(compose, /PUBLIC_ORIGIN: \$\{PUBLIC_ORIGIN:\?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify\}/);
   assert.match(compose, /WEBHOOK_WORKER_ENABLED: "false"/);
   assert.match(compose, /TRACKING_PROVISION_ENABLED: \$\{TRACKING_PROVISION_ENABLED:-false\}/);
-  assert.match(compose, /UMAMI_RUNTIME_ENABLED: \$\{UMAMI_RUNTIME_ENABLED:-false\}/);
   assert.match(compose, /NVS_RUNTIME_ENABLED: \$\{NVS_RUNTIME_ENABLED:-false\}/);
   assert.match(compose, /PIXELS_ENABLED: \$\{PIXELS_ENABLED:-false\}/);
   assert.match(compose, /PUBLICATION_RUNTIME_HMAC_SECRET: \$\{PUBLICATION_RUNTIME_HMAC_SECRET:-\}/);
@@ -162,49 +161,28 @@ test('runtime Compose declara o worker contínuo NVS, bancos privados e imagens 
   assert.match(envExample, /^VERCEL_MASTER_KEY=\S+$/m);
   const indexSource = await readFile(join(root, 'packages/studio/server/index.mjs'), 'utf8');
   assert.match(indexSource, /process\.env\.VERCEL_MASTER_KEY/);
-  assert.match(compose, /dockerfile: runtime\/Dockerfile\.umami/);
-  assert.match(compose, /UMAMI_USERNAME: \$\{UMAMI_USERNAME:\?Defina UMAMI_USERNAME no ambiente do Coolify\}/);
   assert.match(compose, /mariadb:11\.4@sha256:611a2fcc5fa7c6ceb8644c6f74b25ede004ff6c3a6b38c8f8c23d3bbf6c26430/);
   assert.match(compose, /postgres:16\.6-alpine3\.21@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef/);
   const studioDockerfile = await readFile(join(root, 'runtime/Dockerfile.studio'), 'utf8');
   const nvsDockerfile = await readFile(join(root, 'runtime/Dockerfile.nvs'), 'utf8');
   assert.match(studioDockerfile, /node:22\.14\.0-alpine3\.21@sha256:9bef0ef1e268f60627da9ba7d7605e8831d5b56ad07487d24d1aa386336d1944/);
   assert.match(nvsDockerfile, /php:8\.3\.15-cli-bookworm@sha256:0d3656c146a6a11c715b5d35169d80ffe1f67d6ae77ed39a1331f6889f794269/);
-  const [umamiDockerfile, umamiBootstrap, umamiContract] = await Promise.all([
-    readFile(join(root, 'runtime/Dockerfile.umami'), 'utf8'), readFile(join(root, 'runtime/umami-bootstrap.mjs'), 'utf8'), readFile(join(root, 'runtime/umami-contract-test.sh'), 'utf8'),
-  ]);
-  assert.match(umamiDockerfile, /umami:3\.3\.1@sha256:fa32d116cf20cad52cbc3fad9a63b46e7fa02299d8f967168eb453d49c476b4a/);
-  assert.match(umamiDockerfile, /postgresql18-client=18\.6-r0/);
-  assert.match(umamiBootstrap, /crypt\(:'technical_password', gen_salt\('bf'\)\)/);
-  assert.match(umamiBootstrap, /'user', 'Tracking Provisioner'/);
-  assert.match(umamiBootstrap, /\\\\getenv technical_password UMAMI_PASSWORD/);
-  assert.match(umamiBootstrap, /spawn\('psql', \['-v', 'ON_ERROR_STOP=1'\]/);
-  assert.match(umamiBootstrap, /\/proc\/\$\{child\.pid\}\/cmdline/);
-  assert.doesNotMatch(umamiBootstrap, /--set=technical_password/);
-  assert.doesNotMatch(umamiBootstrap, /psql \"\$DATABASE_URL\"/);
-  assert.match(umamiBootstrap, /DELETE FROM "user"/);
-  assert.match(umamiContract, /payload\.id !== website\.id/);
-  assert.match(umamiContract, /duplicate\.status !== 500/);
-  assert.match(umamiContract, /UMAMI_BOOTSTRAP_ASSERT_ARGV=true/);
-  assert.match(umamiContract, /SELECT role FROM .*tracking-provisioner/);
-  assert.match(umamiContract, /SELECT NOT EXISTS \(SELECT 1 FROM .*username = 'admin'/);
   assert.doesNotMatch(compose, /^networks:/m);
-  assert.match(compose, /\/api\/heartbeat/);
   assert.match(compose, /NVS_MARIADB_HOST: nvs-mariadb/);
-  for (const database of ['studio-postgres', 'umami-postgres', 'nvs-mariadb']) {
+  for (const database of ['studio-postgres', 'nvs-mariadb']) {
     const body = compose.slice(compose.indexOf(`  ${database}:`), compose.indexOf('\n  ', compose.indexOf(`  ${database}:`) + 3));
     assert.doesNotMatch(body, /^    ports:/m, `${database} não pode publicar porta`);
   }
 });
 
-test('runbook e scripts tratam backup e restauração dos três bancos com confirmação explícita', async () => {
+test('runbook e scripts tratam backup e restauração dos dois bancos com confirmação explícita', async () => {
   const [backup, restore, runbook, localRestore] = await Promise.all([
     readFile(join(root, 'runtime/backup.sh'), 'utf8'),
     readFile(join(root, 'runtime/restore.sh'), 'utf8'),
     readFile(join(root, 'runtime/RUNBOOK.md'), 'utf8'),
     readFile(join(root, 'runtime/backup-restore-local-test.sh'), 'utf8'),
   ]);
-  for (const name of ['studio-postgres.sql', 'umami-postgres.sql', 'nvs-mariadb.sql']) {
+  for (const name of ['studio-postgres.sql', 'nvs-mariadb.sql']) {
     assert.match(backup, new RegExp(name));
     assert.match(restore, new RegExp(name));
   }
@@ -215,19 +193,18 @@ test('runbook e scripts tratam backup e restauração dos três bancos com confi
   assert.match(restore, /--project-name/);
   assert.match(backup, /mariadb-dump .* nvs/);
   assert.doesNotMatch(backup, /--all-databases/);
-  assert.match(restore, /writer_services='studio-web studio-worker umami nvs nvs-outbox-worker'/);
+  assert.match(restore, /writer_services='studio-web studio-worker nvs nvs-outbox-worker'/);
   assert.match(restore, /compose ps --status running -q/);
   assert.match(restore, /active_writers/);
-  assert.doesNotMatch(restore, /compose stop studio-web studio-worker umami nvs nvs-outbox-worker/);
+  assert.doesNotMatch(restore, /compose stop studio-web studio-worker nvs nvs-outbox-worker/);
   assert.match(restore, /pg_isready -U studio -d studio/);
-  assert.match(restore, /pg_isready -U umami -d umami/);
   assert.match(restore, /mariadb-admin ping/);
   assert.match(runbook, /executa a fila de webhooks/);
   assert.match(runbook, /não é atômica entre os três bancos/);
   assert.match(localRestore, /--pull never/);
   assert.match(localRestore, /backup\.sh/);
   assert.match(localRestore, /restore\.sh/);
-  assert.match(localRestore, /studio-postgres umami-postgres nvs-mariadb/);
+  assert.match(localRestore, /studio-postgres nvs-mariadb/);
 });
 
 // Quatro containers rodavam o mesmo arquivo com --role diferente, e um deles, o de mídia,

@@ -479,3 +479,30 @@ test('ingest sem audiência continua funcionando, com a sessão sem país nem ap
     await database.close();
   }
 });
+
+test('events sai do próprio banco: leads e marcos de VSL, sem depender do Umami', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedCompany(database, { email: 'ev@alva.test', companyName: 'Ev', slug: 'ev' });
+    const project = await seedProjectFor(database, seed.company, seed.user, { name: 'P', slug: 'p-ev' });
+    const website = await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'trk-ev');
+    const repo = new AnalyticsRepository(database);
+    const now = new Date();
+    const from = new Date(now.getTime() - 3600e3);
+    const to = new Date(now.getTime() + 3600e3);
+
+    await repo.ingest({
+      websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'v1',
+      event: { type: 'custom', eventName: 'vsl_start', urlPath: '/vsl', at: now, eventData: { publicId: 'p1', value: 0 } },
+    });
+    await repo.recordLead({ companyId: seed.company.id, projectId: project.id, formId: 'f1', trackingEventId: randomUUID(), urlPath: '/lp', at: now });
+
+    const eventos = await repo.events({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from, to });
+    const nomes = eventos.map((e) => e.name).sort();
+    assert.ok(nomes.includes('lead'), `esperava lead entre ${JSON.stringify(nomes)}`);
+    assert.ok(nomes.includes('vsl_start'), `esperava vsl_start entre ${JSON.stringify(nomes)}`);
+    assert.ok(eventos.every((e) => typeof e.total === 'number'));
+  } finally {
+    await database.close();
+  }
+});

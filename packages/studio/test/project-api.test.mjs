@@ -1095,7 +1095,7 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   ]);
   assert.ok(overview.content.every((item) => typeof item.updatedAt === 'string'));
   assert.deepEqual(overview.domain, { domain: 'studio.alva.test', verificationStatus: 'verified' });
-  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'pending', agents: 'pending' });
+  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'configured', agents: 'pending' });
 
   await database.query(
     `UPDATE project_integrations
@@ -1116,9 +1116,9 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   const configuredOverview = await alice.request(`/api/projects/${records.projectA.id}/overview`);
   assert.equal(configuredOverview.status, 200);
   overview = await configuredOverview.json();
-  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'pending', agents: 'configured' });
+  assert.deepEqual(overview.integrations, { vercel: 'configured', analytics: 'configured', agents: 'configured' });
   assert.deepEqual(overview.runtime, {
-    analytics: false,
+    analytics: true,
     conversions: false,
     pixels: false,
     media: false,
@@ -1156,7 +1156,7 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   const emptyPayload = await emptyOverview.json();
   assert.deepEqual(emptyPayload.counts, { pages: 0, forms: 0, publishedPages: 0, publishedForms: 0, submissions: 0 });
   assert.equal(emptyPayload.domain, null);
-  assert.deepEqual(emptyPayload.integrations, { vercel: 'pending', analytics: 'pending', agents: 'pending' });
+  assert.deepEqual(emptyPayload.integrations, { vercel: 'pending', analytics: 'configured', agents: 'pending' });
   await database.close();
 });
 

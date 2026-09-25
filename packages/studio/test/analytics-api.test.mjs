@@ -75,7 +75,7 @@ test('GET /api/projects/:id/analytics/summary responde 401 sem sessão', async (
   );
 });
 
-test('overview não anuncia analytics configurado enquanto o runtime Umami está desligado', async () => {
+test('o overview anuncia analytics nativo, sem depender de serviço externo', async () => {
   const api = createProjectApi({
     sessionService: fakeSessionService({ companyId: 'company-1', userId: 'user-1', projectId: 'project-1' }),
     projects: {
@@ -87,7 +87,6 @@ test('overview não anuncia analytics configurado enquanto o runtime Umami está
     },
     body: async () => ({}),
     runtimeFlags: {
-      umamiRuntime: false,
       nvsRuntime: false,
       pixels: false,
       mediaPipeline: false,
@@ -98,9 +97,9 @@ test('overview não anuncia analytics configurado enquanto o runtime Umami está
   const result = await request(api, { url: '/api/projects/project-1/overview' }, '/api/projects/project-1/overview', 'GET');
 
   assert.equal(result.status, 200);
-  assert.equal(result.data.integrations.analytics, 'pending');
+  assert.equal(result.data.integrations.analytics, 'configured');
   assert.deepEqual(result.data.runtime, {
-    analytics: false,
+    analytics: true,
     conversions: false,
     pixels: false,
     media: false,
@@ -110,7 +109,7 @@ test('overview não anuncia analytics configurado enquanto o runtime Umami está
   assert.equal(JSON.stringify(result.data).includes('NVS'), false);
 });
 
-test('summary declara o coletor legado ainda em migração mesmo com flag Umami habilitada', async () => {
+test('o resumo vem sempre do coletor próprio e se declara como alva', async () => {
   const api = createProjectApi({
     sessionService: fakeSessionService({ companyId: 'company-1', userId: 'user-1', projectId: 'project-1' }),
     analytics: { summary: async () => ({ dailyVisits: [], funnel: [] }) },
@@ -133,34 +132,10 @@ test('summary declara o coletor legado ainda em migração mesmo com flag Umami 
 
   assert.equal(result.status, 200);
   assert.deepEqual(result.data, {
-    dailyVisits: [], funnel: [], source: 'legacy', readOnly: false,
+    dailyVisits: [], funnel: [], source: 'alva', readOnly: false,
   });
 });
 
-test('flag Umami habilitada não promove a integração do coletor legado a runtime ativo', async () => {
-  const api = createProjectApi({
-    sessionService: fakeSessionService({ companyId: 'company-1', userId: 'user-1', projectId: 'project-1' }),
-    projects: {
-      overview: async () => ({
-        project: { id: 'project-1', name: 'Projeto', slug: 'projeto' },
-        counts: {}, content: [], domain: null,
-        integrations: { vercel: 'pending', analytics: 'configured', agents: 'pending' },
-      }),
-    },
-    body: async () => ({}),
-    runtimeFlags: {
-      umamiRuntime: true,
-      nvsRuntime: false,
-      pixels: false,
-      mediaPipeline: false,
-      billingEnforcement: false,
-    },
-  });
-
-  const result = await request(api, { url: '/api/projects/project-1/overview' }, '/api/projects/project-1/overview', 'GET');
-
-  assert.equal(result.data.integrations.analytics, 'pending');
-});
 
 test('GET /api/projects/:id/analytics/summary responde 403 para papel sem analytics.read', async () => {
   const sessionService = {
