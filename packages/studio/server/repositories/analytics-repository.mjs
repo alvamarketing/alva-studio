@@ -93,7 +93,7 @@ export class AnalyticsRepository {
     };
   }
 
-  async ingest({ websiteId, companyId, projectId, visitorHash, event }) {
+  async ingest({ websiteId, companyId, projectId, visitorHash, event, audience = {} }) {
     const at = event?.at ?? new Date();
     const eventType = event?.type === 'custom' ? 'custom' : 'pageview';
     const sessionAttribution = attribution(event);
@@ -117,11 +117,13 @@ export class AnalyticsRepository {
         const created = await client.query(
           `INSERT INTO analytics_sessions
              (company_id, project_id, website_id, visitor_hash, first_seen_at, last_seen_at,
-              referrer_domain, utm_source, utm_medium, utm_campaign, utm_term, utm_content, click_ids)
-           VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12::jsonb) RETURNING id`,
+              referrer_domain, utm_source, utm_medium, utm_campaign, utm_term, utm_content, click_ids,
+                country, city, device, browser)
+           VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16) RETURNING id`,
           [companyId, projectId, websiteId, visitorHash, at, sessionAttribution.referrerDomain,
             sessionAttribution.utm_source, sessionAttribution.utm_medium, sessionAttribution.utm_campaign,
-            sessionAttribution.utm_term, sessionAttribution.utm_content, JSON.stringify(sessionAttribution.clickIds)],
+            sessionAttribution.utm_term, sessionAttribution.utm_content, JSON.stringify(sessionAttribution.clickIds),
+              audience?.country ?? null, audience?.city ?? null, audience?.device ?? null, audience?.browser ?? null],
         );
         sessionId = created.rows[0].id;
       }

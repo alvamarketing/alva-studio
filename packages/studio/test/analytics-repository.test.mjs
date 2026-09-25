@@ -431,3 +431,51 @@ test('dailyVisits acompanha o período pedido, não uma janela fixa de 7 dias', 
     await database.close();
   }
 });
+
+test('a audiência gravada na sessão aparece no resumo, e o coletor não depende mais do Umami', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedCompany(database, { email: 'aud@alva.test', companyName: 'Aud', slug: 'aud' });
+    const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'proj-aud' });
+    const website = await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'trk-aud');
+    const repo = new AnalyticsRepository(database);
+    const now = new Date();
+    const from = new Date(now.getTime() - 60 * 60 * 1000);
+    const to = new Date(now.getTime() + 60 * 60 * 1000);
+
+    await repo.ingest({
+      websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'v-br',
+      event: { type: 'pageview', urlPath: '/', at: now },
+      audience: { country: 'BR', city: null, device: 'mobile', browser: 'Safari' },
+    });
+    await repo.ingest({
+      websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'v-us',
+      event: { type: 'pageview', urlPath: '/', at: now },
+      audience: { country: 'US', city: null, device: 'desktop', browser: 'Chrome' },
+    });
+
+    const resumo = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from, to });
+    assert.deepEqual(resumo.audience.countries.map((c) => c.value).sort(), ['BR', 'US']);
+    assert.deepEqual(resumo.audience.devices.map((d) => d.value).sort(), ['desktop', 'mobile']);
+    assert.deepEqual(resumo.audience.browsers.map((b) => b.value).sort(), ['Chrome', 'Safari']);
+  } finally {
+    await database.close();
+  }
+});
+
+test('ingest sem audiência continua funcionando, com a sessão sem país nem aparelho', async (t) => {
+  const database = await migratedDatabase(t);
+  try {
+    const seed = await seedCompany(database, { email: 'sa@alva.test', companyName: 'SA', slug: 'sa' });
+    const project = await seedProjectFor(database, seed.company, seed.user, { name: 'P', slug: 'p-sa' });
+    const website = await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'trk-sa');
+    const repo = new AnalyticsRepository(database);
+    const now = new Date();
+    await repo.ingest({ websiteId: website.id, companyId: seed.company.id, projectId: project.id, visitorHash: 'v', event: { type: 'pageview', urlPath: '/', at: now } });
+    const resumo = await repo.summary({ companyId: seed.company.id, projectId: project.id, actorId: seed.user.id, from: new Date(now.getTime() - 3600e3), to: new Date(now.getTime() + 3600e3) });
+    assert.deepEqual(resumo.audience.countries, []);
+    assert.deepEqual(resumo.audience.devices, []);
+  } finally {
+    await database.close();
+  }
+});

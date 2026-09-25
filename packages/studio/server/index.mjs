@@ -16,6 +16,7 @@ import { ContentRepository } from './repositories/content-repository.mjs';
 import { VideoRepository } from './repositories/video-repository.mjs';
 import { AnalyticsRepository } from './repositories/analytics-repository.mjs';
 import { parseCollectPayload, createCollectLimiter } from './analytics-collect.mjs';
+import { derivarAudiencia } from './analytics-audiencia.mjs';
 import { createNonce, formContentSecurityPolicy } from './content-security-policy.mjs';
 import { validateWebhookUrl } from './outbound-webhook.mjs';
 import { WebhookDeliveryRepository } from './repositories/webhook-repository.mjs';
@@ -590,6 +591,9 @@ export function createApp({
           companyId: website.companyId,
           projectId: website.projectId,
           visitorHash,
+          // País (Cloudflare), dispositivo e navegador (user-agent). O IP e o UA cru já
+          // foram consumidos pelo visitorHash e não são guardados; aqui sai só a classe.
+          audience: derivarAudiencia(req.headers),
           event: {
             type: event.event_name === 'pageview' ? 'pageview' : 'custom',
             eventName: event.event_name,
