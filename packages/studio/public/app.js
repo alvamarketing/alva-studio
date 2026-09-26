@@ -7,7 +7,7 @@ import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { configuracaoParaSalvar, destinosDeConversaoModel, nomeDoDestino, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
@@ -52,6 +52,8 @@ let editor,
   mobileMenuTrigger,
   mobileDrawer,
   mediaPipelineEnabled = false,
+  // Fica em null até um overview chegar: desconhecido não é a mesma coisa que desligado.
+  conversoesHabilitadas = null,
   config = { vercelConnected: false };
 const homeOverviewGuard = createLatestRequestGuard();
 const analyticsPanelGuard = createLatestRequestGuard();
@@ -247,6 +249,7 @@ function renderHome() {
       const overview = await api(`/projects/${project.id}/overview`);
       if (!homeOverviewGuard.isCurrent(request, context, studioShell.state().currentCompany?.id || '') || $('#studio-home').hidden) return;
       mediaPipelineEnabled = overview.runtime?.media === true;
+    conversoesHabilitadas = overview.runtime?.conversions === true;
       updateVslNavigation();
       project.counts = projectCardCounts(overview);
       const card = projects.querySelector(`[data-project-id="${project.id}"]`);
@@ -1070,6 +1073,7 @@ async function renderProject() {
     if (request !== projectOverviewRequest || state.currentProject.id !== studioShell.state().currentProject?.id) return;
     const model = projectOverviewModel(overview);
     mediaPipelineEnabled = overview.runtime?.media === true;
+    conversoesHabilitadas = overview.runtime?.conversions === true;
     updateVslNavigation();
     status.dataset.state = model.status;
     status.textContent = model.message;
@@ -1870,7 +1874,6 @@ $('#analytics-range').onchange = action(async () => {
   analyticsViewDays = Number($('#analytics-range').value) || 7;
   await abrirAnalytics();
 });
-const DESTINOS = { meta: ['Meta', 'Pixel e Conversions API'], google: ['Google Ads', 'Enhanced Conversions'], tiktok: ['TikTok', 'Events API'], linkedin: ['LinkedIn', 'Conversions API'], taboola: ['Taboola', 'Server-to-server'] };
 const CONSENTIMENTO = {
   granted: ['granted', 'Concedido', 'Click IDs e hashes de contato gerados no servidor seguem para os destinos.'],
   pending: ['pending', 'Aguardando decisão', 'O evento e os identificadores pseudônimos permitidos continuam sendo processados. Sem nome, e-mail ou telefone.'],
@@ -1878,6 +1881,8 @@ const CONSENTIMENTO = {
 };
 const TRACKING_PAGINA = 10;
 let trackingDeliveries = [];
+let trackingDestinos = [];
+let trackingDestinosErro = '';
 let trackingSelected = null;
 let trackingVisiveis = TRACKING_PAGINA;
 function tempoRelativo(valor) {
@@ -1953,7 +1958,7 @@ function pintarRastreamento() {
     const barra = document.createElement('div');
     barra.className = 'delivery-bar';
     const nome = document.createElement('span');
-    nome.textContent = DESTINOS[destino.destination]?.[0] || destino.destination;
+    nome.textContent = nomeDoDestino(destino.destination);
     const trilho = document.createElement('div');
     trilho.className = 'track';
     const preenchido = document.createElement('i');
@@ -1964,23 +1969,7 @@ function pintarRastreamento() {
     barra.append(nome, trilho, taxa);
     saude.append(barra);
   }
-  const destinos = clear($('#tracking-destinations'));
-  const ativos = new Set(entregas.map((linha) => linha.destination));
-  for (const [chave, [nome, descricao]] of Object.entries(DESTINOS)) {
-    const card = document.createElement('article');
-    card.className = 'provider';
-    const texto = document.createElement('div');
-    const titulo = document.createElement('strong');
-    titulo.textContent = nome;
-    const detalhe = document.createElement('small');
-    detalhe.textContent = descricao;
-    texto.append(titulo, detalhe);
-    const estado = document.createElement('span');
-    estado.className = `delivery-state ${ativos.has(chave) ? 'ok' : 'retry'}`;
-    estado.textContent = ativos.has(chave) ? 'Enviando' : 'Sem envios';
-    card.append(texto, estado);
-    destinos.append(card);
-  }
+  pintarDestinos(entregas);
   const consentimento = clear($('#tracking-consent'));
   const contagem = new Map();
   for (const evento of trackingEventsModel(entregas)) contagem.set(evento.consentState, (contagem.get(evento.consentState) || 0) + 1);
@@ -2005,7 +1994,7 @@ function pintarJornada(evento) {
   titulo.textContent = `${evento.eventName} · ${evento.contentId || 'sem conteúdo'}`;
   const linhaDoTempo = document.createElement('div');
   linhaDoTempo.className = 'timeline';
-  const entregues = evento.destinations.filter(Boolean).map((destino) => DESTINOS[destino]?.[0] || destino);
+  const entregues = evento.destinations.filter(Boolean).map(nomeDoDestino);
   const passos = [
     ['1', 'Registrado no Studio', new Date(evento.receivedAt).toLocaleString('pt-BR')],
     ['2', 'Consentimento aplicado', `${evento.consentLabel} · hashes gerados no servidor`],
@@ -2032,6 +2021,167 @@ function pintarJornada(evento) {
   alvo.append(titulo, linhaDoTempo);
 }
 
+// A tela onde o pixel do projeto é configurado.
+//
+// O segredo entra e não volta: o servidor guarda cifrado e nunca o devolve, então o campo
+// de token aparece sempre vazio, mesmo num destino já configurado. Deixá-lo em branco ao
+// salvar mantém o que está lá — é a diferença entre corrigir o ID do pixel e ser obrigado
+// a redigitar um token que a pessoa talvez não tenha mais à mão.
+function pintarDestinos(entregas) {
+  const raiz = clear($('#tracking-destinations'));
+  // Não conseguir ler é diferente de não haver nada configurado. Desenhar os cinco como
+  // "Não configurado" quando a leitura falhou diria ao dono do projeto que o pixel dele
+  // sumiu — exatamente o tipo de mentira que esta tela existe para não contar.
+  if (trackingDestinosErro) {
+    const aviso = document.createElement('p');
+    aviso.className = 'help';
+    aviso.textContent = `Não foi possível ler os destinos deste ambiente: ${trackingDestinosErro}`;
+    raiz.append(aviso);
+    return;
+  }
+  // Credencial salva com a entrega desligada não sai do lugar. Dizer isso aqui evita a
+  // conclusão errada mais provável: "configurei o pixel e o Facebook não recebeu nada".
+  // Só avisa quando se sabe que está desligada — não quando a capacidade é desconhecida.
+  if (conversoesHabilitadas === false) {
+    const aviso = document.createElement('p');
+    aviso.className = 'help';
+    aviso.textContent = 'A entrega de conversões está desligada neste ambiente. As credenciais abaixo ficam guardadas, mas nada é enviado às plataformas até ela ser ligada.';
+    raiz.append(aviso);
+  }
+  const podeConfigurar = studioShell.can('integration.manage');
+  for (const destino of destinosDeConversaoModel(trackingDestinos, entregas, podeConfigurar)) {
+    raiz.append(cartaoDeDestino(destino));
+  }
+}
+
+function cartaoDeDestino(destino) {
+  const caixa = document.createElement('details');
+  caixa.className = 'provider-config';
+  caixa.dataset.provider = destino.provider;
+
+  const cabecalho = document.createElement('summary');
+  const texto = document.createElement('div');
+  const titulo = document.createElement('strong');
+  titulo.textContent = destino.name;
+  const detalhe = document.createElement('small');
+  // O identificador público no cabeçalho poupa abrir o bloco só para conferir qual pixel
+  // está ali — que é a dúvida mais comum de quem cuida de vários projetos.
+  detalhe.textContent = destino.publicValue ? `${destino.description} · ${destino.publicValue}` : destino.description;
+  texto.append(titulo, detalhe);
+  const estado = document.createElement('span');
+  estado.className = `delivery-state ${destino.state === 'ok' ? 'ok' : destino.state === 'idle' ? 'set' : 'off'}`;
+  estado.textContent = destino.stateLabel;
+  cabecalho.append(texto, estado);
+  caixa.append(cabecalho, destino.editable ? formularioDeDestino(destino) : semPermissao());
+  return caixa;
+}
+
+function semPermissao() {
+  const aviso = document.createElement('p');
+  aviso.className = 'help provider-form';
+  aviso.textContent = 'Configurar destinos exige permissão de integrações. Peça a um administrador do projeto.';
+  return aviso;
+}
+
+function formularioDeDestino(destino) {
+  const form = document.createElement('form');
+  form.className = 'provider-form';
+
+  if (destino.semCredencial) {
+    const aviso = document.createElement('p');
+    aviso.className = 'help';
+    aviso.textContent = 'A Taboola identifica a conversão pelo clique que chega na URL da página. Não há credencial a guardar: basta ativar.';
+    form.append(aviso);
+  }
+  for (const campo of destino.fields) {
+    const rotulo = document.createElement('label');
+    rotulo.textContent = campo.required ? campo.label : `${campo.label} (opcional)`;
+    const entrada = document.createElement('input');
+    entrada.name = campo.name;
+    entrada.autocomplete = 'off';
+    if (campo.secret) {
+      entrada.type = 'password';
+      entrada.placeholder = destino.configured ? 'Guardado — deixe em branco para manter' : '';
+    } else {
+      entrada.type = 'text';
+      if (campo.public && destino.publicValue) entrada.value = destino.publicValue;
+    }
+    rotulo.append(entrada);
+    const ajuda = document.createElement('p');
+    ajuda.className = 'help';
+    ajuda.textContent = campo.help;
+    form.append(rotulo, ajuda);
+  }
+
+  const acoes = document.createElement('div');
+  acoes.className = 'provider-actions';
+  const salvar = document.createElement('button');
+  salvar.className = 'button primary';
+  salvar.textContent = destino.configured ? 'Salvar' : destino.semCredencial ? 'Ativar' : 'Configurar';
+  acoes.append(salvar);
+  if (destino.configured) {
+    const remover = document.createElement('button');
+    remover.type = 'button';
+    remover.className = 'button ghost';
+    remover.textContent = 'Remover';
+    remover.onclick = action(() => removerDestino(destino.provider));
+    acoes.append(remover);
+  }
+  const erro = document.createElement('p');
+  erro.className = 'form-error';
+  erro.setAttribute('role', 'alert');
+  form.append(acoes, erro);
+  form.onsubmit = action(async (evento) => {
+    evento.preventDefault();
+    erro.textContent = '';
+    try {
+      await salvarDestino(destino, new FormData(form));
+    } catch (falha) {
+      // O erro fica ao lado do formulário que o causou, e não também num aviso passageiro
+      // no topo: a mensagem do servidor costuma dizer qual campo está fora de formato, e
+      // ela precisa continuar à vista enquanto a pessoa corrige.
+      erro.textContent = falha.message;
+    }
+  });
+  return form;
+}
+
+async function salvarDestino(destino, dados) {
+  const projectId = studioShell.state().currentProject?.id;
+  const configuration = configuracaoParaSalvar(destino, Object.fromEntries(dados));
+  await api(`/projects/${projectId}/tracking/destinations/${destino.provider}`, 'PUT', {
+    environment: $('#tracking-environment').value,
+    configuration,
+  });
+  toast(`${destino.name} configurado neste ambiente.`);
+  await recarregarDestinos();
+}
+
+async function removerDestino(provider) {
+  const projectId = studioShell.state().currentProject?.id;
+  await api(`/projects/${projectId}/tracking/destinations/${provider}`, 'DELETE', {
+    environment: $('#tracking-environment').value,
+  });
+  toast('Destino removido deste ambiente.');
+  await recarregarDestinos();
+}
+
+async function recarregarDestinos() {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) return;
+  const ambiente = encodeURIComponent($('#tracking-environment').value);
+  try {
+    trackingDestinos = await api(`/projects/${projectId}/tracking/destinations?environment=${ambiente}`);
+    trackingDestinosErro = '';
+  } catch (falha) {
+    // A tela de eventos continua útil sem a lista de destinos; um erro aqui não pode
+    // derrubá-la inteira, mas também não pode passar por "nada configurado".
+    trackingDestinos = [];
+    trackingDestinosErro = falha.message;
+  }
+  pintarDestinos(entregasFiltradas());
+}
+
 async function abrirRastreamento() {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
@@ -2050,13 +2200,22 @@ async function abrirRastreamento() {
     status.textContent = error.message;
     status.dataset.state = 'error';
   }
+  // Os destinos são lidos mesmo quando a lista de eventos falha: quem abriu a tela para
+  // configurar um pixel não depende de haver evento nenhum ainda.
+  await recarregarDestinos();
   pintarRastreamento();
 }
 $('#nav-project-tracking').onclick = action(abrirRastreamento);
-for (const seletor of ['#tracking-environment', '#tracking-filter-event', '#tracking-filter-state']) $(seletor).onchange = () => {
+for (const seletor of ['#tracking-filter-event', '#tracking-filter-state']) $(seletor).onchange = () => {
   trackingVisiveis = TRACKING_PAGINA;
   pintarRastreamento();
 };
+// Trocar de ambiente troca o conjunto de credenciais: prévia e produção têm as suas.
+$('#tracking-environment').onchange = action(async () => {
+  trackingVisiveis = TRACKING_PAGINA;
+  pintarRastreamento();
+  await recarregarDestinos();
+});
 $('#tracking-more').onclick = () => {
   trackingVisiveis += TRACKING_PAGINA;
   pintarRastreamento();

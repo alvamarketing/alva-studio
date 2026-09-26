@@ -286,6 +286,98 @@ export function trackingHealthModel(deliveries) {
   return [...porDestino.values()].map((alvo) => ({ destination: alvo.destination, rate: `${Math.round((alvo.delivered / alvo.total) * 100)}%`, delivered: alvo.delivered, total: alvo.total }));
 }
 
+// Os destinos de conversão como a tela precisa deles.
+//
+// Cada plataforma pede o que pede, e o servidor recusa o que não reconhece — por isso a
+// lista abaixo é conferida contra a do repositório num teste. O rótulo e a ajuda são
+// decisão de interface; o nome do campo, não.
+//
+// `secret` marca o que nunca volta do servidor: o token é gravado cifrado e não é relido
+// nem por esta tela. Um campo de segredo aparece sempre vazio, e salvar sem preenchê-lo
+// mantém o que já estava lá.
+export const CAMPOS_DE_DESTINO = Object.freeze({
+  meta: [
+    { name: 'pixel_id', label: 'ID do pixel', help: 'Só números, como aparece no Gerenciador de Eventos.', required: true, public: true },
+    { name: 'access_token', label: 'Token de acesso', help: 'Gerado na Conversions API do pixel.', required: true, secret: true },
+  ],
+  tiktok: [
+    { name: 'pixel_code', label: 'Código do pixel', help: 'O identificador do pixel no Events Manager.', required: true, public: true },
+    { name: 'access_token', label: 'Token de acesso', help: 'Gerado na Events API do pixel.', required: true, secret: true },
+  ],
+  google: [
+    { name: 'operating_account_id', label: 'ID da conta do Google Ads', help: 'Só números, sem traços.', required: true },
+    { name: 'conversion_action_id', label: 'ID da ação de conversão', help: 'Só números.', required: true },
+    { name: 'oauth_access_token', label: 'Token OAuth', help: 'Token de acesso da conta que registra a conversão.', required: true, secret: true },
+  ],
+  linkedin: [
+    { name: 'conversion_urn', label: 'URN da conversão', help: 'No formato urn:lla:llaPartnerConversion:123.', required: true },
+    { name: 'access_token', label: 'Token de acesso', help: 'Gerado na Conversions API.', required: true, secret: true },
+    { name: 'linkedin_version', label: 'Versão da API', help: 'Seis dígitos, como 202608. Em branco usa a padrão.', required: false },
+  ],
+  taboola: [],
+});
+
+const NOME_DO_DESTINO = Object.freeze({
+  meta: ['Meta', 'Pixel e Conversions API'],
+  tiktok: ['TikTok', 'Events API'],
+  google: ['Google Ads', 'Enhanced Conversions'],
+  linkedin: ['LinkedIn', 'Conversions API'],
+  taboola: ['Taboola', 'Server-to-server pelo clique'],
+});
+
+// O que de fato sobe ao salvar.
+//
+// Segredo em branco tem dois sentidos opostos, e confundi-los é caro: num destino já
+// configurado quer dizer "mantenha o que está lá" — obrigar a redigitar um token que a
+// pessoa talvez não tenha mais à mão transformaria corrigir um ID de pixel numa ida ao
+// painel da plataforma. Num destino novo quer dizer que falta, e aí o campo sobe vazio
+// para o servidor recusar com a mensagem dele, em vez de a tela inventar uma.
+export function configuracaoParaSalvar(destino, valores = {}) {
+  const configuration = {};
+  for (const campo of destino.fields) {
+    const valor = String(valores[campo.name] ?? '').trim();
+    if (!valor) {
+      if (campo.secret && destino.configured) continue;
+      continue;
+    }
+    configuration[campo.name] = valor;
+  }
+  return configuration;
+}
+
+export function nomeDoDestino(chave) {
+  return NOME_DO_DESTINO[chave]?.[0] ?? String(chave ?? '');
+}
+
+const CAMPO_PUBLICO = Object.freeze({ meta: 'pixel_id', tiktok: 'pixel_code', google: 'measurement_id', linkedin: 'partner_id', taboola: 'account_id' });
+
+export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = true) {
+  const salvos = new Map((Array.isArray(destinos) ? destinos : []).map((linha) => [linha?.provider, linha]));
+  // Credencial salva e evento entregue são estados diferentes, e a distância entre os dois
+  // é justamente o que faz alguém desconfiar da configuração.
+  const entregando = new Set((Array.isArray(entregas) ? entregas : []).map((linha) => linha?.destination));
+  return Object.entries(NOME_DO_DESTINO).map(([provider, [name, description]]) => {
+    const salvo = salvos.get(provider);
+    const configured = salvo?.configured === true;
+    const state = configured ? (entregando.has(provider) ? 'ok' : 'idle') : 'off';
+    return {
+      provider,
+      name,
+      description,
+      configured,
+      state,
+      stateLabel: configured ? (entregando.has(provider) ? 'Enviando' : 'Configurado') : 'Não configurado',
+      publicValue: salvo?.publicConfiguration?.[CAMPO_PUBLICO[provider]] ?? '',
+      updatedAt: salvo?.updatedAt ?? null,
+      // A tela abre com permissão de leitura, mas salvar credencial é `integration.manage`.
+      // Mostrar o formulário a quem não pode enviá-lo seria convidar ao erro.
+      editable: podeConfigurar === true,
+      fields: podeConfigurar === true ? CAMPOS_DE_DESTINO[provider] : [],
+      semCredencial: CAMPOS_DE_DESTINO[provider].length === 0,
+    };
+  });
+}
+
 export function analyticsRankModel(rows, limit = 5) {
   const lista = (Array.isArray(rows) ? rows : []).slice(0, limit);
   const total = lista.reduce((soma, linha) => soma + (Number(linha?.total) || 0), 0);

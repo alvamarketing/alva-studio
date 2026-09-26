@@ -1816,10 +1816,27 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .tracking-view .delivery-bar .track { height: 5px; border-radius: var(--radius-pill); background: var(--alva-line); overflow: hidden; }
 .tracking-view .delivery-bar .track i { display: block; height: 100%; width: var(--p); background: var(--alva-blue); }
 .tracking-view .delivery-bar strong { text-align: right; font-variant-numeric: tabular-nums; }
-.tracking-view .providers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; }
-.tracking-view .provider { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid color-mix(in srgb, var(--alva-line) 55%, transparent); }
-.tracking-view .provider strong { display: block; font-size: var(--text-md); }
-.tracking-view .provider small { display: block; font-size: var(--text-sm); color: var(--alva-muted); margin-top: 2px; }
+/* Destinos: a linha vira o cabeçalho de um bloco que abre com o formulário dele. Uma
+   coluna só, porque o formulário aberto em duas colunas espremeria os campos. */
+.tracking-view .providers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.tracking-view .provider-config { border-bottom: 1px solid color-mix(in srgb, var(--alva-line) 55%, transparent); }
+.tracking-view .provider-config > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; cursor: pointer; list-style: none; }
+.tracking-view .provider-config > summary::-webkit-details-marker { display: none; }
+.tracking-view .provider-config > summary:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
+.tracking-view .provider-config strong { display: block; font-size: var(--text-md); }
+.tracking-view .provider-config small { display: block; font-size: var(--text-sm); color: var(--alva-muted); margin-top: 2px; }
+.tracking-view .provider-form { padding: 4px 0 20px; max-width: 46ch; }
+.tracking-view .provider-form label { display: block; font-size: var(--text-sm); font-weight: 600; margin-top: 14px; }
+.tracking-view .provider-form input { display: block; width: 100%; height: 36px; margin-top: 6px; border: 1px solid var(--alva-line); border-radius: var(--radius-sm); background: transparent; color: var(--alva-ink); padding: 0 11px; font-size: var(--text-sm); font-weight: 400; }
+.tracking-view .provider-form input:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 1px; }
+.tracking-view .provider-form .help { font-size: var(--text-sm); color: var(--alva-muted); margin: 4px 0 0; }
+.tracking-view .provider-actions { display: flex; gap: 8px; margin-top: 18px; }
+.tracking-view .provider-form .form-error { font-size: var(--text-sm); color: var(--alva-danger); margin: 10px 0 0; }
+/* Três estados, três leituras: entregando é bom, configurado é neutro — credencial
+   salva não é alerta —, e não configurado é ausência. O âmbar fica reservado para
+   entrega com problema, que é onde ele significa alguma coisa. */
+.tracking-view .delivery-state.set { color: var(--alva-ink); font-weight: 500; }
+.tracking-view .delivery-state.off { color: var(--alva-muted); font-weight: 500; }
 .tracking-view .consent-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
 .tracking-view .consent-card h3 { font-size: var(--text-lg); margin: 0 0 6px; }
 .tracking-view .consent-card p { font-size: var(--text-sm); line-height: 1.6; color: var(--alva-muted); margin: 8px 0 0; }
@@ -1829,7 +1846,9 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   .analytics-view .metrics, .analytics-view .metrics.metrics-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 0; }
   .analytics-view .metric:nth-child(odd) { padding-left: 0; border-left: 0; }
   .analytics-view .analytics-lists, .analytics-view .analytics-lists-3,
-  .tracking-view .tracking-layout, .tracking-view .providers, .tracking-view .consent-board { grid-template-columns: 1fr; gap: 28px; }
+  .tracking-view .tracking-layout, .tracking-view .consent-board { grid-template-columns: 1fr; gap: 28px; }
+  /* Destinos já são uma coluna só, e a separação entre eles é a hairline, não o vão:
+     abrir 28px de espaço aqui desmancharia a lista em cartões soltos. */
 }
 
 /* O diálogo de configurações trata de dois assuntos; cada um ganha seu bloco. */

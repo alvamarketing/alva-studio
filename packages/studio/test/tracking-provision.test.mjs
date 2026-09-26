@@ -153,6 +153,296 @@ test('destinos aceitam somente o contrato de cada plataforma e Taboola pode ser 
   } finally { await database.close(); }
 });
 
+test('salvar destino já configurado mescla: campo ausente mantém a credencial guardada', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'merge-parcial');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { access_token: 'token-original', pixel_id: '111' },
+    });
+    // A tela nunca recebe o token de volta, então reabrir o destino para só trocar o pixel
+    // manda uma requisição sem access_token. Isso não pode zerar a credencial: o servidor
+    // decifra o que já está guardado e mescla por cima só o que veio nesta chamada.
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { pixel_id: '222' },
+    });
+    const destinations = await repository.conversionDestinations({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    assert.deepEqual(destinations.meta, { access_token: 'token-original', pixel_id: '222' });
+  } finally { await database.close(); }
+});
+
+test('salvar destino já configurado mescla: campo enviado substitui a credencial guardada', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'merge-substitui');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { access_token: 'token-antigo', pixel_id: '111' },
+    });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { access_token: 'token-novo', pixel_id: '111' },
+    });
+    const destinations = await repository.conversionDestinations({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    assert.deepEqual(destinations.meta, { access_token: 'token-novo', pixel_id: '111' });
+  } finally { await database.close(); }
+});
+
+test('sem destino salvo, mesclar não dispensa o campo obrigatório ausente', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'merge-sem-existente');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    // Não existe destino anterior: não há o que mesclar, e a exigência de campo obrigatório
+    // continua valendo como sempre valeu.
+    await assert.rejects(
+      () => repository.saveDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta', configuration: { pixel_id: '111' } }),
+      /Configuração do destino inválida/,
+    );
+    const stored = await database.query('SELECT count(*)::int AS count FROM tracking_destinations WHERE company_id = $1 AND project_id = $2', [seeded.company.id, seeded.project.id]);
+    assert.equal(stored.rows[0].count, 0);
+  } finally { await database.close(); }
+});
+
+test('mesclar não abre porta para gravar valor fora do formato do provedor', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'merge-formato-invalido');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { access_token: 'token-original', pixel_id: '111' },
+    });
+    // O resto da configuração vem do que já estava guardado, mas o campo enviado nesta
+    // chamada continua sujeito à validação de formato do provedor.
+    await assert.rejects(
+      () => repository.saveDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta', configuration: { pixel_id: 'não-é-um-número' } }),
+      /Configuração do destino inválida/,
+    );
+    const destinations = await repository.conversionDestinations({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    assert.deepEqual(destinations.meta, { access_token: 'token-original', pixel_id: '111' });
+  } finally { await database.close(); }
+});
+
+test('leitura de destinos devolve sempre os cinco provedores, configurados ou não, e nunca o segredo cifrado', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'leitura-destinos');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { access_token: 'segredo-nunca-deve-vazar', pixel_id: '123' },
+    });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'google',
+      configuration: { operating_account_id: '1', conversion_action_id: '2', oauth_access_token: 'outro-segredo-nunca-deve-vazar' },
+      publicConfiguration: { measurement_id: 'G-ABCD1234' },
+    });
+    const destinations = await repository.destinationsFor({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    assert.deepEqual(destinations.map((item) => item.provider), ['meta', 'tiktok', 'google', 'linkedin', 'taboola'], 'ordem estável, os cinco sempre presentes');
+    const meta = destinations.find((item) => item.provider === 'meta');
+    assert.equal(meta.configured, true);
+    assert.deepEqual(meta.publicConfiguration, { pixel_id: '123' });
+    assert.ok(meta.updatedAt, 'destino configurado tem data de atualização');
+    const google = destinations.find((item) => item.provider === 'google');
+    assert.equal(google.configured, true);
+    assert.deepEqual(google.publicConfiguration, { measurement_id: 'G-ABCD1234' });
+    for (const provider of ['tiktok', 'linkedin', 'taboola']) {
+      const item = destinations.find((entry) => entry.provider === provider);
+      assert.equal(item.configured, false);
+      assert.deepEqual(item.publicConfiguration, {});
+      assert.equal(item.updatedAt, null);
+    }
+    const serializado = JSON.stringify(destinations);
+    assert.equal(serializado.includes('segredo-nunca-deve-vazar'), false, 'o token da Meta não pode aparecer na resposta');
+    assert.equal(serializado.includes('outro-segredo-nunca-deve-vazar'), false, 'o token do Google não pode aparecer na resposta');
+    assert.equal(serializado.includes('access_token'), false);
+    assert.equal(serializado.includes('oauth_access_token'), false);
+  } finally { await database.close(); }
+});
+
+test('leitura de destinos não mistura preview e produção', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'leitura-ambientes');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { access_token: 'token-producao', pixel_id: '999' },
+    });
+    const producao = await repository.destinationsFor({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    const preview = await repository.destinationsFor({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'preview' });
+    assert.equal(producao.find((item) => item.provider === 'meta').configured, true);
+    assert.equal(preview.find((item) => item.provider === 'meta').configured, false);
+  } finally { await database.close(); }
+});
+
+test('remover destino recusa provedor desconhecido', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'remover-provedor-invalido');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await assert.rejects(
+      () => repository.removeDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'bitcoin-ads' }),
+      /Destino de rastreamento inválido/,
+    );
+  } finally { await database.close(); }
+});
+
+test('remover destino que não existe não falha', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'remover-inexistente');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    const resultado = await repository.removeDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta' });
+    assert.deepEqual(resultado, { provider: 'meta', environment: 'production', configured: false });
+    const destinations = await repository.destinationsFor({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    assert.equal(destinations.every((item) => item.configured === false), true);
+  } finally { await database.close(); }
+});
+
+test('remover o último destino do ambiente deixa o binding pending sem job condenado a falhar', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'remover-ultimo');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await repository.saveDestination({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta',
+      configuration: { access_token: 'token', pixel_id: '111' },
+    });
+    const binding = (await database.query(
+      "SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND engine = 'conversions'",
+      [seeded.company.id, seeded.project.id],
+    )).rows[0];
+    const antesDeRemover = await database.query('SELECT status FROM tracking_provision_jobs WHERE binding_id = $1', [binding.id]);
+    assert.equal(antesDeRemover.rows[0].status, 'queued', 'salvar o único destino enfileira o provisionamento, como já acontecia');
+
+    const resultado = await repository.removeDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta' });
+    assert.deepEqual(resultado, { provider: 'meta', environment: 'production', configured: false });
+
+    // "Nenhum destino configurado" é uma configuração legítima (o projeto não envia
+    // conversões), não uma falha do provisionador local — por isso não pode sobrar job
+    // tentando o impossível e acabando morto por um erro que fomos nós que causamos.
+    const jobsDepois = await database.query('SELECT status FROM tracking_provision_jobs WHERE binding_id = $1', [binding.id]);
+    assert.equal(jobsDepois.rowCount, 0, 'nenhum job deve seguir tentando provisionar um binding sem destino');
+    const bindingDepois = await database.query('SELECT status, last_error FROM tracking_bindings WHERE id = $1', [binding.id]);
+    assert.equal(bindingDepois.rows[0].status, 'pending');
+    assert.equal(bindingDepois.rows[0].last_error, null);
+  } finally { await database.close(); }
+});
+
+test('remover um destino mantendo outros ainda enfileira provisionamento, como o salvar', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'remover-parcial');
+    const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    await repository.saveDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta', configuration: { access_token: 'token', pixel_id: '111' } });
+    await repository.saveDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'tiktok', configuration: { access_token: 'token', pixel_code: 'pixel-code' } });
+
+    await repository.removeDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'meta' });
+
+    const destinations = await repository.destinationsFor({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    assert.equal(destinations.find((item) => item.provider === 'meta').configured, false);
+    assert.equal(destinations.find((item) => item.provider === 'tiktok').configured, true);
+    const binding = (await database.query(
+      "SELECT id, status FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND engine = 'conversions'",
+      [seeded.company.id, seeded.project.id],
+    )).rows[0];
+    assert.equal(binding.status, 'pending');
+    const job = (await database.query('SELECT status FROM tracking_provision_jobs WHERE binding_id = $1', [binding.id])).rows[0];
+    assert.equal(job.status, 'queued', 'ainda sobra destino, então o provisionamento é reenfileirado como no salvar');
+  } finally { await database.close(); }
+});
+
+test('API expõe leitura e remoção de destinos, exige integration.manage e nunca serializa segredo', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const seeded = await seed(database, 'api-leitura-remocao');
+    const tracking = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
+    const capabilities = [];
+    const context = { companyId: seeded.company.id, currentProjectId: seeded.project.id, user: { id: seeded.user.id }, role: 'owner' };
+    const api = createProjectApi({
+      tracking, body: async (req) => req.bodyValue,
+      sessionService: { require: async () => context, authorize: async (_context, capability, projectId) => {
+        capabilities.push(capability);
+        assert.equal(capability, 'integration.manage');
+        assert.equal(projectId, seeded.project.id);
+      } },
+    });
+    const invoke = async ({ path, url = path, method, bodyValue = {}, headers = {} }) => {
+      let result;
+      await api({ req: { bodyValue, url, headers }, res: {}, path, method, json: (data, status = 200) => { result = { data, status }; } });
+      return result;
+    };
+    const base = `/api/projects/${seeded.project.id}/tracking/destinations`;
+
+    const vazio = await invoke({ path: base, method: 'GET' });
+    assert.equal(vazio.data.length, 5);
+    assert.equal(vazio.data.every((item) => item.configured === false), true, 'sem environment na query, assume produção');
+
+    await invoke({ path: `${base}/meta`, method: 'PUT', bodyValue: { environment: 'production', configuration: { access_token: 'segredo-de-api-nunca-deve-vazar', pixel_id: '123' } }, headers: { 'content-type': 'application/json' } });
+
+    const comMeta = await invoke({ path: base, url: `${base}?environment=production`, method: 'GET' });
+    assert.equal(comMeta.data.find((item) => item.provider === 'meta').configured, true);
+    assert.equal(JSON.stringify(comMeta.data).includes('segredo-de-api-nunca-deve-vazar'), false);
+
+    const previewVazio = await invoke({ path: base, url: `${base}?environment=preview`, method: 'GET' });
+    assert.equal(previewVazio.data.find((item) => item.provider === 'meta').configured, false, 'preview não herda o destino de produção');
+
+    const removido = await invoke({ path: `${base}/meta`, url: `${base}/meta?environment=production`, method: 'DELETE' });
+    assert.deepEqual(removido.data, { provider: 'meta', environment: 'production', configured: false });
+
+    const semNovaFalha = await invoke({ path: `${base}/meta`, url: `${base}/meta?environment=production`, method: 'DELETE' });
+    assert.equal(semNovaFalha.data.configured, false, 'remover de novo não explode');
+
+    await assert.rejects(
+      () => invoke({ path: `${base}/provedor-inventado`, url: `${base}/provedor-inventado?environment=production`, method: 'DELETE' }),
+      /Destino de rastreamento inválido/,
+    );
+
+    assert.equal(capabilities.every((capability) => capability === 'integration.manage'), true);
+
+    const forbidden = createProjectApi({
+      sessionService: { require: async () => context, authorize: async () => { throw Object.assign(new Error('Sem permissão para esta ação.'), { status: 403 }); } },
+      tracking, body: async () => ({}),
+    });
+    await assert.rejects(
+      () => forbidden({ req: { url: base }, res: {}, path: base, method: 'GET', json: () => {} }),
+      (error) => error.status === 403,
+    );
+    await assert.rejects(
+      () => forbidden({ req: { url: `${base}/meta` }, res: {}, path: `${base}/meta`, method: 'DELETE', json: () => {} }),
+      (error) => error.status === 403,
+    );
+  } finally { await database.close(); }
+});
+
 test('API rejeita formato inválido de destino antes de cifrar ou enfileirar provisionamento', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });

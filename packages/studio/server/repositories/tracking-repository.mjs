@@ -17,6 +17,11 @@ const REQUIRED_PROVIDER_FIELDS = {
   google: ['operating_account_id', 'conversion_action_id', 'oauth_access_token'],
   linkedin: ['conversion_urn', 'access_token'], taboola: [],
 };
+// Exportados porque a tela de configuração desenha exatamente este contrato: o que ela
+// pergunta precisa ser o que aqui é aceito, e há um teste comparando as duas listas.
+export const CAMPOS_POR_DESTINO = PROVIDER_FIELDS;
+export const CAMPOS_EXIGIDOS_POR_DESTINO = REQUIRED_PROVIDER_FIELDS;
+
 const CREDENTIAL = /^[A-Za-z0-9._~+\/=:-]{1,4096}$/;
 const PROVIDER_VALUE_RULES = {
   meta: { pixel_id: /^\d{1,20}$/, access_token: CREDENTIAL },
@@ -187,18 +192,36 @@ export class TrackingRepository {
     const targetEnvironment = environment(rawEnvironment);
     if (!PROVIDERS.has(provider)) throw fail('Destino de rastreamento inválido.');
     if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) throw fail('Configuração do destino inválida.');
-    if (Object.keys(configuration).some((key) => !PROVIDER_FIELDS[provider].has(key) || typeof configuration[key] !== 'string' || !PROVIDER_VALUE_RULES[provider][key]?.test(configuration[key])) || REQUIRED_PROVIDER_FIELDS[provider].some((key) => !configuration[key])) throw fail('Configuração do destino inválida.');
-    const derived = provider === 'meta' ? { pixel_id: configuration.pixel_id } : provider === 'tiktok' ? { pixel_code: configuration.pixel_code } : {};
-    const publicValue = publicConfiguration === undefined ? derived : publicConfiguration;
-    if (!publicValue || typeof publicValue !== 'object' || Array.isArray(publicValue) || Object.keys(publicValue).some((key) => !Object.hasOwn(PUBLIC_PROVIDER_FIELDS[provider], key) || typeof publicValue[key] !== 'string' || !PUBLIC_PROVIDER_FIELDS[provider][key].test(publicValue[key]))) throw fail('Configuração pública do destino inválida.');
-    const plain = JSON.stringify(configuration);
-    if (plain.length > 12_000) throw fail('Configuração do destino excede o limite.');
+    // A validação de formato é sobre o que chegou nesta chamada — mesclar não isenta um
+    // campo enviado de obedecer o contrato do provedor, só preenche o que ficou de fora.
+    if (Object.keys(configuration).some((key) => !PROVIDER_FIELDS[provider].has(key) || typeof configuration[key] !== 'string' || !PROVIDER_VALUE_RULES[provider][key]?.test(configuration[key]))) throw fail('Configuração do destino inválida.');
     await this.database.transaction(async (client) => {
       const binding = await client.query(
         `SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions' FOR UPDATE`,
         [companyId, projectId, targetEnvironment],
       );
       if (!binding.rows[0]) throw fail('Binding de rastreamento não encontrado.', 404);
+      // O servidor nunca devolve o token salvo (ver destinationsFor), então quem reabre um
+      // destino já configurado para corrigir só um campo manda a requisição sem o resto. Um
+      // campo ausente aqui não é "esvazie isto": é "não mudou" — por isso a configuração nova
+      // é mesclada sobre a que já estava cifrada, e só o que veio nesta chamada substitui o
+      // que estava guardado. Sem destino anterior, não há o que mesclar: a exigência de campo
+      // obrigatório continua valendo como sempre valeu.
+      const existente = await client.query(
+        `SELECT encrypted_configuration FROM tracking_destinations
+          WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND provider = $4 FOR UPDATE`,
+        [companyId, projectId, targetEnvironment, provider],
+      );
+      const configuracaoAtual = existente.rows[0]
+        ? JSON.parse(this.vault.decrypt(existente.rows[0].encrypted_configuration, destinationScope({ companyId, projectId, environment: targetEnvironment, provider })))
+        : {};
+      const configuracaoEfetiva = { ...configuracaoAtual, ...configuration };
+      if (REQUIRED_PROVIDER_FIELDS[provider].some((key) => !configuracaoEfetiva[key])) throw fail('Configuração do destino inválida.');
+      const derived = provider === 'meta' ? { pixel_id: configuracaoEfetiva.pixel_id } : provider === 'tiktok' ? { pixel_code: configuracaoEfetiva.pixel_code } : {};
+      const publicValue = publicConfiguration === undefined ? derived : publicConfiguration;
+      if (!publicValue || typeof publicValue !== 'object' || Array.isArray(publicValue) || Object.keys(publicValue).some((key) => !Object.hasOwn(PUBLIC_PROVIDER_FIELDS[provider], key) || typeof publicValue[key] !== 'string' || !PUBLIC_PROVIDER_FIELDS[provider][key].test(publicValue[key]))) throw fail('Configuração pública do destino inválida.');
+      const plain = JSON.stringify(configuracaoEfetiva);
+      if (plain.length > 12_000) throw fail('Configuração do destino excede o limite.');
       await client.query(
         `INSERT INTO tracking_destinations (company_id, project_id, environment, provider, binding_id, encrypted_configuration, public_configuration)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb) ON CONFLICT (company_id, project_id, environment, provider)
@@ -221,10 +244,69 @@ export class TrackingRepository {
   async destinationsFor({ companyId, projectId, environment: rawEnvironment }) {
     const targetEnvironment = environment(rawEnvironment);
     const { rows } = await this.database.query(
-      `SELECT provider FROM tracking_destinations WHERE company_id = $1 AND project_id = $2 AND environment = $3 ORDER BY provider`,
+      `SELECT provider, public_configuration, updated_at FROM tracking_destinations
+        WHERE company_id = $1 AND project_id = $2 AND environment = $3`,
       [companyId, projectId, targetEnvironment],
     );
-    return rows.map((row) => ({ provider: row.provider, environment: targetEnvironment, configured: true }));
+    const porProvedor = new Map(rows.map((row) => [row.provider, row]));
+    // A tela de configuração precisa saber o que falta configurar, não só o que já existe —
+    // por isso os cinco provedores aparecem sempre, na mesma ordem, configurados ou não.
+    // `encrypted_configuration` nunca entra nesta consulta: o que sai daqui é só o que já
+    // nasceu público (`public_configuration`), então não há segredo para vazar por descuido.
+    return [...PROVIDERS].map((provider) => {
+      const row = porProvedor.get(provider);
+      return {
+        provider,
+        environment: targetEnvironment,
+        configured: Boolean(row),
+        publicConfiguration: row ? row.public_configuration || {} : {},
+        updatedAt: row ? row.updated_at : null,
+      };
+    });
+  }
+
+  async removeDestination({ companyId, projectId, environment: rawEnvironment, provider }) {
+    const targetEnvironment = environment(rawEnvironment);
+    if (!PROVIDERS.has(provider)) throw fail('Destino de rastreamento inválido.');
+    await this.database.transaction(async (client) => {
+      const binding = await client.query(
+        `SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions' FOR UPDATE`,
+        [companyId, projectId, targetEnvironment],
+      );
+      if (!binding.rows[0]) throw fail('Binding de rastreamento não encontrado.', 404);
+      await client.query(
+        `DELETE FROM tracking_destinations WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND provider = $4`,
+        [companyId, projectId, targetEnvironment, provider],
+      );
+      const restantes = await client.query(
+        `SELECT count(*)::int AS count FROM tracking_destinations WHERE company_id = $1 AND project_id = $2 AND environment = $3`,
+        [companyId, projectId, targetEnvironment],
+      );
+      if (restantes.rows[0].count > 0) {
+        // Ainda sobra destino neste ambiente: remover um provedor não muda o fato de que o
+        // projeto envia conversões, então o comportamento é o mesmo do salvar — reabre o
+        // binding e enfileira o provisionamento de novo.
+        await client.query(`UPDATE tracking_bindings SET status = 'pending', last_error = NULL, updated_at = now() WHERE id = $1`, [binding.rows[0].id]);
+        const job = await client.query(
+          `INSERT INTO tracking_provision_jobs (company_id, project_id, binding_id) VALUES ($1, $2, $3)
+           ON CONFLICT (binding_id) DO UPDATE SET status = 'queued', next_attempt_at = now(), claim_token = NULL, lease_expires_at = NULL, updated_at = now()
+           WHERE tracking_provision_jobs.lease_expires_at IS NULL OR tracking_provision_jobs.lease_expires_at <= now()
+           RETURNING id`,
+          [companyId, projectId, binding.rows[0].id],
+        );
+        if (!job.rows[0]) throw fail('O provisionamento está em execução.', 409);
+      } else {
+        // Não sobrou destino nenhum: isso é uma configuração válida ("este projeto não envia
+        // conversões"), não uma falha. O provisionador local recusa provisionar sem nenhum
+        // destino configurado, então enfileirar um job aqui só garantiria tentativas fadadas
+        // ao fracasso até o binding ser marcado como morto — por um erro que fomos nós que
+        // causamos ao remover o último destino de propósito. O binding volta para 'pending'
+        // e qualquer job dele é descartado: nada fica tentando o impossível.
+        await client.query(`UPDATE tracking_bindings SET status = 'pending', last_error = NULL, updated_at = now() WHERE id = $1`, [binding.rows[0].id]);
+        await client.query(`DELETE FROM tracking_provision_jobs WHERE binding_id = $1`, [binding.rows[0].id]);
+      }
+    });
+    return { provider, environment: targetEnvironment, configured: false };
   }
 
   async publicProviders({ companyId, projectId, environment: rawEnvironment }) {

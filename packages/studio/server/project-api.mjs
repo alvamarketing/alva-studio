@@ -436,6 +436,17 @@ export function createProjectApi({
         const input = await body(req);
         return json(await tracking.saveDestination({ companyId: context.companyId, projectId, provider, environment: input.environment, configuration: input.configuration, publicConfiguration: input.publicConfiguration }));
       }
+      if (action === 'destinations' && !provider && method === 'GET') {
+        const search = new URL(req.url, 'http://localhost').searchParams;
+        return json(await tracking.destinationsFor({ companyId: context.companyId, projectId, environment: search.get('environment') || 'production' }));
+      }
+      if (action === 'destinations' && provider && method === 'DELETE') {
+        const search = new URL(req.url, 'http://localhost').searchParams;
+        // O corpo é opcional aqui: uma chamada só com "?environment=" na query não pode
+        // esbarrar no "Envie JSON" do body() por não ter mandado nenhum payload.
+        const input = req.headers?.['content-type']?.startsWith('application/json') ? await body(req) : {};
+        return json(await tracking.removeDestination({ companyId: context.companyId, projectId, provider, environment: input.environment || search.get('environment') }));
+      }
       throw fail('Não encontrado.', 404);
     }
 
