@@ -14,11 +14,15 @@ export async function processDueCommercialEvents({ repository, client, maxPerRun
     if (!claim.claimed) break;
     const attemptCount = claim.delivery.attemptCount + 1;
     try {
-      await client.sendEvent(claim.delivery.payload);
+      await client.sendEvent(claim.delivery);
       await repository.markDelivered({ id: claim.delivery.id, claimToken: claim.token });
     } catch (error) {
       const lastError = safeError(error);
-      if (attemptCount >= MAX_COMMERCIAL_ATTEMPTS) await repository.markDead({ id: claim.delivery.id, claimToken: claim.token, attemptCount, lastError });
+      // Erro que não melhora com repetição — credencial ausente, corpo recusado — morre na
+      // primeira. Insistir numa configuração errada só multiplica o disparo contra a
+      // plataforma, sem chance de sucesso.
+      const permanente = error?.retentar === false;
+      if (permanente || attemptCount >= MAX_COMMERCIAL_ATTEMPTS) await repository.markDead({ id: claim.delivery.id, claimToken: claim.token, attemptCount, lastError });
       else await repository.markRetry({ id: claim.delivery.id, claimToken: claim.token, attemptCount, nextAttemptAt: new Date(now().getTime() + commercialRetryDelay(attemptCount)), lastError });
     }
     processed += 1;

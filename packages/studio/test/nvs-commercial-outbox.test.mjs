@@ -74,8 +74,8 @@ test('worker comercial preserva o tracking_event_id em retry e sanitiza erro', a
     async claimNextDue() { return { claimed: true, token: 'claim', delivery: { id: 'delivery', attemptCount: 0, payload: { tracking_event_id: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29' } } }; },
     async markRetry(value) { retry = value; },
   };
-  await processDueCommercialEvents({ repository, client: { sendEvent: async (payload) => { calls.push(payload); throw new Error('Bearer secret\nfailed'); } }, maxPerRun: 1, now: () => new Date(0) });
-  assert.equal(calls[0].tracking_event_id, 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
+  await processDueCommercialEvents({ repository, client: { sendEvent: async (entrega) => { calls.push(entrega); throw new Error('Bearer secret\nfailed'); } }, maxPerRun: 1, now: () => new Date(0) });
+  assert.equal(calls[0].payload.tracking_event_id, 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
   assert.equal(retry.attemptCount, 1);
   assert.equal(retry.lastError.includes('secret'), false);
 });

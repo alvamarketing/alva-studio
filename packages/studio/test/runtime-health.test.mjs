@@ -136,7 +136,10 @@ test('worker de tracking inicia a outbox comercial somente com a flag NVS litera
     role: 'tracking', connectionString: 'postgres://nao-registre-esta-url', heartbeatFile,
     createDatabaseFn: () => ({ query: async () => {}, close: async () => {} }), migrateFn: async () => {},
     commercialRepositoryFactory: () => ({ queue: true }),
-    startCommercialWorkerFn: ({ repository }) => { assert.equal(repository.queue, true); started = true; return { stop: () => {} }; },
+    // O cliente entrega direto aos destinos e por isso lê credencial cifrada; injetá-lo
+    // mantém o teste sobre o que ele afirma — que a flag liga o worker.
+    commercialClientFactory: () => ({ sendEvent: async () => {} }),
+    startCommercialWorkerFn: ({ repository, client }) => { assert.equal(repository.queue, true); assert.ok(client.sendEvent); started = true; return { stop: () => {} }; },
     nvsRuntimeEnabled: true, log: () => {},
   });
   t.after(() => rm(directory, { recursive: true, force: true }));
