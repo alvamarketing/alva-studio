@@ -963,7 +963,7 @@ function paintAnalyticsPanel(model) {
   const chart = $('#analytics-chart');
   const journey = $('#analytics-journey');
   const analyticsUpdated = $('#analytics-updated');
-  if (analyticsUpdated) analyticsUpdated.textContent = model.updatedLabel || 'Origem dos dados indisponível';
+  if (analyticsUpdated) analyticsUpdated.textContent = model.updatedLabel;
   const messages = { loading: 'Carregando visitas…', error: model.message, empty: 'Ainda não há visitas neste período.' };
   status.textContent = messages[model.phase] || '';
   status.dataset.state = model.phase;
@@ -1631,9 +1631,7 @@ function pintarAnalyticsView(summary, { phase = 'ready', message = '' } = {}) {
   const status = $('#analytics-view-status');
   status.textContent = phase === 'loading' ? 'Carregando dados…' : phase === 'error' ? message : '';
   status.dataset.state = phase;
-  $('#analytics-view-source').textContent = summary?.source === 'umami'
-    ? 'Comportamento e aquisição medidos pelo Analytics.'
-    : 'Comportamento e aquisição medidos pelo coletor legado · migração pendente.';
+  $('#analytics-view-source').textContent = 'Comportamento e aquisição medidos pelo Analytics do Studio.';
   const metrics = clear($('#analytics-view-metrics'));
   for (const metric of analyticsMetricsModel(phase === 'ready' ? summary : null)) {
     const card = document.createElement('article');

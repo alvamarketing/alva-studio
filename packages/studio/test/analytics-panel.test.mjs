@@ -73,9 +73,12 @@ test('o intervalo padrão cobre exatamente os últimos 7 dias, terminando agora 
   assert.equal(range.from, '2026-08-29T12:00:00.000Z');
 });
 
-test('ausência de metadados de origem não anuncia analytics atualizado ou ativo', () => {
+// Este teste existia para impedir que a tela anunciasse "atualizado" sem saber de onde o
+// número vinha — havia dois coletores e o resumo não dizia qual respondeu. Sobrou um, o do
+// próprio Studio, então a origem é conhecida; o que continua proibido é citar produto de
+// terceiro ou anunciar integração ativa.
+test('o rótulo nomeia o Analytics do Studio e não anuncia integração ativa', () => {
   const model = analyticsPanelModel(summaryWith([{ date: '2026-09-01', visits: 1 }]));
-  assert.equal(model.updatedLabel, 'Origem dos dados indisponível');
-  assert.equal(model.updatedLabel.toLowerCase().includes('umami'), false);
-  assert.doesNotMatch(model.updatedLabel, /atualizado|ativo/i);
+  assert.equal(model.updatedLabel, 'Analytics do Studio · atualizado agora');
+  assert.doesNotMatch(model.updatedLabel, /umami|nvs|ativo|conectad/i);
 });

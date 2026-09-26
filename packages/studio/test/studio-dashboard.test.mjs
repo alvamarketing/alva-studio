@@ -345,14 +345,27 @@ test('visão do projeto não anuncia analytics interno ativo sem capacidade de r
   assert.equal(JSON.stringify(model).includes('NVS'), false);
 });
 
-test('painel identifica o coletor legado ainda em migração, sem anunciá-lo como runtime ativo', () => {
+// Seção "Visitas nos últimos 7 dias" do wireframe: o slot de 8px ao lado do título diz de
+// onde vem o número e o quanto ele é recente. O wireframe escreve ali "Umami · atualizado
+// agora"; o Umami saiu e quem mede é o Studio, então a forma fica e o nome muda.
+//
+// O rótulo dizia "Coletor legado · migração pendente" e ramificava em `summary.source`, um
+// campo que o resumo nunca devolveu: na prática a tela anunciava ao dono do projeto uma
+// migração que já tinha acabado, ou "Origem dos dados indisponível" com os dados na frente.
+test('o painel diz que quem mede é o Analytics do Studio, sem anunciar migração nenhuma', () => {
   const model = analyticsPanelModel({
-    dailyVisits: [{ date: '2026-09-06T00:00:00.000Z', visits: 3 }], funnel: [], source: 'legacy', readOnly: false,
+    dailyVisits: [{ date: '2026-09-06T00:00:00.000Z', visits: 3 }], funnel: [], readOnly: false,
   });
 
-  assert.equal(model.updatedLabel, 'Coletor legado · migração pendente');
-  assert.equal(model.updatedLabel.includes('Umami'), false);
-  assert.equal(model.updatedLabel.includes('NVS'), false);
+  assert.equal(model.updatedLabel, 'Analytics do Studio · atualizado agora');
+  assert.doesNotMatch(model.updatedLabel, /legado|pendente|indisponível/i);
+});
+
+test('sem visita ainda, o rótulo diz que não há dado — não que a origem falhou', () => {
+  const model = analyticsPanelModel({ dailyVisits: [], funnel: [], readOnly: false });
+
+  assert.equal(model.phase, 'empty');
+  assert.equal(model.updatedLabel, 'Analytics do Studio · sem dados ainda');
 });
 
 test('visão do projeto separa carregamento, erro e projeto vazio', () => {
@@ -523,7 +536,7 @@ test('painel "Visitas nos últimos 7 dias" usa as classes do wireframe, sem cita
 
   assert.match(html, /<section id="analytics-panel"[^>]*class="surface analytics-card"[^>]*hidden/);
   assert.match(html, /<h2 id="analytics-panel-title">Visitas nos últimos 7 dias<\/h2>/);
-  assert.match(html, /id="analytics-updated"[^>]*>Coletor legado · migração pendente<\/span>/);
+  assert.match(html, /id="analytics-updated"[^>]*>Analytics do Studio<\/span>/);
   assert.match(html, /analytics-card[\s\S]*id="open-analytics"[^>]*>Abrir Analytics</);
   assert.match(html, /id="analytics-chart" class="chart"/);
   assert.match(html, /id="analytics-journey" class="journey"/);
@@ -539,7 +552,9 @@ test('painel "Visitas nos últimos 7 dias" usa as classes do wireframe, sem cita
 
   assert.match(app, /studioShell\?\.can\?\.\('analytics\.read'\)/);
   assert.match(app, /analyticsPanelModel\(/);
-  assert.match(app, /analyticsUpdated\.textContent = model\.updatedLabel \|\| 'Origem dos dados indisponível'/);
+  // O fallback saiu junto: o modelo já decide o que escrever em cada fase, e um texto
+  // alternativo aqui só reintroduziria a mensagem que a tela não deve mais dar.
+  assert.match(app, /analyticsUpdated\.textContent = model\.updatedLabel;/);
   assert.match(app, /analytics\/summary\?from=.*&to=/, 'a rota exige from/to (server/project-api.mjs: analyticsRange) — sem isso o resumo sempre responde 400');
   assert.match(app, /\$\('#open-analytics'\)\.onclick/, 'Abrir Analytics precisa ter ação associada');
   assert.match(app, /setDashboardView\('project'\)/, 'Abrir Analytics precisa levar à visão que contém o painel');

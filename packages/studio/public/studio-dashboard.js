@@ -330,14 +330,16 @@ export function analyticsPanelModel(summary, { phase = 'ready', error = '', canR
   const funnel = Array.isArray(summary?.funnel) ? summary.funnel.slice(0, ANALYTICS_FUNNEL_STEPS) : [];
   const hasVisits = bars.some((bar) => bar.visitas > 0);
 
+  // Não há mais de onde os dados poderem vir: o coletor é o do próprio Studio. O rótulo
+  // ramificava numa origem que o resumo nunca devolveu, e por isso dizia "indisponível"
+  // com o gráfico preenchido logo ao lado.
+  const pronto = hasVisits || funnel.length;
   return {
-    phase: hasVisits || funnel.length ? 'ready' : 'empty',
+    phase: pronto ? 'ready' : 'empty',
     bars,
     funnel,
     metrics: analyticsMetricsModel(summary),
-    updatedLabel: summary?.source === 'legacy'
-      ? 'Coletor legado · migração pendente'
-      : 'Origem dos dados indisponível',
+    updatedLabel: `Analytics do Studio · ${pronto ? 'atualizado agora' : 'sem dados ainda'}`,
   };
 }
 
