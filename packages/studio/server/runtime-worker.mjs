@@ -6,6 +6,7 @@ import { startWebhookWorker } from './webhook-worker.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
 import { NvsClient, UmamiClient } from './tracking-clients.mjs';
 import { criarClienteDeDestinos } from './tracking-cliente-direto.mjs';
+import { criarProvisionadorLocal } from './tracking-provisionador-local.mjs';
 import { startTrackingProvisionWorker } from './tracking-provision-worker.mjs';
 import { NvsCommercialOutboxRepository } from './repositories/nvs-commercial-outbox-repository.mjs';
 import { startCommercialEventsWorker } from './commercial-events-worker.mjs';
@@ -25,7 +26,7 @@ export async function startRuntimeWorker({
   webhookRepositoryFactory = (database) => new WebhookDeliveryRepository(database),
   startWebhookWorkerFn = startWebhookWorker,
   trackingRepositoryFactory = (database) => new TrackingRepository(database),
-  trackingClientsFactory = () => ({ umami: new UmamiClient(), nvs: new NvsClient() }),
+  trackingClientsFactory = (database) => ({ umami: new UmamiClient(), nvs: criarProvisionadorLocal({ tracking: trackingRepositoryFactory(database) }) }),
   startTrackingWorkerFn = startTrackingProvisionWorker,
   commercialRepositoryFactory = (database) => new NvsCommercialOutboxRepository(database),
   commercialClientFactory = (database) => criarClienteDeDestinos({ tracking: trackingRepositoryFactory(database) }),
@@ -68,7 +69,7 @@ export async function startRuntimeWorker({
     if (assume('tracking') && trackingProvisionEnabled) {
       trackingWorker = startTrackingWorkerFn({
         repository: trackingRepositoryFactory(database),
-        clients: trackingClientsFactory(),
+        clients: trackingClientsFactory(database),
       });
     }
     if (assume('tracking') && nvsRuntimeEnabled) {

@@ -10,7 +10,7 @@ project_name='alva-studio-runtime'
 confirmed=false
 writers_stopped=false
 active_writers=''
-writer_services='studio-web studio-worker nvs nvs-outbox-worker'
+writer_services='studio-web studio-worker'
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --input-dir) [ "$#" -ge 2 ] || usage; input_dir=$2; shift 2 ;;
@@ -25,7 +25,7 @@ done
 [ -d "$input_dir" ] || { echo "Diretório de backup não encontrado: $input_dir" >&2; exit 66; }
 [ -f "$compose_file" ] || { echo "Compose não encontrado: $compose_file" >&2; exit 66; }
 [ -z "$env_file" ] || [ -f "$env_file" ] || { echo "Arquivo de ambiente não encontrado: $env_file" >&2; exit 66; }
-for file in studio-postgres.sql nvs-mariadb.sql SHA256SUMS; do
+for file in studio-postgres.sql SHA256SUMS; do
   [ -f "$input_dir/$file" ] || { echo "Arquivo obrigatório ausente: $file" >&2; exit 65; }
 done
 command -v docker >/dev/null 2>&1 || { echo "Docker não está instalado." >&2; exit 69; }
@@ -41,11 +41,10 @@ restart_writers() {
 }
 trap restart_writers EXIT HUP INT TERM
 (cd "$input_dir" && shasum -a 256 -c SHA256SUMS)
-for service in studio-postgres nvs-mariadb; do
+for service in studio-postgres; do
   compose ps -q "$service" | grep -q . || { echo "Serviço indisponível: $service" >&2; exit 69; }
 done
 compose exec -T studio-postgres pg_isready -U studio -d studio
-compose exec -T nvs-mariadb sh -ec 'exec mariadb-admin ping -h 127.0.0.1 -unvs -p"$MARIADB_PASSWORD" --silent'
 for service in $writer_services; do
   if compose ps --status running -q "$service" | grep -q .; then active_writers="${active_writers}${active_writers:+ }$service"; fi
 done
@@ -54,7 +53,6 @@ if [ -n "$active_writers" ]; then
   compose stop $active_writers
 fi
 compose exec -T studio-postgres psql -v ON_ERROR_STOP=1 -U studio -d studio < "$input_dir/studio-postgres.sql"
-compose exec -T nvs-mariadb sh -ec 'exec mariadb -unvs -p"$MARIADB_PASSWORD" nvs' < "$input_dir/nvs-mariadb.sql"
 if [ -n "$active_writers" ]; then
   compose start $active_writers
   writers_stopped=false

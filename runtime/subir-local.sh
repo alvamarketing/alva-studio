@@ -4,24 +4,17 @@
 # o Mac já confia, então não há proxy no meio nem aviso de certificado. Na primeira vez gera runtime/.env com segredos aleatórios — o arquivo
 # fica fora do git e é reaproveitado nas próximas.
 #
-# O NVS não sobe por padrão: montar uma página não depende dele. Peça com --tracking
-# quando o trabalho for esse. O analytics é nativo do Studio e está sempre de pé.
+# Analytics e tracking são nativos do Studio: não há serviço externo para ligar.
 #
 # Uso: runtime/subir-local.sh              sobe (ou atualiza) em https://studio.localhost:8443
-#      runtime/subir-local.sh --tracking   idem, com o NVS junto
 #      runtime/subir-local.sh --tunel      idem, e abre um endereço público de teste
 #                                          (túnel da Cloudflare) que vira o PUBLIC_ORIGIN
 #      runtime/subir-local.sh --parar      derruba os serviços, preservando os dados
 set -euo pipefail
 
 pasta="$(cd "$(dirname "$0")" && pwd)"
-perfis=()
-for argumento in "$@"; do
-  [[ "$argumento" == "--tracking" ]] && perfis+=(--profile tracking)
-done
-base=(docker compose --project-name alva-studio ${perfis[@]+"${perfis[@]}"} -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml")
-# parar precisa enxergar todo perfil, senão o NVS fica de pé sem ninguém notar
-todos=(docker compose --project-name alva-studio --profile tracking -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml" -f "$pasta/compose.tunel.yaml")
+base=(docker compose --project-name alva-studio -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml")
+todos=(docker compose --project-name alva-studio -f "$pasta/compose.yaml" -f "$pasta/compose.local.yaml" -f "$pasta/compose.tunel.yaml")
 com_tunel=("${base[@]}" -f "$pasta/compose.tunel.yaml")
 origem_local="https://alva.orb.local"
 
@@ -49,17 +42,11 @@ if [[ ! -f "$pasta/.env" ]]; then
 STUDIO_POSTGRES_PASSWORD=$senha_studio
 STUDIO_DATABASE_URL=postgres://studio:$senha_studio@studio-postgres:5432/studio
 PUBLIC_ORIGIN=$origem_local
-NVS_RUNTIME_ENABLED=false
 TRACKING_MASTER_KEY=$(hex)
 VERCEL_MASTER_KEY=$(hex)
 PUBLICATION_RUNTIME_HMAC_SECRET=$(hex)
 PIXELS_ENABLED=false
 TRACKING_PROVISION_ENABLED=false
-NVS_MARIADB_PASSWORD=$(hex)
-NVS_MARIADB_ROOT_PASSWORD=$(hex)
-NVS_INTERNAL_HMAC_SECRET=$(hex)
-NVS_PROPERTY_SECRETS_KEY=$(hex)
-NVS_OUTBOX_DELIVERY_ENABLED=false
 ASAAS_ENVIRONMENT=sandbox
 ENV
   echo "runtime/.env criado com segredos novos."

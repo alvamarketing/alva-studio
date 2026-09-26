@@ -26,14 +26,13 @@ compose() {
   if [ -n "$env_file" ]; then docker compose --env-file "$env_file" -p "$project_name" -f "$compose_file" "$@"
   else docker compose -p "$project_name" -f "$compose_file" "$@"; fi
 }
-for service in studio-postgres nvs-mariadb; do
+for service in studio-postgres; do
   compose ps -q "$service" | grep -q . || { echo "Serviço indisponível: $service" >&2; exit 69; }
 done
 mkdir "$output_dir"
 cleanup() { rm -rf -- "$output_dir"; }
 trap cleanup EXIT HUP INT TERM
 compose exec -T studio-postgres pg_dump --clean --if-exists --no-owner --no-privileges -U studio -d studio > "$output_dir/studio-postgres.sql"
-compose exec -T nvs-mariadb sh -ec 'exec mariadb-dump --single-transaction --routines --events -unvs -p"$MARIADB_PASSWORD" nvs' > "$output_dir/nvs-mariadb.sql"
-(cd "$output_dir" && shasum -a 256 studio-postgres.sql nvs-mariadb.sql > SHA256SUMS)
+(cd "$output_dir" && shasum -a 256 studio-postgres.sql > SHA256SUMS)
 trap - EXIT HUP INT TERM
 echo "Backup criado em: $output_dir"

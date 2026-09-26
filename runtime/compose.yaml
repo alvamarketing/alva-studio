@@ -54,8 +54,6 @@ services:
       TRACKING_PROVISION_ENABLED: ${TRACKING_PROVISION_ENABLED:-false}
       NVS_RUNTIME_ENABLED: ${NVS_RUNTIME_ENABLED:-false}
       TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
-      NVS_INTERNAL_URL: http://nvs
-      NVS_INTERNAL_HMAC_SECRET: ${NVS_INTERNAL_HMAC_SECRET:?Defina NVS_INTERNAL_HMAC_SECRET no ambiente do Coolify}
     depends_on:
       studio-postgres:
         condition: service_healthy
@@ -81,70 +79,5 @@ services:
       timeout: 5s
       retries: 12
 
-  nvs:
-    profiles: ["tracking"]
-    build:
-      context: ..
-      dockerfile: runtime/Dockerfile.nvs
-    restart: unless-stopped
-    depends_on:
-      nvs-mariadb:
-        condition: service_healthy
-    environment:
-      NVS_MARIADB_HOST: nvs-mariadb
-      NVS_MARIADB_DATABASE: nvs
-      NVS_MARIADB_USER: nvs
-      NVS_MARIADB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
-      DB_HOST: nvs-mariadb
-      DB_DATABASE: nvs
-      DB_USERNAME: nvs
-      DB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
-      NVS_INTERNAL_HMAC_SECRET: ${NVS_INTERNAL_HMAC_SECRET:?Defina NVS_INTERNAL_HMAC_SECRET no ambiente do Coolify}
-      NVS_PROPERTY_SECRETS_KEY: ${NVS_PROPERTY_SECRETS_KEY:?Defina NVS_PROPERTY_SECRETS_KEY no ambiente do Coolify}
-      NVS_OUTBOX_DELIVERY_ENABLED: ${NVS_OUTBOX_DELIVERY_ENABLED:-false}
-    healthcheck:
-      test: ["CMD", "php", "healthcheck.php"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  nvs-outbox-worker:
-    profiles: ["tracking"]
-    build:
-      context: ..
-      dockerfile: runtime/Dockerfile.nvs
-    restart: unless-stopped
-    command: ["php", "/app/alva/bin/outbox-worker.php"]
-    depends_on:
-      nvs:
-        condition: service_healthy
-    environment:
-      NVS_MARIADB_HOST: nvs-mariadb
-      NVS_MARIADB_DATABASE: nvs
-      NVS_MARIADB_USER: nvs
-      NVS_MARIADB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
-      NVS_INTERNAL_HMAC_SECRET: ${NVS_INTERNAL_HMAC_SECRET:?Defina NVS_INTERNAL_HMAC_SECRET no ambiente do Coolify}
-      NVS_PROPERTY_SECRETS_KEY: ${NVS_PROPERTY_SECRETS_KEY:?Defina NVS_PROPERTY_SECRETS_KEY no ambiente do Coolify}
-      NVS_OUTBOX_DELIVERY_ENABLED: ${NVS_OUTBOX_DELIVERY_ENABLED:-false}
-
-  nvs-mariadb:
-    profiles: ["tracking"]
-    image: mariadb:11.4@sha256:611a2fcc5fa7c6ceb8644c6f74b25ede004ff6c3a6b38c8f8c23d3bbf6c26430
-    restart: unless-stopped
-    environment:
-      MARIADB_DATABASE: nvs
-      MARIADB_USER: nvs
-      MARIADB_PASSWORD: ${NVS_MARIADB_PASSWORD:?Defina NVS_MARIADB_PASSWORD no ambiente do Coolify}
-      MARIADB_ROOT_PASSWORD: ${NVS_MARIADB_ROOT_PASSWORD:?Defina NVS_MARIADB_ROOT_PASSWORD no ambiente do Coolify}
-    volumes:
-      - nvs-mariadb-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p\"$$MARIADB_ROOT_PASSWORD\" --silent"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-
 volumes:
   studio-postgres-data:
-  nvs-mariadb-data:

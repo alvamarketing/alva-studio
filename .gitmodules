@@ -1,3 +1,0 @@
-[submodule "runtime/nvs/vendor/nvs-core"]
-	path = runtime/nvs/vendor/nvs-core
-	url = https://github.com/alvamarketing/nvs-track-core.git
