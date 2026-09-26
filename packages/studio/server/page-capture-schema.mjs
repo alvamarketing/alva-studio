@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from './form-answer-validation.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const INPUT_TYPES = new Set(['text', 'email', 'tel', 'number', 'radio', 'checkbox']);
+// Os tipos que o inspetor de campo oferece. `date` e `file` faltavam aqui: a interface os
+// oferecia numa landing e a publicação os recusava, depois de a página estar montada. A
+// validação de resposta desses dois já existia e é a mesma do quiz, então o que faltava
+// era só o acordo entre as duas pontas.
+const INPUT_TYPES = new Set(['text', 'email', 'tel', 'number', 'date', 'file', 'radio', 'checkbox']);
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 function required(attrs) { return Object.hasOwn(attrs, 'required') && attrs.required !== false && attrs.required !== 'false'; }
 

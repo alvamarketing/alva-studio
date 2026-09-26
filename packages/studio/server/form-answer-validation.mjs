@@ -1,5 +1,9 @@
 import { normalizeQuizNavigation, quizVisitedScreenIds } from '../public/quiz-navigation.js';
-const INFORMATIONAL = new Set(['image', 'video', 'vsl', 'cta', 'statement', 'chart', 'loader', 'logo', 'progress', 'countdown', 'timer']);
+import { TIPOS_SEM_RESPOSTA } from '../public/quiz-elements.js';
+// A mesma lista de quem renderiza: o que não desenha campo não pode ser cobrado como
+// pergunta. Duas listas aqui divergiram e deixaram `title`, `heading`, `text` e
+// `paragraph` de fora, tornando um quiz com decoração obrigatória impossível de enviar.
+const INFORMATIONAL = TIPOS_SEM_RESPOSTA;
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });

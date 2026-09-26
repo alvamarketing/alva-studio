@@ -51,6 +51,16 @@ function vslControl(element, vslEmbedUrls) {
   return `<div class="vsl-embed" data-vsl-public-id="${escape(element.publicId)}"><iframe class="vsl-embed-frame" src="${escape(src)}" title="${escape(element.title || 'VSL')}" allow="autoplay; fullscreen; picture-in-picture" loading="lazy" allowfullscreen></iframe></div>`;
 }
 
+// Os tipos que desenham só decoração: eles não produzem campo de resposta nenhum na tela
+// publicada. A lista mora aqui, junto de quem decide isso, porque a validação do servidor
+// precisa saber exatamente os mesmos — um tipo decorativo marcado como obrigatório fazia o
+// servidor exigir resposta de algo que a pessoa não tem como preencher nem enxergar, e o
+// quiz ficava impossível de enviar.
+export const TIPOS_SEM_RESPOSTA = new Set([
+  'image', 'video', 'vsl', 'cta', 'chart', 'loader', 'logo', 'progress', 'countdown', 'timer',
+  'statement', 'title', 'heading', 'text', 'paragraph',
+]);
+
 function control(element, options = {}) {
   const required = element.required ? ' required' : '';
   if (element.type === 'single_choice') return choices(element);
