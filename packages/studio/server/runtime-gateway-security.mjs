@@ -8,6 +8,22 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // do Facebook chegar ao servidor sem identificador de clique.
 export const PARAMETROS_DE_CLIQUE = new Set(['fbclid', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id', 'tblci']);
 
+// `fbp` é diferente de todo o resto da lista acima: não é a Meta que manda esse valor na URL
+// do anúncio, é o pixel dela escrevendo um cookie de primeira parte (`_fbp`) no navegador da
+// pessoa. Por isso ele não entra na busca por query string — entra pelo cabeçalho Cookie, e só
+// quando bate exatamente com o nome e o formato que a Meta usa (fb.<dígito>.<ms>.<número>).
+// Essas duas regras ficam aqui, exportadas, para que o módulo publicado na Vercel (a segunda
+// cópia desta lógica, em texto puro, no vercel-runtime-gateway.mjs) use o mesmo texto de regex
+// em vez de uma cópia manual que pode se desencontrar do original.
+export const REGEX_COOKIE_FBP = /(?:^|;\s*)_fbp=([^;]*)/;
+export const FORMATO_FBP = /^fb\.\d\.\d+\.\d+$/;
+
+function extractFbp(cookieHeader) {
+  if (typeof cookieHeader !== 'string' || !cookieHeader) return null;
+  const match = cookieHeader.match(REGEX_COOKIE_FBP);
+  return match && FORMATO_FBP.test(match[1]) ? match[1] : null;
+}
+
 function fail(message, status = 403) { return Object.assign(new Error(message), { status, statusCode: status }); }
 function header(headers, name) { return headers?.[name] || headers?.[name.toLowerCase()] || headers?.[name.toUpperCase()] || ''; }
 function publicHost(value) {
@@ -32,13 +48,16 @@ export function runtimeManifest(row) {
     revokedAt: row.revokedAt ?? row.revoked_at ?? null,
   };
 }
-export function signedRuntimeAttribution(referer, host, derivedKey) {
+export function signedRuntimeAttribution(referer, host, derivedKey, cookieHeader) {
   let url;
   try { url = new URL(referer); if (url.origin !== `https://${publicHost(host)}`) return null; } catch { return null; }
   const values = Object.fromEntries([...PARAMETROS_DE_CLIQUE].flatMap((key) => {
+    if (key === 'fbp') return []; // fbp vem do cookie abaixo, nunca da query string.
     const value = url.searchParams.get(key);
     return typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[key, value]] : [];
   }));
+  const fbp = extractFbp(cookieHeader);
+  if (fbp) values.fbp = fbp;
   if (!Object.keys(values).length) return null;
   const payload = Buffer.from(JSON.stringify(values)).toString('base64url');
   return `${payload}.${createHmac('sha256', derivedKey).update(`alva-runtime-attribution.${payload}`).digest('hex')}`;

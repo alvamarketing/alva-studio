@@ -378,6 +378,39 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
   });
 }
 
+const NIVEL_DA_CORRESPONDENCIA = Object.freeze({ boa: 'Boa', parcial: 'Parcial', fraca: 'Fraca' });
+
+// Quanto o Studio consegue identificar quem converteu, do jeito que a tela mostra.
+//
+// O servidor já entrega a nota pronta e o que falta, porque o cálculo depende de hashes e
+// identificadores que não podem chegar ao navegador. Aqui só se decide como isso aparece:
+// o vazio convida em vez de mostrar zero, e cada falta diz quantas conversões atinge — que
+// é o que separa "resolver isso muda tudo" de "isso aconteceu uma vez".
+export function correspondenciaModel(resumo) {
+  const eventos = Number(resumo?.eventos) || 0;
+  if (!eventos || resumo?.media === null || resumo?.media === undefined) {
+    return {
+      phase: 'empty', valor: '—', rotulo: '', detalhe: '',
+      message: 'Nenhuma conversão foi entregue ainda. A qualidade da correspondência aparece quando a primeira chegar.',
+      faltando: [],
+    };
+  }
+  const plural = eventos === 1 ? '1 conversão' : `${numero(eventos)} conversões`;
+  const faltando = (Array.isArray(resumo.faltando) ? resumo.faltando : []).map((item) => ({
+    sinal: item.sinal,
+    oQueFazer: item.oQueFazer,
+    alcance: `${numero(item.eventos)} de ${numero(eventos)} ${eventos === 1 ? 'conversão' : 'conversões'}`,
+  }));
+  return {
+    phase: 'ready',
+    valor: `${resumo.media}%`,
+    rotulo: NIVEL_DA_CORRESPONDENCIA[resumo.nivel] ?? '',
+    detalhe: `Média de ${plural} entregues.`,
+    message: faltando.length ? '' : 'Nenhum sinal está faltando nas conversões deste projeto.',
+    faltando,
+  };
+}
+
 export function analyticsRankModel(rows, limit = 5) {
   const lista = (Array.isArray(rows) ? rows : []).slice(0, limit);
   const total = lista.reduce((soma, linha) => soma + (Number(linha?.total) || 0), 0);

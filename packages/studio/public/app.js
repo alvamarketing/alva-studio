@@ -7,7 +7,7 @@ import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { configuracaoParaSalvar, destinosDeConversaoModel, nomeDoDestino, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { correspondenciaModel, configuracaoParaSalvar, destinosDeConversaoModel, nomeDoDestino, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
@@ -2166,6 +2166,58 @@ async function removerDestino(provider) {
   await recarregarDestinos();
 }
 
+function pintarCorrespondencia(resumo) {
+  const raiz = clear($('#tracking-match'));
+  const model = correspondenciaModel(resumo);
+  const nota = document.createElement('div');
+  nota.className = 'match-score';
+  const valor = document.createElement('strong');
+  valor.textContent = model.valor;
+  nota.append(valor);
+  if (model.rotulo) {
+    const rotulo = document.createElement('span');
+    rotulo.className = `delivery-state ${model.rotulo === 'Boa' ? 'ok' : model.rotulo === 'Parcial' ? 'retry' : 'off'}`;
+    rotulo.textContent = model.rotulo;
+    nota.append(rotulo);
+  }
+  if (model.detalhe) {
+    const detalhe = document.createElement('small');
+    detalhe.textContent = model.detalhe;
+    nota.append(detalhe);
+  }
+  raiz.append(nota);
+  if (model.message) {
+    const aviso = document.createElement('p');
+    aviso.className = 'help';
+    aviso.textContent = model.message;
+    raiz.append(aviso);
+  }
+  for (const item of model.faltando) {
+    const linha = document.createElement('article');
+    linha.className = 'match-gap';
+    const titulo = document.createElement('strong');
+    titulo.textContent = item.sinal;
+    const alcance = document.createElement('span');
+    alcance.className = 'delivery-state off';
+    alcance.textContent = item.alcance;
+    const acao = document.createElement('p');
+    acao.textContent = item.oQueFazer;
+    linha.append(titulo, alcance, acao);
+    raiz.append(linha);
+  }
+}
+
+async function recarregarCorrespondencia() {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) return;
+  try {
+    pintarCorrespondencia(await api(`/projects/${projectId}/conversions/match-quality`));
+  } catch {
+    // A nota é um complemento: falhar em lê-la não pode derrubar a tela de eventos.
+    pintarCorrespondencia({ eventos: 0, media: null, nivel: null, faltando: [] });
+  }
+}
+
 async function recarregarDestinos() {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) return;
@@ -2203,6 +2255,7 @@ async function abrirRastreamento() {
   // Os destinos são lidos mesmo quando a lista de eventos falha: quem abriu a tela para
   // configurar um pixel não depende de haver evento nenhum ainda.
   await recarregarDestinos();
+  await recarregarCorrespondencia();
   pintarRastreamento();
 }
 $('#nav-project-tracking').onclick = action(abrirRastreamento);

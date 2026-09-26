@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { SecretVault } from './publication-repository.mjs';
 import { IDENTIFICADORES_DE_CLIQUE, NOME_NA_PLATAFORMA } from '../conversion-consent-policy.mjs';
+import { qualidadeDaCorrespondencia, resumoDaCorrespondencia } from '../qualidade-de-correspondencia.mjs';
 
 const EVENTS = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
 const ENVIRONMENTS = new Set(['preview', 'production']);
@@ -88,7 +89,11 @@ function statusRecord(row) {
     eventRef: row.tracking_event_id ? createHash('sha256').update(String(row.tracking_event_id)).digest('hex').slice(0, 12) : null,
     destination: row.destination,
     consentState: row.payload?.consent_state ?? 'pending',
-    contentId: row.payload?.content_id ?? '',
+    contentId: row.payload?.params?.content_id ?? row.payload?.content_id ?? '',
+    contentName: row.payload?.params?.content_name ?? '',
+    // A nota sai calculada daqui: o que ela mede — hashes de contato e identificadores de
+    // clique — não pode ir ao navegador, então o número vai sozinho.
+    matchQuality: qualidadeDaCorrespondencia(row.payload ?? {}).percentual,
   };
 }
 export function commercialRetryDelay(attempt) { return BACKOFF_MS[Math.min(Math.max(1, attempt), BACKOFF_MS.length) - 1]; }
@@ -143,5 +148,14 @@ export class ConversionsOutboxRepository {
   async markDelivered({ id, claimToken }) { const { rows } = await this.database.query(`UPDATE conversions_outbox SET status = 'delivered', attempt_count = attempt_count + 1, claim_token = NULL, lease_expires_at = NULL, last_error = NULL, delivered_at = now(), updated_at = now() WHERE id = $1 AND claim_token = $2 AND status = 'running' RETURNING *`, [id, claimToken]); return record(rows[0]); }
   async markRetry({ id, claimToken, attemptCount, nextAttemptAt, lastError }) { const { rows } = await this.database.query(`UPDATE conversions_outbox SET status = 'retry', attempt_count = $3, next_attempt_at = $4, last_error = $5, claim_token = NULL, lease_expires_at = NULL, updated_at = now() WHERE id = $1 AND claim_token = $2 AND status = 'running' RETURNING *`, [id, claimToken, attemptCount, nextAttemptAt, String(lastError || 'delivery_failed').replace(/[\r\n]/g, ' ').slice(0, 240)]); return record(rows[0]); }
   async markDead({ id, claimToken, attemptCount, lastError }) { const { rows } = await this.database.query(`UPDATE conversions_outbox SET status = 'dead', attempt_count = $3, last_error = $4, claim_token = NULL, lease_expires_at = NULL, updated_at = now() WHERE id = $1 AND claim_token = $2 AND status = 'running' RETURNING *`, [id, claimToken, attemptCount, String(lastError || 'delivery_failed').replace(/[\r\n]/g, ' ').slice(0, 240)]); return record(rows[0]); }
+  // O resumo da correspondência do projeto: quantos eventos, a média, e o que mais falta.
+  // Fica aqui porque é onde o payload existe; a tela recebe só o que dá para mostrar.
+  async matchQuality({ companyId, projectId }) {
+    const { rows } = await this.database.query(
+      `SELECT payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2 ORDER BY created_at DESC LIMIT 500`,
+      [companyId, projectId],
+    );
+    return resumoDaCorrespondencia(rows);
+  }
   async status({ companyId, projectId }) { const { rows } = await this.database.query(`SELECT * FROM conversions_outbox WHERE company_id = $1 AND project_id = $2 ORDER BY created_at DESC`, [companyId, projectId]); return rows.map(statusRecord); }
 }

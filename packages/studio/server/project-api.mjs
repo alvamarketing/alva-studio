@@ -349,6 +349,13 @@ export function createProjectApi({
       return sendCsv(res, renderLeadsCsv({ submissions }));
     }
 
+    const matchQuality = path.match(/^\/api\/projects\/([^/]+)\/conversions\/match-quality$/);
+    if (matchQuality && method === 'GET') {
+      const projectId = matchQuality[1];
+      await sessionService.authorize(context, 'analytics.read', projectId);
+      return json(commercialOutbox ? await commercialOutbox.matchQuality({ companyId: context.companyId, projectId }) : { eventos: 0, media: null, nivel: null, faltando: [] });
+    }
+
     const conversions = path.match(/^\/api\/projects\/([^/]+)\/conversions$/);
     if (conversions && method === 'GET') {
       const projectId = conversions[1];

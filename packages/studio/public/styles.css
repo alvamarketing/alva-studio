@@ -1832,6 +1832,16 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .tracking-view .provider-form .help { font-size: var(--text-sm); color: var(--alva-muted); margin: 4px 0 0; }
 .tracking-view .provider-actions { display: flex; gap: 8px; margin-top: 18px; }
 .tracking-view .provider-form .form-error { font-size: var(--text-sm); color: var(--alva-danger); margin: 10px 0 0; }
+/* Nota de correspondência: um número grande, como as métricas do topo, e abaixo dele o
+   que falta — cada falta com seu alcance e a ação. Mesmos tokens da faixa de números. */
+.tracking-view .match-score { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.tracking-view .match-score strong { font-size: var(--text-5xl); line-height: 1.1; letter-spacing: -1.4px; font-variant-numeric: tabular-nums; }
+.tracking-view .match-score small { color: var(--alva-muted); font-size: var(--text-sm); }
+.tracking-view .match-gap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 14px 0; border-bottom: 1px solid color-mix(in srgb, var(--alva-line) 55%, transparent); }
+.tracking-view .match-gap:last-child { border-bottom: 0; }
+.tracking-view .match-gap strong { font-size: var(--text-md); }
+.tracking-view .match-gap p { grid-column: 1 / -1; margin: 0; max-width: 72ch; font-size: var(--text-sm); line-height: 1.6; color: var(--alva-muted); }
+
 /* Três estados, três leituras: entregando é bom, configurado é neutro — credencial
    salva não é alerta —, e não configurado é ausência. O âmbar fica reservado para
    entrega com problema, que é onde ele significa alguma coisa. */
