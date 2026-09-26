@@ -87,7 +87,7 @@ test('o overview anuncia analytics nativo, sem depender de serviço externo', as
     },
     body: async () => ({}),
     runtimeFlags: {
-      nvsRuntime: false,
+      conversions: false,
       pixels: false,
       mediaPipeline: false,
       billingEnforcement: false,
@@ -116,7 +116,7 @@ test('o resumo vem sempre do coletor próprio e se declara como alva', async () 
     body: async () => ({}),
     runtimeFlags: {
       umamiRuntime: true,
-      nvsRuntime: false,
+      conversions: false,
       pixels: false,
       mediaPipeline: false,
       billingEnforcement: false,

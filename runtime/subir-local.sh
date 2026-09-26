@@ -47,6 +47,7 @@ VERCEL_MASTER_KEY=$(hex)
 PUBLICATION_RUNTIME_HMAC_SECRET=$(hex)
 PIXELS_ENABLED=false
 TRACKING_PROVISION_ENABLED=false
+CONVERSIONS_ENABLED=false
 ASAAS_ENVIRONMENT=sandbox
 ENV
   echo "runtime/.env criado com segredos novos."

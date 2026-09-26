@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const fonte = await readFile(new URL('../server/repositories/nvs-commercial-outbox-repository.mjs', import.meta.url), 'utf8');
+const fonte = await readFile(new URL('../server/repositories/conversions-outbox-repository.mjs', import.meta.url), 'utf8');
 
 test('o status das conversões expõe destino, conteúdo e consentimento', () => {
   const corpo = fonte.slice(fonte.indexOf('function statusRecord('), fonte.indexOf('export function commercialRetryDelay'));

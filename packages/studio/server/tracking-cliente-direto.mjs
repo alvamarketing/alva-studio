@@ -10,12 +10,12 @@
 import { entregarEvento } from './tracking-entrega.mjs';
 
 export function criarClienteDeDestinos({ tracking, fetchImpl = fetch, tempoLimiteMs } = {}) {
-  if (!tracking?.nvsDestinations) throw new Error('O cliente de destinos exige o repositório de tracking.');
+  if (!tracking?.conversionDestinations) throw new Error('O cliente de destinos exige o repositório de tracking.');
 
   return {
     async sendEvent(entrega) {
       const destino = String(entrega?.destination || '');
-      const credenciaisPorProvedor = await tracking.nvsDestinations({
+      const credenciaisPorProvedor = await tracking.conversionDestinations({
         companyId: entrega.companyId,
         projectId: entrega.projectId,
         environment: entrega.environment,

@@ -8,7 +8,7 @@ function publicRun(run, snapshot) {
   return snapshot ? { ...run, snapshotHash: snapshot.hash, manifest: snapshot.manifest } : run;
 }
 export class PublicationService {
-  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains, tracking, runtimeManifests = null, runtimeEnabled = false, runtimeOrigin = '', runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET, trackingRequired = false, trackingRequiredEngines = trackingRequired ? ['umami', 'nvs'] : [], billingPolicy = null } = {}) {
+  constructor({ snapshotBuilder, integrations, deployments, publisherFactory = (credentials) => new Publisher(credentials), audit, domains, tracking, runtimeManifests = null, runtimeEnabled = false, runtimeOrigin = '', runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET, trackingRequired = false, trackingRequiredEngines = trackingRequired ? ['conversions'] : [], billingPolicy = null } = {}) {
     this.snapshotBuilder = snapshotBuilder;
     this.integrations = integrations;
     this.deployments = deployments;

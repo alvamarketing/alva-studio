@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { SecretVault } from '../server/repositories/publication-repository.mjs';
-import { NvsCommercialOutboxRepository } from '../server/repositories/nvs-commercial-outbox-repository.mjs';
+import { ConversionsOutboxRepository } from '../server/repositories/conversions-outbox-repository.mjs';
+import { TrackingRepository } from '../server/repositories/tracking-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
 async function seed(database) {
@@ -13,7 +14,19 @@ async function seed(database) {
   return { user, company, project };
 }
 
-function scope(ids, environment) { return `tracking-binding:${ids.company.id}:${ids.project.id}:${environment}:nvs`; }
+function scope(ids, environment) { return `tracking-binding:${ids.company.id}:${ids.project.id}:${environment}:conversions`; }
+
+async function prepararDestinos(database, vault, ids, provedores) {
+  const tracking = new TrackingRepository(database, { vault });
+  for (const [provider, configuration] of Object.entries(provedores)) {
+    await tracking.saveDestination({ companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', provider, configuration });
+  }
+  await database.query(
+    `UPDATE tracking_bindings SET status = 'ready', encrypted_remote_reference = $4
+      WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions'`,
+    [ids.company.id, ids.project.id, 'preview', vault.encrypt('alva_preview_property', scope(ids, 'preview'))],
+  );
+}
 
 test('outbox comercial deriva propriedade preview, hasheia contato e deduplica retries', async (t) => {
   const { connectionString } = await postgresFixture(t);
@@ -22,12 +35,8 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
   try {
     const ids = await seed(database);
     const vault = new SecretVault({ masterKey: 'task-6-master-key' });
-    await database.query(
-      `UPDATE tracking_bindings SET status = 'ready', encrypted_remote_reference = $4
-        WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'nvs'`,
-      [ids.company.id, ids.project.id, 'preview', vault.encrypt('nvs_preview_property', scope(ids, 'preview'))],
-    );
-    const outbox = new NvsCommercialOutboxRepository(database, { vault });
+    await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' }, taboola: {} });
+    const outbox = new ConversionsOutboxRepository(database, { vault });
     const event = { companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' }, attribution: { gclid: 'google-click', unknown: 'blocked' } };
     await database.transaction((client) => outbox.enqueue(client, event));
     await database.transaction((client) => outbox.enqueue(client, event));
@@ -35,11 +44,15 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
     await database.transaction((client) => outbox.enqueue(client, vsl));
     await database.transaction((client) => outbox.enqueue(client, vsl));
     await database.transaction((client) => outbox.enqueue(client, { ...vsl, trackingEventId: 'b1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29' }));
-    const rows = await database.query('SELECT property_id, tracking_event_id, event_name, destination, payload FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2', [ids.company.id, ids.project.id]);
-    assert.equal(rows.rowCount, 3);
-    const lead = rows.rows.find((row) => row.event_name === 'lead');
-    assert.equal(lead.property_id, 'nvs_preview_property');
-    assert.equal(lead.destination, 'nvs');
+    const rows = await database.query('SELECT property_id, tracking_event_id, event_name, destination, payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [ids.company.id, ids.project.id]);
+    // Três eventos distintos, dois destinos configurados: seis entregas. O evento repetido
+    // não acrescenta nenhuma — a identidade da linha inclui o destino, então cada plataforma
+    // recebe uma vez e tem a própria tentativa.
+    assert.equal(rows.rowCount, 6);
+    const leads = rows.rows.filter((row) => row.event_name === 'lead');
+    assert.deepEqual(leads.map((row) => row.destination).sort(), ['meta', 'taboola']);
+    const lead = leads[0];
+    assert.equal(lead.property_id, 'alva_preview_property');
     const payload = lead.payload;
     assert.deepEqual(payload.user, {
       email_sha256: createHash('sha256').update('pessoa@example.test').digest('hex'),
@@ -49,22 +62,33 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
     assert.equal(JSON.stringify(payload).includes('Pessoa@Example'), false);
     assert.equal(JSON.stringify(payload).includes('Nunca enviar'), false);
     const status = await outbox.status({ companyId: ids.company.id, projectId: ids.project.id });
-    assert.equal(JSON.stringify(status).includes('nvs_preview_property'), false);
+    assert.equal(JSON.stringify(status).includes('alva_preview_property'), false);
     assert.equal(JSON.stringify(status).includes('d1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29'), false);
   } finally { await database.close(); }
 });
 
-test('cliente NVS assina o mesmo envelope comercial sem respostas ou identificadores crus', async () => {
-  const { NvsClient } = await import('../server/tracking-clients.mjs');
-  const requests = [];
-  const client = new NvsClient({ baseUrl: 'http://nvs.test', secret: 'a'.repeat(64), now: () => 1_700_000_000_000, fetchImpl: async (url, init) => {
-    requests.push({ url, init });
-    return new Response(JSON.stringify({ status: 'queued' }), { status: 202, headers: { 'Content-Type': 'application/json' } });
-  } });
-  await client.sendEvent({ property_id: 'nvs_preview_property', tracking_event_id: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', event_name: 'lead', event_time: 1_700_000_000, user: { email_sha256: 'a'.repeat(64) }, params: {} });
-  assert.equal(requests[0].url, 'http://nvs.test/internal/v1/events');
-  assert.match(requests[0].init.headers['X-NVS-Signature'], /^[a-f0-9]{64}$/);
-  assert.equal(JSON.stringify(requests[0].init).includes('answers'), false);
+test('sem destino configurado o evento não entra na fila', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const ids = await seed(database);
+    const vault = new SecretVault({ masterKey: 'task-6-master-key' });
+    // O binding pronto sozinho não basta: sem destino não existe para onde entregar, e uma
+    // linha na fila sem endereço só viraria tentativa condenada até morrer.
+    await database.query(
+      `UPDATE tracking_bindings SET status = 'ready', encrypted_remote_reference = $4
+        WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions'`,
+      [ids.company.id, ids.project.id, 'preview', vault.encrypt('alva_preview_property', scope(ids, 'preview'))],
+    );
+    const outbox = new ConversionsOutboxRepository(database, { vault });
+    const entregas = await database.transaction((client) => outbox.enqueue(client, {
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
+      trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
+    }));
+    assert.equal(entregas, null);
+    assert.equal((await database.query('SELECT 1 FROM conversions_outbox')).rowCount, 0);
+  } finally { await database.close(); }
 });
 
 test('worker comercial preserva o tracking_event_id em retry e sanitiza erro', async () => {
@@ -80,15 +104,15 @@ test('worker comercial preserva o tracking_event_id em retry e sanitiza erro', a
   assert.equal(retry.lastError.includes('secret'), false);
 });
 
-test('fan-out NVS reutiliza o UUID do browser e reduz os parâmetros VSL à allowlist', async () => {
-  const { nvsVslEvent } = await import('../server/index.mjs');
+test('o evento de VSL reutiliza o UUID do browser e reduz os parâmetros VSL à allowlist', async () => {
+  const { eventoDeConversaoVsl } = await import('../server/index.mjs');
   const input = { payload: { data: { trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29' } } };
-  assert.deepEqual(nvsVslEvent({ payload: { name: 'vsl_progress', data: { publicId: 'vsl-123', value: 75 } } }, input), {
+  assert.deepEqual(eventoDeConversaoVsl({ payload: { name: 'vsl_progress', data: { publicId: 'vsl-123', value: 75 } } }, input), {
     trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29',
     eventName: 'vsl_progress', params: { content_id: 'vsl-123', value: 75 },
   });
-  assert.equal(nvsVslEvent({ payload: { name: 'form_start', data: { formId: 'form-123' } } }, input), null);
-  assert.equal(nvsVslEvent({ payload: { name: 'vsl_start', data: {} } }, { payload: { data: { trackingEventId: 'not-a-uuid' } } }), null);
+  assert.equal(eventoDeConversaoVsl({ payload: { name: 'form_start', data: { formId: 'form-123' } } }, input), null);
+  assert.equal(eventoDeConversaoVsl({ payload: { name: 'vsl_start', data: {} } }, { payload: { data: { trackingEventId: 'not-a-uuid' } } }), null);
 });
 
 test('origens READY repetidas no mesmo ambiente são deduplicadas, mas preview e produção iguais são ambíguos', async (t) => {

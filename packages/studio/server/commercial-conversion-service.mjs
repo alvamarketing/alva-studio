@@ -1,19 +1,19 @@
-import { buildNvsConversion, buildProviderConversion, CONVERSION_PROVIDERS, resolveConsentState } from './conversion-consent-policy.mjs';
+import { buildConversion, buildProviderConversion, CONVERSION_PROVIDERS, resolveConsentState } from './conversion-consent-policy.mjs';
 
 export class CommercialConversionService {
-  constructor({ persist, enqueueNvs, adapters = {}, technicalEnabled = () => true } = {}) {
-    if (typeof persist !== 'function' || typeof enqueueNvs !== 'function') throw new Error('Persistência comercial obrigatória.');
+  constructor({ persist, enqueueConversion, adapters = {}, technicalEnabled = () => true } = {}) {
+    if (typeof persist !== 'function' || typeof enqueueConversion !== 'function') throw new Error('Persistência comercial obrigatória.');
     this.persist = persist;
-    this.enqueueNvs = enqueueNvs;
+    this.enqueueConversion = enqueueConversion;
     this.adapters = adapters;
     this.technicalEnabled = technicalEnabled;
   }
 
   async deliver({ manifest, storedConsent, browserEvent, serverAnswers, enabledProviders = [] } = {}) {
     const consentState = resolveConsentState({ manifest, storedConsent });
-    const nvsPayload = buildNvsConversion({ manifest, consentState, browserEvent, serverAnswers });
-    await this.persist(nvsPayload);
-    await this.enqueueNvs(nvsPayload);
+    const conversao = buildConversion({ manifest, consentState, browserEvent, serverAnswers });
+    await this.persist(conversao);
+    await this.enqueueConversion(conversao);
     const enabled = new Set(enabledProviders);
     const delivered = []; const blocked = [];
     for (const provider of CONVERSION_PROVIDERS) {
@@ -23,6 +23,6 @@ export class CommercialConversionService {
       await this.adapters[provider](payload);
       delivered.push(provider);
     }
-    return { consentState, trackingEventId: nvsPayload.tracking_event_id, delivered, blocked };
+    return { consentState, trackingEventId: conversao.tracking_event_id, delivered, blocked };
   }
 }

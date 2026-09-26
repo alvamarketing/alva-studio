@@ -8,11 +8,11 @@ const answers = { email: 'Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999'
 
 for (const state of ['pending', 'denied', 'granted']) {
   test(`fan-out persists and calls all five enabled adapters in ${state}`, async () => {
-    const local = []; const nvs = []; const calls = [];
+    const local = []; const fila = []; const calls = [];
     const adapters = Object.fromEntries(['meta', 'google', 'tiktok', 'linkedin', 'taboola'].map((provider) => [provider, async (payload) => calls.push([provider, payload])]));
-    const service = new CommercialConversionService({ persist: async (event) => local.push(event), enqueueNvs: async (event) => nvs.push(event), adapters, technicalEnabled: () => true });
+    const service = new CommercialConversionService({ persist: async (event) => local.push(event), enqueueConversion: async (event) => fila.push(event), adapters, technicalEnabled: () => true });
     await service.deliver({ manifest, storedConsent: { scope: manifest, state }, browserEvent, serverAnswers: answers, enabledProviders: Object.keys(adapters) });
-    assert.equal(local.length, 1); assert.equal(nvs.length, 1); assert.equal(calls.length, 5);
+    assert.equal(local.length, 1); assert.equal(fila.length, 1); assert.equal(calls.length, 5);
     assert.ok(calls.every(([, payload]) => payload.tracking_event_id === browserEvent.trackingEventId && payload.consent_state === state));
     assert.equal(JSON.stringify(calls).includes('forged'), false);
     assert.equal(JSON.stringify(calls).includes('Pessoa@Example'), false);
@@ -22,9 +22,9 @@ for (const state of ['pending', 'denied', 'granted']) {
 }
 
 test('technical flag or disabled provider are the only egress gates and do not block persistence', async () => {
-  const persisted = []; const nvs = []; const calls = [];
-  const service = new CommercialConversionService({ persist: async (event) => persisted.push(event), enqueueNvs: async (event) => nvs.push(event), adapters: { meta: async () => calls.push('meta'), google: async () => calls.push('google') }, technicalEnabled: (provider) => provider !== 'google' });
+  const persisted = []; const fila = []; const calls = [];
+  const service = new CommercialConversionService({ persist: async (event) => persisted.push(event), enqueueConversion: async (event) => fila.push(event), adapters: { meta: async () => calls.push('meta'), google: async () => calls.push('google') }, technicalEnabled: (provider) => provider !== 'google' });
   const result = await service.deliver({ manifest, storedConsent: { scope: manifest, state: 'denied' }, browserEvent, serverAnswers: answers, enabledProviders: ['meta'] });
-  assert.equal(persisted.length, 1); assert.equal(nvs.length, 1); assert.deepEqual(calls, ['meta']);
+  assert.equal(persisted.length, 1); assert.equal(fila.length, 1); assert.deepEqual(calls, ['meta']);
   assert.deepEqual(result.blocked.sort(), ['google:technical_disabled', 'tiktok:provider_disabled', 'linkedin:provider_disabled', 'taboola:provider_disabled'].sort());
 });

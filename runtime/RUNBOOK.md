@@ -1,23 +1,28 @@
 # Runtime Docker/Coolify
 
-Somente `studio-web` publica `127.0.0.1:4178`; bancos e NVS não
-expõem portas. O Compose usa sua rede padrão, preservando o egress necessário
+Somente `studio-web` publica `127.0.0.1:4178`; o banco não
+expõe porta. O Compose usa sua rede padrão, preservando o egress necessário
 para o Studio e workers. Em Coolify, configure o proxy somente para
-`studio-web` e não crie rotas públicas para bancos ou painéis dos motores.
+`studio-web` e não crie rotas públicas para o banco.
 
 ## Na máquina
 
-`runtime/subir-local.sh` sobe Studio, worker, Postgres e um
-proxy HTTPS local, esperando todos ficarem saudáveis; `--parar` derruba sem
-apagar dados. `--tunel` abre também um túnel rápido da Cloudflare
-(`compose.tunel.yaml`, sem conta) e grava o endereço `https://….trycloudflare.com`
-como `PUBLIC_ORIGIN`: é o que permite a uma página publicada na internet mandar
-visita e lead para o Studio local. O endereço muda a cada subida, e enquanto o
-túnel está de pé o `studio.localhost` deixa de autenticar. Na primeira vez ele gera `runtime/.env` (fora do git) com
-segredos aleatórios e as flags comerciais desligadas. O Studio fica em
-`https://studio.localhost:8443`: o certificado é do próprio Caddy, então o
-navegador avisa na primeira visita. A tela de primeiro acesso não cria a conta
-quando `PUBLIC_ORIGIN` está definido; use o bootstrap dentro do container:
+`runtime/subir-local.sh` sobe Studio, worker e Postgres, esperando todos ficarem
+saudáveis; `--parar` derruba sem apagar dados. `--tunel` abre também um túnel
+rápido da Cloudflare (`compose.tunel.yaml`, sem conta) e grava o endereço
+`https://….trycloudflare.com` como `PUBLIC_ORIGIN`: é o que permite a uma página
+publicada na internet mandar visita e lead para o Studio local. O endereço muda a
+cada subida, e enquanto o túnel está de pé o domínio local deixa de autenticar. Na
+primeira vez ele gera `runtime/.env` (fora do git) com segredos aleatórios e as
+flags comerciais desligadas.
+
+O Studio fica em `https://alva.orb.local`. Não há proxy no meio: o OrbStack dá ao
+container o domínio e um certificado em que o Mac já confia, o que satisfaz a
+exigência de `PUBLIC_ORIGIN` em HTTPS e de cookie de sessão `Secure` sem aviso no
+navegador. O endereço aparece como link clicável no container `studio-web`.
+
+A tela de primeiro acesso não cria a conta quando `PUBLIC_ORIGIN` está definido;
+use o bootstrap dentro do container:
 
     printf '<senha>' | docker exec -i -e OWNER_NAME=… -e OWNER_EMAIL=… alva-studio-studio-web-1 node server/bootstrap-owner.mjs
 
@@ -31,19 +36,16 @@ não passe segredo por argumentos. `STUDIO_DATABASE_URL` usa a mesma senha de
 valor; forneça uma origem HTTPS explícita também em desenvolvimento e testes.
 
 As flags comerciais ficam literalmente em `false`: esta entrega não provisiona
-eventos e não habilita pipeline de mídia. O NVS incorpora o
-Core 0.3.10 e aplica seu schema mais as migrações Alva antes de responder como
-pronto. As únicas APIs de controle são `/internal/v1/properties`,
-`/internal/v1/events` e `/internal/v1/status`; todas exigem HMAC SHA-256 sobre
-`timestamp + "\n" + nonce + "\n" + corpo`, janela de cinco minutos e nonce
-persistido. O gateway não expõe segredos. Cada evento entra em uma outbox
-transacional por propriedade, evento e destino; o envio externo permanece
-desligado por `NVS_OUTBOX_DELIVERY_ENABLED=false` até o provisionamento
-explícito de uma propriedade. O
-`studio-worker` executa a fila de webhooks, o provisionamento de tracking e a
-reconsulta de cobrança fora do processo web, num processo só
-(`--role=webhook,tracking,billing`). Eram quatro containers rodando este mesmo
-arquivo, e o quarto — mídia — não tinha trabalho: só migrava e batia heartbeat.
+eventos e não habilita pipeline de mídia. A entrega de conversões acontece
+dentro do próprio Studio, sem gateway externo: cada evento entra na
+`conversions_outbox`, uma linha por destino configurado (Meta, TikTok, Google,
+LinkedIn ou Taboola), e o envio externo permanece desligado por
+`CONVERSIONS_ENABLED=false` até o provisionamento explícito de um destino. O
+`studio-worker` executa a fila de webhooks, o provisionamento de tracking, a
+entrega de conversões e a reconsulta de cobrança fora do processo web, num
+processo só (`--role=webhook,tracking,billing`). Eram quatro containers
+rodando este mesmo arquivo, e o quarto — mídia — não tinha trabalho: só
+migrava e batia heartbeat.
 
 migrações e antes de abrir o servidor. Essa role cria e consulta somente os
 websites que possui, como confirma o teste de contrato. O bootstrap usa hash
@@ -56,7 +58,7 @@ Alpine já pinada, deixando a ferramenta de bootstrap reproduzível.
 `TRACKING_MASTER_KEY` é exclusiva do control plane
 e precisa estar disponível tanto no `studio-web` para o gate de publicação
 quanto no worker de provisionamento. As flags
-`NVS_RUNTIME_ENABLED` e `TRACKING_PROVISION_ENABLED` exigem valor literal
+`CONVERSIONS_ENABLED` e `TRACKING_PROVISION_ENABLED` exigem valor literal
 `true` e continuam desligadas até aceite operacional.
 `VERCEL_MASTER_KEY` é a chave mestra não vazia do cofre que cifra os tokens de
 integração Vercel no Studio. Gere uma chave aleatória longa, guarde-a no cofre
@@ -95,7 +97,7 @@ provedor no banco, sem tentar liberar entitlement manualmente.
    `OWNER_NAME` e `OWNER_EMAIL` no ambiente do processo; a senha entra pelo
    stdin e nunca por argumento ou arquivo versionado.
 4. Em seguida, habilite no staging de teste as flags de provisionamento e dos
-   motores (`NVS_RUNTIME_ENABLED` e
+   motores (`CONVERSIONS_ENABLED` e
    `TRACKING_PROVISION_ENABLED`), cadastre uma propriedade de teste e conecte
    a Vercel de teste no Studio. Use somente URLs HTTPS de staging e publique
    uma prévia.
@@ -114,7 +116,7 @@ curl --fail http://127.0.0.1:4178/health/live
 curl --fail http://127.0.0.1:4178/health/ready
 ```
 
-Use nome de projeto isolado para não tocar serviços existentes. Confira os nove
+Use nome de projeto isolado para não tocar serviços existentes. Confira os três
 health checks antes de usar o runtime.
 
 
@@ -125,9 +127,9 @@ trata esse conflito por leitura e reconciliação do website existente.
 
 ## Backup, restauração e prova de persistência
 
-O backup exporta os três bancos em SQL e gera `SHA256SUMS`; ele falha se o
-diretório de destino já existir. A restauração exige confirmação literal e
-valida todos os hashes antes de escrever. Os scripts aceitam `--env-file` e
+O backup exporta o banco `studio-postgres` em SQL e gera `SHA256SUMS`; ele
+falha se o diretório de destino já existir. A restauração exige confirmação
+literal e valida o hash antes de escrever. Os scripts aceitam `--env-file` e
 `--project-name` para operar a mesma composição isolada.
 
 ```sh
@@ -135,34 +137,31 @@ runtime/backup.sh --env-file /caminho/runtime.env --project-name alva-runtime-te
 runtime/restore.sh --env-file /caminho/runtime.env --project-name alva-runtime-teste --input-dir /caminho/novo/backup-AAAA-MM-DD --confirm-restore
 ```
 
-Para homologar persistência, crie uma linha descartável em cada banco, reinicie
-somente os três serviços de banco e confira as linhas. Depois faça backup,
-altere as linhas, restaure e confira os valores originais. Os volumes nomeados
-`studio-postgres-data` e `nvs-mariadb-data` não devem
-ser removidos durante esse procedimento.
+Para homologar persistência, crie uma linha descartável no banco, reinicie
+somente o serviço `studio-postgres` e confira a linha. Depois faça backup,
+altere a linha, restaure e confira o valor original. O volume nomeado
+`studio-postgres-data` não deve ser removido durante esse procedimento.
 
-A restauração não é atômica entre os três bancos. O script confirma hashes e a
-saúde dos três serviços, interrompe antes da primeira escrita somente os
-writers que já estavam ativos (`studio-web`, worker, `nvs` e a fila
-NVS) e os religa por trap mesmo em falha. Uma falha durante a aplicação ainda
-exige restaurar novamente o mesmo backup nos três bancos. Antes de restaurar,
-gere um backup novo do estado atual para recuperação. O dump MariaDB usa
-somente o banco e usuário `nvs`, sem bancos de sistema nem a conta root.
+Com um só banco, a restauração é atômica. O script confirma o hash e a saúde
+do serviço, interrompe antes da primeira escrita somente os writers que já
+estavam ativos (`studio-web` e `studio-worker`) e os religa por trap mesmo em
+falha. Uma falha durante a aplicação ainda exige restaurar novamente o mesmo
+backup. Antes de restaurar, gere um backup novo do estado atual para
+recuperação.
 
 O restore captura quais writers estavam em execução e religa somente esses
-serviços. Assim, o ensaio dos bancos não inicia web, workers ou motores que não
-estavam ativos. O ensaio local reproduzível usa somente valores fictícios,
-projeto Docker único e imagens já disponíveis, sem pull:
+serviços. Assim, o ensaio do banco não inicia web nem workers que não estavam
+ativos. O ensaio local reproduzível usa somente valores fictícios, projeto
+Docker único e imagens já disponíveis, sem pull:
 
 ```sh
 runtime/backup-restore-local-test.sh
 ```
 
-Ele sobe apenas `studio-postgres` e `nvs-mariadb`, cria uma
-probe distinta em cada banco, executa `backup.sh`, altera as probes e executa
-`restore.sh --confirm-restore`. O runner valida `SHA256SUMS`, os três valores
-originais e que nenhum writer foi criado; o cleanup remove containers, volumes
-e arquivos temporários desse projeto isolado.
+Ele sobe apenas `studio-postgres`, cria uma probe, executa `backup.sh`, altera
+a probe e executa `restore.sh --confirm-restore`. O runner valida
+`SHA256SUMS`, o valor original e que nenhum writer foi criado; o cleanup
+remove containers, volumes e arquivos temporários desse projeto isolado.
 
 ## Certificação local da V1
 
@@ -184,7 +183,7 @@ Cada tenant possui página, quiz, prévia, submissão e checkout próprios. A
 matriz tenta cruzar publicação, rota pública, outbox, cobrança e MCP e exige
 que os recursos do outro tenant não sejam lidos nem operados. Depois das
 submissões com consentimento `pending` e `denied`, ela lê o `payload` real em
-`nvs_commercial_outbox`: preserva `tracking_event_id` e `fbc`, mas não permite
+`conversions_outbox`: preserva `tracking_event_id` e `fbc`, mas não permite
 nome, e-mail, telefone, respostas, hashes nem chaves equivalentes, inclusive
 em objetos aninhados.
 
@@ -194,7 +193,7 @@ localizações e finalidades. Valores nunca entram em documentação, testes ou
 logs.
 
 Esta é uma evidência local, não a certificação comercial final. A restauração
-coordenada dos três bancos por `backup.sh` e `restore.sh` foi exercitada no
-Compose descartável. Vercel de staging, Asaas Sandbox e revisão visual
+do banco por `backup.sh` e `restore.sh` foi exercitada no Compose descartável.
+Vercel de staging, Asaas Sandbox e revisão visual
 independente continuam pendentes. A VSL própria pertence à V2 e não integra os
 critérios da V1.

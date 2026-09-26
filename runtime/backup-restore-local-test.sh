@@ -1,7 +1,10 @@
 #!/bin/sh
 set -eu
 
-# Ensaio descartável: somente bancos do Compose isolado, valores fictícios e sem pull de imagens.
+# Ensaio descartável: somente o banco do Compose isolado, valores fictícios e sem pull de imagens.
+#
+# Eram três bancos enquanto o Analytics e o Rastreamento vinham de produtos externos. Sobrou
+# um: o Postgres do Studio.
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 project="alva-restore-cert-$$"
 workspace=$(mktemp -d)
@@ -36,24 +39,20 @@ compose() { docker compose --env-file "$environment" --project-name "$project" -
 postgres_sql() { compose exec -T "$1" psql -v ON_ERROR_STOP=1 -U "$2" -d "$2" --command "$3"; }
 postgres_value() { compose exec -T "$1" psql -U "$2" -d "$2" --tuples-only --no-align --command 'SELECT value FROM certification_restore_probe' | tr -d '\r\n'; }
 studio_value() { postgres_value studio-postgres studio; }
-nvs_value() { mariadb_sql 'SELECT value FROM certification_restore_probe' | tail -n 1 | tr -d '\r'; }
 
 compose up --detach --wait --pull never studio-postgres >/dev/null
 postgres_sql studio-postgres studio "CREATE TABLE certification_restore_probe (id integer PRIMARY KEY, value text NOT NULL); INSERT INTO certification_restore_probe VALUES (1, 'before-studio');" >/dev/null
-mariadb_sql "CREATE TABLE certification_restore_probe (id integer PRIMARY KEY, value varchar(80) NOT NULL); INSERT INTO certification_restore_probe VALUES (1, 'before-nvs');" >/dev/null
 
 sh "$root/runtime/backup.sh" --env-file "$environment" --project-name "$project" --output-dir "$backup_dir" >/dev/null
 (cd "$backup_dir" && shasum -a 256 -c SHA256SUMS >/dev/null)
 
 postgres_sql studio-postgres studio "UPDATE certification_restore_probe SET value = 'after-studio' WHERE id = 1;" >/dev/null
-mariadb_sql "UPDATE certification_restore_probe SET value = 'after-nvs' WHERE id = 1;" >/dev/null
 
 sh "$root/runtime/restore.sh" --env-file "$environment" --project-name "$project" --input-dir "$backup_dir" --confirm-restore >/dev/null
 
 [ "$(studio_value)" = 'before-studio' ] || { echo 'Studio PostgreSQL não foi restaurado.' >&2; exit 1; }
-[ "$(umami_value)" = 'before-umami' ] || { echo 'Umami PostgreSQL não foi restaurado.' >&2; exit 1; }
-[ "$(nvs_value)" = 'before-nvs' ] || { echo 'NVS MariaDB não foi restaurado.' >&2; exit 1; }
-for writer in studio-web studio-worker studio-media-worker studio-billing-worker studio-tracking-worker nvs nvs-outbox-worker; do
+# Restaurar com um writer no ar sobrescreveria o que acabou de voltar.
+for writer in studio-web studio-worker; do
   [ -z "$(compose ps -q "$writer")" ] || { echo "Writer iniciado indevidamente: $writer" >&2; exit 1; }
 done
-printf '%s\n' 'Backup e restauração locais dos três bancos verificados.'
+printf '%s\n' 'Backup e restauração locais do banco do Studio verificados.'

@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { analyticsMetricsModel } from '../public/studio-dashboard.js';
 
-const umami = { pageviews: 6754, visits: 2132, visitors: 1931, bounces: 1087, totalTime: 289912 };
+const resumo = { pageviews: 6754, visits: 2132, visitors: 1931, bounces: 1087, totalTime: 289912 };
 
-test('as cinco métricas da referência visual saem do resumo do Umami', () => {
-  const metricas = analyticsMetricsModel(umami);
+test('as cinco métricas da referência visual saem do resumo do próprio Studio', () => {
+  const metricas = analyticsMetricsModel(resumo);
   assert.deepEqual(metricas.map((m) => m.label), ['Visualizações', 'Visitas', 'Visitantes', 'Taxa de rejeição', 'Duração média']);
   assert.deepEqual(metricas.map((m) => m.value), ['6.754', '2.132', '1.931', '51%', '2m 16s']);
 });
@@ -41,7 +41,7 @@ test('a visão geral não repete as métricas: elas vivem na tela de Analytics',
 
 test('o modelo do painel já carrega as métricas do resumo que ele busca', async () => {
   const { analyticsPanelModel } = await import('../public/studio-dashboard.js');
-  const model = analyticsPanelModel(umami, {});
+  const model = analyticsPanelModel(resumo, {});
   assert.equal(model.metrics.length, 5);
   assert.equal(model.metrics[0].value, '6.754');
 });

@@ -28,7 +28,7 @@ import { resolvePublishedVslReferencesForRender } from './vsl-reference.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
-import { NvsCommercialOutboxRepository } from './repositories/nvs-commercial-outbox-repository.mjs';
+import { ConversionsOutboxRepository } from './repositories/conversions-outbox-repository.mjs';
 import { PublicationRuntimeRepository } from './repositories/publication-runtime-repository.mjs';
 import { RuntimeConsentGateway } from './runtime-consent-gateway.mjs';
 import { createRuntimeLoader } from './publication-runtime.mjs';
@@ -48,11 +48,11 @@ import { McpKeyRepository } from './repositories/mcp-repository.mjs';
 import { createMcpServer } from './mcp-server.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
-const NVS_VSL_EVENTS = new Set(['vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
+const EVENTOS_DE_CONVERSAO = new Set(['vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
 
-export function nvsVslEvent(normalized, input) {
+export function eventoDeConversaoVsl(normalized, input) {
   const payload = normalized?.payload;
-  if (!payload || !NVS_VSL_EVENTS.has(payload.name)) return null;
+  if (!payload || !EVENTOS_DE_CONVERSAO.has(payload.name)) return null;
   const trackingEventId = input?.payload?.data?.trackingEventId;
   if (typeof trackingEventId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trackingEventId)) return null;
   const data = payload.data || {};
@@ -292,8 +292,8 @@ export function createApp({
     : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
   const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
-  const commercialOutbox = runtimeFlags.nvsRuntime && database && process.env.TRACKING_MASTER_KEY
-    ? new NvsCommercialOutboxRepository(database) : null;
+  const commercialOutbox = runtimeFlags.conversions && database && process.env.TRACKING_MASTER_KEY
+    ? new ConversionsOutboxRepository(database) : null;
   // Capturas publicadas precisam do manifesto e do envelope assinado mesmo sem pixels.
   // Consentimento e loader continuam sendo uma capacidade opt-in de pixels.
   const runtimeManifests = database ? new PublicationRuntimeRepository(database) : null;
@@ -595,7 +595,7 @@ export function createApp({
         // O envio para os destinos de conversão saía do gateway do Umami. Com o Umami
         // absorvido, é o coletor próprio que alimenta o outbox: sem isto, remover o
         // gateway calaria Meta e TikTok sem ninguém perceber.
-        if (commercialOutbox && NVS_VSL_EVENTS.has(event.event_name)) {
+        if (commercialOutbox && EVENTOS_DE_CONVERSAO.has(event.event_name)) {
           const dados = event.event_data || {};
           await database.transaction((client) => commercialOutbox.enqueue(client, {
             companyId: website.companyId,

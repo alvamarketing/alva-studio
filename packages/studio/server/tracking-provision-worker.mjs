@@ -3,7 +3,6 @@ export const MAX_TRACKING_PROVISION_ATTEMPTS = TRACKING_PROVISION_BACKOFF_MS.len
 export function trackingProvisionDelay(attempt) { return TRACKING_PROVISION_BACKOFF_MS[Math.max(0, Math.min(attempt - 1, TRACKING_PROVISION_BACKOFF_MS.length - 1))]; }
 
 function safeFailure(error) { return String(error?.message || 'Falha no provisionamento.').replace(/[\r\n]/g, ' ').slice(0, 240); }
-function nvsPropertyId(bindingId) { return `nvs_${bindingId.replace(/-/g, '')}`; }
 
 export async function processDueTrackingProvisionJobs({ repository, clients, maxPerRun = 50, leaseMs = 30_000, now = () => new Date() }) {
   let processed = 0;
@@ -15,11 +14,13 @@ export async function processDueTrackingProvisionJobs({ repository, clients, max
     try {
       const client = clients?.[job.engine];
       if (!client || typeof client.provision !== 'function') throw new Error('Motor de rastreamento indisponível.');
+      // O que o provisionamento precisa saber é só de qual binding se trata. O identificador
+      // da propriedade e as credenciais dos destinos eram argumentos porque um serviço
+      // externo os exigia no corpo do pedido; quem provisiona agora é local e lê o que
+      // precisa — mandar credencial por parâmetro só ampliaria onde ela passa.
       const result = await client.provision({
         companyId: job.companyId, projectId: job.projectId, bindingId: job.bindingId,
         environment: job.environment, projectName: job.projectName, projectSlug: job.projectSlug,
-        propertyId: job.engine === 'nvs' ? (job.remoteReference || nvsPropertyId(job.bindingId)) : undefined,
-        destinations: job.engine === 'nvs' ? await repository.nvsDestinations({ companyId: job.companyId, projectId: job.projectId, environment: job.environment }) : undefined,
       });
       await repository.markReady({ jobId: job.id, bindingId: job.bindingId, claimToken: token, remoteReference: result?.remoteId || null });
     } catch (error) {

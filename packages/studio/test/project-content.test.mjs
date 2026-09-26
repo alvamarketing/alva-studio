@@ -6,7 +6,7 @@ import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { CompanyRepository } from '../server/repositories/company-repository.mjs';
 import { ProjectRepository } from '../server/repositories/project-repository.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
-import { NvsCommercialOutboxRepository } from '../server/repositories/nvs-commercial-outbox-repository.mjs';
+import { ConversionsOutboxRepository } from '../server/repositories/conversions-outbox-repository.mjs';
 import { SecretVault } from '../server/repositories/publication-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
@@ -61,7 +61,7 @@ function assertStatus(statusCode) {
 }
 
 function trackingBindingScope({ companyId, projectId, environment }) {
-  return `tracking-binding:${companyId}:${projectId}:${environment}:nvs`;
+  return `tracking-binding:${companyId}:${projectId}:${environment}:conversions`;
 }
 
 function formSchema(id, title) {
@@ -362,23 +362,30 @@ test('capture Landing faz rollback de outbox/webhook e preserva eventId na entre
     await assert.rejects(() => content.submitPublishedPageCapture(args), /outbox/);
     assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 0);
     const vault = new SecretVault({ masterKey: 'page-capture-rollback-test-key' });
+    // A fila endereça uma entrega por destino salvo: sem destino não há para onde levar o
+    // lead, e a captura não enfileiraria nada.
+    const { TrackingRepository } = await import('../server/repositories/tracking-repository.mjs');
+    await new TrackingRepository(database, { vault }).saveDestination({
+      companyId: company.id, projectId: project.id, environment: 'production',
+      provider: 'meta', configuration: { pixel_id: '123', access_token: 'token' },
+    });
     await database.query(
       `UPDATE tracking_bindings SET status = 'ready', encrypted_remote_reference = $4
-       WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'nvs'`,
+       WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions'`,
       [company.id, project.id, 'production', vault.encrypt('page_capture_property', trackingBindingScope({ companyId: company.id, projectId: project.id, environment: 'production' }))],
     );
-    content.commercialOutbox = new NvsCommercialOutboxRepository(database, { vault });
+    content.commercialOutbox = new ConversionsOutboxRepository(database, { vault });
     const original = content.webhookDeliveries.enqueue.bind(content.webhookDeliveries);
     content.webhookDeliveries.enqueue = async () => { throw new Error('webhook'); };
     await assert.rejects(() => content.submitPublishedPageCapture(args), /webhook/);
     assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 0);
-    assert.equal((await database.query('SELECT count(*)::int AS n FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0].n, 0);
+    assert.equal((await database.query('SELECT count(*)::int AS n FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0].n, 0);
     content.webhookDeliveries.enqueue = original;
     const submitted = await content.submitPublishedPageCapture(args);
     const delivery = (await database.query("SELECT source_kind, page_id, page_submission_id, event FROM webhook_deliveries WHERE source_kind = 'page'")).rows[0];
     assert.equal(delivery.source_kind, 'page'); assert.equal(delivery.page_id, page.id);
     assert.equal(delivery.event.eventId, submitted.eventId);
-    assert.equal((await database.query('SELECT tracking_event_id FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0].tracking_event_id, submitted.eventId);
+    assert.equal((await database.query('SELECT tracking_event_id FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0].tracking_event_id, submitted.eventId);
     assert.equal((await content.webhookDeliveries.claimNextDue()).delivery.sourceKind, 'page');
   });
 });

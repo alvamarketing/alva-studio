@@ -69,7 +69,7 @@ test('HTTP público bloqueia acesso direto e aceita somente loader/consent pela 
   await content.publishForm({ companyId: company.id, projectId: project.id, actorId: user.id, formId: form.id });
   const manifestInput = buildRuntimeManifest({ publicationId: 'run-http', snapshotHash: 'b'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production' });
   await new PublicationRuntimeRepository(database).saveManifest({ companyId: company.id, projectId: project.id, manifest: manifestInput });
-  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: true, nvsRuntime: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
+  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: true, conversions: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await new Promise((resolve) => app.close(resolve)); await database.close(); });
   const base = `http://127.0.0.1:${app.address().port}`;

@@ -9,18 +9,18 @@ import { criarProvisionadorLocal } from '../server/tracking-provisionador-local.
 
 test('deriva o identificador do binding, sem chamar serviço nenhum', async () => {
   const provisionador = criarProvisionadorLocal({
-    tracking: { nvsDestinations: async () => ({ meta: { pixel_id: '1', access_token: 't' } }) },
+    tracking: { conversionDestinations: async () => ({ meta: { pixel_id: '1', access_token: 't' } }) },
   });
   const resultado = await provisionador.provision({
     companyId: 'c1', projectId: 'p1', environment: 'production',
     bindingId: '3f0a562e-c2e3-4885-a33a-791a88880efa',
   });
-  assert.equal(resultado.remoteId, 'nvs_3f0a562ec2e34885a33a791a88880efa');
+  assert.equal(resultado.remoteId, 'alva_3f0a562ec2e34885a33a791a88880efa');
 });
 
 test('o mesmo binding dá sempre o mesmo identificador', async () => {
   const provisionador = criarProvisionadorLocal({
-    tracking: { nvsDestinations: async () => ({ meta: {} }) },
+    tracking: { conversionDestinations: async () => ({ meta: {} }) },
   });
   const entrada = { companyId: 'c1', projectId: 'p1', environment: 'production', bindingId: 'aaaa-bbbb' };
   const primeiro = await provisionador.provision(entrada);
@@ -29,7 +29,7 @@ test('o mesmo binding dá sempre o mesmo identificador', async () => {
 });
 
 test('sem nenhum destino configurado, recusa em vez de marcar pronto', async () => {
-  const provisionador = criarProvisionadorLocal({ tracking: { nvsDestinations: async () => ({}) } });
+  const provisionador = criarProvisionadorLocal({ tracking: { conversionDestinations: async () => ({}) } });
   await assert.rejects(
     () => provisionador.provision({ companyId: 'c1', projectId: 'p1', environment: 'production', bindingId: 'b1' }),
     /nenhum destino/i,
@@ -38,7 +38,7 @@ test('sem nenhum destino configurado, recusa em vez de marcar pronto', async () 
 
 test('destino desconhecido não passa: só os cinco que sabemos entregar', async () => {
   const provisionador = criarProvisionadorLocal({
-    tracking: { nvsDestinations: async () => ({ pinterest: { token: 'x' } }) },
+    tracking: { conversionDestinations: async () => ({ pinterest: { token: 'x' } }) },
   });
   await assert.rejects(
     () => provisionador.provision({ companyId: 'c1', projectId: 'p1', environment: 'production', bindingId: 'b1' }),

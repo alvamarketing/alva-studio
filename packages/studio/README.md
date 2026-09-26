@@ -89,16 +89,17 @@ Os motores internos comerciais nascem desligados. Somente o valor literal
 `true` ativa cada flag; qualquer valor ausente ou diferente mantém o recurso
 indisponível:
 
-- `UMAMI_RUNTIME_ENABLED`
-- `NVS_RUNTIME_ENABLED`
+- `CONVERSIONS_ENABLED`
 - `PIXELS_ENABLED`
 - `MEDIA_PIPELINE_ENABLED`
 - `BILLING_ENFORCEMENT`
 
 As flags não provisionam serviços, não expõem painéis nem tornam uma integração
-ativa por si mesmas. O coletor Node existente continua registrando eventos
-durante a migração; após o corte homologado para Umami e NVS reais, sua leitura
-fica preservada por 90 dias.
+ativa por si mesmas. O analytics é nativo do Studio e não depende de flag: o
+Umami saiu, e o coletor Node existente registra os eventos sempre. A entrega
+de conversões seguiu o mesmo caminho — o runtime NVS saiu, e o Studio entrega
+direto às plataformas de anúncio —, mas essa camada continua atrás de
+`CONVERSIONS_ENABLED`.
 
 ### Cobrança Asaas V1
 

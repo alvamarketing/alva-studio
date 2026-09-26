@@ -5,7 +5,6 @@ import { TrackingRepository } from '../server/repositories/tracking-repository.m
 import { processDueTrackingProvisionJobs, MAX_TRACKING_PROVISION_ATTEMPTS } from '../server/tracking-provision-worker.mjs';
 import { PublicationService } from '../server/publication-service.mjs';
 import { createProjectApi } from '../server/project-api.mjs';
-import { NvsClient } from '../server/tracking-clients.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
 async function seed(database, suffix) {
@@ -34,9 +33,9 @@ test('projeto cria bindings independentes para preview e produção, sem IDs adm
     const firstStatus = await repository.status({ companyId: first.company.id, projectId: first.project.id });
     const secondStatus = await repository.status({ companyId: second.company.id, projectId: second.project.id });
     assert.deepEqual(firstStatus.bindings.map((item) => [item.environment, item.engine]).sort(), [
-      ['preview', 'nvs'], ['preview', 'umami'], ['production', 'nvs'], ['production', 'umami'],
+      ['preview', 'conversions'], ['production', 'conversions'],
     ]);
-    assert.equal(new Set(firstStatus.bindings.map((item) => item.id)).size, 4);
+    assert.equal(new Set(firstStatus.bindings.map((item) => item.id)).size, 2);
     assert.notDeepEqual(firstStatus.bindings.map((item) => item.id).sort(), secondStatus.bindings.map((item) => item.id).sort());
     assert.equal(JSON.stringify(firstStatus).includes('remote'), false, 'o DTO não pode revelar referências administrativas');
     await assert.rejects(
@@ -55,15 +54,13 @@ test('worker provisiona de forma idempotente, trata falha parcial e não executa
     const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
     const calls = [];
     const clients = {
-      umami: { provision: async (input) => { calls.push(['umami', input.bindingId]); return { remoteId: input.bindingId }; } },
-      nvs: { provision: async () => { calls.push(['nvs']); throw new Error('indisponível'); } },
+      conversions: { provision: async () => { calls.push(['conversions']); throw new Error('indisponível'); } },
     };
     const first = await processDueTrackingProvisionJobs({ repository, clients, maxPerRun: 4, now: () => new Date() });
-    assert.equal(first.processed, 4);
-    assert.equal(calls.filter(([engine]) => engine === 'umami').length, 2);
+    assert.equal(first.processed, 2, 'dois ambientes, um motor');
+    assert.equal(calls.filter(([engine]) => engine === 'conversions').length, 2);
     const afterFirst = await repository.status({ companyId: seeded.company.id, projectId: seeded.project.id });
-    assert.equal(afterFirst.bindings.filter((item) => item.engine === 'umami').every((item) => item.status === 'ready'), true);
-    assert.equal(afterFirst.bindings.filter((item) => item.engine === 'nvs').every((item) => item.status === 'pending'), true);
+    assert.equal(afterFirst.bindings.every((item) => item.status === 'pending'), true, 'a falha mantém o binding pendente');
     const claimed = await repository.claimNextDue({ leaseMs: 60_000 });
     assert.equal(claimed.claimed, false, 'backoff impede nova execução imediata');
     const due = await database.query("UPDATE tracking_provision_jobs SET lease_expires_at = now() - interval '1 second', next_attempt_at = now() WHERE status = 'retry' RETURNING id");
@@ -81,17 +78,17 @@ test('falhas consecutivas terminam em dead e retry manual reabre somente o bindi
   try {
     const seeded = await seed(database, 'dead');
     const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
-    const clients = { umami: { provision: async () => ({ remoteId: 'ok' }) }, nvs: { provision: async () => { throw new Error('offline'); } } };
+    const clients = { conversions: { provision: async () => { throw new Error('offline'); } } };
     for (let attempt = 0; attempt < MAX_TRACKING_PROVISION_ATTEMPTS; attempt += 1) {
       await database.query("UPDATE tracking_provision_jobs SET next_attempt_at = now(), lease_expires_at = NULL WHERE status IN ('queued', 'retry')");
       await processDueTrackingProvisionJobs({ repository, clients, now: () => new Date('2026-09-06T10:00:00.000Z') });
     }
     const status = await repository.status({ companyId: seeded.company.id, projectId: seeded.project.id });
-    const dead = status.bindings.find((item) => item.engine === 'nvs' && item.environment === 'production');
+    const dead = status.bindings.find((item) => item.engine === 'conversions' && item.environment === 'production');
     assert.equal(dead.status, 'dead');
-    const retried = await repository.retry({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', engine: 'nvs' });
+    const retried = await repository.retry({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', engine: 'conversions' });
     assert.equal(retried.status, 'pending');
-    const untouched = (await repository.status({ companyId: seeded.company.id, projectId: seeded.project.id })).bindings.find((item) => item.engine === 'nvs' && item.environment === 'preview');
+    const untouched = (await repository.status({ companyId: seeded.company.id, projectId: seeded.project.id })).bindings.find((item) => item.engine === 'conversions' && item.environment === 'preview');
     assert.equal(untouched.status, 'dead');
   } finally { await database.close(); }
 });
@@ -105,10 +102,10 @@ test('ciphertext de binding é vinculado criptograficamente ao escopo e não ace
     const second = await seed(database, 'scope-b');
     const repository = new TrackingRepository(database, { masterKey: 'chave-de-teste' });
     const binding = (await database.query(
-      "SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND engine = 'umami'",
+      "SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND engine = 'conversions'",
       [second.company.id, second.project.id],
     )).rows[0];
-    const foreignCiphertext = repository.vault.encrypt('umami-admin-id', `binding:${first.company.id}:${first.project.id}:production:umami`);
+    const foreignCiphertext = repository.vault.encrypt('id-de-outro-tenant', `binding:${first.company.id}:${first.project.id}:production:conversions`);
     await database.query("UPDATE tracking_provision_jobs SET status = 'succeeded' WHERE company_id IN ($1, $2)", [first.company.id, second.company.id]);
     await database.query("UPDATE tracking_bindings SET encrypted_remote_reference = $2 WHERE id = $1", [binding.id, foreignCiphertext]);
     await database.query("UPDATE tracking_provision_jobs SET status = 'retry', next_attempt_at = now() WHERE binding_id = $1", [binding.id]);
@@ -116,7 +113,7 @@ test('ciphertext de binding é vinculado criptograficamente ao escopo e não ace
   } finally { await database.close(); }
 });
 
-test('destinos aceitam somente o contrato NVS e Taboola pode ser ativado sem credenciais', async (t) => {
+test('destinos aceitam somente o contrato de cada plataforma e Taboola pode ser ativado sem credenciais', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
   await migrate(database);
@@ -143,15 +140,16 @@ test('destinos aceitam somente o contrato NVS e Taboola pode ser ativado sem cre
       () => repository.saveDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider: 'linkedin', configuration: { conversion_urn: 'urn:lla:llaPartnerConversion:bad', access_token: 'token', linkedin_version: '20260' } }),
       /Configuração do destino inválida/,
     );
-    const destinations = await repository.nvsDestinations({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
+    const destinations = await repository.conversionDestinations({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production' });
     assert.deepEqual(destinations, configurations);
-    const requests = [];
-    const client = new NvsClient({ baseUrl: 'http://nvs.test', secret: 'segredo-de-teste', now: () => 0, fetchImpl: async (_url, init) => {
-      requests.push(JSON.parse(init.body));
-      return new Response(JSON.stringify({ property: { property_id: 'nvs_binding' } }), { status: 201, headers: { 'Content-Type': 'application/json' } });
-    } });
-    await client.provision({ propertyId: 'nvs_binding', projectName: 'Projeto', environment: 'production', destinations });
-    assert.deepEqual(requests[0].destinations, configurations);
+    const { criarProvisionadorLocal } = await import('../server/tracking-provisionador-local.mjs');
+    const provisionador = criarProvisionadorLocal({ tracking: repository });
+    // O provisionamento deixou de sair pela rede: o que se verifica é que ele enxerga as
+    // credenciais salvas e dá o projeto como pronto.
+    const pronto = await provisionador.provision({
+      companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', bindingId: 'aaaa-bbbb',
+    });
+    assert.equal(pronto.remoteId, 'alva_aaaabbbb');
   } finally { await database.close(); }
 });
 
@@ -183,7 +181,7 @@ test('nova publicação exige apenas os bindings dos motores ativos sem invalida
   const ready = { async assertReady(input) { required.push(input.engines); throw Object.assign(new Error('Rastreamento do ambiente ainda não está pronto.'), { status: 409 }); } };
   const service = new PublicationService({
     tracking: ready,
-    trackingRequiredEngines: ['umami'],
+    trackingRequiredEngines: ['conversions'],
     snapshotBuilder: { build: async () => ({ hash: 'a'.repeat(64), manifest: [], files: [] }) },
     integrations: { credentials: async () => ({ token: 'privado', vercelProjectId: 'vercel' }), publicSettings: async () => ({ connectionStatus: 'configured' }) },
     deployments: { async latest() { return { id: 'snapshot-antigo', status: 'READY' }; }, async latestReady() { return null; } },
@@ -192,20 +190,20 @@ test('nova publicação exige apenas os bindings dos motores ativos sem invalida
     () => service.preview({ companyId: 'c', projectId: 'p', requestedBy: 'u', expectedRevision: 1 }),
     /rastreamento/i,
   );
-  assert.deepEqual(required, [['umami']]);
+  assert.deepEqual(required, [['conversions']]);
   const overview = await service.overview({ companyId: 'c', projectId: 'p' });
   assert.equal(overview.production.id, 'snapshot-antigo');
 });
 
 test('gate de publicação falha fechado quando há motores obrigatórios sem repositório', async () => {
-  const service = new PublicationService({ trackingRequiredEngines: ['nvs'] });
+  const service = new PublicationService({ trackingRequiredEngines: ['conversions'] });
   await assert.rejects(() => service.requireTracking({ companyId: 'c', projectId: 'p' }, 'preview'), /rastreamento/i);
 });
 
 test('API de tracking exige integration.manage e nunca serializa dados administrativos', async () => {
   const calls = [];
   const tracking = {
-    async ensureJobs(input) { calls.push(['provision', input]); return { bindings: [{ id: 'publico', environment: 'preview', engine: 'umami', status: 'pending' }] }; },
+    async ensureJobs(input) { calls.push(['provision', input]); return { bindings: [{ id: 'publico', environment: 'preview', engine: 'conversions', status: 'pending' }] }; },
     async status(input) { calls.push(['status', input]); return { bindings: [] }; },
     async retry(input) { calls.push(['retry', input]); return { id: 'publico', environment: input.environment, engine: input.engine, status: 'pending' }; },
     async saveDestination(input) { calls.push(['destination', input]); return { provider: input.provider, environment: input.environment, configured: true }; },
@@ -224,7 +222,7 @@ test('API de tracking exige integration.manage e nunca serializa dados administr
   const provision = await invoke('/api/projects/project-a/tracking/provision', 'POST');
   assert.equal(provision.status, 202);
   assert.equal(JSON.stringify(provision.data).includes('remote'), false);
-  await invoke('/api/projects/project-a/tracking/retry', 'POST', { environment: 'production', engine: 'nvs' });
+  await invoke('/api/projects/project-a/tracking/retry', 'POST', { environment: 'production', engine: 'conversions' });
   await invoke('/api/projects/project-a/tracking/destinations/meta', 'PUT', { environment: 'production', configuration: { pixel_id: 'pixel-1' } });
   assert.deepEqual(calls.map(([name]) => name), ['provision', 'retry', 'destination']);
   const forbidden = createProjectApi({ sessionService: { ...sessionService, authorize: async () => { throw Object.assign(new Error('Sem permissão para esta ação.'), { status: 403 }); } }, tracking, body: async () => ({}) });

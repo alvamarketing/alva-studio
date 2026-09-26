@@ -18,9 +18,10 @@
   - `migrations/012_analytics_websites.sql`: backfill e provisionamento automático do tracker público por projeto.
   - `migrations/013_tracking_provisioning.sql`: bindings de destino por ambiente, destinos cifrados e fila transacional de provisionamento com lease.
   - `migrations/014_umami_cutover.sql`: token público opaco por ambiente; o marco de corte ficou do tempo em que havia dois coletores.
-  - `migrations/015_nvs_commercial_outbox.sql`: fila transacional de conversões NVS com deduplicação, lease, retry e auditoria sanitizada.
+  - `migrations/015_nvs_commercial_outbox.sql`: cria a fila transacional de conversões (então chamada `nvs_commercial_outbox`) com deduplicação, lease, retry e auditoria sanitizada. Já aplicada em banco compartilhado, então o arquivo mantém o nome antigo por checksum — quem renomeia a tabela é a 023.
   - `migrations/017_asaas_billing.sql`: plano por ambiente, pedidos, assinatura, entitlement, inbox idempotente por evento Asaas, retry com disponibilidade e fila de revisão.
   - `migrations/018_agent_mcp.sql`: chaves MCP por projeto, operações idempotentes, limite persistente e vínculo de auditoria de agente.
+  - `migrations/023_conversions_outbox.sql`: renomeia `nvs_commercial_outbox` para `conversions_outbox` (tabela, índices e constraints), troca `destination` do valor fixo `nvs` para o destino real (`meta`, `tiktok`, `google`, `linkedin`, `taboola`) com uma linha por destino, reduz o motor de tracking a `conversions` e remove os bindings do Umami.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
@@ -28,7 +29,10 @@
 - `project-api.mjs`: API multiempresa, rotas de cobrança e administração de chaves MCP autenticadas, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
 - `mcp-server.mjs`: fronteira JSON-RPC MCP negociada, catálogo fechado de leitura/rascunho e respostas de erro seguras.
 - `asaas-client.mjs`, `billing-service.mjs`, `billing-webhook.mjs`, `billing-worker.mjs` e `billing-policy.mjs`: contrato recorrente hospedado, reconsulta assíncrona de pagamento/assinatura, inbox limitado/autenticado e gates transacionais 5/10/5.
-- `tracking-clients.mjs`, `tracking-provision-worker.mjs` e `commercial-events-worker.mjs`: clientes internos do NVS, provisionamento por projeto e entrega assíncrona de conversões comerciais.
+- `tracking-destinos.mjs`: adaptadores dos destinos de conversão (Meta, TikTok, Google, LinkedIn, Taboola), portados do PHP que morava no runtime NVS.
+- `tracking-entrega.mjs` e `tracking-cliente-direto.mjs`: decisão de quando vale reter e envio do evento comercial direto ao destino, sem gateway no meio.
+- `tracking-provisionador-local.mjs`: provisiona um destino sem chamada de rede, com o identificador da propriedade derivado do próprio binding.
+- `tracking-provision-worker.mjs` e `commercial-events-worker.mjs`: filas do worker de tracking — provisionamento por projeto e entrega assíncrona de conversões comerciais.
 - `outbound-webhook.mjs`: entrega best-effort pós-persistência por HTTPS, com timeout, sem credenciais/cabeçalhos repassados, bloqueio de destinos locais/privados e status `delivered`/`failed`; fila, retry, idempotência e defesa contra DNS rebinding ficam no nó `worker_webhook`.
 - `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
 - `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.
@@ -48,7 +52,7 @@
 - `repositories/billing-repository.mjs`: persistência de plano/pedido/assinatura/entitlement, reprocessamento de eventos e auditoria sem payload financeiro bruto.
 - `repositories/mcp-repository.mjs`: hashes de chave, escopos, validade, revogação, rate limit persistente e idempotência por projeto.
 - `repositories/tracking-repository.mjs`: bindings e destinos de tracking isolados por empresa, projeto e ambiente, sem expor referências remotas.
-- `repositories/nvs-commercial-outbox-repository.mjs`: outbox comercial cifrada por binding, com contatos normalizados/hash somente no servidor, click IDs allowlisted e sem respostas brutas.
+- `repositories/conversions-outbox-repository.mjs`: outbox comercial cifrada por binding, com contatos normalizados/hash somente no servidor, click IDs allowlisted e sem respostas brutas.
 - `repositories/publication-runtime-repository.mjs`: manifestos, consentimentos vinculados ao escopo e nonces de replay persistidos.
 - `publisher.mjs`: chamadas Vercel para previews, produção, status e domínio, com retry temporário.
 - `auth.mjs`: conta única, sessões e credencial Vercel cifrada em disco do modo local legado.

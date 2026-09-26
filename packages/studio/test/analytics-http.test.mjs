@@ -234,7 +234,7 @@ test('página pública da VSL inclui o script do tracker do projeto e a CSP corr
   await database.close();
 });
 
-test('evento de VSL pelo coletor próprio entra no outbox comercial, como entrava pelo gateway do Umami', async (t) => {
+test('evento de VSL pelo coletor próprio entra no outbox comercial, um por destino configurado', async (t) => {
   // O outbox só existe com a chave mestra de tracking configurada.
   const chaveAnterior = process.env.TRACKING_MASTER_KEY;
   process.env.TRACKING_MASTER_KEY = 'a'.repeat(64);
@@ -245,17 +245,22 @@ test('evento de VSL pelo coletor próprio entra no outbox comercial, como entrav
   const seed = await seedCompany(database, { email: 'outbox@alva.test', companyName: 'Outbox', slug: 'outbox-co' });
   const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'projeto-outbox' });
   await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'trk-outbox');
-  // O outbox só enfileira para projeto com o NVS provisionado — é a trava que impede
-  // mandar evento de quem não contratou o destino.
+  // O outbox só enfileira para projeto provisionado e com destino salvo — é a trava que
+  // impede mandar evento de quem não configurou para onde ele vai.
   const { SecretVault } = await import('../server/repositories/publication-repository.mjs');
+  const { TrackingRepository } = await import('../server/repositories/tracking-repository.mjs');
   const vault = new SecretVault({ masterKey: process.env.TRACKING_MASTER_KEY });
+  await new TrackingRepository(database, { vault }).saveDestination({
+    companyId: seed.company.id, projectId: project.id, environment: 'production',
+    provider: 'meta', configuration: { pixel_id: '123', access_token: 'token' },
+  });
   await database.query(
     `UPDATE tracking_bindings SET status = 'ready', encrypted_remote_reference = $4
-      WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'nvs'`,
+      WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions'`,
     [seed.company.id, project.id, 'production',
-      vault.encrypt('nvs_prop', `tracking-binding:${seed.company.id}:${project.id}:production:nvs`)],
+      vault.encrypt('alva_prop', `tracking-binding:${seed.company.id}:${project.id}:production:conversions`)],
   );
-  const app = await start(t, database, { runtimeFlags: { nvsRuntime: true } });
+  const app = await start(t, database, { runtimeFlags: { conversions: true } });
 
   const resposta = await fetch(`${app.base}/api/public/collect`, {
     method: 'POST',
@@ -270,10 +275,10 @@ test('evento de VSL pelo coletor próprio entra no outbox comercial, como entrav
   assert.equal(resposta.status, 204, await resposta.text());
 
   const { rows } = await database.query(
-    `SELECT event_name FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2`,
+    `SELECT event_name, destination FROM conversions_outbox WHERE company_id = $1 AND project_id = $2`,
     [seed.company.id, project.id],
   );
-  assert.deepEqual(rows.map((r) => r.event_name), ['vsl_start']);
+  assert.deepEqual(rows.map((r) => [r.event_name, r.destination]), [['vsl_start', 'meta']]);
   await database.close();
 });
 
@@ -284,13 +289,13 @@ test('pageview comum não vira evento comercial — só os de VSL entram no outb
   const seed = await seedCompany(database, { email: 'pv@alva.test', companyName: 'PV', slug: 'pv-co' });
   const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'projeto-pv' });
   await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'trk-pv');
-  const app = await start(t, database, { runtimeFlags: { nvsRuntime: true } });
+  const app = await start(t, database, { runtimeFlags: { conversions: true } });
 
   await fetch(`${app.base}/api/public/collect`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ trackerPublicId: 'trk-pv', event_name: 'pageview', url_path: '/' }),
   });
-  const { rows } = await database.query(`SELECT 1 FROM nvs_commercial_outbox WHERE company_id = $1`, [seed.company.id]);
+  const { rows } = await database.query(`SELECT 1 FROM conversions_outbox WHERE company_id = $1`, [seed.company.id]);
   assert.equal(rows.length, 0);
   await database.close();
 });

@@ -84,7 +84,7 @@ export function buildProviderConversion({ provider, manifest, consentState, brow
   return payload;
 }
 
-export function buildNvsConversion({ manifest, consentState, browserEvent: rawEvent, serverAnswers = {} } = {}) {
+export function buildConversion({ manifest, consentState, browserEvent: rawEvent, serverAnswers = {} } = {}) {
   consentScope(manifest);
   if (!STATES.has(consentState)) fail('Estado de consentimento inválido.');
   const event = browserEvent(rawEvent);

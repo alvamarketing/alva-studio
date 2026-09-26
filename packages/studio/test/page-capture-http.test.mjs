@@ -58,7 +58,7 @@ test('HTTP de captura publicada usa versão congelada, gateway assinado e namesp
 
   const manifest = buildRuntimeManifest({ publicationId: 'page-capture-http', snapshotHash: 'c'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', contents: [{ path: '/landing', type: 'page', contentId: page.id, versionId: versionA.id, captureIds: [captureId] }] });
   await new PublicationRuntimeRepository(database).saveManifest({ companyId: company.id, projectId: project.id, manifest });
-  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: false, nvsRuntime: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
+  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: false, conversions: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await new Promise((resolve) => app.close(resolve)); await database.close(); });
   const base = `http://127.0.0.1:${app.address().port}`;

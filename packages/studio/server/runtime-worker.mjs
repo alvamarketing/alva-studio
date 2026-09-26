@@ -4,11 +4,10 @@ import { createDatabase, migrate } from './db/postgres.mjs';
 import { WebhookDeliveryRepository } from './repositories/webhook-repository.mjs';
 import { startWebhookWorker } from './webhook-worker.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
-import { NvsClient, UmamiClient } from './tracking-clients.mjs';
 import { criarClienteDeDestinos } from './tracking-cliente-direto.mjs';
 import { criarProvisionadorLocal } from './tracking-provisionador-local.mjs';
 import { startTrackingProvisionWorker } from './tracking-provision-worker.mjs';
-import { NvsCommercialOutboxRepository } from './repositories/nvs-commercial-outbox-repository.mjs';
+import { ConversionsOutboxRepository } from './repositories/conversions-outbox-repository.mjs';
 import { startCommercialEventsWorker } from './commercial-events-worker.mjs';
 import { BillingRepository } from './repositories/billing-repository.mjs';
 import { AsaasClient } from './asaas-client.mjs';
@@ -26,9 +25,9 @@ export async function startRuntimeWorker({
   webhookRepositoryFactory = (database) => new WebhookDeliveryRepository(database),
   startWebhookWorkerFn = startWebhookWorker,
   trackingRepositoryFactory = (database) => new TrackingRepository(database),
-  trackingClientsFactory = (database) => ({ umami: new UmamiClient(), nvs: criarProvisionadorLocal({ tracking: trackingRepositoryFactory(database) }) }),
+  trackingClientsFactory = (database) => ({ conversions: criarProvisionadorLocal({ tracking: trackingRepositoryFactory(database) }) }),
   startTrackingWorkerFn = startTrackingProvisionWorker,
-  commercialRepositoryFactory = (database) => new NvsCommercialOutboxRepository(database),
+  commercialRepositoryFactory = (database) => new ConversionsOutboxRepository(database),
   commercialClientFactory = (database) => criarClienteDeDestinos({ tracking: trackingRepositoryFactory(database) }),
   startCommercialWorkerFn = startCommercialEventsWorker,
   billingRepositoryFactory = (database) => new BillingRepository(database),
@@ -36,7 +35,7 @@ export async function startRuntimeWorker({
   billingEnvironment = billingRuntimeEnvironment(),
   billingClientFactory = (environment) => new AsaasClient({ environment, apiKey: environment === 'production' ? process.env.ASAAS_PRODUCTION_API_KEY : process.env.ASAAS_SANDBOX_API_KEY }),
   trackingProvisionEnabled = process.env.TRACKING_PROVISION_ENABLED === 'true',
-  nvsRuntimeEnabled = process.env.NVS_RUNTIME_ENABLED === 'true',
+  conversoesHabilitadas = process.env.CONVERSIONS_ENABLED === 'true',
   log = console.log,
 } = {}) {
   // Um processo pode assumir mais de um papel: os blocos abaixo nunca dependeram uns dos
@@ -72,7 +71,7 @@ export async function startRuntimeWorker({
         clients: trackingClientsFactory(database),
       });
     }
-    if (assume('tracking') && nvsRuntimeEnabled) {
+    if (assume('tracking') && conversoesHabilitadas) {
       commercialWorker = startCommercialWorkerFn({ repository: commercialRepositoryFactory(database), client: commercialClientFactory(database) });
     }
     if (assume('billing')) {

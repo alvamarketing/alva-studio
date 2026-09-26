@@ -18,7 +18,8 @@ import { BillingRepository } from '../server/repositories/billing-repository.mjs
 import { CompanyRepository } from '../server/repositories/company-repository.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
 import { McpKeyRepository } from '../server/repositories/mcp-repository.mjs';
-import { NvsCommercialOutboxRepository } from '../server/repositories/nvs-commercial-outbox-repository.mjs';
+import { ConversionsOutboxRepository } from '../server/repositories/conversions-outbox-repository.mjs';
+import { criarProvisionadorLocal } from '../server/tracking-provisionador-local.mjs';
 import { ProjectRepository } from '../server/repositories/project-repository.mjs';
 import { AuditRepository, DeploymentRepository, ProjectIntegrationRepository, SecretVault } from '../server/repositories/publication-repository.mjs';
 import { TrackingRepository } from '../server/repositories/tracking-repository.mjs';
@@ -78,7 +79,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
   const companies = new CompanyRepository(database);
   const projects = new ProjectRepository(database);
   const tracking = new TrackingRepository(database, { vault });
-  const commercialOutbox = new NvsCommercialOutboxRepository(database, { vault });
+  const commercialOutbox = new ConversionsOutboxRepository(database, { vault });
   const content = new ContentRepository(database, {
     publicOrigin: 'https://studio.local-cert.test',
     commercialOutbox,
@@ -114,18 +115,29 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         await content.publishForm({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id, formId: records.formB.id });
         return { status: 'passed' };
       },
-      provisioning_fake: async () => {
-        await tracking.ensureJobs({ companyId: records.companyA.id, projectId: records.projectA.id });
-        await tracking.ensureJobs({ companyId: records.companyB.id, projectId: records.projectB.id });
+      provisioning_local: async () => {
+        // Provisionar deixou de ser uma chamada de rede, então aqui não há mais o que
+        // dublar: quem prepara o projeto é o provisionador de verdade, e a certificação
+        // continua sem egress porque ele não sai da máquina.
+        for (const [company, project] of [[records.companyA, records.projectA], [records.companyB, records.projectB]]) {
+          await tracking.saveDestination({
+            companyId: company.id, projectId: project.id, environment: 'preview',
+            provider: 'meta', configuration: { pixel_id: '123', access_token: 'token-local' },
+          });
+          await tracking.saveDestination({
+            companyId: company.id, projectId: project.id, environment: 'production',
+            provider: 'meta', configuration: { pixel_id: '123', access_token: 'token-local' },
+          });
+          await tracking.ensureJobs({ companyId: company.id, projectId: project.id });
+        }
         const processed = await processDueTrackingProvisionJobs({
           repository: tracking,
-          clients: {
-            umami: { provision: async ({ bindingId }) => ({ remoteId: bindingId }) },
-            nvs: { provision: async ({ propertyId }) => ({ remoteId: propertyId }) },
-          },
+          clients: { conversions: criarProvisionadorLocal({ tracking }) },
           maxPerRun: 8,
         });
-        assert.equal(processed.processed, 8);
+        // Dois tenants, dois ambientes, um motor: quatro. Eram oito quando o rastreamento
+        // dependia de dois produtos externos.
+        assert.equal(processed.processed, 4);
         const statuses = await Promise.all([
           tracking.status({ companyId: records.companyA.id, projectId: records.projectA.id }),
           tracking.status({ companyId: records.companyB.id, projectId: records.projectB.id }),
@@ -185,8 +197,8 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         assert.equal(records.submissionB.form.projectId, records.projectB.id);
         assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions WHERE company_id = $1', [records.companyA.id])).rows[0].count, 1);
         assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions WHERE company_id = $1', [records.companyB.id])).rows[0].count, 1);
-        const outboxA = (await database.query('SELECT payload FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2', [records.companyA.id, records.projectA.id])).rows[0].payload;
-        const outboxB = (await database.query('SELECT payload FROM nvs_commercial_outbox WHERE company_id = $1 AND project_id = $2', [records.companyB.id, records.projectB.id])).rows[0].payload;
+        const outboxA = (await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [records.companyA.id, records.projectA.id])).rows[0].payload;
+        const outboxB = (await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [records.companyB.id, records.projectB.id])).rows[0].payload;
         assertSanitizedOutboxPayload(outboxA, { trackingEventId: records.submission.eventId, fbc: 'fb.local.cert.a', personalValues: ['Nome local A', 'lead-a@local-cert.test', '+55 11 99999-0001'] });
         assertSanitizedOutboxPayload(outboxB, { trackingEventId: records.submissionB.eventId, fbc: 'fb.local.cert.b', personalValues: ['Nome local B', 'lead-b@local-cert.test', '+55 11 99999-0002'] });
         assert.deepEqual(await commercialOutbox.status({ companyId: records.companyA.id, projectId: records.projectB.id }), []);
@@ -196,7 +208,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
       conversion_fake: async () => {
         const service = new CommercialConversionService({
           persist: async (payload) => conversionCalls.push(['persist', payload]),
-          enqueueNvs: async (payload) => conversionCalls.push(['nvs', payload]),
+          enqueueConversion: async (payload) => conversionCalls.push(['conversions', payload]),
           adapters: { meta: async (payload) => conversionCalls.push(['meta', payload]) },
           technicalEnabled: (provider) => provider === 'meta',
         });
@@ -208,7 +220,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         assert.equal(outcome.trackingEventId, records.submission.eventId);
         assert.equal(JSON.stringify(conversionCalls).includes('lead-a@local-cert.test'), false);
         assert.equal(JSON.stringify(conversionCalls).includes('email_sha256'), false);
-        assert.equal((await database.query('SELECT count(*)::int AS count FROM nvs_commercial_outbox WHERE company_id = $1', [records.companyA.id])).rows[0].count, 1);
+        assert.equal((await database.query('SELECT count(*)::int AS count FROM conversions_outbox WHERE company_id = $1', [records.companyA.id])).rows[0].count, 1);
         return { status: 'passed' };
       },
       billing_fake: async () => {
@@ -268,7 +280,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         return { status: 'passed' };
       },
       publication_rollback: async () => {
-        assert.deepEqual(readRuntimeFlags({}), { nvsRuntime: false, pixels: false, mediaPipeline: false, billingEnforcement: false });
+        assert.deepEqual(readRuntimeFlags({}), { conversions: false, pixels: false, mediaPipeline: false, billingEnforcement: false });
         assert.equal(fakePublicationCalls.some((call) => call.snapshotHash === 'a'.repeat(64)), true);
         return { status: 'passed' };
       },

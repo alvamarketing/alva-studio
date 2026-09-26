@@ -105,8 +105,8 @@ test('worker de tracking consome a fila fora do processo web', async (t) => {
     role: 'tracking', connectionString: 'postgres://nao-registre-esta-url', heartbeatFile,
     createDatabaseFn: () => database, migrateFn: async () => calls.push('migrate'),
     trackingRepositoryFactory: (value) => ({ database: value }),
-    trackingClientsFactory: () => ({ umami: {}, nvs: {} }),
-    startTrackingWorkerFn: ({ repository, clients }) => { assert.equal(repository.database, database); assert.ok(clients.umami); calls.push('tracking-worker'); return { stop: () => { stopped = true; } }; }, trackingProvisionEnabled: true,
+    trackingClientsFactory: () => ({ conversions: {} }),
+    startTrackingWorkerFn: ({ repository, clients }) => { assert.equal(repository.database, database); assert.ok(clients.conversions); calls.push('tracking-worker'); return { stop: () => { stopped = true; } }; }, trackingProvisionEnabled: true,
     log: () => {},
   });
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -129,7 +129,7 @@ test('worker de tracking permanece em heartbeat sem consumir fila enquanto a fla
   await runtime.close();
 });
 
-test('worker de tracking inicia a outbox comercial somente com a flag NVS literal', async (t) => {
+test('worker de tracking inicia a outbox comercial somente com a flag de conversões', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'alva-runtime-commercial-worker-'));
   const heartbeatFile = join(directory, 'heartbeat.json'); let started = false;
   const runtime = await startRuntimeWorker({
@@ -140,7 +140,7 @@ test('worker de tracking inicia a outbox comercial somente com a flag NVS litera
     // mantém o teste sobre o que ele afirma — que a flag liga o worker.
     commercialClientFactory: () => ({ sendEvent: async () => {} }),
     startCommercialWorkerFn: ({ repository, client }) => { assert.equal(repository.queue, true); assert.ok(client.sendEvent); started = true; return { stop: () => {} }; },
-    nvsRuntimeEnabled: true, log: () => {},
+    conversoesHabilitadas: true, log: () => {},
   });
   t.after(() => rm(directory, { recursive: true, force: true }));
   assert.equal(started, true);
@@ -196,7 +196,13 @@ test('runbook e scripts tratam backup e restauração do banco com confirmação
   assert.doesNotMatch(restore, /compose stop studio-web studio-worker/);
   assert.match(restore, /pg_isready -U studio -d studio/);
   assert.match(runbook, /executa a fila de webhooks/);
-  assert.match(runbook, /não é atômica entre os três bancos/);
+  // Eram três bancos, e o aviso existia porque o backup não podia ser atômico entre eles.
+  // Sobrou um: o runbook precisa dizer isso, em vez de manter um risco que saiu com o Umami
+  // e o NVS.
+  assert.match(runbook, /Com um só banco, a restauração é atômica/);
+  assert.doesNotMatch(runbook, /três bancos/);
+  // O proxy local saiu junto: quem dá domínio e certificado é o OrbStack.
+  assert.match(runbook, /https:\/\/alva\.orb\.local/);
   assert.match(localRestore, /--pull never/);
   assert.match(localRestore, /backup\.sh/);
   assert.match(localRestore, /restore\.sh/);

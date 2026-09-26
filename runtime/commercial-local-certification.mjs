@@ -1,6 +1,6 @@
 export const LOCAL_CERTIFICATION_STAGES = Object.freeze([
   'creation',
-  'provisioning_fake',
+  'provisioning_local',
   'publication_fake',
   'visit_and_lead',
   'conversion_fake',
@@ -13,13 +13,7 @@ export const LOCAL_CERTIFICATION_STAGES = Object.freeze([
 export const LOCAL_SECRET_INVENTORY = Object.freeze([
   Object.freeze({ name: 'STUDIO_DATABASE_URL', location: 'ambiente do runtime', purpose: 'PostgreSQL do Studio' }),
   Object.freeze({ name: 'STUDIO_POSTGRES_PASSWORD', location: 'ambiente do runtime', purpose: 'PostgreSQL do Studio' }),
-  Object.freeze({ name: 'UMAMI_POSTGRES_PASSWORD', location: 'ambiente do runtime', purpose: 'PostgreSQL do Umami' }),
-  Object.freeze({ name: 'UMAMI_APP_SECRET', location: 'ambiente do runtime', purpose: 'sessão do Umami' }),
-  Object.freeze({ name: 'UMAMI_USERNAME', location: 'ambiente do runtime', purpose: 'conta técnica do Umami' }),
-  Object.freeze({ name: 'UMAMI_PASSWORD', location: 'ambiente do runtime', purpose: 'conta técnica do Umami' }),
-  Object.freeze({ name: 'NVS_MARIADB_PASSWORD', location: 'ambiente do runtime', purpose: 'MariaDB do NVS' }),
   Object.freeze({ name: 'TRACKING_MASTER_KEY', location: 'ambiente do runtime', purpose: 'cofre de tracking' }),
-  Object.freeze({ name: 'NVS_INTERNAL_HMAC_SECRET', location: 'ambiente do runtime', purpose: 'HMAC interno NVS' }),
   Object.freeze({ name: 'VERCEL_MASTER_KEY', location: 'ambiente do Studio', purpose: 'cofre de publicação' }),
   Object.freeze({ name: 'PUBLICATION_RUNTIME_HMAC_SECRET', location: 'ambiente do Studio', purpose: 'gateway de publicação' }),
   Object.freeze({ name: 'ASAAS_SANDBOX_API_KEY', location: 'cofre sandbox', purpose: 'checkout e reconciliação sandbox' }),
@@ -29,8 +23,7 @@ export const LOCAL_SECRET_INVENTORY = Object.freeze([
 ]);
 
 const REQUIRED_OFF_FLAGS = Object.freeze([
-  'UMAMI_RUNTIME_ENABLED',
-  'NVS_RUNTIME_ENABLED',
+  'CONVERSIONS_ENABLED',
   'PIXELS_ENABLED',
   'MEDIA_PIPELINE_ENABLED',
   'BILLING_ENFORCEMENT',

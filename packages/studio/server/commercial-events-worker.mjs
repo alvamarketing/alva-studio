@@ -1,4 +1,4 @@
-import { MAX_COMMERCIAL_ATTEMPTS, commercialRetryDelay } from './repositories/nvs-commercial-outbox-repository.mjs';
+import { MAX_COMMERCIAL_ATTEMPTS, commercialRetryDelay } from './repositories/conversions-outbox-repository.mjs';
 
 function safeError(error) {
   return String(error?.message || 'delivery_failed')

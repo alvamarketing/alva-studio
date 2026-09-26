@@ -44,7 +44,7 @@ test('landing publicada preserva captura/versionamento até a submissão assinad
   assert.equal(action, `/api/public/pages/oferta/captures/${captureId}/submissions`);
   const manifest = buildRuntimeManifest({ publicationId: 'landing-capture-run', snapshotHash: snapshot.hash, origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', contents: snapshot.manifest.map(({ path, type, contentId, versionId, captureIds }) => ({ path, type, contentId, versionId, captureIds: captureIds || [] })) });
   await new PublicationRuntimeRepository(database).saveManifest({ companyId: company.id, projectId: project.id, manifest });
-  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: false, nvsRuntime: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
+  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: false, conversions: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await new Promise((resolve) => app.close(resolve)); await database.close(); });
   const body = Buffer.from('email=lead%40example.test'); const timestamp = Math.floor(Date.now() / 1000); const nonce = 'landing-capture-submit-1';
@@ -121,7 +121,7 @@ test('quiz publicado confirma captura versionada antes da conclusão', async (t)
   assert.equal(action, `/api/public/pages/quiz/captures/${captureId}/submissions`);
   const manifest = buildRuntimeManifest({ publicationId: 'quiz-capture-run', snapshotHash: snapshot.hash, origin: 'https://quiz.example.test', domain: 'quiz.example.test', environment: 'production', contents: snapshot.manifest.map(({ path, type, contentId, versionId, captureIds }) => ({ path, type, contentId, versionId, captureIds: captureIds || [] })) });
   await new PublicationRuntimeRepository(database).saveManifest({ companyId: company.id, projectId: project.id, manifest });
-  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: false, nvsRuntime: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
+  const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: false, conversions: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
   await new Promise((resolve) => app.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await new Promise((resolve) => app.close(resolve)); await database.close(); });
   const body = Buffer.from(JSON.stringify({ answers: { email: 'lead@quiz.test' }, trackingEventId: '33333333-3333-4333-8333-333333333333' })); const timestamp = Math.floor(Date.now() / 1000); const nonce = 'quiz-capture-submit-1';

@@ -16,15 +16,15 @@ function falhar(mensagem) {
 }
 
 export function identificadorDaPropriedade(bindingId) {
-  return `nvs_${String(bindingId ?? '').replace(/-/g, '')}`;
+  return `alva_${String(bindingId ?? '').replace(/-/g, '')}`;
 }
 
 export function criarProvisionadorLocal({ tracking } = {}) {
-  if (!tracking?.nvsDestinations) throw new Error('O provisionador exige o repositório de tracking.');
+  if (!tracking?.conversionDestinations) throw new Error('O provisionador exige o repositório de tracking.');
 
   return {
     async provision({ companyId, projectId, environment, bindingId } = {}) {
-      const destinos = await tracking.nvsDestinations({ companyId, projectId, environment });
+      const destinos = await tracking.conversionDestinations({ companyId, projectId, environment });
       const configurados = Object.keys(destinos || {});
       if (!configurados.length)
         throw falhar('Nenhum destino de conversão configurado neste projeto.');

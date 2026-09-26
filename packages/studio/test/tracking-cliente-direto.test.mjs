@@ -19,7 +19,7 @@ const payloadBase = {
 };
 
 function trackingFalso(destinos = { meta: { pixel_id: '1', access_token: 't' } }) {
-  return { nvsDestinations: async () => destinos };
+  return { conversionDestinations: async () => destinos };
 }
 
 test('entrega usando a credencial do projeto, decifrada pelo repositório de tracking', async () => {

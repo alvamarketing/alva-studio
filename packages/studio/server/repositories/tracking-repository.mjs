@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { SecretVault } from './publication-repository.mjs';
 
-const ENGINES = new Set(['umami', 'nvs']);
+const ENGINES = new Set(['conversions']);
 const ENVIRONMENTS = new Set(['preview', 'production']);
 const PROVIDERS = new Set(['meta', 'tiktok', 'google', 'linkedin', 'taboola']);
+// Um projeto provisionado tem um binding por ambiente e motor. Era 4 escrito à mão, com dois
+// motores externos; sobrou um, e um número fixo aqui transforma projeto normal em 404.
+const BINDINGS_POR_PROJETO = ENVIRONMENTS.size * ENGINES.size;
 const PROVIDER_FIELDS = {
   meta: new Set(['access_token', 'pixel_id']), tiktok: new Set(['access_token', 'pixel_code']),
   google: new Set(['operating_account_id', 'conversion_action_id', 'oauth_access_token']),
@@ -57,53 +60,13 @@ export class TrackingRepository {
     this.vault = vault || new SecretVault({ masterKey: masterKey || process.env.TRACKING_MASTER_KEY });
   }
 
-  async resolveUmamiPublicToken({ publicToken }) {
-    const { rows } = await this.database.query(
-      `SELECT website.company_id, website.project_id, website.environment, binding.id AS binding_id, binding.encrypted_remote_reference, website.cutover_at
-         FROM analytics_websites website
-         JOIN tracking_bindings binding ON binding.company_id = website.company_id AND binding.project_id = website.project_id
-          AND binding.environment = website.environment AND binding.engine = 'umami' AND binding.status = 'ready'
-        WHERE website.tracker_public_id = $1`,
-      [publicToken],
-    );
-    if (!rows.length) return null;
-    const row = rows[0];
-    const remoteWebsiteId = row.encrypted_remote_reference && this.vault.decrypt(row.encrypted_remote_reference, bindingScope({ companyId: row.company_id, projectId: row.project_id, environment: row.environment, engine: 'umami' }));
-    if (!remoteWebsiteId) return null;
-    return { companyId: row.company_id, projectId: row.project_id, environment: row.environment, remoteWebsiteId, cutoverAt: row.cutover_at };
-  }
-
-  async remoteWebsiteFor({ companyId, projectId, environment: targetEnvironment = 'production' }) {
-    const target = environment(targetEnvironment);
-    const { rows } = await this.database.query(
-      `SELECT binding.encrypted_remote_reference
-         FROM tracking_bindings binding
-        WHERE binding.company_id = $1 AND binding.project_id = $2
-          AND binding.environment = $3 AND binding.engine = 'umami' AND binding.status = 'ready'`,
-      [companyId, projectId, target],
-    );
-    if (!rows[0]?.encrypted_remote_reference) return null;
-    const value = this.vault.decrypt(rows[0].encrypted_remote_reference, bindingScope({ companyId, projectId, environment: target, engine: 'umami' }));
-    return /^[0-9a-f-]{36}$/i.test(String(value)) ? value : null;
-  }
-
-  async confirmUmamiCutover({ companyId, projectId, environment: targetEnvironment }) {
-    const { rows } = await this.database.query(
-      `UPDATE analytics_websites SET cutover_at = now()
-        WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND cutover_at IS NULL
-        RETURNING cutover_at`,
-      [companyId, projectId, environment(targetEnvironment)],
-    );
-    return rows[0]?.cutover_at || null;
-  }
-
   async status({ companyId, projectId }) {
     const { rows } = await this.database.query(
       `SELECT id, environment, engine, status, provision_attempt_count, last_error, updated_at
          FROM tracking_bindings WHERE company_id = $1 AND project_id = $2
          ORDER BY environment, engine`, [companyId, projectId],
     );
-    if (rows.length !== 4) throw fail('Projeto de rastreamento não encontrado.', 404);
+    if (rows.length !== BINDINGS_POR_PROJETO) throw fail('Projeto de rastreamento não encontrado.', 404);
     return { bindings: rows.map(publicBinding) };
   }
 
@@ -112,7 +75,7 @@ export class TrackingRepository {
       const { rows } = await client.query(
       `SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2`, [companyId, projectId],
       );
-      if (rows.length !== 4) throw fail('Projeto de rastreamento não encontrado.', 404);
+      if (rows.length !== BINDINGS_POR_PROJETO) throw fail('Projeto de rastreamento não encontrado.', 404);
       for (const { id } of rows) await client.query(
       `INSERT INTO tracking_provision_jobs (company_id, project_id, binding_id)
        VALUES ($1, $2, $3) ON CONFLICT (binding_id) DO NOTHING`, [companyId, projectId, id],
@@ -232,7 +195,7 @@ export class TrackingRepository {
     if (plain.length > 12_000) throw fail('Configuração do destino excede o limite.');
     await this.database.transaction(async (client) => {
       const binding = await client.query(
-        `SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'nvs' FOR UPDATE`,
+        `SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions' FOR UPDATE`,
         [companyId, projectId, targetEnvironment],
       );
       if (!binding.rows[0]) throw fail('Binding de rastreamento não encontrado.', 404);
@@ -274,7 +237,7 @@ export class TrackingRepository {
     });
   }
 
-  async nvsDestinations({ companyId, projectId, environment: rawEnvironment }) {
+  async conversionDestinations({ companyId, projectId, environment: rawEnvironment }) {
     const targetEnvironment = environment(rawEnvironment);
     const { rows } = await this.database.query(
       `SELECT provider, encrypted_configuration FROM tracking_destinations
