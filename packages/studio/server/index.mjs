@@ -603,6 +603,10 @@ export function createApp({
             environment: 'production',
             trackingEventId: registrado.trackingEventId,
             eventName: event.event_name,
+            // A sessão sabe de qual anúncio a pessoa veio; o evento de VSL não sabia, e por
+            // isso chegava às plataformas sem atribuição nenhuma.
+            attribution: registrado.aquisicao || {},
+            contexto: { sourceUrl: cors.corsOrigin ? `${cors.corsOrigin}${event.url_path || ''}` : undefined },
             params: {
               ...(dados.publicId ? { content_id: dados.publicId } : {}),
               ...(Number.isInteger(dados.value) ? { value: dados.value } : {}),

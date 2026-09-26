@@ -99,15 +99,20 @@ export class AnalyticsRepository {
     const sessionAttribution = attribution(event);
     return withTransaction(this.database, async (client) => {
       const existing = await client.query(
-        `SELECT id FROM analytics_sessions
+        `SELECT id, click_ids FROM analytics_sessions
           WHERE company_id = $1 AND project_id = $2 AND website_id = $3 AND visitor_hash = $4
             AND last_seen_at >= $5::timestamptz - interval '30 minutes'
           ORDER BY last_seen_at DESC LIMIT 1 FOR UPDATE`,
         [companyId, projectId, websiteId, visitorHash, at],
       );
       let sessionId;
+      // A aquisição da sessão — como a pessoa chegou — é devolvida junto porque a conversão
+      // precisa dela. O identificador do clique só existe na URL da primeira visita; na
+      // segunda página ele já sumiu, e sem lê-lo daqui a conversão sai sem atribuição.
+      let aquisicao = sessionAttribution.clickIds ?? {};
       if (existing.rows.length) {
         sessionId = existing.rows[0].id;
+        aquisicao = existing.rows[0].click_ids ?? {};
         await client.query(
           `UPDATE analytics_sessions SET last_seen_at = $4
             WHERE company_id = $1 AND project_id = $2 AND id = $3 AND last_seen_at < $4`,
@@ -142,7 +147,7 @@ export class AnalyticsRepository {
           [companyId, projectId, inserted.rows[0].id, dataKey, dataValue, dataType],
         );
       }
-      return { sessionId, eventId: inserted.rows[0].id, trackingEventId: inserted.rows[0].tracking_event_id };
+      return { sessionId, eventId: inserted.rows[0].id, trackingEventId: inserted.rows[0].tracking_event_id, aquisicao };
     });
   }
 

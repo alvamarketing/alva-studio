@@ -35,6 +35,9 @@ const meta = {
         event_time: evento.event_time,
         event_id: evento.tracking_event_id,
         action_source: 'website',
+        // Onde a conversão aconteceu. A Meta usa o endereço na atribuição e na qualidade
+        // de correspondência; omiti-lo joga fora um sinal que o servidor já tem em mãos.
+        ...(evento.source_url ? { event_source_url: evento.source_url } : {}),
         user_data: semVazios({
           em: evento.user?.email_sha256,
           ph: evento.user?.phone_sha256,

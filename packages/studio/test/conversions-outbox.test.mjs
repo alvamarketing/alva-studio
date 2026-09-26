@@ -203,3 +203,58 @@ test('o identificador de clique sai da fila e chega ao corpo que vai para a plat
     assert.match(pedidoTaboola.url, /click-id=tb-clique/);
   } finally { await database.close(); }
 });
+
+// Um lead sem contexto chega à Meta como "alguém converteu". Com o endereço da página e o
+// nome do conteúdo, ele chega como "alguém converteu na landing de imobiliárias" — que é o
+// que permite separar o que funciona do que não funciona sem sair do painel do anúncio.
+test('o evento carrega onde aconteceu, e a Meta recebe isso como event_source_url', async (t) => {
+  const { destinoPara } = await import('../server/tracking-destinos.mjs');
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const ids = await seed(database);
+    const vault = new SecretVault({ masterKey: 'task-6-master-key' });
+    await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' } });
+    const outbox = new ConversionsOutboxRepository(database, { vault });
+    await database.transaction((client) => outbox.enqueue(client, {
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
+      trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
+      contexto: { sourceUrl: 'https://cliente.test/imobiliarias', contentId: 'page-1', contentName: 'Landing Imobiliárias' },
+    }));
+    const { rows } = await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1', [ids.company.id]);
+    const payload = rows[0].payload;
+    assert.equal(payload.source_url, 'https://cliente.test/imobiliarias');
+    assert.deepEqual(payload.params, { content_id: 'page-1', content_name: 'Landing Imobiliárias' });
+
+    const corpo = destinoPara('meta').requisicao(payload, { pixel_id: '123', access_token: 'token' }).corpo;
+    assert.equal(corpo.data[0].event_source_url, 'https://cliente.test/imobiliarias');
+    assert.deepEqual(corpo.data[0].custom_data, { content_id: 'page-1', content_name: 'Landing Imobiliárias' });
+  } finally { await database.close(); }
+});
+
+// O endereço vai para a plataforma, então precisa ser um endereço — e só o dele. Query
+// string carrega identificador de clique e, com frequência, dado que a pessoa digitou.
+test('endereço inválido ou com query string não entra no evento', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const ids = await seed(database);
+    const vault = new SecretVault({ masterKey: 'task-6-master-key' });
+    await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' } });
+    const outbox = new ConversionsOutboxRepository(database, { vault });
+    const enfileirar = (contexto, trackingEventId) => database.transaction((client) => outbox.enqueue(client, {
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
+      trackingEventId, eventName: 'lead', contexto,
+    }));
+    await enfileirar({ sourceUrl: 'https://cliente.test/oferta?fbclid=segredo&email=pessoa@x.test' }, 'a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
+    await enfileirar({ sourceUrl: 'javascript:alert(1)' }, 'b1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
+    await enfileirar({ sourceUrl: 'http://cliente.test/sem-tls' }, 'c1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
+    const { rows } = await database.query('SELECT tracking_event_id, payload FROM conversions_outbox WHERE company_id = $1 ORDER BY tracking_event_id', [ids.company.id]);
+    const url = (prefixo) => rows.find((linha) => linha.tracking_event_id.startsWith(prefixo)).payload.source_url;
+    assert.equal(url('a1'), 'https://cliente.test/oferta', 'a query string é descartada, o caminho fica');
+    assert.equal(url('b1'), undefined, 'esquema que não é http(s) não entra');
+    assert.equal(url('c1'), undefined, 'endereço sem TLS não entra');
+  } finally { await database.close(); }
+});

@@ -269,16 +269,23 @@ test('evento de VSL pelo coletor próprio entra no outbox comercial, um por dest
       trackerPublicId: 'trk-outbox',
       event_name: 'vsl_start',
       url_path: '/vsl',
+      // O clique que trouxe a pessoa vem na URL da primeira visita e some depois. O
+      // coletor já o guarda na sessão; a conversão de VSL precisa levá-lo junto, senão o
+      // vídeo assistido nunca é atribuído ao anúncio que o pagou.
+      url_query: 'fbclid=IwAR-clique-da-vsl&utm_source=meta',
       event_data: { publicId: 'vsl-1' },
     }),
   });
   assert.equal(resposta.status, 204, await resposta.text());
 
   const { rows } = await database.query(
-    `SELECT event_name, destination FROM conversions_outbox WHERE company_id = $1 AND project_id = $2`,
+    `SELECT event_name, destination, payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2`,
     [seed.company.id, project.id],
   );
   assert.deepEqual(rows.map((r) => [r.event_name, r.destination]), [['vsl_start', 'meta']]);
+  const payload = rows[0].payload;
+  assert.match(payload.click_ids?.fbc ?? '', /^fb\.1\.\d+\.IwAR-clique-da-vsl$/, 'o clique da sessão precisa viajar com a conversão');
+  assert.equal(payload.params.content_id, 'vsl-1');
   await database.close();
 });
 

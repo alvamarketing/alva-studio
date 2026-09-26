@@ -385,7 +385,16 @@ test('capture Landing faz rollback de outbox/webhook e preserva eventId na entre
     const delivery = (await database.query("SELECT source_kind, page_id, page_submission_id, event FROM webhook_deliveries WHERE source_kind = 'page'")).rows[0];
     assert.equal(delivery.source_kind, 'page'); assert.equal(delivery.page_id, page.id);
     assert.equal(delivery.event.eventId, submitted.eventId);
-    assert.equal((await database.query('SELECT tracking_event_id FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0].tracking_event_id, submitted.eventId);
+    const naFila = (await database.query('SELECT tracking_event_id, payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [company.id, project.id])).rows[0];
+    assert.equal(naFila.tracking_event_id, submitted.eventId);
+    // O lead leva consigo onde aconteceu. Sem isso ele chega à plataforma como "alguém
+    // converteu", e a landing que produziu o lead fica indistinguível das outras.
+    // O endereço é o da página, não o do domínio: é a rota publicada que identifica qual
+    // conteúdo converteu.
+    assert.match(naFila.payload.source_url, new RegExp(`^https://${domain}/.+`));
+    assert.equal(naFila.payload.params.content_id, page.id);
+    assert.equal(typeof naFila.payload.params.content_name, 'string');
+    assert.ok(naFila.payload.params.content_name.length > 0, 'o nome da página precisa viajar junto');
     assert.equal((await content.webhookDeliveries.claimNextDue()).delivery.sourceKind, 'page');
   });
 });

@@ -339,6 +339,14 @@ async function assertPublishedPathAvailable(client, { companyId, projectId, path
   if (rowCount) throw fail('Esta rota publicada já está em uso no projeto.', 409);
 }
 
+// A origem validada é só o domínio; o caminho publicado é a outra metade. Juntos dão o
+// endereço da página onde a pessoa estava, que é o que a plataforma entende.
+function enderecoPublicado(origin, publishedPath) {
+  if (typeof origin !== 'string' || !origin) return undefined;
+  const caminho = typeof publishedPath === 'string' && publishedPath.startsWith('/') ? publishedPath : '';
+  return `${origin.replace(/\/$/, '')}${caminho}`;
+}
+
 export class ContentRepository {
   constructor(database, { publicOrigin = process.env.PUBLIC_ORIGIN, commercialOutbox = null, commercialConsentResolver = null } = {}) {
     this.database = database;
@@ -955,7 +963,8 @@ export class ContentRepository {
   async submitPublishedPageCapture({ companyId, projectId, pageId, pageVersionId, captureId, input, origin, attribution, publicationId, subjectId }) {
     return withTransaction(this.database, async (client) => {
       const { rows } = await client.query(
-        `SELECT page.id AS page_id, version.id AS version_id, version.capture_schema
+        `SELECT page.id AS page_id, page.name AS page_name, version.id AS version_id,
+                version.capture_schema, version.published_path
          FROM pages page JOIN page_versions version
            ON version.page_id = page.id AND version.company_id = page.company_id AND version.project_id = page.project_id
          WHERE page.company_id = $1 AND page.project_id = $2 AND page.id = $3 AND version.id = $4 AND page.deleted_at IS NULL`,
@@ -993,7 +1002,14 @@ export class ContentRepository {
       if (!environment) throw fail('Origem publicada obrigatória para conversões.', 403);
       if (!repeated && this.commercialOutbox) {
         const consentState = this.commercialConsentResolver ? await this.commercialConsentResolver({ companyId, projectId, environment, origin, publicationId, subjectId }) : 'pending';
-        await this.commercialOutbox.enqueue(client, { companyId, projectId, environment, trackingEventId: submission.tracking_event_id, eventName: 'lead', consentState, answers, attribution, at: submission.submitted_at });
+        // Onde o lead aconteceu viaja com ele. Sem isso a conversão chega à plataforma como
+        // "alguém converteu", e separar a landing que funciona da que não funciona vira
+        // trabalho manual fora do painel do anúncio.
+        await this.commercialOutbox.enqueue(client, {
+          companyId, projectId, environment, trackingEventId: submission.tracking_event_id,
+          eventName: 'lead', consentState, answers, attribution, at: submission.submitted_at,
+          contexto: { sourceUrl: enderecoPublicado(origin, rows[0].published_path), contentId: pageId, contentName: rows[0].page_name },
+        });
       }
       if (!repeated && capture.webhook) await this.webhookDeliveries.enqueue(client, { companyId, projectId, pageId, pageSubmissionId: submission.id, url: capture.webhook, event: { eventId: submission.tracking_event_id, event: 'page.submitted', companyId, projectId, pageId, pageVersionId, captureId, submittedAt: submission.submitted_at, answers } });
       return { id: submission.id, eventId: submission.tracking_event_id, answers: repeated ? submission.answers : answers, submittedAt: submission.submitted_at };
@@ -1018,6 +1034,7 @@ export class ContentRepository {
         await this.commercialOutbox.enqueue(client, {
           companyId: form.company_id, projectId: form.project_id, environment,
           trackingEventId: eventId, eventName: 'lead', consentState, answers, attribution, at: rows[0].submitted_at,
+          contexto: { sourceUrl: enderecoPublicado(origin, form.published_path), contentId: form.id, contentName: form.name },
         });
       }
       let webhookDelivery = null;

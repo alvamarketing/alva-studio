@@ -42,6 +42,34 @@ function attribution(values = {}) {
   if (!values || typeof values !== 'object' || Array.isArray(values)) throw fail('Identificadores de atribuição inválidos.');
   return Object.fromEntries(Object.entries(values).flatMap(([key, value]) => ATTRIBUTION_KEYS.has(key) && typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[key, value]] : []));
 }
+// O endereço da página onde a conversão aconteceu. Vai para a plataforma — a Meta o
+// recebe como `event_source_url` e usa na atribuição —, então passa por três exigências:
+// ser http(s), ser https (a página publicada sempre é; um endereço sem TLS aqui indica
+// origem forjada) e perder a query string. A query carrega o identificador do clique, que
+// já vai em campo próprio, e com frequência carrega o que a pessoa digitou no formulário.
+function enderecoDeOrigem(valor) {
+  if (typeof valor !== 'string' || !valor) return undefined;
+  let url;
+  try { url = new URL(valor); } catch { return undefined; }
+  if (url.protocol !== 'https:') return undefined;
+  return `${url.origin}${url.pathname}`.replace(/\/$/, '') || undefined;
+}
+
+function textoCurto(valor, limite = 190) {
+  const limpo = String(valor ?? '').trim().replace(/[\r\n]/g, ' ');
+  return limpo && limpo.length <= limite ? limpo : undefined;
+}
+
+function contextoDoFunil({ sourceUrl, contentId, contentName } = {}) {
+  return {
+    sourceUrl: enderecoDeOrigem(sourceUrl),
+    params: Object.fromEntries(Object.entries({
+      content_id: textoCurto(contentId),
+      content_name: textoCurto(contentName),
+    }).filter(([, valor]) => valor !== undefined)),
+  };
+}
+
 function record(row) {
   // `destination` faz parte da entrega, não é enfeite: é o que diz ao cliente para qual
   // plataforma este evento vai. Sem ele a entrega não tem endereço.
@@ -68,7 +96,7 @@ export const MAX_COMMERCIAL_ATTEMPTS = BACKOFF_MS.length;
 
 export class ConversionsOutboxRepository {
   constructor(database, { vault = new SecretVault({ masterKey: process.env.TRACKING_MASTER_KEY }) } = {}) { this.database = database; this.vault = vault; }
-  async enqueue(client, { companyId, projectId, environment, trackingEventId, eventName, consentState = 'pending', answers = {}, attribution: rawAttribution = {}, params = {}, at = new Date() }) {
+  async enqueue(client, { companyId, projectId, environment, trackingEventId, eventName, consentState = 'pending', answers = {}, attribution: rawAttribution = {}, params = {}, contexto = {}, at = new Date() }) {
     if (!ENVIRONMENTS.has(environment) || !EVENTS.has(eventName) || !['pending', 'denied', 'granted'].includes(consentState)) throw fail('Evento comercial inválido.');
     const binding = await client.query(
       `SELECT encrypted_remote_reference FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions' AND status = 'ready'`,
@@ -88,7 +116,8 @@ export class ConversionsOutboxRepository {
     if (!configurados.length) return null;
     const cleanAttribution = attribution(rawAttribution);
     const cliques = identificadoresDeClique(cleanAttribution, at);
-    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), params };
+    const funil = contextoDoFunil(contexto);
+    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), params: { ...funil.params, ...params } };
     await client.query(
       `INSERT INTO conversions_outbox (company_id, project_id, environment, property_id, tracking_event_id, event_name, destination, payload)
        SELECT $1, $2, $3, $4, $5, $6, destino, $7::jsonb FROM unnest($8::varchar[]) AS destino
