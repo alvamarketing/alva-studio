@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { CommercialConversionService } from '../server/commercial-conversion-service.mjs';
 
 const manifest = { companyId: 'company', projectId: 'project', publicationId: 'pub', snapshotHash: 'a'.repeat(64), policyVersion: 1, origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production' };
-const browserEvent = { trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', eventTime: 1_700_000_000, contentId: 'form-1', attribution: { fbc: 'fbc', fbp: 'fbp', gclid: 'gclid', ttclid: 'ttclid', li_fat_id: 'li', tblci: 'tb' }, consent: 'granted', user: { email_sha256: 'forged' } };
+const browserEvent = { trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', eventTime: 1_700_000_000, contentId: 'form-1', attribution: { fbclid: 'fbclid', fbp: 'fbp', gclid: 'gclid', ttclid: 'ttclid', li_fat_id: 'li', tblci: 'tb' }, consent: 'granted', user: { email_sha256: 'forged' } };
 const answers = { email: 'Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999' };
 
 for (const state of ['pending', 'denied', 'granted']) {

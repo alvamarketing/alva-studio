@@ -3,14 +3,25 @@ import { createHash } from 'node:crypto';
 const STATES = new Set(['pending', 'denied', 'granted']);
 const PROVIDERS = new Set(['meta', 'google', 'tiktok', 'linkedin', 'taboola']);
 const EVENT_NAMES = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
+// De → para: o nome que a plataforma coloca na URL do anúncio, e o nome que a API dela
+// espera receber de volta. A Meta manda `fbclid` e quer `fbc`, que é derivado dele com o
+// instante do clique — a derivação mora em quem conhece esse instante, não aqui.
+//
+// Esta é a única lista de identificadores de clique do servidor. Existiam quatro, e foi
+// entre elas que a atribuição se perdia: o navegador coletava um nome, a fila aceitava
+// outro, e os adaptadores liam um terceiro.
 const ATTRIBUTION = Object.freeze({
-  meta: Object.freeze({ fbc: 'fbc', fbp: 'fbp' }),
+  meta: Object.freeze({ fbclid: 'fbc', fbp: 'fbp' }),
   google: Object.freeze({ gclid: 'gclid', gbraid: 'gbraid', wbraid: 'wbraid' }),
   tiktok: Object.freeze({ ttclid: 'ttclid' }),
   linkedin: Object.freeze({ li_fat_id: 'linkedin_tracking_uuid' }),
   taboola: Object.freeze({ tblci: 'taboola_click_id' }),
 });
 const ALL_ATTRIBUTION = new Set(Object.values(ATTRIBUTION).flatMap((value) => Object.keys(value)));
+export const IDENTIFICADORES_DE_CLIQUE = ALL_ATTRIBUTION;
+export const NOME_NA_PLATAFORMA = Object.freeze(Object.fromEntries(
+  Object.values(ATTRIBUTION).flatMap((mapa) => Object.entries(mapa)),
+));
 const IGNORED_BROWSER_FIELDS = new Set(['consent', 'consentState', 'user', 'hash', 'hashes', 'ip', 'userAgent']);
 const BROWSER_FIELDS = new Set(['trackingEventId', 'eventName', 'eventTime', 'contentId', 'value', 'currency', 'attribution', ...IGNORED_BROWSER_FIELDS]);
 const SCOPE_FIELDS = Object.freeze(['companyId', 'projectId', 'publicationId', 'snapshotHash', 'policyVersion', 'origin', 'domain', 'environment']);

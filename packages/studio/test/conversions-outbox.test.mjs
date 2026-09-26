@@ -160,3 +160,46 @@ test('produtores internos de checkout e compra preservam o UUID persistido e res
   ]);
   await assert.rejects(() => producer.purchase({ ...base, value: -1 }), /value inválido/);
 });
+
+// A costura entre a fila e os destinos nunca teve teste: cada lado era exercitado com uma
+// forma inventada no próprio teste, e as duas não se encontravam. Este teste parte do que
+// a fila realmente grava e entrega ao adaptador real — que é o caminho de produção.
+test('o identificador de clique sai da fila e chega ao corpo que vai para a plataforma', async (t) => {
+  const { destinoPara } = await import('../server/tracking-destinos.mjs');
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const ids = await seed(database);
+    const vault = new SecretVault({ masterKey: 'task-6-master-key' });
+    await prepararDestinos(database, vault, ids, {
+      meta: { pixel_id: '123', access_token: 'token' },
+      tiktok: { pixel_code: 'PX', access_token: 'token' },
+      taboola: {},
+    });
+    const outbox = new ConversionsOutboxRepository(database, { vault });
+    await database.transaction((client) => outbox.enqueue(client, {
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
+      trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted',
+      answers: {},
+      attribution: { fbclid: 'IwAR-clique-do-facebook', ttclid: 'tt-clique', tblci: 'tb-clique' },
+    }));
+    const { rows } = await database.query(
+      'SELECT destination, payload FROM conversions_outbox WHERE company_id = $1 ORDER BY destination', [ids.company.id],
+    );
+    const payload = (destino) => rows.find((linha) => linha.destination === destino).payload;
+
+    // A Meta deduplica e atribui pelo `fbc`, que é derivado do `fbclid` da URL no formato
+    // documentado `fb.1.<milissegundos>.<fbclid>`. Mandar o fbclid cru não atribui nada.
+    const corpoMeta = destinoPara('meta').requisicao(payload('meta'), { pixel_id: '123', access_token: 'token' }).corpo;
+    assert.match(corpoMeta.data[0].user_data.fbc, /^fb\.1\.\d+\.IwAR-clique-do-facebook$/);
+
+    const corpoTikTok = destinoPara('tiktok').requisicao(payload('tiktok'), { pixel_code: 'PX', access_token: 'token' }).corpo;
+    assert.equal(corpoTikTok.data[0].user.ttclid, 'tt-clique');
+
+    // A Taboola recusa o evento sem o clique: sem a ponte, esse destino nunca entregaria
+    // nada, em nenhum projeto.
+    const pedidoTaboola = destinoPara('taboola').requisicao(payload('taboola'), {});
+    assert.match(pedidoTaboola.url, /click-id=tb-clique/);
+  } finally { await database.close(); }
+});

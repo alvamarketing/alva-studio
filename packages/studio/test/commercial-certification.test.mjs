@@ -28,9 +28,13 @@ import { postgresFixture } from './postgres-fixture.mjs';
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 
-function assertSanitizedOutboxPayload(payload, { trackingEventId, fbc, personalValues }) {
+function assertSanitizedOutboxPayload(payload, { trackingEventId, fbclid, personalValues }) {
   assert.equal(payload.tracking_event_id, trackingEventId);
-  assert.equal(payload.attribution?.fbc, fbc);
+  // O que a plataforma recebe não é o `fbclid` cru da URL, e sim o `fbc` derivado no
+  // formato que a Meta documenta. A certificação confere os dois: que o identificador
+  // sobreviveu à sanitização e que chegou na forma que atribui.
+  assert.equal(payload.attribution?.fbclid, fbclid);
+  assert.match(payload.click_ids?.fbc ?? '', new RegExp(`^fb\\.1\\.\\d+\\.${fbclid}$`));
   const serialized = JSON.stringify(payload);
   assert.equal(serialized.includes('sha256'), false);
   for (const value of personalValues) assert.equal(serialized.includes(value), false, `payload não pode conter ${value}`);
@@ -187,11 +191,11 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         await assert.rejects(() => content.submitPublicFormForProject({ companySlug: 'certificacao-b', projectSlug: 'projeto-a', route: '/quiz', origin: records.originB, input: { answers: {} } }), /não encontrado/);
         records.submission = await content.submitPublicFormForProject({
           companySlug: 'certificacao-a', projectSlug: 'projeto-a', route: '/quiz', origin: records.originA, publicationId: records.preview.id,
-          subjectId: 'local-certification-subject-0001', attribution: { fbc: 'fb.local.cert.a' }, input: { answers: { nome: 'Nome local A', email: 'lead-a@local-cert.test', telefone: '+55 11 99999-0001' } },
+          subjectId: 'local-certification-subject-0001', attribution: { fbclid: 'fb-local-cert-a' }, input: { answers: { nome: 'Nome local A', email: 'lead-a@local-cert.test', telefone: '+55 11 99999-0001' } },
         });
         records.submissionB = await content.submitPublicFormForProject({
           companySlug: 'certificacao-b', projectSlug: 'projeto-b', route: '/quiz', origin: records.originB, publicationId: records.previewB.id,
-          subjectId: 'local-certification-subject-0002', attribution: { fbc: 'fb.local.cert.b' }, input: { answers: { nome: 'Nome local B', email: 'lead-b@local-cert.test', telefone: '+55 11 99999-0002' } },
+          subjectId: 'local-certification-subject-0002', attribution: { fbclid: 'fb-local-cert-b' }, input: { answers: { nome: 'Nome local B', email: 'lead-b@local-cert.test', telefone: '+55 11 99999-0002' } },
         });
         assert.equal(records.submission.form.projectId, records.projectA.id);
         assert.equal(records.submissionB.form.projectId, records.projectB.id);
@@ -199,8 +203,8 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions WHERE company_id = $1', [records.companyB.id])).rows[0].count, 1);
         const outboxA = (await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [records.companyA.id, records.projectA.id])).rows[0].payload;
         const outboxB = (await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [records.companyB.id, records.projectB.id])).rows[0].payload;
-        assertSanitizedOutboxPayload(outboxA, { trackingEventId: records.submission.eventId, fbc: 'fb.local.cert.a', personalValues: ['Nome local A', 'lead-a@local-cert.test', '+55 11 99999-0001'] });
-        assertSanitizedOutboxPayload(outboxB, { trackingEventId: records.submissionB.eventId, fbc: 'fb.local.cert.b', personalValues: ['Nome local B', 'lead-b@local-cert.test', '+55 11 99999-0002'] });
+        assertSanitizedOutboxPayload(outboxA, { trackingEventId: records.submission.eventId, fbclid: 'fb-local-cert-a', personalValues: ['Nome local A', 'lead-a@local-cert.test', '+55 11 99999-0001'] });
+        assertSanitizedOutboxPayload(outboxB, { trackingEventId: records.submissionB.eventId, fbclid: 'fb-local-cert-b', personalValues: ['Nome local B', 'lead-b@local-cert.test', '+55 11 99999-0002'] });
         assert.deepEqual(await commercialOutbox.status({ companyId: records.companyA.id, projectId: records.projectB.id }), []);
         assert.deepEqual(await commercialOutbox.status({ companyId: records.companyB.id, projectId: records.projectA.id }), []);
         return { status: 'passed' };
@@ -215,7 +219,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         const manifest = { companyId: records.companyA.id, projectId: records.projectA.id, publicationId: records.preview.id, snapshotHash: 'a'.repeat(64), policyVersion: 1, origin: 'https://local-cert-a.example.test', domain: 'local-cert-a.example.test', environment: 'preview' };
         const outcome = await service.deliver({
           manifest, storedConsent: { scope: manifest, state: 'pending' }, serverAnswers: records.submission.answers,
-          browserEvent: { trackingEventId: records.submission.eventId, eventName: 'lead', eventTime: 1_700_000_000, contentId: records.form.id, attribution: { fbc: 'fb.local.cert.a' } }, enabledProviders: ['meta'],
+          browserEvent: { trackingEventId: records.submission.eventId, eventName: 'lead', eventTime: 1_700_000_000, contentId: records.form.id, attribution: { fbclid: 'fb-local-cert-a' } }, enabledProviders: ['meta'],
         });
         assert.equal(outcome.trackingEventId, records.submission.eventId);
         assert.equal(JSON.stringify(conversionCalls).includes('lead-a@local-cert.test'), false);

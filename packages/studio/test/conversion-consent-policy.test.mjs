@@ -12,7 +12,10 @@ const manifest = Object.freeze({
 const event = Object.freeze({
   trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
   eventTime: 1_700_000_000, contentId: 'form-1', value: 19.9, currency: 'BRL',
-  attribution: { fbc: 'fb.1.1700000000.click', fbp: 'fb.1.1700000000.browser', gclid: 'google-click', gbraid: 'gbraid-click', wbraid: 'wbraid-click', ttclid: 'tt-click', li_fat_id: 'li-click', tblci: 'tb-click' },
+  // Os nomes de entrada são os que a plataforma põe na URL do anúncio. Antes este teste
+  // alimentava `fbc` já derivado, como se o navegador o entregasse pronto — ele nunca
+  // entrega: o que chega é o `fbclid`.
+  attribution: { fbclid: 'IwAR-click', fbp: 'fb.1.1700000000.browser', gclid: 'google-click', gbraid: 'gbraid-click', wbraid: 'wbraid-click', ttclid: 'tt-click', li_fat_id: 'li-click', tblci: 'tb-click' },
   consent: 'granted', user: { email_sha256: 'forged' }, ip: '203.0.113.1', userAgent: 'forged-agent',
 });
 const directPii = { email: 'Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', nested: { email: 'hidden@example.test' }, aliases: ['hidden@example.test'] };
@@ -47,9 +50,9 @@ for (const provider of Object.keys(expectedClickId)) {
 
 test('browser cannot forge granted consent, hashes, PII, nested values, arrays, or unknown attribution fields', () => {
   assert.equal(resolveConsentState({ manifest, browserEvent: event, storedConsent: { scope: { ...manifest }, state: 'denied' } }), 'denied');
-  assert.throws(() => buildProviderConversion({ provider: 'meta', manifest, consentState: 'pending', browserEvent: { ...event, attribution: { fbc: 'ok', unknown: 'nope' } }, serverAnswers: directPii }), /atribuição inválidos/i);
+  assert.throws(() => buildProviderConversion({ provider: 'meta', manifest, consentState: 'pending', browserEvent: { ...event, attribution: { fbclid: 'ok', unknown: 'nope' } }, serverAnswers: directPii }), /atribuição inválidos/i);
   assert.throws(() => buildProviderConversion({ provider: 'meta', manifest, consentState: 'denied', browserEvent: { ...event, metadata: { email: 'hidden@example.test' } }, serverAnswers: directPii }), /campo.*navegador/i);
-  assert.throws(() => buildProviderConversion({ provider: 'meta', manifest, consentState: 'pending', browserEvent: { ...event, attribution: { fbc: ['nope'] } }, serverAnswers: directPii }), /atribuição inválidos/i);
+  assert.throws(() => buildProviderConversion({ provider: 'meta', manifest, consentState: 'pending', browserEvent: { ...event, attribution: { fbclid: ['nope'] } }, serverAnswers: directPii }), /atribuição inválidos/i);
 });
 
 test('manifest scope mismatch and future revocation fall back to pending without changing historical payloads', () => {

@@ -2,7 +2,11 @@ import { verifyRuntimeRequest } from './publication-runtime.mjs';
 import { derivePublicationRuntimeKey } from './vercel-runtime-gateway.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-const ATTRIBUTION = new Set(['fbc', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id', 'tblci']);
+// Os nomes que as plataformas de fato colocam na URL de destino do anúncio. Estava
+// escrito `fbc` aqui, que a Meta nunca manda: ela manda `fbclid`, e `fbc` é o valor
+// derivado dele que a Conversions API espera. Pedir pelo nome errado fazia toda campanha
+// do Facebook chegar ao servidor sem identificador de clique.
+export const PARAMETROS_DE_CLIQUE = new Set(['fbclid', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id', 'tblci']);
 
 function fail(message, status = 403) { return Object.assign(new Error(message), { status, statusCode: status }); }
 function header(headers, name) { return headers?.[name] || headers?.[name.toLowerCase()] || headers?.[name.toUpperCase()] || ''; }
@@ -31,7 +35,7 @@ export function runtimeManifest(row) {
 export function signedRuntimeAttribution(referer, host, derivedKey) {
   let url;
   try { url = new URL(referer); if (url.origin !== `https://${publicHost(host)}`) return null; } catch { return null; }
-  const values = Object.fromEntries([...ATTRIBUTION].flatMap((key) => {
+  const values = Object.fromEntries([...PARAMETROS_DE_CLIQUE].flatMap((key) => {
     const value = url.searchParams.get(key);
     return typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[key, value]] : [];
   }));
@@ -49,7 +53,7 @@ export function verifiedRuntimeAttribution(cookie, manifest, rootSecret) {
   try {
     const values = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (!values || typeof values !== 'object' || Array.isArray(values)) return {};
-    return Object.fromEntries(Object.entries(values).flatMap(([name, value]) => ATTRIBUTION.has(name) && typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[name, value]] : []));
+    return Object.fromEntries(Object.entries(values).flatMap(([name, value]) => PARAMETROS_DE_CLIQUE.has(name) && typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[name, value]] : []));
   } catch { return {}; }
 }
 

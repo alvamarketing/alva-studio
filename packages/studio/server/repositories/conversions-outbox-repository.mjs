@@ -1,9 +1,27 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { SecretVault } from './publication-repository.mjs';
+import { IDENTIFICADORES_DE_CLIQUE, NOME_NA_PLATAFORMA } from '../conversion-consent-policy.mjs';
 
 const EVENTS = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
 const ENVIRONMENTS = new Set(['preview', 'production']);
-const ATTRIBUTION_KEYS = new Set(['fbc', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id', 'tblci']);
+const ATTRIBUTION_KEYS = IDENTIFICADORES_DE_CLIQUE;
+
+// A fila guardava os identificadores sob `attribution`, com os nomes da coleta, e os
+// adaptadores liam `click_ids`, com os nomes das plataformas — duas chaves que nunca se
+// encontravam. Resultado: nenhuma conversão levava identificador de clique a lugar
+// nenhum, e Taboola e Google recusavam o evento exatamente por falta dele.
+//
+// A tradução de nome vem de `conversion-consent-policy.mjs`, que é a única lista. Só a
+// derivação do `fbc` mora aqui, porque ela precisa do instante do evento.
+function identificadoresDeClique(atribuicao, quando) {
+  return Object.fromEntries(Object.entries(atribuicao).flatMap(([nome, valor]) => {
+    const destino = NOME_NA_PLATAFORMA[nome];
+    if (!destino || !valor) return [];
+    // Formato documentado pela Meta: fb.<índice do subdomínio>.<criação em ms>.<fbclid>.
+    // A idade do clique entra na atribuição, então o instante vai junto.
+    return [[destino, nome === 'fbclid' ? `fb.1.${quando.getTime()}.${valor}` : valor]];
+  }));
+}
 const BACKOFF_MS = [30_000, 120_000, 600_000, 3_600_000, 14_400_000, 43_200_000];
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
@@ -69,7 +87,8 @@ export class ConversionsOutboxRepository {
     )).rows.map((row) => row.provider);
     if (!configurados.length) return null;
     const cleanAttribution = attribution(rawAttribution);
-    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), params };
+    const cliques = identificadoresDeClique(cleanAttribution, at);
+    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), params };
     await client.query(
       `INSERT INTO conversions_outbox (company_id, project_id, environment, property_id, tracking_event_id, event_name, destination, payload)
        SELECT $1, $2, $3, $4, $5, $6, destino, $7::jsonb FROM unnest($8::varchar[]) AS destino
