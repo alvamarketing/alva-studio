@@ -49,6 +49,16 @@ const SINAIS = [
     oQueFazer: 'O identificador que o pixel escreve no navegador não chegou. Ele só existe se o pixel da plataforma estiver na página publicada: confira se o pixel está ativo nesta página, além da entrega pelo servidor.',
   },
   {
+    chave: 'visitante',
+    sinal: 'Endereço e navegador de quem converteu',
+    peso: 20,
+    presente: (evento) => Boolean(evento?.client?.ip) && Boolean(evento?.client?.user_agent),
+    // Só some quando a conversão veio por um caminho que não é a página publicada, ou
+    // quando o endereço que chegou era o do proxy — que é descartado de propósito, porque
+    // juntaria visitantes diferentes sob um endereço só.
+    oQueFazer: 'A conversão chegou sem o endereço ou o navegador de quem a fez. Isso acontece quando ela não veio pela publicação verificada do projeto, ou quando há um proxy na frente que não repassa o endereço original.',
+  },
+  {
     chave: 'endereco',
     sinal: 'Endereço da página',
     peso: 8,

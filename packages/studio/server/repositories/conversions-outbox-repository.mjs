@@ -56,6 +56,28 @@ function enderecoDeOrigem(valor) {
   return `${url.origin}${url.pathname}`.replace(/\/$/, '') || undefined;
 }
 
+// O endereço e o navegador de quem converteu. As plataformas contam os dois entre os
+// sinais mais fortes de correspondência, e são os únicos dados de identificação que o
+// Studio guarda — por isso a linha da fila os apaga assim que a entrega confirma, em
+// `markDelivered`: eles existem enquanto o evento está a caminho, e não depois.
+//
+// Endereço de rede privada é descartado: quando ele aparece, é o proxy na frente do
+// servidor, não a pessoa. Mandar o IP do próprio datacenter para a plataforma pioraria a
+// correspondência em vez de melhorar, juntando visitantes diferentes sob o mesmo endereço.
+const REDE_PRIVADA = /^(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|::1$|fc|fd|fe80:)/i;
+
+export function contextoDoVisitante({ ip, userAgent } = {}) {
+  const bruto = String(ip ?? '').trim().replace(/^::ffff:/i, '');
+  const valido = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(bruto)
+    ? bruto.split('.').every((parte) => Number(parte) <= 255)
+    : /^[0-9a-f:]{3,45}$/i.test(bruto) && bruto.includes(':');
+  const agente = String(userAgent ?? '').replace(/[\r\n]/g, ' ').trim().slice(0, 512);
+  return Object.fromEntries(Object.entries({
+    ip: valido && !REDE_PRIVADA.test(bruto) ? bruto : undefined,
+    user_agent: agente || undefined,
+  }).filter(([, valor]) => valor !== undefined));
+}
+
 function textoCurto(valor, limite = 190) {
   const limpo = String(valor ?? '').trim().replace(/[\r\n]/g, ' ');
   return limpo && limpo.length <= limite ? limpo : undefined;
@@ -101,7 +123,7 @@ export const MAX_COMMERCIAL_ATTEMPTS = BACKOFF_MS.length;
 
 export class ConversionsOutboxRepository {
   constructor(database, { vault = new SecretVault({ masterKey: process.env.TRACKING_MASTER_KEY }) } = {}) { this.database = database; this.vault = vault; }
-  async enqueue(client, { companyId, projectId, environment, trackingEventId, eventName, consentState = 'pending', answers = {}, attribution: rawAttribution = {}, params = {}, contexto = {}, at = new Date() }) {
+  async enqueue(client, { companyId, projectId, environment, trackingEventId, eventName, consentState = 'pending', answers = {}, attribution: rawAttribution = {}, params = {}, contexto = {}, cliente = {}, at = new Date() }) {
     if (!ENVIRONMENTS.has(environment) || !EVENTS.has(eventName) || !['pending', 'denied', 'granted'].includes(consentState)) throw fail('Evento comercial inválido.');
     const binding = await client.query(
       `SELECT encrypted_remote_reference FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions' AND status = 'ready'`,
@@ -122,7 +144,8 @@ export class ConversionsOutboxRepository {
     const cleanAttribution = attribution(rawAttribution);
     const cliques = identificadoresDeClique(cleanAttribution, at);
     const funil = contextoDoFunil(contexto);
-    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), params: { ...funil.params, ...params } };
+    const visitante = contextoDoVisitante(cliente);
+    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), ...(Object.keys(visitante).length ? { client: visitante } : {}), params: { ...funil.params, ...params } };
     await client.query(
       `INSERT INTO conversions_outbox (company_id, project_id, environment, property_id, tracking_event_id, event_name, destination, payload)
        SELECT $1, $2, $3, $4, $5, $6, destino, $7::jsonb FROM unnest($8::varchar[]) AS destino
@@ -145,7 +168,11 @@ export class ConversionsOutboxRepository {
     );
     return rows[0] ? { claimed: true, token, delivery: { ...record(rows[0]), payload: rows[0].payload } } : { claimed: false };
   }
-  async markDelivered({ id, claimToken }) { const { rows } = await this.database.query(`UPDATE conversions_outbox SET status = 'delivered', attempt_count = attempt_count + 1, claim_token = NULL, lease_expires_at = NULL, last_error = NULL, delivered_at = now(), updated_at = now() WHERE id = $1 AND claim_token = $2 AND status = 'running' RETURNING *`, [id, claimToken]); return record(rows[0]); }
+  // A linha sobrevive à entrega porque a tela de eventos a mostra. O endereço e o
+  // navegador de quem converteu, não: eles são os únicos dados de identificação que o
+  // Studio retém, e existem para atravessar a fila — não para ficar guardados depois que
+  // já chegaram ao destino.
+  async markDelivered({ id, claimToken }) { const { rows } = await this.database.query(`UPDATE conversions_outbox SET status = 'delivered', attempt_count = attempt_count + 1, claim_token = NULL, lease_expires_at = NULL, last_error = NULL, delivered_at = now(), payload = payload - 'client', updated_at = now() WHERE id = $1 AND claim_token = $2 AND status = 'running' RETURNING *`, [id, claimToken]); return record(rows[0]); }
   async markRetry({ id, claimToken, attemptCount, nextAttemptAt, lastError }) { const { rows } = await this.database.query(`UPDATE conversions_outbox SET status = 'retry', attempt_count = $3, next_attempt_at = $4, last_error = $5, claim_token = NULL, lease_expires_at = NULL, updated_at = now() WHERE id = $1 AND claim_token = $2 AND status = 'running' RETURNING *`, [id, claimToken, attemptCount, nextAttemptAt, String(lastError || 'delivery_failed').replace(/[\r\n]/g, ' ').slice(0, 240)]); return record(rows[0]); }
   async markDead({ id, claimToken, attemptCount, lastError }) { const { rows } = await this.database.query(`UPDATE conversions_outbox SET status = 'dead', attempt_count = $3, last_error = $4, claim_token = NULL, lease_expires_at = NULL, updated_at = now() WHERE id = $1 AND claim_token = $2 AND status = 'running' RETURNING *`, [id, claimToken, attemptCount, String(lastError || 'delivery_failed').replace(/[\r\n]/g, ' ').slice(0, 240)]); return record(rows[0]); }
   // O resumo da correspondência do projeto: quantos eventos, a média, e o que mais falta.

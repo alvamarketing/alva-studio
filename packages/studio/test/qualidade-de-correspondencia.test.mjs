@@ -10,8 +10,26 @@ const completo = {
   user: { email_sha256: 'a'.repeat(64), phone_sha256: 'b'.repeat(64) },
   click_ids: { fbc: 'fb.1.1700000000.abc', fbp: 'fb.1.1700000000.123' },
   source_url: 'https://cliente.test/oferta',
+  client: { ip: '203.0.113.7', user_agent: 'Mozilla/5.0' },
   consent_state: 'granted',
 };
+
+// A nota precisa medir o que o envio de fato leva. Se ela ignorasse o endereço e o
+// navegador, diria "correspondência boa" para uma conversão a que falta justamente o par
+// de sinais que mais pesa depois do clique.
+test('o endereço e o navegador de quem converteu contam na nota', () => {
+  const semVisitante = qualidadeDaCorrespondencia({ ...completo, client: undefined });
+  assert.ok(semVisitante.pontos < qualidadeDaCorrespondencia(completo).pontos);
+  assert.ok(semVisitante.faltando.some((item) => /quem converteu/i.test(item.sinal)));
+  assert.equal(qualidadeDaCorrespondencia(completo).faltando.length, 0);
+});
+
+// Meio par não é sinal: a plataforma casa melhor com os dois juntos, e contar metade
+// inflaria a nota sem melhorar a entrega.
+test('só o navegador, sem o endereço, não conta como presente', () => {
+  const meio = qualidadeDaCorrespondencia({ ...completo, client: { user_agent: 'Mozilla/5.0' } });
+  assert.ok(meio.faltando.some((item) => /quem converteu/i.test(item.sinal)));
+});
 
 test('um evento com todos os sinais que o Studio sabe enviar chega ao topo', () => {
   const nota = qualidadeDaCorrespondencia(completo);

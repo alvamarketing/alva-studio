@@ -146,6 +146,13 @@ async function runtimeNamespaceMatches(database, manifest, companySlug, projectS
   );
   return rows.length === 1 && rows[0].company_slug === companySlug && rows[0].project_slug === projectSlug;
 }
+// O endereço e o navegador de quem está convertendo. A página publicada chega por um
+// gateway, então o endereço real vem no cabeçalho que ele encaminha; o do socket seria o
+// do próprio proxy, e juntaria visitantes diferentes sob um endereço só.
+function clienteDaRequisicao(req) {
+  const encaminhado = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return { ip: encaminhado || req.socket?.remoteAddress, userAgent: req.headers['user-agent'] };
+}
 function runtimeAttribution(cookie, gateway, rootSecret) {
   const value = String(cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_attribution='))?.slice('alva_runtime_attribution='.length);
   return gateway ? verifiedRuntimeAttribution(value, gateway.manifest, rootSecret) : {};
@@ -580,8 +587,13 @@ export function createApp({
           companyId: website.companyId,
           projectId: website.projectId,
           visitorHash,
-          // País (Cloudflare), dispositivo e navegador (user-agent). O IP e o UA cru já
-          // foram consumidos pelo visitorHash e não são guardados; aqui sai só a classe.
+          // País (Cloudflare), dispositivo e navegador (user-agent). O analytics guarda só
+          // a classe derivada: o IP e o UA crus não entram em `analytics_sessions`.
+          //
+          // Eles entram, sim, na linha da fila de conversões logo abaixo, porque as
+          // plataformas os contam entre os sinais mais fortes de correspondência — e saem
+          // de lá assim que a entrega confirma (`markDelivered` apaga o campo `client`).
+          // É a única retenção de dado identificável do Studio, e ela dura o tempo da fila.
           audience: derivarAudiencia(req.headers),
           event: {
             type: event.event_name === 'pageview' ? 'pageview' : 'custom',
@@ -607,6 +619,7 @@ export function createApp({
             // isso chegava às plataformas sem atribuição nenhuma.
             attribution: registrado.aquisicao || {},
             contexto: { sourceUrl: cors.corsOrigin ? `${cors.corsOrigin}${event.url_path || ''}` : undefined },
+            cliente: { ip: req.socket.remoteAddress, userAgent: req.headers['user-agent'] },
             params: {
               ...(dados.publicId ? { content_id: dados.publicId } : {}),
               ...(Number.isInteger(dados.value) ? { value: dados.value } : {}),
@@ -685,7 +698,7 @@ export function createApp({
         if (origin !== runtimeGateway.origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);
         const subjectId = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length);
-        await content.submitPublishedPageCapture({ companyId: manifest.companyId, projectId: manifest.projectId, pageId: entry.contentId, pageVersionId: entry.versionId, captureId: pageCaptureRequest.captureId, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), publicationId: runtimeGateway.publicationId, subjectId });
+        await content.submitPublishedPageCapture({ companyId: manifest.companyId, projectId: manifest.projectId, pageId: entry.contentId, pageVersionId: entry.versionId, captureId: pageCaptureRequest.captureId, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDaRequisicao(req), publicationId: runtimeGateway.publicationId, subjectId });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${path}`);
@@ -695,12 +708,12 @@ export function createApp({
         if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);
         const saved = domainScope
-          ? await content.submitPublicFormForDomain({ host: effectiveHost, route: publicFormRequest.route, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length) })
+          ? await content.submitPublicFormForDomain({ host: effectiveHost, route: publicFormRequest.route, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDaRequisicao(req), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length) })
           : await content.submitPublicFormForProject({
             companySlug: publicFormRequest.companySlug,
             projectSlug: publicFormRequest.projectSlug,
             route: publicFormRequest.route,
-            input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length),
+            input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDaRequisicao(req), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length),
           });
         await analytics?.recordLead({
           companyId: saved.form.companyId,

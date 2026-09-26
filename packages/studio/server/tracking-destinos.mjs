@@ -43,6 +43,10 @@ const meta = {
           ph: evento.user?.phone_sha256,
           fbc: evento.click_ids?.fbc,
           fbp: evento.click_ids?.fbp,
+          // Endereço e navegador de quem converteu: dois dos sinais que mais pesam na
+          // correspondência, e os únicos aqui que não são hash nem identificador de clique.
+          client_ip_address: evento.client?.ip,
+          client_user_agent: evento.client?.user_agent,
         }),
         custom_data: evento.params ?? {},
       }],
