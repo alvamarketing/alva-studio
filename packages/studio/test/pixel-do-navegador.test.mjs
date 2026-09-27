@@ -218,3 +218,56 @@ test('o TikTok recebe o lead com o mesmo id', async () => {
   const corpo = destinoPara('tiktok').requisicao({ event_name: 'lead', event_time: 1, tracking_event_id: ID, source_url: 'https://lp.example.test/oferta' }, CREDENCIAIS.tiktok).corpo.data[0];
   assert.equal(disparo[1], corpo.event, 'navegador e servidor mandam nomes diferentes ao TikTok');
 });
+
+// O código base oficial de cada pixel, e não um arremedo: o SDK real conta com o que ele
+// define (callMethod, push, loaded, version na Meta; TiktokAnalyticsObject, methods,
+// setAndDefer, instance no TikTok).
+// - https://developers.facebook.com/docs/meta-pixel/get-started
+// - https://business-api.tiktok.com/portal/docs/install-pixel-using-code/v1.3
+test('o pixel da Meta nasce do código base oficial', async () => {
+  const { window, scripts } = await rodarCarregador(fonte([{ provider: 'meta', id: '123' }]), navegador({ estadoDoConsentimento: 'granted' }));
+  assert.equal(window.fbq.version, '2.0');
+  assert.equal(window.fbq.loaded, true);
+  assert.equal(window.fbq.push, window.fbq);
+  assert.equal(window._fbq, window.fbq);
+  assert.deepEqual(scripts.map((script) => script.src), ['https://connect.facebook.net/en_US/fbevents.js']);
+});
+
+test('o pixel do TikTok nasce do código base oficial', async () => {
+  const { window, scripts } = await rodarCarregador(fonte([{ provider: 'tiktok', id: 'PXTIKTOK' }]), navegador({ estadoDoConsentimento: 'granted' }));
+  assert.equal(window.TiktokAnalyticsObject, 'ttq');
+  assert.deepEqual(window.ttq.methods, ['page', 'track', 'identify', 'instances', 'debug', 'on', 'off', 'once', 'ready', 'alias', 'group', 'enableCookie', 'disableCookie']);
+  assert.equal(typeof window.ttq.instance, 'function');
+  assert.deepEqual(scripts.map((script) => script.src), ['https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=PXTIKTOK&lib=ttq']);
+  assert.deepEqual([...window.ttq], [['page']]);
+});
+
+// O navegador só avisa lead. Compra e início de checkout saem pelo servidor, que é quem
+// sabe que aconteceram — um script qualquer da página não pode inventá-los.
+test('pela janela, só o lead dispara', async () => {
+  const { window } = await rodarCarregador(fonte([{ provider: 'meta', id: '123' }]), navegador({ estadoDoConsentimento: 'granted' }));
+  window.alvaRuntime.conversao('purchase', ID);
+  window.alvaRuntime.conversao('initiate_checkout', ID);
+  assert.deepEqual(disparosDaMeta(window), [['track', 'PageView']]);
+});
+
+// O formulário de várias etapas troca o documento com document.write. Quem ainda não
+// decidiu sobre o consentimento precisa continuar vendo o banner na página de obrigado.
+test('na mesma janela, sem consentimento, o banner volta na página nova', async () => {
+  // document.open() mantém o mesmo objeto document; muda o conteúdo.
+  const metas = {};
+  const pagina = navegador({ metas, estadoDoConsentimento: 'pending' });
+  await rodarCarregador(fonte([{ provider: 'meta', id: '123' }]), pagina);
+  const banners = () => pagina.noCorpo.filter((no) => no.className === 'alva-runtime-consent').length;
+  assert.equal(banners(), 1);
+  metas['alva-conversion'] = `lead:${ID}`;
+  await rodarCarregador(fonte([{ provider: 'meta', id: '123' }]), pagina);
+  assert.equal(banners(), 2, 'o banner não foi refeito na página de obrigado');
+  assert.deepEqual(disparosDaMeta(pagina.window), [], 'sem consentimento, nada dispara');
+});
+
+// Object.hasOwn só existe a partir do Safari 15.4; o carregador quebrava antes de
+// mostrar o banner em iPhones sem atualização.
+test('o carregador não usa o que o Safari antigo não tem', () => {
+  assert.doesNotMatch(fonte([{ provider: 'meta', id: '123' }]), /Object\.hasOwn/);
+});

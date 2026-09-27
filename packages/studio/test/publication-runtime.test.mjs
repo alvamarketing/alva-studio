@@ -69,6 +69,7 @@ function runtimeDom(state) {
   const attributes = new Map();
   const scripts = [];
   const nodes = [];
+  const registrar = (node) => scripts.push({ src: node.src, provider: node.dataset.alvaRuntimeProvider, metaQueue: window.fbq?.queue?.map((entry) => [...entry]), dataLayer: window.dataLayer?.slice(), tiktok: window.ttq && { queue: window.ttq.slice(), i: window.ttq._i, t: window.ttq._t, o: window.ttq._o }, linkedin: { id: window._linkedin_partner_id, ids: window._linkedin_data_partner_ids?.slice() }, taboola: window._tfa?.slice() });
   const document = {
     documentElement: { getAttribute: (name) => attributes.get(name) || null, setAttribute: (name, value) => attributes.set(name, value) },
     createElement: () => {
@@ -77,7 +78,9 @@ function runtimeDom(state) {
       nodes.push(node);
       return node;
     },
-    head: { appendChild: (node) => scripts.push({ src: node.src, provider: node.dataset.alvaRuntimeProvider, metaQueue: window.fbq?.queue?.map((entry) => [...entry]), dataLayer: window.dataLayer?.slice(), tiktok: window.ttq && { queue: window.ttq.slice(), i: window.ttq._i, t: window.ttq._t, o: window.ttq._o }, linkedin: { id: window._linkedin_partner_id, ids: window._linkedin_data_partner_ids?.slice() }, taboola: window._tfa?.slice() }) },
+    head: { appendChild: (node) => registrar(node) },
+    // O código base oficial da Meta e do TikTok insere o script antes do primeiro <script>.
+    getElementsByTagName: (tag) => (tag === 'script' ? [{ parentNode: { insertBefore: (node) => registrar(node) } }] : []),
     body: { appendChild: () => {} },
     querySelectorAll: () => [],
     querySelector: () => null,
@@ -97,9 +100,14 @@ async function runLoader({ provider, id, state = 'granted' }) {
 
 test('bootstraps dos cinco providers preparam contratos antes do SDK e só rodam uma vez após grant', async () => {
   const cases = [
-    { provider: 'meta', id: '123', verify: ({ window, scripts }) => { assert.deepEqual(scripts[0].metaQueue, [['init', '123'], ['track', 'PageView']]); assert.equal(scripts[0].src, 'https://connect.facebook.net/en_US/fbevents.js'); assert.equal(typeof window.fbq, 'function'); } },
+    // Código base oficial: o script é inserido e init/PageView entram na fila em seguida;
+    // o SDK carrega de forma assíncrona e a encontra pronta.
+    // https://developers.facebook.com/docs/meta-pixel/get-started
+    { provider: 'meta', id: '123', verify: ({ window, scripts }) => { assert.deepEqual(window.fbq.queue.map((entry) => [...entry]), [['init', '123'], ['track', 'PageView']]); assert.equal(scripts[0].src, 'https://connect.facebook.net/en_US/fbevents.js'); assert.equal(typeof window.fbq, 'function'); } },
     { provider: 'ga4', id: 'G-ABCD1234', verify: ({ scripts }) => { assert.equal(scripts[0].src, 'https://www.googletagmanager.com/gtag/js?id=G-ABCD1234'); assert.equal(scripts[0].dataLayer[1][0], 'config'); assert.equal(scripts[0].dataLayer[1][1], 'G-ABCD1234'); } },
-    { provider: 'tiktok', id: 'pixel_1', verify: ({ scripts }) => { const capture = scripts[0].tiktok; assert.equal(scripts[0].src, 'https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=pixel_1&lib=ttq'); assert.deepEqual(capture.queue, [['load', 'pixel_1'], ['page']]); assert.ok(capture.i.pixel_1); assert.equal(typeof capture.t.pixel_1, 'number'); assert.deepEqual(capture.o.pixel_1, {}); } },
+    // https://business-api.tiktok.com/portal/docs/install-pixel-using-code/v1.3 — ttq.load
+    // registra o pixel em _i/_t/_o e insere o script; ttq.page() entra na fila.
+    { provider: 'tiktok', id: 'pixel_1', verify: ({ window, scripts }) => { assert.equal(scripts[0].src, 'https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=pixel_1&lib=ttq'); assert.deepEqual([...window.ttq], [['page']]); assert.ok(window.ttq._i.pixel_1); assert.equal(typeof window.ttq._t.pixel_1, 'number'); assert.deepEqual(window.ttq._o.pixel_1, {}); } },
     { provider: 'linkedin', id: '456', verify: ({ scripts }) => { assert.equal(scripts[0].src, 'https://snap.licdn.com/li.lms-analytics/insight.min.js'); assert.equal(scripts[0].linkedin.id, '456'); assert.deepEqual(scripts[0].linkedin.ids, ['456']); } },
     // https://developers.taboola.com/pixel/docs/add-the-base-pixel-manually
     { provider: 'taboola', id: '1234567', verify: ({ scripts }) => { assert.equal(scripts[0].src, 'https://cdn.taboola.com/libtrc/unip/1234567/tfa.js'); assert.deepEqual(scripts[0].taboola, [{ notify: 'event', name: 'page_view', id: 1234567 }]); } },

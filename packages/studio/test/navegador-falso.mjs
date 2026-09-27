@@ -4,6 +4,7 @@ export function navegador({ metas = {}, estadoDoConsentimento, window = {} } = {
   const atributos = new Map();
   const scripts = [];
   const botoes = [];
+  const noCorpo = [];
   const pagina = { estadoDoConsentimento };
   const document = {
     documentElement: { getAttribute: (nome) => atributos.get(nome) ?? null, setAttribute: (nome, valor) => atributos.set(nome, valor) },
@@ -14,7 +15,10 @@ export function navegador({ metas = {}, estadoDoConsentimento, window = {} } = {
       return no;
     },
     head: { appendChild: (no) => scripts.push(no) },
-    body: { appendChild() {} },
+    body: { appendChild: (no) => noCorpo.push(no) },
+    // O código base oficial da Meta e do TikTok insere o script antes do primeiro
+    // <script> da página, e não no <head>.
+    getElementsByTagName: (tag) => (tag === 'script' ? [{ parentNode: { insertBefore: (no) => scripts.push(no) } }] : []),
     querySelectorAll: () => [],
     querySelector: (seletor) => {
       const nome = /^meta\[name="([^"]+)"\]$/.exec(seletor)?.[1];
@@ -22,7 +26,7 @@ export function navegador({ metas = {}, estadoDoConsentimento, window = {} } = {
     },
   };
   const fetch = async () => ({ ok: true, json: async () => ({ state: pagina.estadoDoConsentimento }) });
-  return Object.assign(pagina, { window, document, fetch, scripts, botoes });
+  return Object.assign(pagina, { window, document, fetch, scripts, botoes, noCorpo });
 }
 
 export async function rodarCarregador(fonte, pagina) {
