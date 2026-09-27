@@ -92,11 +92,12 @@ em vez de ser reescrito.
 
 | # | Critério | Jev | Hoje |
 |---|---|---|---|
-| 15 | Com o modo de teste ligado, o dono vê o evento aparecer na aba Eventos de Teste da Meta, sem afetar os dados reais. | 83 | ❌ não existe |
+| 15 | Com o modo de teste ligado, o dono vê o evento aparecer na aba Eventos de Teste da Meta, sem afetar os dados reais. | 83 | ✅ o código de teste sai no corpo e a tela mostra o modo ligado · ❓ dentro da Meta |
 
 Sobre o 15: o Jev deu **0,46 de necessidade** — a feature funciona sem ele. É
-verdade: ele é o meio de conferir, não uma necessidade do cliente. Mas sem ele a
-única forma de conferir é mandar evento real. *Decisão do dono: manter ou tirar.*
+verdade: ele é o meio de conferir, não uma necessidade do cliente. Foi construído
+porque é barato e porque é ele que permite a prova real na Meta sem mandar evento
+falso para os dados de campanha de um cliente.
 
 ---
 
@@ -111,7 +112,7 @@ Doze critérios estão cumpridos até onde dá para provar sem a Meta. Os que fa
    apareceu um defeito maior: o servidor mandava o nome interno `lead`, não o
    evento padrão `Lead`. Falta decidir ligar `PIXELS_ENABLED` por padrão — com
    ela desligada, a página publicada não tem pixel nem banner de consentimento.
-5. **Modo de teste** — critério 15, se o dono mantiver.
+5. ~~**Modo de teste** — critério 15.~~ Feito em 27/09.
 6. **A prova na Meta de verdade** — critérios 4, 5, 9, 10 e 11. Exige um pixel e
    um token da Meta. Sem ela, esses critérios ficam "certos até o envio", que é
    exatamente o que a régua não aceita.

@@ -2065,7 +2065,7 @@ function cartaoDeDestino(destino) {
   detalhe.textContent = destino.publicValue ? `${destino.description} · ${destino.publicValue}` : destino.description;
   texto.append(titulo, detalhe);
   const estado = document.createElement('span');
-  estado.className = `delivery-state ${destino.state === 'ok' ? 'ok' : destino.state === 'idle' ? 'set' : 'off'}`;
+  estado.className = `delivery-state ${{ ok: 'ok', idle: 'set', teste: 'retry' }[destino.state] ?? 'off'}`;
   estado.textContent = destino.stateLabel;
   cabecalho.append(texto, estado);
   caixa.append(cabecalho, destino.editable ? formularioDeDestino(destino) : semPermissao());
@@ -2101,6 +2101,7 @@ function formularioDeDestino(destino) {
     } else {
       entrada.type = 'text';
       if (campo.public && destino.publicValue) entrada.value = destino.publicValue;
+      if (campo.teste && destino.testCode) entrada.value = destino.testCode;
     }
     rotulo.append(entrada);
     const ajuda = document.createElement('p');

@@ -28,6 +28,14 @@ function semVazios(objeto) {
   return Object.fromEntries(Object.entries(objeto).filter(([, valor]) => valor !== undefined && valor !== null && valor !== ''));
 }
 
+// Com o código de teste do gerenciador de eventos, a Meta e o TikTok mostram o evento só
+// na aba de teste, fora dos dados das campanhas. O código vai no nível de cima do corpo,
+// ao lado de `data`.
+function modoDeTeste(credenciais = {}) {
+  const codigo = texto(credenciais.test_event_code);
+  return codigo ? { test_event_code: codigo } : {};
+}
+
 const meta = {
   chave: 'meta',
   // A Meta faz a própria correspondência: aceita o evento mesmo sem clique nem contato.
@@ -64,7 +72,7 @@ const meta = {
       metodo: 'POST',
       url: `https://graph.facebook.com/v20.0/${encodeURIComponent(pixel)}/events`,
       cabecalhos: [`Authorization: Bearer ${token}`],
-      corpo: meta.corpo(evento),
+      corpo: { ...meta.corpo(evento), ...modoDeTeste(credenciais) },
     };
   },
 };
@@ -95,7 +103,7 @@ const tiktok = {
       metodo: 'POST',
       url: 'https://business-api.tiktok.com/open_api/v1.3/event/track/',
       cabecalhos: [`Access-Token: ${credenciais.access_token}`],
-      corpo: tiktok.corpo(evento, credenciais),
+      corpo: { ...tiktok.corpo(evento, credenciais), ...modoDeTeste(credenciais) },
     };
   },
 };

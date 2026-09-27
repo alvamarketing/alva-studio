@@ -8,7 +8,7 @@ const PROVIDERS = new Set(['meta', 'tiktok', 'google', 'linkedin', 'taboola']);
 // motores externos; sobrou um, e um número fixo aqui transforma projeto normal em 404.
 const BINDINGS_POR_PROJETO = ENVIRONMENTS.size * ENGINES.size;
 const PROVIDER_FIELDS = {
-  meta: new Set(['access_token', 'pixel_id']), tiktok: new Set(['access_token', 'pixel_code']),
+  meta: new Set(['access_token', 'pixel_id', 'test_event_code']), tiktok: new Set(['access_token', 'pixel_code', 'test_event_code']),
   google: new Set(['operating_account_id', 'conversion_action_id', 'oauth_access_token']),
   linkedin: new Set(['conversion_urn', 'access_token', 'linkedin_version']), taboola: new Set(),
 };
@@ -23,15 +23,18 @@ export const CAMPOS_POR_DESTINO = PROVIDER_FIELDS;
 export const CAMPOS_EXIGIDOS_POR_DESTINO = REQUIRED_PROVIDER_FIELDS;
 
 const CREDENTIAL = /^[A-Za-z0-9._~+\/=:-]{1,4096}$/;
+// O código de teste do gerenciador de eventos. Vazio é o pedido de desligar o modo de
+// teste — sem ele, um campo ausente significa "não mudou", e não haveria como sair.
+const CODIGO_DE_TESTE = /^(?:[A-Za-z0-9_-]{1,64})?$/;
 const PROVIDER_VALUE_RULES = {
-  meta: { pixel_id: /^\d{1,20}$/, access_token: CREDENTIAL },
-  tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/, access_token: CREDENTIAL },
+  meta: { pixel_id: /^\d{1,20}$/, access_token: CREDENTIAL, test_event_code: CODIGO_DE_TESTE },
+  tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/, access_token: CREDENTIAL, test_event_code: CODIGO_DE_TESTE },
   google: { operating_account_id: /^\d{1,20}$/, conversion_action_id: /^\d{1,20}$/, oauth_access_token: CREDENTIAL },
   linkedin: { conversion_urn: /^urn:lla:llaPartnerConversion:\d{1,20}$/, access_token: CREDENTIAL, linkedin_version: /^\d{6}$/ },
   taboola: {},
 };
 const PUBLIC_PROVIDER_FIELDS = {
-  meta: { pixel_id: /^\d{1,20}$/ }, tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/ },
+  meta: { pixel_id: /^\d{1,20}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/ }, tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/ },
   google: { measurement_id: /^G-[A-Z0-9]{4,20}$/ }, linkedin: { partner_id: /^\d{1,30}$/ }, taboola: { account_id: /^[A-Za-z0-9_-]{1,255}$/ },
 };
 
@@ -216,8 +219,12 @@ export class TrackingRepository {
         ? JSON.parse(this.vault.decrypt(existente.rows[0].encrypted_configuration, destinationScope({ companyId, projectId, environment: targetEnvironment, provider })))
         : {};
       const configuracaoEfetiva = { ...configuracaoAtual, ...configuration };
+      if (configuracaoEfetiva.test_event_code === '') delete configuracaoEfetiva.test_event_code;
       if (REQUIRED_PROVIDER_FIELDS[provider].some((key) => !configuracaoEfetiva[key])) throw fail('Configuração do destino inválida.');
-      const derived = provider === 'meta' ? { pixel_id: configuracaoEfetiva.pixel_id } : provider === 'tiktok' ? { pixel_code: configuracaoEfetiva.pixel_code } : {};
+      // O código de teste não é segredo — a plataforma o mostra às claras — e a tela precisa
+      // saber que o destino está em modo de teste, ou "Entregue" pareceria entrega de verdade.
+      const teste = configuracaoEfetiva.test_event_code ? { test_event_code: configuracaoEfetiva.test_event_code } : {};
+      const derived = provider === 'meta' ? { pixel_id: configuracaoEfetiva.pixel_id, ...teste } : provider === 'tiktok' ? { pixel_code: configuracaoEfetiva.pixel_code, ...teste } : {};
       const publicValue = publicConfiguration === undefined ? derived : publicConfiguration;
       if (!publicValue || typeof publicValue !== 'object' || Array.isArray(publicValue) || Object.keys(publicValue).some((key) => !Object.hasOwn(PUBLIC_PROVIDER_FIELDS[provider], key) || typeof publicValue[key] !== 'string' || !PUBLIC_PROVIDER_FIELDS[provider][key].test(publicValue[key]))) throw fail('Configuração pública do destino inválida.');
       const plain = JSON.stringify(configuracaoEfetiva);

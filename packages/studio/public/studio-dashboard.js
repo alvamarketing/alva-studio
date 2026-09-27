@@ -356,14 +356,26 @@ export function trackingHealthModel(deliveries) {
 // `secret` marca o que nunca volta do servidor: o token é gravado cifrado e não é relido
 // nem por esta tela. Um campo de segredo aparece sempre vazio, e salvar sem preenchê-lo
 // mantém o que já estava lá.
+// Opcional. Com ele, os eventos vão só para a aba de teste da plataforma; apagá-lo volta a
+// mandar de verdade.
+const CAMPO_CODIGO_DE_TESTE = Object.freeze({
+  name: 'test_event_code',
+  label: 'Código de teste',
+  help: 'Da aba Eventos de teste do gerenciador de eventos. Com ele, os eventos aparecem só ali e não entram nos dados das campanhas. Apague para voltar a enviar de verdade.',
+  required: false,
+  teste: true,
+});
+
 export const CAMPOS_DE_DESTINO = Object.freeze({
   meta: [
     { name: 'pixel_id', label: 'ID do pixel', help: 'Só números, como aparece no Gerenciador de Eventos.', required: true, public: true },
     { name: 'access_token', label: 'Token de acesso', help: 'Gerado na Conversions API do pixel.', required: true, secret: true },
+    CAMPO_CODIGO_DE_TESTE,
   ],
   tiktok: [
     { name: 'pixel_code', label: 'Código do pixel', help: 'O identificador do pixel no Events Manager.', required: true, public: true },
     { name: 'access_token', label: 'Token de acesso', help: 'Gerado na Events API do pixel.', required: true, secret: true },
+    CAMPO_CODIGO_DE_TESTE,
   ],
   google: [
     { name: 'operating_account_id', label: 'ID da conta do Google Ads', help: 'Só números, sem traços.', required: true },
@@ -398,7 +410,8 @@ export function configuracaoParaSalvar(destino, valores = {}) {
   for (const campo of destino.fields) {
     const valor = String(valores[campo.name] ?? '').trim();
     if (!valor) {
-      if (campo.secret && destino.configured) continue;
+      // O código de teste apagado é o pedido de desligar o modo de teste.
+      if (campo.teste && destino.testCode) configuration[campo.name] = '';
       continue;
     }
     configuration[campo.name] = valor;
@@ -420,14 +433,16 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
   return Object.entries(NOME_DO_DESTINO).map(([provider, [name, description]]) => {
     const salvo = salvos.get(provider);
     const configured = salvo?.configured === true;
-    const state = configured ? (entregando.has(provider) ? 'ok' : 'idle') : 'off';
+    const testCode = configured ? salvo?.publicConfiguration?.test_event_code ?? '' : '';
+    const state = configured ? (testCode ? 'teste' : entregando.has(provider) ? 'ok' : 'idle') : 'off';
     return {
       provider,
       name,
       description,
       configured,
       state,
-      stateLabel: configured ? (entregando.has(provider) ? 'Enviando' : 'Configurado') : 'Não configurado',
+      stateLabel: !configured ? 'Não configurado' : testCode ? 'Modo de teste' : entregando.has(provider) ? 'Enviando' : 'Configurado',
+      testCode,
       publicValue: salvo?.publicConfiguration?.[CAMPO_PUBLICO[provider]] ?? '',
       updatedAt: salvo?.updatedAt ?? null,
       // A tela abre com permissão de leitura, mas salvar credencial é `integration.manage`.
