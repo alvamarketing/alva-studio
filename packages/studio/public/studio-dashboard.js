@@ -219,7 +219,43 @@ function taxaDeRejeicao(bounces, visits) {
 }
 
 const PERCENTUAL = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const ESTADO_ENTREGA = { delivered: 'Entregue', dead: 'Encerrada' };
+// "Falhou" diz o que aconteceu. O rótulo anterior podia ser lido como "terminou", e a
+// tela existe justamente para não deixar uma falha passar por envio.
+const ROTULO_DO_CONSENTIMENTO = { granted: 'Concedido', denied: 'Negado', pending: 'Aguardando decisão' };
+const ESTADO_ENTREGA = { delivered: 'Entregue', dead: 'Falhou' };
+
+// O motivo gravado pela fila, dito de um jeito que aponta o que conferir. O código cru
+// ("destination_rejected_401") não diz nada a quem configura um pixel; "a plataforma
+// recusou a credencial, confira o token" diz. Código desconhecido não vaza para a tela.
+export function motivoDaFalha(codigo, nome = 'este destino') {
+  const texto = String(codigo ?? '').trim();
+  if (!texto) return '';
+  if (/^destination_rejected_(401|403)$/.test(texto)) return `A plataforma recusou a credencial. Confira a credencial de ${nome} em Destinos, nesta tela.`;
+  if (texto === 'destination_rejected_404') return `A plataforma não encontrou a conta informada. Confira os dados de ${nome} em Destinos, nesta tela.`;
+  const recusado = texto.match(/^destination_rejected_(\d+)$/);
+  if (recusado) return `A plataforma recusou o evento (código ${recusado[1]}).`;
+  const fora = texto.match(/^destination_unavailable_(\d+)$/);
+  if (fora) return `A plataforma estava indisponível (código ${fora[1]}). O envio tenta de novo sozinho.`;
+  if (texto === 'transport_error') return 'Não foi possível falar com a plataforma. O envio tenta de novo sozinho.';
+  if (texto === 'destination_not_configured') return `Sem credencial de ${nome} neste ambiente. Configure-a em Destinos, nesta tela.`;
+  if (texto === 'destination_identifier_required') return 'Esta plataforma não tinha como atribuir o evento.';
+  return 'O envio falhou.';
+}
+
+// O estado de uma entrega, lido por todas as telas que o mostram. Duas telas decidindo o
+// mesmo rótulo cada uma do seu jeito divergiriam.
+export function estadoDaEntrega(linha) {
+  const status = linha?.status;
+  const falhou = status === 'dead';
+  const nome = nomeDoDestino(linha?.destination);
+  return {
+    destino: linha?.destination ?? '',
+    nome,
+    rotulo: ESTADO_ENTREGA[status] ?? 'Nova tentativa',
+    estado: status === 'delivered' ? 'ok' : falhou ? 'error' : 'retry',
+    motivo: status === 'delivered' ? '' : motivoDaFalha(linha?.lastError, nome),
+  };
+}
 
 export function trackingMetricsModel(deliveries) {
   const linhas = Array.isArray(deliveries) ? deliveries : [];
@@ -233,7 +269,7 @@ export function trackingMetricsModel(deliveries) {
     { key: 'received', label: 'Eventos recebidos', value: numero(eventos), detail: '' },
     { key: 'delivered', label: 'Entregues', value: numero(entregues), detail: parcela(entregues) },
     { key: 'retrying', label: 'Em nova tentativa', value: numero(tentando), detail: parcela(tentando) },
-    { key: 'dead', label: 'Falhas encerradas', value: numero(encerradas), detail: parcela(encerradas) },
+    { key: 'dead', label: 'Falharam', value: numero(encerradas), detail: parcela(encerradas) },
   ];
 }
 
@@ -248,9 +284,11 @@ export function trackingEventsModel(deliveries) {
         eventName: linha?.eventName ?? '',
         contentId: linha?.contentId ?? '',
         consentState: linha?.consentState ?? 'pending',
-        consentLabel: linha?.consentState ?? 'pending',
+        consentLabel: ROTULO_DO_CONSENTIMENTO[linha?.consentState] ?? ROTULO_DO_CONSENTIMENTO.pending,
         receivedAt: linha?.createdAt ?? null,
+        contentName: linha?.contentName ?? '',
         destinations: [],
+        entregas: [],
         delivered: 0,
         total: 0,
         status: 'Entregue',
@@ -258,12 +296,35 @@ export function trackingEventsModel(deliveries) {
     }
     const evento = porEvento.get(chave);
     evento.destinations.push(linha?.destination);
+    evento.entregas.push(estadoDaEntrega(linha));
     evento.total += 1;
     if (linha?.status === 'delivered') evento.delivered += 1;
-    if (linha?.status === 'dead') evento.status = 'Encerrada';
-    else if (evento.status !== 'Encerrada' && linha?.status !== 'delivered') evento.status = 'Nova tentativa';
+    if (linha?.status === 'dead') evento.status = 'Falhou';
+    else if (evento.status !== 'Falhou' && linha?.status !== 'delivered') evento.status = 'Nova tentativa';
   }
   return [...porEvento.values()];
+}
+
+
+// Os passos da jornada de um evento, como o painel os mostra. Ficam aqui, fora do DOM,
+// porque cada frase é uma afirmação sobre o que aconteceu — e a tela afirmava duas coisas
+// falsas: "destinos concluídos" incluía os que falharam, e "hashes gerados no servidor"
+// aparecia mesmo sem consentimento, quando nenhum hash é gerado.
+export function passosDaJornada(evento) {
+  const consentiu = evento?.consentState === 'granted';
+  const recebido = evento?.receivedAt ? new Date(evento.receivedAt).toLocaleString('pt-BR') : '';
+  const destinos = (evento?.entregas ?? [])
+    .map((entrega) => `${entrega.nome} · ${entrega.rotulo}${entrega.motivo ? ` — ${entrega.motivo}` : ''}`)
+    .join('\n');
+  return [
+    { ordem: '1', nome: 'Registrado no Studio', detalhe: recebido },
+    {
+      ordem: '2',
+      nome: 'Consentimento',
+      detalhe: `${ROTULO_DO_CONSENTIMENTO[evento?.consentState] ?? 'Aguardando decisão'} · ${consentiu ? 'e-mail e telefone seguem como hash, gerado no servidor' : 'sem e-mail nem telefone: só identificadores de clique'}`,
+    },
+    { ordem: '3', nome: 'Destinos', detalhe: destinos || 'Nenhum destino recebeu este evento.' },
+  ];
 }
 
 export function trackingPageModel(events, visible) {

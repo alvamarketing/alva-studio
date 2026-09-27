@@ -1851,12 +1851,14 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .tracking-view .consent-card h3 { font-size: var(--text-lg); margin: 0 0 6px; }
 .tracking-view .consent-card p { font-size: var(--text-sm); line-height: 1.6; color: var(--alva-muted); margin: 8px 0 0; }
 .tracking-view .tracking-more { margin-top: 16px; }
+/* Um destino por linha no passo "Destinos" da jornada, cada um com o seu estado. */
+.tracking-view .timeline-row small { white-space: pre-line; }
 
 @media (max-width: 1000px) {
   .analytics-view .metrics, .analytics-view .metrics.metrics-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 0; }
   .analytics-view .metric:nth-child(odd) { padding-left: 0; border-left: 0; }
   .analytics-view .analytics-lists, .analytics-view .analytics-lists-3,
-  .tracking-view .tracking-layout, .tracking-view .consent-board { grid-template-columns: 1fr; gap: 28px; }
+  .tracking-view .tracking-layout, .tracking-view .consent-board { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   /* Destinos já são uma coluna só, e a separação entre eles é a hairline, não o vão:
      abrir 28px de espaço aqui desmancharia a lista em cartões soltos. */
 }

@@ -11,7 +11,7 @@ const entregas = [
 
 test('as quatro métricas contam entregas por estado com participação', () => {
   const m = trackingMetricsModel(entregas);
-  assert.deepEqual(m.map((x) => x.label), ['Eventos recebidos', 'Entregues', 'Em nova tentativa', 'Falhas encerradas']);
+  assert.deepEqual(m.map((x) => x.label), ['Eventos recebidos', 'Entregues', 'Em nova tentativa', 'Falharam']);
   assert.deepEqual(m.map((x) => x.value), ['3', '2', '1', '1']);
   assert.deepEqual(m.map((x) => x.detail), ['', '50,0%', '25,0%', '25,0%']);
 });
@@ -19,17 +19,19 @@ test('as quatro métricas contam entregas por estado com participação', () => 
 test('um evento vira uma linha, com seus destinos reunidos', () => {
   const linhas = trackingEventsModel(entregas);
   assert.equal(linhas.length, 3);
-  assert.deepEqual(linhas[0], {
-    eventRef: 'e1', eventName: 'lead', contentId: 'Diagnóstico', consentState: 'granted',
-    consentLabel: 'granted', receivedAt: '2026-09-08T20:01:42.000Z',
+  const { entregas: porDestino, ...resto } = linhas[0];
+  assert.deepEqual(resto, {
+    eventRef: 'e1', eventName: 'lead', contentId: 'Diagnóstico', contentName: '', consentState: 'granted',
+    consentLabel: 'Concedido', receivedAt: '2026-09-08T20:01:42.000Z',
     destinations: ['meta', 'google'], delivered: 2, total: 2, status: 'Entregue',
   });
+  assert.deepEqual(porDestino.map((entrega) => [entrega.destino, entrega.rotulo]), [['meta', 'Entregue'], ['google', 'Entregue']]);
 });
 
 test('o estado da linha reflete a pior situação entre os destinos', () => {
   const [, emTentativa, encerrado] = trackingEventsModel(entregas);
   assert.equal(emTentativa.status, 'Nova tentativa');
-  assert.equal(encerrado.status, 'Encerrada');
+  assert.equal(encerrado.status, 'Falhou');
 });
 
 test('a saúde por destino mostra a taxa de entrega de cada um', () => {

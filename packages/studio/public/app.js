@@ -7,7 +7,7 @@ import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { correspondenciaModel, configuracaoParaSalvar, destinosDeConversaoModel, nomeDoDestino, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { correspondenciaModel, configuracaoParaSalvar, estadoDaEntrega, passosDaJornada, destinosDeConversaoModel, nomeDoDestino, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
@@ -591,7 +591,8 @@ async function renderProjectConversions(state) {
     if (!rows.length) return list.append(projectEmpty('Nenhuma conversão enviada.', 'As conversões confirmadas aparecerão aqui.'));
     for (const row of rows) {
       const status = String(row.status || '').toLowerCase();
-      const statusLabel = { delivered: 'Entregue', retry: 'Nova tentativa', dead: 'Encerrada' }[status] || 'Processando';
+      const entrega = estadoDaEntrega(row);
+      const statusLabel = entrega.motivo ? `${entrega.rotulo} — ${entrega.motivo}` : entrega.rotulo;
       const item = document.createElement('article'); item.className = `project-content-row conversion-row conversion-status-${status || 'pending'}`;
       item.setAttribute('aria-label', `Conversão ${row.eventName || 'evento'} · ${row.environment || 'ambiente'} · ${statusLabel}`);
       const icon = document.createElement('span'); icon.className = 'project-content-icon'; icon.setAttribute('aria-hidden', 'true');
@@ -1935,7 +1936,7 @@ function pintarRastreamento() {
   for (const evento of eventos) {
     const linha = document.createElement('tr');
     linha.classList.toggle('selected', evento.eventRef === trackingSelected);
-    const estados = { Entregue: 'ok', 'Nova tentativa': 'retry', Encerrada: 'error' };
+    const estados = { Entregue: 'ok', 'Nova tentativa': 'retry', Falhou: 'error' };
     for (const texto of [evento.eventName, evento.contentId || '—', evento.consentLabel, tempoRelativo(evento.receivedAt)]) {
       const celula = document.createElement('td');
       celula.textContent = texto;
@@ -1991,17 +1992,12 @@ function pintarJornada(evento) {
   const alvo = clear($('#tracking-journey'));
   if (!evento) return alvo.append(projectEmpty('Selecione um evento.', 'A jornada aparece ao escolher uma linha.'));
   const titulo = document.createElement('strong');
-  titulo.textContent = `${evento.eventName} · ${evento.contentId || 'sem conteúdo'}`;
+  titulo.textContent = `${evento.eventName} · ${evento.contentName || evento.contentId || 'sem conteúdo'}`;
   const linhaDoTempo = document.createElement('div');
   linhaDoTempo.className = 'timeline';
-  const entregues = evento.destinations.filter(Boolean).map(nomeDoDestino);
-  const passos = [
-    ['1', 'Registrado no Studio', new Date(evento.receivedAt).toLocaleString('pt-BR')],
-    ['2', 'Consentimento aplicado', `${evento.consentLabel} · hashes gerados no servidor`],
-    ['3', 'Recebido pelo Rastreamento', `${evento.total} ${evento.total === 1 ? 'entrega enfileirada' : 'entregas enfileiradas'}`],
-    ['4', 'Destinos concluídos', entregues.length ? `${evento.delivered} de ${evento.total} · ${entregues.join(', ')}` : 'Nenhum destino concluído'],
-  ];
-  for (const [ordem, nome, detalhe] of passos) {
+  // Cada frase vem de passosDaJornada, que é testada: a tela mostra o que o modelo
+  // afirma, e não uma frase escrita à parte que possa dizer outra coisa.
+  for (const { ordem, nome, detalhe } of passosDaJornada(evento)) {
     const linha = document.createElement('div');
     linha.className = 'timeline-row';
     const marca = document.createElement('div');
