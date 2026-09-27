@@ -286,6 +286,9 @@ test('evento de VSL pelo coletor próprio entra no outbox comercial, um por dest
   const payload = rows[0].payload;
   assert.match(payload.click_ids?.fbc ?? '', /^fb\.1\.\d+\.IwAR-clique-da-vsl$/, 'o clique da sessão precisa viajar com a conversão');
   assert.equal(payload.params.content_id, 'vsl-1');
+  // A origem guardada na sessão também viaja: sem ela, o vídeo assistido chega à
+  // plataforma sem dizer de qual campanha veio.
+  assert.equal(payload.params.utm_source, 'meta');
   await database.close();
 });
 

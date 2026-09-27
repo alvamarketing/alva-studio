@@ -19,6 +19,12 @@ const ATTRIBUTION = Object.freeze({
 });
 const ALL_ATTRIBUTION = new Set(Object.values(ATTRIBUTION).flatMap((value) => Object.keys(value)));
 export const IDENTIFICADORES_DE_CLIQUE = ALL_ATTRIBUTION;
+
+// A origem do tráfego, como o anúncio a marca na URL. Só nomes em minúsculas, como no
+// Google Analytics: `UTM_SOURCE` não é lido lá e não é lido aqui, e os relatórios dos dois
+// continuam batendo. `utm_id` e as variantes estendidas ficam de fora — nenhuma
+// plataforma de destino as usa.
+export const PARAMETROS_UTM = Object.freeze(['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']);
 export const NOME_NA_PLATAFORMA = Object.freeze(Object.fromEntries(
   Object.values(ATTRIBUTION).flatMap((mapa) => Object.entries(mapa)),
 ));

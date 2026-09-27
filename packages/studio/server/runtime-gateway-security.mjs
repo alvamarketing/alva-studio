@@ -1,12 +1,19 @@
 import { verifyRuntimeRequest, visitanteCanonico } from './publication-runtime.mjs';
 import { derivePublicationRuntimeKey } from './vercel-runtime-gateway.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { PARAMETROS_UTM } from './conversion-consent-policy.mjs';
 
 // Os nomes que as plataformas de fato colocam na URL de destino do anúncio. Estava
 // escrito `fbc` aqui, que a Meta nunca manda: ela manda `fbclid`, e `fbc` é o valor
 // derivado dele que a Conversions API espera. Pedir pelo nome errado fazia toda campanha
 // do Facebook chegar ao servidor sem identificador de clique.
 export const PARAMETROS_DE_CLIQUE = new Set(['fbclid', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id', 'tblci']);
+
+// O que o gateway lê da URL da página: o identificador do clique — menos o `fbp`, que é
+// cookie — e a UTM. Exportado porque o módulo publicado na Vercel recebe esta lista
+// gerada, e não digitada: foi uma segunda lista escrita à mão que deixou o `fbc` divergir.
+export const PARAMETROS_DA_URL = Object.freeze([...PARAMETROS_DE_CLIQUE].filter((nome) => nome !== 'fbp').concat(PARAMETROS_UTM));
+const PARAMETROS_ACEITOS = new Set([...PARAMETROS_DE_CLIQUE, ...PARAMETROS_UTM]);
 
 // `fbp` é diferente de todo o resto da lista acima: não é a Meta que manda esse valor na URL
 // do anúncio, é o pixel dela escrevendo um cookie de primeira parte (`_fbp`) no navegador da
@@ -51,8 +58,7 @@ export function runtimeManifest(row) {
 export function signedRuntimeAttribution(referer, host, derivedKey, cookieHeader) {
   let url;
   try { url = new URL(referer); if (url.origin !== `https://${publicHost(host)}`) return null; } catch { return null; }
-  const values = Object.fromEntries([...PARAMETROS_DE_CLIQUE].flatMap((key) => {
-    if (key === 'fbp') return []; // fbp vem do cookie abaixo, nunca da query string.
+  const values = Object.fromEntries(PARAMETROS_DA_URL.flatMap((key) => {
     const value = url.searchParams.get(key);
     return typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[key, value]] : [];
   }));
@@ -72,7 +78,7 @@ export function verifiedRuntimeAttribution(cookie, manifest, rootSecret) {
   try {
     const values = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (!values || typeof values !== 'object' || Array.isArray(values)) return {};
-    return Object.fromEntries(Object.entries(values).flatMap(([name, value]) => PARAMETROS_DE_CLIQUE.has(name) && typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[name, value]] : []));
+    return Object.fromEntries(Object.entries(values).flatMap(([name, value]) => PARAMETROS_ACEITOS.has(name) && typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[name, value]] : []));
   } catch { return {}; }
 }
 

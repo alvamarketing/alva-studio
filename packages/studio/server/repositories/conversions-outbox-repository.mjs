@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { SecretVault } from './publication-repository.mjs';
-import { IDENTIFICADORES_DE_CLIQUE, NOME_NA_PLATAFORMA } from '../conversion-consent-policy.mjs';
+import { IDENTIFICADORES_DE_CLIQUE, NOME_NA_PLATAFORMA, PARAMETROS_UTM } from '../conversion-consent-policy.mjs';
 import { qualidadeDaCorrespondencia, resumoDaCorrespondencia } from '../qualidade-de-correspondencia.mjs';
 
 const EVENTS = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
@@ -78,6 +78,18 @@ export function contextoDoVisitante({ ip, userAgent } = {}) {
   }).filter(([, valor]) => valor !== undefined));
 }
 
+// A origem do tráfego, tirada da mesma atribuição assinada que traz o clique. Vai para os
+// parâmetros do evento — `custom_data` na Meta, `properties` no TikTok —, que é onde a
+// plataforma mostra campanha e criativo. O Google e o LinkedIn atribuem pelo clique e não
+// leem estes campos. O limite é o mesmo do gateway: valor maior não entra.
+function utmDe(atribuicao) {
+  const origem = atribuicao && typeof atribuicao === 'object' && !Array.isArray(atribuicao) ? atribuicao : {};
+  return Object.fromEntries(PARAMETROS_UTM.flatMap((nome) => {
+    const valor = typeof origem[nome] === 'string' ? origem[nome].replace(/[\r\n]+/g, ' ').trim() : '';
+    return valor && valor.length <= 512 ? [[nome, valor]] : [];
+  }));
+}
+
 function textoCurto(valor, limite = 190) {
   const limpo = String(valor ?? '').trim().replace(/[\r\n]/g, ' ');
   return limpo && limpo.length <= limite ? limpo : undefined;
@@ -144,8 +156,9 @@ export class ConversionsOutboxRepository {
     const cleanAttribution = attribution(rawAttribution);
     const cliques = identificadoresDeClique(cleanAttribution, at);
     const funil = contextoDoFunil(contexto);
+    const utm = utmDe(rawAttribution);
     const visitante = contextoDoVisitante(cliente);
-    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), ...(Object.keys(visitante).length ? { client: visitante } : {}), params: { ...funil.params, ...params } };
+    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), ...(Object.keys(visitante).length ? { client: visitante } : {}), params: { ...funil.params, ...utm, ...params } };
     await client.query(
       `INSERT INTO conversions_outbox (company_id, project_id, environment, property_id, tracking_event_id, event_name, destination, payload)
        SELECT $1, $2, $3, $4, $5, $6, destino, $7::jsonb FROM unnest($8::varchar[]) AS destino

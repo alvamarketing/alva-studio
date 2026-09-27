@@ -258,3 +258,36 @@ test('endereço inválido ou com query string não entra no evento', async (t) =
     assert.equal(url('c1'), undefined, 'endereço sem TLS não entra');
   } finally { await database.close(); }
 });
+
+// A UTM chega assinada junto do clique, e tem de chegar à plataforma: é ela que diz, no
+// painel do anúncio, qual campanha e qual criativo trouxeram o lead. Ela vai nos
+// parâmetros do evento — `custom_data` na Meta —, e nunca entre os identificadores de
+// clique, que servem a outra coisa.
+test('a UTM vai para os parâmetros do evento, e dali para a plataforma', async (t) => {
+  const { destinoPara } = await import('../server/tracking-destinos.mjs');
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const ids = await seed(database);
+    const vault = new SecretVault({ masterKey: 'task-6-master-key' });
+    await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' } });
+    const outbox = new ConversionsOutboxRepository(database, { vault });
+    await database.transaction((client) => outbox.enqueue(client, {
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
+      trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
+      attribution: { fbclid: 'IwAR-x', utm_source: 'facebook', utm_medium: 'cpc', utm_campaign: 'lançamento set', utm_content: 'x'.repeat(600) },
+    }));
+    const { rows } = await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1', [ids.company.id]);
+    const payload = rows[0].payload;
+    assert.equal(payload.params.utm_source, 'facebook');
+    assert.equal(payload.params.utm_medium, 'cpc');
+    assert.equal(payload.params.utm_campaign, 'lançamento set', 'acento e espaço chegam intactos');
+    assert.equal('utm_content' in payload.params, false, 'valor acima do limite não entra');
+    assert.deepEqual(Object.keys(payload.click_ids), ['fbc'], 'UTM não é identificador de clique');
+
+    const corpo = destinoPara('meta').requisicao(payload, { pixel_id: '123', access_token: 'token' }).corpo;
+    assert.equal(corpo.data[0].custom_data.utm_source, 'facebook');
+    assert.equal(corpo.data[0].custom_data.utm_campaign, 'lançamento set');
+  } finally { await database.close(); }
+});

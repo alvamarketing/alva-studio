@@ -99,7 +99,7 @@ export class AnalyticsRepository {
     const sessionAttribution = attribution(event);
     return withTransaction(this.database, async (client) => {
       const existing = await client.query(
-        `SELECT id, click_ids FROM analytics_sessions
+        `SELECT id, click_ids, utm_source, utm_medium, utm_campaign, utm_term, utm_content FROM analytics_sessions
           WHERE company_id = $1 AND project_id = $2 AND website_id = $3 AND visitor_hash = $4
             AND last_seen_at >= $5::timestamptz - interval '30 minutes'
           ORDER BY last_seen_at DESC LIMIT 1 FOR UPDATE`,
@@ -109,10 +109,14 @@ export class AnalyticsRepository {
       // A aquisição da sessão — como a pessoa chegou — é devolvida junto porque a conversão
       // precisa dela. O identificador do clique só existe na URL da primeira visita; na
       // segunda página ele já sumiu, e sem lê-lo daqui a conversão sai sem atribuição.
-      let aquisicao = sessionAttribution.clickIds ?? {};
+      // A UTM também: é ela que diz de qual campanha veio quem assistiu ao vídeo.
+      const utmDaSessao = (linha) => Object.fromEntries(
+        ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].flatMap((nome) => (linha?.[nome] ? [[nome, linha[nome]]] : [])),
+      );
+      let aquisicao = { ...(sessionAttribution.clickIds ?? {}), ...utmDaSessao(sessionAttribution) };
       if (existing.rows.length) {
         sessionId = existing.rows[0].id;
-        aquisicao = existing.rows[0].click_ids ?? {};
+        aquisicao = { ...(existing.rows[0].click_ids ?? {}), ...utmDaSessao(existing.rows[0]) };
         await client.query(
           `UPDATE analytics_sessions SET last_seen_at = $4
             WHERE company_id = $1 AND project_id = $2 AND id = $3 AND last_seen_at < $4`,

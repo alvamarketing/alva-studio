@@ -211,6 +211,7 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
           ttclid: dados?.user?.ttclid,
           gclid: dados?.adIdentifiers?.gclid, gbraid: dados?.adIdentifiers?.gbraid, wbraid: dados?.adIdentifiers?.wbraid,
           url: dados?.event_source_url,
+          utm: Object.fromEntries(Object.entries(dados?.custom_data ?? dados?.properties ?? {}).filter(([nome]) => nome.startsWith('utm_'))),
         };
       } catch (erro) {
         saida[linha.destination] = { vai: false, motivo: erro.message };
@@ -256,6 +257,17 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
     assert.equal(linha.saida.meta.ip, linha.ipDaPessoa, `${linha.cenario}: o IP que chega à Meta não é o da pessoa`);
     assert.equal(linha.saida.meta.ua, linha.uaDaPessoa, `${linha.cenario}: o navegador que chega à Meta não é o da pessoa`);
   }
+  // A UTM chega à plataforma. Até 27/09 chegava em 0 de 25 cenários; o gateway só
+  // assinava o clique.
+  assert.deepEqual(porNome['Facebook · anúncio'].saida.meta.utm, { utm_source: 'facebook', utm_medium: 'cpc', utm_campaign: 'lancamento_set', utm_content: 'criativo_a' });
+  assert.deepEqual(porNome['Orgânico · link com UTM de e-mail'].saida.meta.utm, { utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'edicao_42' }, 'UTM sem clique de anúncio também chega');
+  assert.deepEqual(porNome['UTM · acentos'].saida.meta.utm, { utm_campaign: 'promoção_verão' });
+  assert.deepEqual(porNome['UTM · valor com espaço (%20 e +)'].saida.meta.utm, { utm_campaign: 'black friday', utm_content: 'banner topo' });
+  assert.deepEqual(porNome['TikTok · anúncio'].saida.tiktok.utm, { utm_source: 'tiktok', utm_medium: 'paid', utm_campaign: 'ugc_set' });
+  for (const nome of ['Direto (digitou o endereço)', 'UTM · no fragmento (#), não na query', 'UTM · valor enorme (600 caracteres)', 'UTM · nome do parâmetro em maiúsculas', 'UTM · parâmetros fora do padrão']) {
+    assert.deepEqual(porNome[nome].saida.meta.utm, {}, `${nome}: não deveria levar UTM`);
+  }
+
   const ipsEnviados = new Set(relatorio.map((linha) => linha.saida.meta.ip));
   assert.equal(ipsEnviados.size, relatorio.length, 'visitantes diferentes precisam chegar com IPs diferentes');
   assert.equal(ipsEnviados.has(IP_DA_FUNCAO_VERCEL), false, 'o IP da função da Vercel não pode chegar a plataforma nenhuma');

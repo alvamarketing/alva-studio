@@ -89,10 +89,12 @@ test('a lista de parâmetros de clique é a mesma no gateway publicado', async (
   assert.notEqual(modulo, undefined, 'o módulo gerado precisa ser encontrável');
   // fbp não é parâmetro de URL: ele vem do cookie `_fbp`, então fica fora da lista que o
   // módulo busca na query string do referer, e passa a ter um caminho próprio.
-  const lista = modulo.data.match(/for\(const keyName of \[([^\]]+)\]\)/)?.[1] ?? '';
-  const nomes = lista.split(',').map((parte) => parte.trim().replace(/^'|'$/g, '')).filter(Boolean);
-  const esperadosNaUrl = [...PARAMETROS_DE_CLIQUE].filter((nome) => nome !== 'fbp');
-  assert.deepEqual(nomes.sort(), esperadosNaUrl.sort());
+  // A lista chega ao módulo gerada a partir da do Node (clique e UTM), em JSON.
+  const lista = modulo.data.match(/for\(const keyName of (\[[^\]]+\])\)/)?.[1] ?? '[]';
+  const { PARAMETROS_DA_URL } = await import('../server/runtime-gateway-security.mjs');
+  assert.deepEqual(JSON.parse(lista), [...PARAMETROS_DA_URL]);
+  assert.equal(JSON.parse(lista).includes('fbp'), false, 'fbp vem do cookie, não da URL');
+  assert.ok([...PARAMETROS_DE_CLIQUE].filter((nome) => nome !== 'fbp').every((nome) => JSON.parse(lista).includes(nome)));
   // O fbp continua coberto nas duas cópias, só que pela mesma regra de cookie — literalmente
   // o mesmo texto de regex — em vez de duas expressões escritas à mão que podem se desencontrar.
   assert.ok(modulo.data.includes(REGEX_COOKIE_FBP.source), 'o módulo publicado precisa usar a mesma regra de cookie que o Node');
@@ -111,4 +113,65 @@ test('o que o gateway coleta é exatamente o que a fila aceita', async () => {
   for (const nome of PARAMETROS_DE_CLIQUE) {
     assert.ok(NOME_NA_PLATAFORMA[nome], `${nome} não tem destino em nenhuma plataforma`);
   }
+});
+
+// --- UTM ---
+//
+// A simulação de 27/09 mostrou UTM chegando à conversão em 0 de 25 cenários: o gateway
+// só assinava o identificador do clique. Campanha, origem e mídia são o que permite ver,
+// no painel do anúncio, qual criativo trouxe o lead.
+
+test('a UTM da URL da página entra no cookie assinado, junto do clique', () => {
+  const cookie = assinar('https://cliente.test/oferta?fbclid=IwAR-x&utm_source=facebook&utm_medium=cpc&utm_campaign=lancamento&utm_term=agencia&utm_content=criativo_a');
+  assert.deepEqual(verifiedRuntimeAttribution(cookie, manifest, raiz), {
+    fbclid: 'IwAR-x', utm_source: 'facebook', utm_medium: 'cpc', utm_campaign: 'lancamento', utm_term: 'agencia', utm_content: 'criativo_a',
+  });
+});
+
+// Newsletter, parceria, post orgânico com link marcado: não há clique de anúncio, mas a
+// origem existe e é o que diz de onde veio o lead.
+test('UTM sozinha, sem clique de anúncio, também gera atribuição', () => {
+  const cookie = assinar('https://cliente.test/oferta?utm_source=newsletter&utm_medium=email');
+  assert.deepEqual(verifiedRuntimeAttribution(cookie, manifest, raiz), { utm_source: 'newsletter', utm_medium: 'email' });
+});
+
+// Os nomes são só em minúsculas, como no Google Analytics: os relatórios dos dois
+// continuam batendo. Os valores mantêm a caixa original.
+test('o nome do parâmetro só vale em minúsculas; o valor mantém a caixa', () => {
+  assert.equal(assinar('https://cliente.test/?UTM_SOURCE=Facebook'), null);
+  assert.deepEqual(verifiedRuntimeAttribution(assinar('https://cliente.test/?utm_source=Facebook'), manifest, raiz), { utm_source: 'Facebook' });
+});
+
+test('UTM fora do padrão, enorme ou no fragmento não entra', () => {
+  assert.equal(assinar('https://cliente.test/?utm_id=1&utm_source_platform=meta'), null);
+  assert.equal(assinar(`https://cliente.test/?utm_campaign=${'x'.repeat(600)}`), null);
+  assert.equal(assinar('https://cliente.test/#utm_source=fragmento'), null);
+});
+
+test('o gateway publicado assina a UTM da página, com a mesma lista do Node', async () => {
+  const { runtimeGatewayArtifacts, derivePublicationRuntimeKey: derivar } = await import('../server/vercel-runtime-gateway.mjs');
+  const { PARAMETROS_DA_URL } = await import('../server/runtime-gateway-security.mjs');
+  const { files } = runtimeGatewayArtifacts([], {
+    publicationId: 'pub-1', snapshotHash: 'a'.repeat(64), environment: 'production',
+    runtimeOrigin: 'https://studio.test', runtimeHmacSecret: 'b'.repeat(64),
+  });
+  const fonte = files.find((arquivo) => /module\.exports=\{handler\}/.test(String(arquivo.data ?? ''))).data;
+  const crypto = await import('node:crypto');
+  const modulo = { exports: {} };
+  const cookies = [];
+  // eslint-disable-next-line no-new-func
+  new Function('require', 'module', 'exports', 'process', 'fetch', 'Buffer', 'URL', fonte)(
+    () => crypto, modulo, modulo.exports,
+    { env: { PUBLICATION_RUNTIME_DERIVED_KEY: derivar('b'.repeat(64), { publicationId: 'pub-1', snapshotHash: 'a'.repeat(64), environment: 'production' }), ALVA_RUNTIME_PUBLICATION_ID: 'pub-1', ALVA_RUNTIME_ENVIRONMENT: 'production', ALVA_RUNTIME_GATEWAY_ORIGIN: 'https://studio.test' } },
+    async () => new Response('', { status: 200 }), Buffer, URL,
+  );
+  await modulo.exports.handler(
+    { url: '/api/_alva/runtime/runtime.js', method: 'GET', headers: { host: 'cliente.test', referer: 'https://cliente.test/oferta?utm_source=google&utm_campaign=marca&gclid=Cj0-x' }, async *[Symbol.asyncIterator]() {} },
+    { statusCode: 200, setHeader(nome, valor) { if (nome === 'set-cookie') cookies.push(...[valor].flat()); }, end() {} },
+  );
+  const atribuicao = cookies.find((linha) => linha.startsWith('alva_runtime_attribution='));
+  assert.ok(atribuicao, 'o gateway publicado não gravou a atribuição');
+  const payload = JSON.parse(Buffer.from(atribuicao.split('=')[1].split('.')[0], 'base64url').toString());
+  assert.deepEqual(payload, { gclid: 'Cj0-x', utm_source: 'google', utm_campaign: 'marca' });
+  assert.ok(PARAMETROS_DA_URL.includes('utm_source'));
 });
