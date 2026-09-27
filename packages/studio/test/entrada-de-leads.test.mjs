@@ -3,8 +3,8 @@
 // A auditoria de 27/09 achou dois defeitos graves com a mesma origem: cada peça era
 // testada com entrada inventada, e nenhum teste atravessava o caminho que a produção
 // usa. Este arquivo existe para isso. Ele não assina requisição à mão nem enfileira
-// direto: roda o gateway de verdade (`forwardRuntimeGatewayRequest`, o mesmo que é
-// publicado na Vercel) nos dois passos que a pessoa faz — carregar a página vinda do
+// direto: roda o módulo de gateway que é publicado na Vercel, com os rewrites do
+// `vercel.json` da mesma publicação, nos dois passos que a pessoa faz — carregar a página vinda do
 // anúncio e enviar o formulário — e lê o que chegou ao banco e o que sairia para cada
 // plataforma.
 //
@@ -24,9 +24,10 @@ import { SecretVault } from '../server/repositories/publication-repository.mjs';
 import { TrackingRepository } from '../server/repositories/tracking-repository.mjs';
 import { buildPublishableSnapshot } from '../server/publication-snapshot.mjs';
 import { buildRuntimeManifest } from '../server/publication-runtime.mjs';
-import { derivePublicationRuntimeKey, forwardRuntimeGatewayRequest, runtimeGatewayArtifacts } from '../server/vercel-runtime-gateway.mjs';
+import { derivePublicationRuntimeKey, runtimeGatewayArtifacts } from '../server/vercel-runtime-gateway.mjs';
 import { destinoPara } from '../server/tracking-destinos.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
+import { gatewayPublicado } from './gateway-publicado.mjs';
 
 const STUDIO = 'https://studio.example.test';
 const DOMINIO = 'lp.example.test';
@@ -164,8 +165,9 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
   t.after(async () => { await new Promise((resolve) => app.close(resolve)); await database.close(); });
   const porta = app.address().port;
   const chave = derivePublicationRuntimeKey(RAIZ, { publicationId, snapshotHash: manifesto.snapshotHash, environment: 'production' });
-  const gateway = (pedido) => forwardRuntimeGatewayRequest({
-    host: DOMINIO, publicationId, environment: 'production', derivedKey: chave, gatewayOrigin: STUDIO, fetchImpl: fetchDoGateway(porta), ...pedido,
+  const gateway = await gatewayPublicado({
+    artefato, dominio: DOMINIO, fetchImpl: fetchDoGateway(porta),
+    env: { PUBLICATION_RUNTIME_DERIVED_KEY: chave, ALVA_RUNTIME_PUBLICATION_ID: publicationId, ALVA_RUNTIME_ENVIRONMENT: 'production', ALVA_RUNTIME_GATEWAY_ORIGIN: STUDIO },
   });
 
   const relatorio = [];
@@ -178,7 +180,7 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
     // 1. A pessoa abre a página vinda do anúncio. O navegador pede o carregador do
     //    runtime, e o gateway lê a URL da página (o Referer) para gravar a atribuição.
     const carregador = await gateway({
-      method: 'GET', path: '/_alva/runtime.js',
+      method: 'GET', path: `/_alva/runtime.js?publicationId=${publicationId}`,
       headers: { referer: enderecoDaPagina, 'user-agent': ua, 'x-real-ip': ip, ...(cookiesDoNavegador ? { cookie: cookiesDoNavegador } : {}) },
     });
     const cookieDeAtribuicao = [carregador.headers['set-cookie']].flat().filter(Boolean)

@@ -1,6 +1,5 @@
-import { createHmac, randomBytes } from 'node:crypto';
-import { signRuntimeRequest } from './publication-runtime.mjs';
-import { signedRuntimeAttribution, REGEX_COOKIE_FBP, FORMATO_FBP, PARAMETROS_DA_URL } from './runtime-gateway-security.mjs';
+import { createHmac } from 'node:crypto';
+import { REGEX_COOKIE_FBP, FORMATO_FBP, PARAMETROS_DA_URL } from './runtime-gateway-security.mjs';
 
 const ENVIRONMENTS = new Set(['preview', 'production']);
 const PROVIDER_CSP = Object.freeze({
@@ -10,31 +9,14 @@ const PROVIDER_CSP = Object.freeze({
   linkedin: { scriptHosts: ['https://snap.licdn.com'], connectHosts: ['https://px.ads.linkedin.com'] },
   taboola: { scriptHosts: ['https://cdn.taboola.com'], connectHosts: ['https://trc.taboola.com'] },
 });
-const FORWARDED_RESPONSE_HEADERS = new Set(['content-type', 'cache-control', 'location', 'set-cookie', 'x-webhook-delivery']);
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
 function publicationScope({ publicationId, snapshotHash, environment } = {}) {
   if (typeof publicationId !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(publicationId) || !/^[a-f0-9]{64}$/i.test(snapshotHash || '') || !ENVIRONMENTS.has(environment)) throw fail('Escopo de runtime inválido.');
   return { publicationId, snapshotHash: snapshotHash.toLowerCase(), environment };
 }
-function allowedGatewayPath(path) {
-  if (typeof path !== 'string' || !(path === '/_alva' || path.startsWith('/_alva/') || path.startsWith('/api/public/forms/') || path.startsWith('/api/public/pages/'))) throw fail('Rota do gateway inválida.', 404);
-  if (path.includes('\\') || path.includes('//') || /[\r\n]/.test(path)) throw fail('Rota do gateway inválida.', 404);
-  return path;
-}
-function safeHost(host) {
-  if (typeof host !== 'string' || !/^[A-Za-z0-9.-]+(?::\d{1,5})?$/.test(host) || host.length > 253) throw fail('Host público inválido.', 400);
-  return host.toLowerCase();
-}
 function gatewayOrigin(value) {
   try { const url = new URL(value); if (url.protocol !== 'https:' || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error(); return url.origin; } catch { throw fail('Origem interna inválida.', 500); }
-}
-function responseHeaders(headers) {
-  const output = {};
-  for (const [key, value] of headers.entries()) if (FORWARDED_RESPONSE_HEADERS.has(key.toLowerCase())) output[key.toLowerCase()] = value;
-  const cookies = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : headers.get('set-cookie') ? [headers.get('set-cookie')] : [];
-  if (cookies.length) output['set-cookie'] = cookies;
-  return output;
 }
 
 // O visitante como a Vercel o entrega à função: o IP em `x-real-ip` — e, na falta dele,
@@ -49,48 +31,11 @@ function responseHeaders(headers) {
 export const FORMATO_IPV4 = /^(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 export const FORMATO_IPV6 = /^[0-9a-f:]{3,45}$/i;
 
-export function visitanteDaVercel(headers = {}) {
-  const primeiro = String(headers['x-forwarded-for'] || '').split(',')[0];
-  const bruto = String(headers['x-real-ip'] || primeiro || '').trim().replace(/^::ffff:/i, '');
-  const ip = FORMATO_IPV4.test(bruto) || (FORMATO_IPV6.test(bruto) && bruto.includes(':')) ? bruto : null;
-  const userAgent = String(headers['user-agent'] || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 512) || null;
-  return { ip, userAgent };
-}
 
 export function derivePublicationRuntimeKey(secret, input) {
   if (typeof secret !== 'string' || secret.length < 16) throw fail('Segredo de runtime ausente.', 500);
   const scope = publicationScope(input);
   return createHmac('sha256', secret).update(JSON.stringify(scope)).digest('hex');
-}
-
-export async function forwardRuntimeGatewayRequest({ method = 'GET', path, host, headers = {}, body = Buffer.alloc(0), publicationId, environment, derivedKey, gatewayOrigin: targetOrigin, fetchImpl = fetch, now = () => Math.floor(Date.now() / 1000), nonce = () => randomBytes(18).toString('base64url') } = {}) {
-  const cleanPath = allowedGatewayPath(path);
-  const cleanHost = safeHost(host);
-  if (!ENVIRONMENTS.has(environment) || typeof publicationId !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(publicationId) || typeof derivedKey !== 'string' || !/^[a-f0-9]{64}$/i.test(derivedKey)) throw fail('Escopo de runtime inválido.', 500);
-  const source = Buffer.isBuffer(body) ? body : Buffer.from(body || '');
-  const visitante = visitanteDaVercel(headers);
-  const request = { method: String(method).toUpperCase(), path: cleanPath, publicationId, environment, timestamp: Number(now()), nonce: nonce(), body: source, client: visitante };
-  const signature = signRuntimeRequest(request, derivedKey);
-  const target = new URL(cleanPath, gatewayOrigin(targetOrigin));
-  const outbound = {
-    'x-alva-runtime-gateway': '1',
-    'x-alva-public-host': cleanHost,
-    'x-alva-publication-id': publicationId,
-    'x-alva-runtime-environment': environment,
-    'x-alva-runtime-timestamp': String(request.timestamp),
-    'x-alva-runtime-nonce': request.nonce,
-    'x-alva-runtime-signature': signature,
-    ...(visitante.ip ? { 'x-alva-client-ip': visitante.ip } : {}),
-    ...(visitante.userAgent ? { 'x-alva-client-ua': visitante.userAgent } : {}),
-  };
-  for (const name of ['content-type', 'cookie', 'origin', 'accept']) if (typeof headers[name] === 'string' && headers[name]) outbound[name] = headers[name];
-  const response = await fetchImpl(target.toString(), { method: request.method, headers: outbound, ...(source.length ? { body: source } : {}) });
-  const responseHeader = responseHeaders(response.headers);
-  if (cleanPath === '/_alva/runtime.js') {
-    const attribution = signedRuntimeAttribution(headers.referer || headers.referrer, cleanHost, derivedKey, headers.cookie);
-    if (attribution) responseHeader['set-cookie'] = [...(responseHeader['set-cookie'] || []), `alva_runtime_attribution=${attribution}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1800`];
-  }
-  return { status: response.status, headers: responseHeader, body: Buffer.from(await response.arrayBuffer()) };
 }
 
 function gatewayModuleSource() {

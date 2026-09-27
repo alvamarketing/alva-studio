@@ -6,8 +6,8 @@ por Facebook, Google, TikTok, direto, orgânico e uma variação extensa de UTM.
 Duas frentes, porque cada uma responde uma coisa que a outra não alcança.
 
 **Local, pelo gateway de verdade** — `test/entrada-de-leads.test.mjs`. 25
-cenários, rodando `forwardRuntimeGatewayRequest` (o mesmo gateway que é
-publicado) nos dois passos da pessoa: carregar a página vinda do anúncio e
+cenários, rodando o módulo de gateway publicado na Vercel, com os rewrites do
+`vercel.json` da mesma publicação, nos dois passos da pessoa: carregar a página vinda do anúncio e
 enviar o formulário. Postgres real, página publicada de verdade, destinos Meta,
 TikTok e Google configurados. Lê o que chegou ao banco e o corpo que o adaptador
 real montaria para cada plataforma.
@@ -104,3 +104,10 @@ novos pedem decisão do dono antes de entrar no plano:
 2. **O Google e os leads que não são dele.** Ou a fila deixa de endereçar ao
    Google o evento que ele não tem como atribuir, ou a tela passa a distinguir
    "recusado por não ter como atribuir" de "falhou".
+
+**Correção de 27/09, mais tarde.** Até o commit que a trouxe, esta frente rodava
+`forwardRuntimeGatewayRequest`, uma segunda cópia do gateway escrita em Node que
+se dizia "o mesmo gateway publicado". Não era: ela assinava a query junto com o
+caminho, e o módulo publicado não. Os 25 cenários foram refeitos pelo módulo
+publicado e continuam valendo; a cópia foi apagada.
+

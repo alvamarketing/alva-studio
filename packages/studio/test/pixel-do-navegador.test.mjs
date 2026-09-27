@@ -25,6 +25,7 @@ import { buildRuntimeManifest, createRuntimeLoader } from '../server/publication
 import { derivePublicationRuntimeKey, runtimeGatewayArtifacts } from '../server/vercel-runtime-gateway.mjs';
 import { destinoPara } from '../server/tracking-destinos.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
+import { gatewayPublicado } from './gateway-publicado.mjs';
 
 const STUDIO = 'https://studio.example.test';
 const DOMINIO = 'lp.example.test';
@@ -55,34 +56,6 @@ function fetchDoGateway(porta) {
     const cabecalhos = new Headers();
     for (const [nome, valor] of Object.entries(resposta.headers)) for (const item of [valor].flat()) cabecalhos.append(nome, String(item));
     return new Response(resposta.text, { status: resposta.status, headers: cabecalhos });
-  };
-}
-
-// O gateway que roda na Vercel, executado como a Vercel o executa: o módulo publicado, com
-// as regras de rewrite do `vercel.json` gerado na mesma publicação.
-async function gatewayPublicado({ artefato, env, fetchImpl }) {
-  const fonte = artefato.files.find((arquivo) => /module\.exports=\{handler\}/.test(String(arquivo.data ?? ''))).data;
-  const { rewrites } = JSON.parse(artefato.files.find((arquivo) => arquivo.file === 'vercel.json').data);
-  const modulo = { exports: {} };
-  const crypto = await import('node:crypto');
-  // eslint-disable-next-line no-new-func
-  new Function('require', 'module', 'exports', 'process', 'fetch', 'Buffer', 'URL', fonte)(
-    (nome) => { if (nome === 'node:crypto') return crypto; throw new Error(`require inesperado: ${nome}`); },
-    modulo, modulo.exports, { env }, fetchImpl, Buffer, URL,
-  );
-  const reescrever = (endereco) => {
-    const url = new URL(endereco, `https://${DOMINIO}`);
-    for (const { source, destination } of rewrites) {
-      const prefixo = source.replace(/:path\*$/, '');
-      if (source.endsWith(':path*') && url.pathname.startsWith(prefixo)) return destination.replace(/:path\*$/, '') + url.pathname.slice(prefixo.length) + url.search;
-    }
-    return endereco;
-  };
-  return async ({ method, path, headers = {}, body }) => {
-    const pedido = { url: reescrever(path), method, headers: { host: DOMINIO, ...headers }, async *[Symbol.asyncIterator]() { if (body) yield body; } };
-    const resposta = { statusCode: 200, cabecalhos: {}, corpo: '', setHeader(nome, valor) { this.cabecalhos[nome.toLowerCase()] = valor; }, end(dados) { this.corpo = dados; } };
-    await modulo.exports.handler(pedido, resposta);
-    return { status: resposta.statusCode, headers: resposta.cabecalhos, text: Buffer.isBuffer(resposta.corpo) ? resposta.corpo.toString() : String(resposta.corpo ?? '') };
   };
 }
 
@@ -170,7 +143,7 @@ test('o lead chega à Meta pelo navegador e pelo servidor com o mesmo nome e o m
   t.after(async () => { await new Promise((resolve) => app.close(resolve)); await database.close(); });
   const porta = app.address().port;
   const chave = derivePublicationRuntimeKey(RAIZ, { publicationId, snapshotHash: manifesto.snapshotHash, environment: 'production' });
-  const gateway = await gatewayPublicado({ artefato, env: { PUBLICATION_RUNTIME_DERIVED_KEY: chave, ALVA_RUNTIME_PUBLICATION_ID: publicationId, ALVA_RUNTIME_ENVIRONMENT: 'production', ALVA_RUNTIME_GATEWAY_ORIGIN: STUDIO }, fetchImpl: fetchDoGateway(porta) });
+  const gateway = await gatewayPublicado({ artefato, env: { PUBLICATION_RUNTIME_DERIVED_KEY: chave, ALVA_RUNTIME_PUBLICATION_ID: publicationId, ALVA_RUNTIME_ENVIRONMENT: 'production', ALVA_RUNTIME_GATEWAY_ORIGIN: STUDIO }, fetchImpl: fetchDoGateway(porta), dominio: DOMINIO });
 
   // A pessoa aceita a medição no banner.
   const consentimento = await gateway({ method: 'POST', path: `/_alva/consent?publicationId=${publicationId}`, headers: { 'content-type': 'application/json', origin: `https://${DOMINIO}`, referer: `https://${DOMINIO}/oferta` }, body: Buffer.from(JSON.stringify({ action: 'grant' })) });

@@ -1,29 +1,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { derivePublicationRuntimeKey, forwardRuntimeGatewayRequest, runtimeGatewayArtifacts } from '../server/vercel-runtime-gateway.mjs';
+import { derivePublicationRuntimeKey, runtimeGatewayArtifacts } from '../server/vercel-runtime-gateway.mjs';
+import { gatewayPublicado } from './gateway-publicado.mjs';
 
 const scope = { publicationId: 'run-1', snapshotHash: 'a'.repeat(64), environment: 'production' };
 
+// O módulo publicado, com a raiz de segredo que só o Studio conhece. A Vercel recebe só a
+// chave derivada (`runtimeEnv`).
+async function publicado({ fetchImpl, env = {} }) {
+  const artefato = runtimeGatewayArtifacts([], { ...scope, runtimeOrigin: 'https://studio.example.test', runtimeHmacSecret: 'root-secret-only-at-studio' });
+  return { artefato, gateway: await gatewayPublicado({ artefato, dominio: 'lp.example.test', fetchImpl, env: { ...artefato.runtimeEnv, ...env } }) };
+}
+
 test('gateway da Vercel preserva corpo e cookie, assina o request e não recebe o segredo raiz', async () => {
   const requests = [];
-  const derivedKey = derivePublicationRuntimeKey('root-secret-only-at-studio', scope);
-  const result = await forwardRuntimeGatewayRequest({
-    method: 'POST',
-    path: '/api/public/forms/acme/lp/captura/submissions',
-    host: 'lp.example.test',
-    headers: { cookie: 'alva_runtime_consent=subject-1234567890; other=1', origin: 'https://lp.example.test', 'content-type': 'application/json' },
-    body: Buffer.from('{"answers":{"email":"pessoa@example.test"}}'),
-    publicationId: scope.publicationId,
-    environment: scope.environment,
-    derivedKey,
-    gatewayOrigin: 'https://studio.example.test',
-    now: () => 1_700_000_000,
-    nonce: () => 'nonce-123456789012',
+  const { artefato, gateway } = await publicado({
     fetchImpl: async (url, init) => {
-      requests.push({ url, init });
+      requests.push({ url: String(url), init });
       return new Response('ok', { status: 201, headers: { 'content-type': 'text/html', 'set-cookie': 'alva_runtime_consent=subject-1234567890; HttpOnly; Path=/' } });
     },
   });
+  const result = await gateway({
+    method: 'POST',
+    path: '/api/public/forms/acme/lp/captura/submissions',
+    headers: { cookie: 'alva_runtime_consent=subject-1234567890; other=1', origin: 'https://lp.example.test', 'content-type': 'application/json' },
+    body: Buffer.from('{"answers":{"email":"pessoa@example.test"}}'),
+  });
+  assert.equal(JSON.stringify(artefato.runtimeEnv).includes('root-secret-only-at-studio'), false);
   assert.equal(result.status, 201);
   assert.equal(Buffer.from(result.body).toString(), 'ok');
   assert.equal(requests[0].url, 'https://studio.example.test/api/public/forms/acme/lp/captura/submissions');
@@ -97,16 +100,21 @@ test('CSP separa script e coleta por provider e preserva contratos de landing e 
 
 test('gateway recusa rota, host ou escopo inválido antes de qualquer request interno', async () => {
   let calls = 0;
-  const base = { publicationId: scope.publicationId, environment: scope.environment, derivedKey: 'key', gatewayOrigin: 'https://studio.example.test', fetchImpl: async () => { calls += 1; return new Response('ok'); } };
-  await assert.rejects(() => forwardRuntimeGatewayRequest({ ...base, method: 'POST', path: '/api/private/users', host: 'lp.example.test' }), /rota/i);
-  await assert.rejects(() => forwardRuntimeGatewayRequest({ ...base, method: 'POST', path: '/api/public/forms/x/submissions', host: 'evil.test\nheader: nope' }), /host/i);
-  await assert.rejects(() => forwardRuntimeGatewayRequest({ ...base, method: 'POST', path: '/api/public/forms/x/submissions', host: 'lp.example.test', environment: 'development' }), /escopo/i);
+  const fetchImpl = async () => { calls += 1; return new Response('ok'); };
+  const { gateway } = await publicado({ fetchImpl });
+  const rota = await gateway({ method: 'POST', path: '/api/_alva/private/users' });
+  assert.deepEqual([rota.status, rota.text], [404, 'Rota não encontrada.']);
+  const host = await gateway({ method: 'POST', path: '/api/public/forms/x/submissions', headers: { host: 'evil.test\nheader: nope' } });
+  assert.deepEqual([host.status, host.text], [400, 'Host inválido.']);
+  const { gateway: foraDoEscopo } = await publicado({ fetchImpl, env: { ALVA_RUNTIME_ENVIRONMENT: 'development' } });
+  const escopo = await foraDoEscopo({ method: 'POST', path: '/api/public/forms/x/submissions' });
+  assert.deepEqual([escopo.status, escopo.text], [500, 'Runtime indisponível.']);
   assert.equal(calls, 0);
 });
 
 test('runtime transforma todos os click IDs da landing em cookie HttpOnly assinado e o Studio só aceita a allowlist', async () => {
-  const derivedKey = derivePublicationRuntimeKey('root-secret-only-at-studio', scope);
-  const result = await forwardRuntimeGatewayRequest({ method: 'GET', path: '/_alva/runtime.js', host: 'lp.example.test', headers: { referer: 'https://lp.example.test/?fbc=a&fbp=b&gclid=c&gbraid=d&wbraid=e&ttclid=f&li_fat_id=g&tblci=h&unknown=no' }, publicationId: scope.publicationId, environment: scope.environment, derivedKey, gatewayOrigin: 'https://studio.example.test', now: () => 1_700_000_000, nonce: () => 'nonce-attribution-123', fetchImpl: async () => new Response('runtime') });
+  const { gateway } = await publicado({ fetchImpl: async () => new Response('runtime') });
+  const result = await gateway({ method: 'GET', path: `/_alva/runtime.js?publicationId=${scope.publicationId}`, headers: { referer: 'https://lp.example.test/?fbc=a&fbp=b&gclid=c&gbraid=d&wbraid=e&ttclid=f&li_fat_id=g&tblci=h&unknown=no' } });
   const cookie = result.headers['set-cookie'][0];
   assert.match(cookie, /^alva_runtime_attribution=/);
   assert.match(cookie, /HttpOnly; Secure; SameSite=Lax/);
