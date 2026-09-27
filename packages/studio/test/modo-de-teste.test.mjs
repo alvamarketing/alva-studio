@@ -15,7 +15,7 @@ import { destinoPara } from '../server/tracking-destinos.mjs';
 import { configuracaoParaSalvar, destinosDeConversaoModel } from '../public/studio-dashboard.js';
 import { postgresFixture } from './postgres-fixture.mjs';
 
-const EVENTO = { event_name: 'lead', event_time: 1_727_400_000, tracking_event_id: '9b2f6a7e-4c1d-4e8a-9f3b-2d6c8e1a5b70' };
+const EVENTO = { event_name: 'lead', event_time: 1_727_400_000, tracking_event_id: '9b2f6a7e-4c1d-4e8a-9f3b-2d6c8e1a5b70', source_url: 'https://lp.exemplo.test/oferta' };
 const META = { pixel_id: '123456', access_token: 'token-meta' };
 const TIKTOK = { pixel_code: 'PXTIKTOK', access_token: 'token-tiktok' };
 

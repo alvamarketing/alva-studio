@@ -242,6 +242,7 @@ export function motivoDaFalha(codigo, nome = 'este destino') {
   if (fora) return `A plataforma estava indisponível (código ${fora[1]}). O envio tenta de novo sozinho.`;
   if (texto === 'transport_error') return 'Não foi possível falar com a plataforma. O envio tenta de novo sozinho.';
   if (texto === 'destination_not_configured') return `Sem credencial de ${nome} neste ambiente. Configure-a em Destinos, nesta tela.`;
+  if (texto === 'destination_page_url_required') return 'O evento chegou sem o endereço da página, que esta plataforma exige.';
   if (texto === 'destination_identifier_required') return 'Esta plataforma não tinha como atribuir o evento.';
   return 'O envio falhou.';
 }

@@ -81,3 +81,18 @@ test('a ajuda do modo de teste não promete o que a Meta não garante', () => {
   assert.doesNotMatch(ajuda, /não entram|fora dos dados|sem afetar/i);
   assert.match(ajuda, /contam|conta/i);
 });
+
+// https://business-api.tiktok.com/portal/docs/parameters/v1.3 — `page.url` é obrigatório
+// para eventos web; `ip` e `user_agent` vão sem hash e aumentam a correspondência.
+test('TikTok: recebe a página, o IP e o navegador de quem converteu', () => {
+  const corpo = destinoPara('tiktok').requisicao({ ...EVENTO, client: { ip: '189.68.172.6', user_agent: 'Mozilla/5.0 (iPhone)' } }, TIKTOK).corpo.data[0];
+  assert.deepEqual(corpo.page, { url: 'https://lp.exemplo.test/oferta' });
+  assert.equal(corpo.user.ip, '189.68.172.6');
+  assert.equal(corpo.user.user_agent, 'Mozilla/5.0 (iPhone)');
+});
+
+test('TikTok: sem o endereço da página, o evento web não é válido e não vai', () => {
+  const semPagina = { ...EVENTO, source_url: undefined };
+  assert.equal(destinoPara('tiktok').podeAtribuir(semPagina), false);
+  assert.throws(() => destinoPara('tiktok').requisicao(semPagina, TIKTOK), /destination_page_url_required/);
+});

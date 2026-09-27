@@ -188,6 +188,8 @@ test('o identificador de clique sai da fila e chega ao corpo que vai para a plat
       trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted',
       answers: {},
       attribution: { fbclid: 'IwAR-clique-do-facebook', ttclid: 'tt-clique', tblci: 'tb-clique' },
+      // A página onde o lead aconteceu: o TikTok não aceita evento web sem ela.
+      contexto: { sourceUrl: 'https://lp.exemplo.test/oferta' },
     }));
     const { rows } = await database.query(
       'SELECT destination, payload FROM conversions_outbox WHERE company_id = $1 ORDER BY destination', [ids.company.id],

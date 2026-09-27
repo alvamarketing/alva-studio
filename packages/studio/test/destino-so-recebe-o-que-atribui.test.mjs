@@ -12,7 +12,8 @@ import assert from 'node:assert/strict';
 import { DESTINOS, destinoPara } from '../server/tracking-destinos.mjs';
 
 const HASH = 'a'.repeat(64);
-const base = { event_name: 'lead', event_time: 1_700_000_000, tracking_event_id: 'e1', consent_state: 'pending', user: {}, params: {} };
+// Todo lead que passa pela publicação traz a página onde aconteceu.
+const base = { event_name: 'lead', event_time: 1_700_000_000, tracking_event_id: 'e1', consent_state: 'pending', source_url: 'https://lp.exemplo.test/oferta', user: {}, params: {} };
 const CREDENCIAIS = {
   meta: { pixel_id: '1', access_token: 't' },
   tiktok: { pixel_code: 'PX', access_token: 't' },
@@ -23,6 +24,9 @@ const CREDENCIAIS = {
 
 test('Meta e TikTok atribuem qualquer evento: eles fazem a própria correspondência', () => {
   for (const chave of ['meta', 'tiktok']) assert.equal(destinoPara(chave).podeAtribuir(base), true, chave);
+  // Menos um caso: evento web sem a página é inválido para o TikTok.
+  // https://business-api.tiktok.com/portal/docs/parameters/v1.3
+  assert.equal(destinoPara('tiktok').podeAtribuir({ ...base, source_url: undefined }), false);
 });
 
 test('o Google atribui com o clique dele, ou com contato hasheado', () => {
@@ -55,6 +59,7 @@ test('a Taboola só atribui com o clique dela, em formato válido', () => {
 test('a pergunta da fila e a recusa do adaptador nunca discordam', () => {
   const eventos = [
     base,
+    { ...base, source_url: undefined },
     { ...base, click_ids: { gclid: 'g' } },
     { ...base, click_ids: { fbc: 'fb.1.1.x' } },
     { ...base, click_ids: { taboola_click_id: 'abc' } },
@@ -65,7 +70,7 @@ test('a pergunta da fila e a recusa do adaptador nunca discordam', () => {
   for (const chave of Object.keys(DESTINOS)) {
     for (const evento of eventos) {
       let recusou = false;
-      try { destinoPara(chave).requisicao(evento, CREDENCIAIS[chave]); } catch (erro) { recusou = erro.message === 'destination_identifier_required'; }
+      try { destinoPara(chave).requisicao(evento, CREDENCIAIS[chave]); } catch (erro) { recusou = ['destination_identifier_required', 'destination_page_url_required'].includes(erro.message); }
       assert.equal(destinoPara(chave).podeAtribuir(evento), !recusou, `${chave} discorda de si mesmo em ${JSON.stringify({ click_ids: evento.click_ids, user: evento.user })}`);
     }
   }

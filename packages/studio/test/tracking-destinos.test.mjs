@@ -10,6 +10,7 @@ const evento = ({ nome = 'lead', ...resto } = {}) => ({
   event_name: nome,
   event_time: 1_764_200_000,
   tracking_event_id: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29',
+  source_url: 'https://lp.exemplo.test/oferta',
   user: { email_sha256: 'a'.repeat(64), email_google_sha256: 'c'.repeat(64), phone_sha256: 'b'.repeat(64), phone_e164_sha256: 'd'.repeat(64) },
   click_ids: {},
   params: {},

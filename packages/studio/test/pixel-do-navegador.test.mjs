@@ -247,6 +247,6 @@ test('o TikTok recebe o lead com o mesmo id', async () => {
   const [disparo] = disparosDoTikTok(window);
   assert.ok(disparo, 'o TikTok não recebeu o lead');
   assert.equal(disparo[3]?.event_id, ID);
-  const corpo = destinoPara('tiktok').requisicao({ event_name: 'lead', event_time: 1, tracking_event_id: ID }, CREDENCIAIS.tiktok).corpo.data[0];
+  const corpo = destinoPara('tiktok').requisicao({ event_name: 'lead', event_time: 1, tracking_event_id: ID, source_url: 'https://lp.example.test/oferta' }, CREDENCIAIS.tiktok).corpo.data[0];
   assert.equal(disparo[1], corpo.event, 'navegador e servidor mandam nomes diferentes ao TikTok');
 });

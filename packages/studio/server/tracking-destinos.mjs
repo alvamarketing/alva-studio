@@ -94,9 +94,15 @@ const meta = {
   },
 };
 
+// `page.url` é obrigatório em evento web; `ip` e `user_agent` vão sem hash.
+// https://business-api.tiktok.com/portal/docs/parameters/v1.3
+const TEM_PAGINA = (evento) => Boolean(texto(evento.source_url));
+
 const tiktok = {
   chave: 'tiktok',
-  podeAtribuir: () => true,
+  // O TikTok faz a própria correspondência, mas evento web sem o endereço da página é
+  // inválido para ele.
+  podeAtribuir: TEM_PAGINA,
   corpo(evento, credenciais) {
     return {
       event_source: 'web',
@@ -109,13 +115,17 @@ const tiktok = {
           email: evento.user?.email_sha256,
           phone: evento.user?.phone_e164_sha256,
           ttclid: evento.click_ids?.ttclid,
+          ip: evento.client?.ip,
+          user_agent: evento.client?.user_agent,
         }),
+        page: { url: evento.source_url },
         properties: evento.params ?? {},
       }],
     };
   },
   requisicao(evento, credenciais = {}) {
     if (!texto(credenciais.pixel_code) || !texto(credenciais.access_token)) throw recusa('destination_not_configured');
+    if (!TEM_PAGINA(evento)) throw recusa('destination_page_url_required');
     return {
       metodo: 'POST',
       url: 'https://business-api.tiktok.com/open_api/v1.3/event/track/',
