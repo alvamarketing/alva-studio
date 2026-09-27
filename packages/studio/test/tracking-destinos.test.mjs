@@ -24,11 +24,10 @@ test('o registro conhece os cinco destinos e recusa o desconhecido', () => {
 
 test('Meta: o event_id vai no corpo, que é o que deduplica contra o pixel do navegador', () => {
   const pedido = destinoPara('meta').requisicao(evento(), { pixel_id: '123', access_token: 'tok' });
-  assert.equal(pedido.url, 'https://graph.facebook.com/v20.0/123/events');
+  assert.equal(pedido.url, 'https://graph.facebook.com/v26.0/123/events?access_token=tok');
   assert.equal(pedido.corpo.data[0].event_id, 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
   assert.equal(pedido.corpo.data[0].action_source, 'website');
   assert.equal(pedido.corpo.data[0].user_data.em, 'a'.repeat(64));
-  assert.ok(pedido.cabecalhos.some((h) => h.startsWith('Authorization: Bearer tok')));
 });
 
 test('Meta: sem pixel ou token, recusa antes de sair pela rede', () => {

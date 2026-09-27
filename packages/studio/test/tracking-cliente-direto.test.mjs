@@ -30,7 +30,7 @@ test('entrega usando a credencial do projeto, decifrada pelo repositório de tra
   });
   await cliente.sendEvent(entrega(payloadBase));
   assert.equal(chamadas.length, 1);
-  assert.match(chamadas[0], /graph\.facebook\.com\/v20\.0\/1\/events/);
+  assert.match(chamadas[0], /graph\.facebook\.com\/v26\.0\/1\/events/);
 });
 
 test('destino sem credencial no projeto falha sem tocar a rede', async () => {

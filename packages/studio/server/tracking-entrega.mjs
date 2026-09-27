@@ -62,7 +62,11 @@ export async function entregarEvento({
     return { entregue: false, retentar: true, motivo: 'transport_error' };
   }
 
-  const { retentar, motivo } = classificarResposta({ status: resposta.status });
+  // A plataforma que diz o motivo no corpo é lida pelo corpo; a que não diz, pelo status.
+  let corpo = null;
+  try { corpo = JSON.parse(await resposta.text()); } catch { corpo = null; }
+  const lida = destinoPara(destino).lerResposta?.({ status: resposta.status, corpo }) ?? null;
+  const { retentar, motivo } = lida ?? classificarResposta({ status: resposta.status });
   if (!motivo) return { entregue: true, status: resposta.status };
   return { entregue: false, retentar, motivo, status: resposta.status };
 }

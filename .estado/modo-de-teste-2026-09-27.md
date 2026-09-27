@@ -12,7 +12,12 @@ ligado, o dono vê o evento na aba Eventos de Teste da Meta, sem afetar os dados
 
 - Campo opcional **Código de teste** na Meta e no TikTok, na tela de Rastreamento.
 - Com o código, o servidor manda `test_event_code` no nível de cima do corpo, ao lado
-  de `data`. Sem ele, o evento é de verdade.
+  de `data`, e o evento aparece na hora na aba Eventos de Teste.
+- **Correção de 27/09, mais tarde:** a primeira versão prometia que o evento de teste
+  "não entra nos dados das campanhas". A Meta documenta o contrário: "Events sent with
+  test_event_code are not dropped. They flow into Events Manager and are used for
+  targeting and ads measurement purposes" (Conversions API, *Using the API*). A ajuda da
+  tela agora diz que eles continuam contando, e que o código é para conferir e apagar.
 - O destino em modo de teste aparece como **Modo de teste**, na cor de atenção — um
   "Enviando" verde faria entrega de teste parecer entrega de campanha.
 - Apagar o código desliga o modo de teste sem pedir o token de novo: o campo vazio
@@ -24,10 +29,8 @@ ligado, o dono vê o evento na aba Eventos de Teste da Meta, sem afetar os dados
 
 - **Meta**: `test_event_code` no nível de cima do corpo — documentação oficial da
   Conversions API (parâmetros do corpo principal).
-- **TikTok**: a documentação oficial confirma o código e que ele isola o evento dos
-  dados reais, mas a posição no corpo só foi confirmada por fontes de terceiros; a
-  referência da Events API v1.3 não carregou fora do navegador. Implementado no nível
-  de cima, como a Meta. Conferir no primeiro teste real com TikTok.
+- **TikTok**: `test_event_code` no nível de cima do corpo, confirmado na documentação
+  oficial (*Events API 2.0 web setup verification*), lida num navegador de verdade.
 
 ## Evidência
 

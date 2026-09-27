@@ -36,6 +36,10 @@ function modoDeTeste(credenciais = {}) {
   return codigo ? { test_event_code: codigo } : {};
 }
 
+// A versão da Graph API em vigor. A v20.0 ficou no ar até 24/09/2026; cada versão dura
+// cerca de dois anos. https://developers.facebook.com/docs/graph-api/changelog
+const VERSAO_DA_GRAPH_API = 'v26.0';
+
 const meta = {
   chave: 'meta',
   // A Meta faz a própria correspondência: aceita o evento mesmo sem clique nem contato.
@@ -68,12 +72,25 @@ const meta = {
     const pixel = texto(credenciais.pixel_id);
     const token = texto(credenciais.access_token);
     if (!pixel || !token) throw recusa('destination_not_configured');
+    // O token vai como `access_token` na URL, que é como a documentação da Conversions API
+    // descreve o envio; ela não fala em cabeçalho Bearer.
+    // https://developers.facebook.com/docs/marketing-api/conversions-api/using-the-api
     return {
       metodo: 'POST',
-      url: `https://graph.facebook.com/v20.0/${encodeURIComponent(pixel)}/events`,
-      cabecalhos: [`Authorization: Bearer ${token}`],
+      url: `https://graph.facebook.com/${VERSAO_DA_GRAPH_API}/${encodeURIComponent(pixel)}/events?access_token=${encodeURIComponent(token)}`,
+      cabecalhos: [],
       corpo: { ...meta.corpo(evento), ...modoDeTeste(credenciais) },
     };
+  },
+  // O motivo vem em `error.code`, não no status HTTP.
+  // https://developers.facebook.com/docs/graph-api/guides/error-handling
+  lerResposta({ status, corpo }) {
+    if (status >= 200 && status < 300) return null;
+    const codigo = Number(corpo?.error?.code);
+    if (codigo === 190 || codigo === 102) return { retentar: false, motivo: 'destination_credential_rejected' };
+    if (codigo === 10 || (codigo >= 200 && codigo <= 299)) return { retentar: false, motivo: 'destination_permission_denied' };
+    if ([1, 2, 4, 17, 341].includes(codigo)) return { retentar: true, motivo: 'destination_rate_limited' };
+    return null;
   },
 };
 
@@ -105,6 +122,19 @@ const tiktok = {
       cabecalhos: [`Access-Token: ${credenciais.access_token}`],
       corpo: { ...tiktok.corpo(evento, credenciais), ...modoDeTeste(credenciais) },
     };
+  },
+  // Sucesso é HTTP 200 com `code` 0; o motivo da falha vem em `code`. 40100 é limite de
+  // requisições, mesmo chegando com HTTP 401.
+  // https://business-api.tiktok.com/portal/docs/responses-and-errors/v1.3
+  lerResposta({ status, corpo }) {
+    const codigo = Number(corpo?.code);
+    if (status === 200 && codigo === 0) return null;
+    if (codigo === 40100) return { retentar: true, motivo: 'destination_rate_limited' };
+    if (codigo === 40001) return { retentar: false, motivo: 'destination_permission_denied' };
+    if (codigo === 40104) return { retentar: false, motivo: 'destination_credential_rejected' };
+    if (codigo === 40002) return { retentar: false, motivo: 'destination_invalid_payload' };
+    if (status >= 200 && status < 300) return { retentar: false, motivo: 'destination_rejected' };
+    return null;
   },
 };
 

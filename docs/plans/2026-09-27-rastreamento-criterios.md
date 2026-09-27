@@ -92,7 +92,7 @@ em vez de ser reescrito.
 
 | # | Critério | Jev | Hoje |
 |---|---|---|---|
-| 15 | Com o modo de teste ligado, o dono vê o evento aparecer na aba Eventos de Teste da Meta, sem afetar os dados reais. | 83 | ✅ o código de teste sai no corpo e a tela mostra o modo ligado · ❓ dentro da Meta |
+| 15 | Com o modo de teste ligado, o dono vê o evento aparecer na aba Eventos de Teste da Meta, sem afetar os dados reais. | 83 | ⚠️ o evento chega à aba de teste, mas **"sem afetar os dados reais" é impossível**: a Meta documenta que evento de teste conta nos dados. A tela agora diz isso; o critério precisa ser reescrito |
 
 Sobre o 15: o Jev deu **0,46 de necessidade** — a feature funciona sem ele. É
 verdade: ele é o meio de conferir, não uma necessidade do cliente. Foi construído

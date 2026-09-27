@@ -230,6 +230,10 @@ const ESTADO_ENTREGA = { delivered: 'Entregue', dead: 'Falhou' };
 export function motivoDaFalha(codigo, nome = 'este destino') {
   const texto = String(codigo ?? '').trim();
   if (!texto) return '';
+  if (texto === 'destination_credential_rejected') return `A plataforma recusou a credencial. Confira a credencial de ${nome} em Destinos, nesta tela.`;
+  if (texto === 'destination_permission_denied') return `A credencial não tem permissão para enviar eventos a esta conta. Confira as permissões do token em ${nome}.`;
+  if (texto === 'destination_rate_limited') return 'A plataforma pediu para esperar. O envio tenta de novo sozinho.';
+  if (texto === 'destination_invalid_payload') return 'A plataforma recusou o formato do evento. É defeito do Studio, não da sua configuração.';
   if (/^destination_rejected_(401|403)$/.test(texto)) return `A plataforma recusou a credencial. Confira a credencial de ${nome} em Destinos, nesta tela.`;
   if (texto === 'destination_rejected_404') return `A plataforma não encontrou a conta informada. Confira os dados de ${nome} em Destinos, nesta tela.`;
   const recusado = texto.match(/^destination_rejected_(\d+)$/);
@@ -361,7 +365,7 @@ export function trackingHealthModel(deliveries) {
 const CAMPO_CODIGO_DE_TESTE = Object.freeze({
   name: 'test_event_code',
   label: 'Código de teste',
-  help: 'Da aba Eventos de teste do gerenciador de eventos. Com ele, os eventos aparecem só ali e não entram nos dados das campanhas. Apague para voltar a enviar de verdade.',
+  help: 'Da aba Eventos de teste do gerenciador de eventos. Com ele, os eventos aparecem ali na hora — mas continuam contando nos dados da conta. Use só para conferir e apague depois.',
   required: false,
   teste: true,
 });
