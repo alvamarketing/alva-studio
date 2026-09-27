@@ -122,7 +122,7 @@ test('o lead chega à Meta pelo navegador e pelo servidor com o mesmo nome e o m
   // Ela envia o formulário e recebe a página de obrigado.
   const envio = await gateway({
     method: 'POST', path: acao,
-    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, cookie: cookieDeConsentimento },
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, cookie: cookieDeConsentimento, 'x-real-ip': '189.68.172.6', 'user-agent': 'Mozilla/5.0 (iPhone)' },
     body: Buffer.from(`email=${encodeURIComponent('pessoa@exemplo.test')}`),
   });
   assert.equal(envio.status, 200, envio.text);
@@ -149,6 +149,37 @@ test('o lead chega à Meta pelo navegador e pelo servidor com o mesmo nome e o m
   // O navegador: o mesmo nome e o mesmo id.
   assert.deepEqual(disparosDaMeta(window), [['track', 'PageView'], ['track', 'Lead', {}, { eventID: idDoServidor }]]);
   assert.ok(UUID.test(idDoServidor));
+
+  // Critério 10: recarregar a página de obrigado reenvia o formulário — o navegador manda
+  // o mesmo corpo, com os mesmos cookies. É o mesmo lead: nem o servidor nem o pixel podem
+  // contar outro. (Achado do revisor independente em 27/09.)
+  const recarregada = await gateway({
+    method: 'POST', path: acao,
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, cookie: cookieDeConsentimento, 'x-real-ip': '189.68.172.6', 'user-agent': 'Mozilla/5.0 (iPhone)' },
+    body: Buffer.from(`email=${encodeURIComponent('pessoa@exemplo.test')}`),
+  });
+  assert.equal(recarregada.status, 200, recarregada.text);
+  // O pixel já disparou na primeira página de obrigado; a recarga não o avisa de novo.
+  assert.doesNotMatch(recarregada.text, /alva-conversion/, 'o reenvio não pode disparar o pixel outra vez');
+  assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 1, 'o reenvio criou outra captura');
+  assert.equal((await database.query("SELECT count(*)::int AS n FROM conversions_outbox WHERE destination='meta'")).rows[0].n, 1, 'o reenvio criou outra conversão');
+
+  // Outra pessoa com as mesmas respostas é outro lead.
+  const outraPessoa = await gateway({
+    method: 'POST', path: acao,
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, 'x-real-ip': '200.150.10.20', 'user-agent': 'Mozilla/5.0 (Android)' },
+    body: Buffer.from(`email=${encodeURIComponent('pessoa@exemplo.test')}`),
+  });
+  assert.equal(outraPessoa.status, 200, outraPessoa.text);
+  assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 2);
+
+  // A mesma pessoa mandando outra resposta também é outro envio.
+  await gateway({
+    method: 'POST', path: acao,
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, cookie: cookieDeConsentimento, 'x-real-ip': '189.68.172.6', 'user-agent': 'Mozilla/5.0 (iPhone)' },
+    body: Buffer.from(`email=${encodeURIComponent('outro@exemplo.test')}`),
+  });
+  assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 3);
 });
 
 // --- O carregador, sozinho ---

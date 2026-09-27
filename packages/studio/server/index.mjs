@@ -709,7 +709,7 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${path}`);
-        return res.end(renderCompletion('Obrigado!', 'Recebemos suas respostas.', { nonce, conversao: conversaoParaOsPixels(capturado?.eventId) }));
+        return res.end(renderCompletion('Obrigado!', 'Recebemos suas respostas.', { nonce, conversao: capturado?.reenvio ? null : conversaoParaOsPixels(capturado?.eventId) }));
       }
       if (req.method === 'POST' && content && publicFormRequest) {
         if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);

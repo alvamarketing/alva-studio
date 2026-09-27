@@ -1,6 +1,6 @@
 import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability, normalizeProjectSlug, normalizeRoute } from '../domain/access.mjs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { validateFormAnswers } from '../form-answer-validation.mjs';
 import { normalizeFormInput } from '../form-store.mjs';
 import { allowedPublicationOrigin } from '../publication-cors.mjs';
@@ -17,6 +17,17 @@ function fail(message, statusCode) {
 }
 
 const PAGE_CAPTURE_EVENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Quanto tempo um envio idêntico da mesma pessoa conta como o mesmo lead.
+const JANELA_DE_REENVIO_MIN = 30;
+
+// Quem enviou, sem identificar ninguém: o cookie de consentimento da pessoa ou, sem ele, o
+// IP e o navegador — em hash, amarrado à captura. Sem nenhum dos dois, não há como saber se
+// é a mesma pessoa, e cada envio conta.
+function chaveDoVisitante({ pageId, captureId, subjectId, cliente }) {
+  const pessoa = subjectId ? `s:${subjectId}` : cliente?.ip && cliente?.userAgent ? `c:${cliente.ip}|${cliente.userAgent}` : null;
+  return pessoa ? createHash('sha256').update(`${pageId}:${captureId}:${pessoa}`).digest('hex') : null;
+}
 
 function requestedTrackingEventId(input) {
   const value = input?.trackingEventId;
@@ -975,6 +986,19 @@ export class ContentRepository {
       if (!capture) throw fail('Captura publicada não encontrada.', 404);
       const answers = validatePageCaptureAnswers(capture, input);
       const retryEventId = requestedTrackingEventId(input);
+      // Recarregar a página de obrigado faz o navegador reenviar o POST: mesmas respostas,
+      // mesma pessoa. É o mesmo lead, e devolve-se o original em vez de contar outro.
+      const visitante = chaveDoVisitante({ pageId, captureId, subjectId, cliente });
+      const reenvio = !retryEventId && visitante
+        ? (await client.query(
+          `SELECT id, tracking_event_id, submitted_at, answers FROM page_submissions
+           WHERE company_id = $1 AND project_id = $2 AND page_id = $3 AND capture_id = $4 AND visitor_key = $5
+             AND answers = $6::jsonb AND submitted_at > now() - make_interval(mins => $7)
+           ORDER BY submitted_at DESC LIMIT 1`,
+          [companyId, projectId, pageId, captureId, visitante, JSON.stringify(answers), JANELA_DE_REENVIO_MIN],
+        )).rows[0]
+        : null;
+      if (reenvio) return { id: reenvio.id, eventId: reenvio.tracking_event_id, answers: reenvio.answers, submittedAt: reenvio.submitted_at, reenvio: true };
       const inserted = retryEventId
         ? await client.query(
           `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers, tracking_event_id)
@@ -983,9 +1007,9 @@ export class ContentRepository {
           [companyId, projectId, pageId, pageVersionId, captureId, JSON.stringify(answers), retryEventId],
         )
         : await client.query(
-          `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers)
-           VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id, tracking_event_id, submitted_at`,
-          [companyId, projectId, pageId, pageVersionId, captureId, JSON.stringify(answers)],
+          `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers, visitor_key)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7) RETURNING id, tracking_event_id, submitted_at`,
+          [companyId, projectId, pageId, pageVersionId, captureId, JSON.stringify(answers), visitante],
         );
       const repeated = retryEventId && !inserted.rows.length;
       const submission = repeated

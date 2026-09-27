@@ -77,7 +77,7 @@ em vez de ser reescrito.
 | # | Critério | Jev | Hoje |
 |---|---|---|---|
 | 9 | No Gerenciador de Eventos da Meta, um lead enviado pelo navegador e pelo servidor aparece como recebido pelas duas fontes e contado uma única vez. | 87 | ✅ até o disparo: navegador e servidor com o mesmo nome (`Lead`) e o mesmo id, pelo gateway publicado (commit `b37b9c7`) · ❓ dentro da Meta · ⚠️ os pixels seguem atrás de `PIXELS_ENABLED`, desligada por padrão |
-| 10 | Reenviar o formulário ou recarregar a página de obrigado não gera uma segunda conversão. | 89 | ✅ na fila (identidade por evento e destino) · ❓ dentro da Meta |
+| 10 | Reenviar o formulário ou recarregar a página de obrigado não gera uma segunda conversão. | 89 | ✅ recarregar reenvia o POST e o Studio devolve o lead original — sem nova captura, sem nova conversão, sem novo disparo do pixel, pelo gateway publicado · ❓ dentro da Meta. (O ✅ anterior não cobria a recarga: achado do revisor independente.) |
 
 ### Dizer a verdade
 
