@@ -11,7 +11,9 @@ const EVENT_NAMES = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start
 // entre elas que a atribuição se perdia: o navegador coletava um nome, a fila aceitava
 // outro, e os adaptadores liam um terceiro.
 const ATTRIBUTION = Object.freeze({
-  meta: Object.freeze({ fbclid: 'fbc', fbp: 'fbp' }),
+  // `fbc` também chega pronto, do cookie `_fbc` que o pixel grava — e esse vale mais que o
+  // derivado do `fbclid`.
+  meta: Object.freeze({ fbclid: 'fbc', fbc: 'fbc', fbp: 'fbp' }),
   google: Object.freeze({ gclid: 'gclid', gbraid: 'gbraid', wbraid: 'wbraid' }),
   tiktok: Object.freeze({ ttclid: 'ttclid' }),
   linkedin: Object.freeze({ li_fat_id: 'linkedin_tracking_uuid' }),

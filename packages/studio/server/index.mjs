@@ -33,7 +33,7 @@ import { PublicationRuntimeRepository } from './repositories/publication-runtime
 import { RuntimeConsentGateway } from './runtime-consent-gateway.mjs';
 import { createRuntimeLoader } from './publication-runtime.mjs';
 import { resolveConsentState } from './conversion-consent-policy.mjs';
-import { runtimeManifest, verifiedRuntimeAttribution, verifyRuntimeGatewayEnvelope } from './runtime-gateway-security.mjs';
+import { runtimeManifest, cookiesDaMeta, verifiedRuntimeAttribution, verifyRuntimeGatewayEnvelope } from './runtime-gateway-security.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
 import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
 import { CloudflareStream } from './cloudflare-stream.mjs';
@@ -152,7 +152,9 @@ async function runtimeNamespaceMatches(database, manifest, companySlug, projectS
 // visitante. Sem assinatura, nada é enviado: nada é melhor que dado falso.
 function runtimeAttribution(cookie, gateway, rootSecret) {
   const value = String(cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_attribution='))?.slice('alva_runtime_attribution='.length);
-  return gateway ? verifiedRuntimeAttribution(value, gateway.manifest, rootSecret) : {};
+  // Os cookies do pixel da Meta são lidos no envio: na primeira visita eles ainda não
+  // existiam quando a página carregou o runtime.
+  return gateway ? { ...verifiedRuntimeAttribution(value, gateway.manifest, rootSecret), ...cookiesDaMeta(cookie) } : {};
 }
 async function rawBody(req, max = 8 * 1024 * 1024, tooLarge = 'Página muito grande. Use URLs para imagens.') {
   if (req.alvaRawBody) {

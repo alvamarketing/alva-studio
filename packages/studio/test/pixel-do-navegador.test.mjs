@@ -122,7 +122,8 @@ test('o lead chega à Meta pelo navegador e pelo servidor com o mesmo nome e o m
   // Ela envia o formulário e recebe a página de obrigado.
   const envio = await gateway({
     method: 'POST', path: acao,
-    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, cookie: cookieDeConsentimento, 'x-real-ip': '189.68.172.6', 'user-agent': 'Mozilla/5.0 (iPhone)' },
+    // Com o pixel carregado, o navegador já traz os cookies que a Meta gravou.
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, cookie: `${cookieDeConsentimento}; _fbp=fb.1.1727400000000.1234567890; _fbc=fb.1.1727400000123.IwAR-do-pixel`, 'x-real-ip': '189.68.172.6', 'user-agent': 'Mozilla/5.0 (iPhone)' },
     body: Buffer.from(`email=${encodeURIComponent('pessoa@exemplo.test')}`),
   });
   assert.equal(envio.status, 200, envio.text);
@@ -145,6 +146,8 @@ test('o lead chega à Meta pelo navegador e pelo servidor com o mesmo nome e o m
   const corpoDaMeta = destinoPara('meta').requisicao(naFila.payload, CREDENCIAIS.meta).corpo.data[0];
   assert.equal(corpoDaMeta.event_name, 'Lead', 'o servidor precisa mandar o evento padrão Lead, não o nome interno');
   assert.equal(corpoDaMeta.event_id, idDoServidor);
+  assert.equal(corpoDaMeta.user_data.fbc, 'fb.1.1727400000123.IwAR-do-pixel', 'o _fbc do pixel precisa chegar à Meta');
+  assert.equal(corpoDaMeta.user_data.fbp, 'fb.1.1727400000000.1234567890', 'o _fbp do pixel precisa chegar à Meta');
 
   // O navegador: o mesmo nome e o mesmo id.
   assert.deepEqual(disparosDaMeta(window), [['track', 'PageView'], ['track', 'Lead', {}, { eventID: idDoServidor }]]);

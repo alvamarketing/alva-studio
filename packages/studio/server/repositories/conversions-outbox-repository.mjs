@@ -17,7 +17,9 @@ const ATTRIBUTION_KEYS = IDENTIFICADORES_DE_CLIQUE;
 // A tradução de nome vem de `conversion-consent-policy.mjs`, que é a única lista. Só a
 // derivação do `fbc` mora aqui, porque ela precisa do instante do evento.
 function identificadoresDeClique(atribuicao, quando) {
-  return Object.fromEntries(Object.entries(atribuicao).flatMap(([nome, valor]) => {
+  // O `fbc` do cookie do pixel vem por último para prevalecer sobre o montado do `fbclid`.
+  const ordenada = Object.entries(atribuicao).sort(([a], [b]) => (a === 'fbc') - (b === 'fbc'));
+  return Object.fromEntries(ordenada.flatMap(([nome, valor]) => {
     const destino = NOME_NA_PLATAFORMA[nome];
     if (!destino || !valor) return [];
     // Formato documentado pela Meta: fb.<índice do subdomínio>.<criação em ms>.<fbclid>.
