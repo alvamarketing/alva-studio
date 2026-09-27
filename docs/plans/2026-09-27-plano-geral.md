@@ -177,10 +177,15 @@ o **Puck AI fica de fora** (é pago, e a geração por IA chama a API direto).
 Dois itens da VSL moram em outras fases: o marcador no esquema (2.3) e o
 componente no Puck (3.3). Os que ficam aqui:
 
+**Decidido: a VSL sobe pela Cloudflare** (Cloudflare Stream, com envio direto do
+navegador). Combinado antes deste plano; a primeira versão dele sugeria manter a
+VSL só por URL, e estava errada.
+
 | # | O que |
 |---|---|
-| 5.1 | **O menu da VSL está escondido para todo mundo.** Ele só aparece com o pipeline de upload de mídia ligado — mas a VSL funciona com URL de vídeo e não precisa de upload. *Recomendação: mostrar a VSL independentemente do pipeline.* |
-| 5.2 | **O pipeline de upload** (envio direto do navegador para a Cloudflare) existe no código e está desligado. *Decisão: ligar, com as credenciais da Cloudflare, ou manter a VSL só por URL.* |
+| 5.1 | **Declarar as variáveis do pipeline.** Ele exige `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_STREAM_TOKEN` e `MEDIA_PIPELINE_ENABLED=true`, e nenhuma das três está no `runtime/.env.example` nem no gerador do `.env` local. Quem sobe o ambiente não tem como saber que elas existem. |
+| 5.2 | **Ligar o pipeline** com as credenciais da conta Cloudflare. *Credenciais: dono.* O menu da VSL, que hoje está escondido para todo mundo, aparece junto — ele depende exatamente desse pipeline. |
+| 5.3 | **Uma VSL de ponta a ponta**: enviar um vídeo, esperar a conversão da Cloudflare, publicar numa landing e conferir no navegador o player tocando e os marcos de retenção chegando ao Analytics. Pela regra 1: o caminho inteiro, não a peça. |
 
 ---
 
@@ -230,9 +235,8 @@ Nada abaixo trava a fase 1; cada uma trava só o item citado.
 | D4 | Os seis modelos de página | converter os que são usados; aposentar os outros | 2.4 |
 | D5 | Os ~13 tipos legados de elemento | decidir um a um | 4.4 |
 | D6 | Fechar o `editor-novo.html` | **sim** — é uma porta aberta que grava por cima das páginas | 3.6 |
-| D7 | Pipeline de upload de mídia | manter por URL até haver motivo | 5.2 |
-| D8 | VSL visível sem o pipeline | **sim** | 5.1 |
-| D9 | "Aurora · Umami + NVS" no wireframe | trocar o nome | 7 |
+| D7 | Credenciais da Cloudflare Stream | — | 5.2 |
+| D8 | "Aurora · Umami + NVS" no wireframe | trocar o nome | 7 |
 
 ## O que já está decidido e não se reabre
 
@@ -243,3 +247,5 @@ Nada abaixo trava a fase 1; cada uma trava só o item citado.
 - IP e navegador vão para as plataformas, e saem da fila na entrega. *(dono, 26/09)*
 - Esquema antes do editor novo. *(dono, 26/09)*
 - Ligar as engines de ramificação e cálculo ao quiz. *(dono, 26/09)*
+- A VSL sobe pela Cloudflare Stream. *(combinado antes deste plano; lembrado pelo
+  dono em 27/09)*
