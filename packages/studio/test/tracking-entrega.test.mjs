@@ -84,7 +84,7 @@ test('Taboola é GET e não manda corpo', async () => {
   await entregarEvento({
     destino: 'taboola',
     evento: { ...evento, click_ids: { taboola_click_id: 'abc' } },
-    credenciais: {},
+    credenciais: { account_id: '1234567', lead_event_name: 'lead_formulario' },
     fetchImpl: async (_u, o) => { opcoesUsadas = o; return { ok: true, status: 200, text: async () => '' }; },
   });
   assert.equal(opcoesUsadas.method, 'GET');

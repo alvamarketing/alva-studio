@@ -10,12 +10,13 @@ const BINDINGS_POR_PROJETO = ENVIRONMENTS.size * ENGINES.size;
 const PROVIDER_FIELDS = {
   meta: new Set(['access_token', 'pixel_id', 'test_event_code']), tiktok: new Set(['access_token', 'pixel_code', 'test_event_code']),
   google: new Set(['operating_account_id', 'conversion_action_id', 'oauth_access_token']),
-  linkedin: new Set(['conversion_urn', 'access_token', 'linkedin_version']), taboola: new Set(),
+  linkedin: new Set(['conversion_urn', 'access_token', 'linkedin_version']),
+  taboola: new Set(['account_id', 'lead_event_name', 'initiate_checkout_event_name', 'purchase_event_name']),
 };
 const REQUIRED_PROVIDER_FIELDS = {
   meta: ['access_token', 'pixel_id'], tiktok: ['access_token', 'pixel_code'],
   google: ['operating_account_id', 'conversion_action_id', 'oauth_access_token'],
-  linkedin: ['conversion_urn', 'access_token'], taboola: [],
+  linkedin: ['conversion_urn', 'access_token'], taboola: ['account_id', 'lead_event_name'],
 };
 // Exportados porque a tela de configuração desenha exatamente este contrato: o que ela
 // pergunta precisa ser o que aqui é aceito, e há um teste comparando as duas listas.
@@ -25,17 +26,20 @@ export const CAMPOS_EXIGIDOS_POR_DESTINO = REQUIRED_PROVIDER_FIELDS;
 const CREDENTIAL = /^[A-Za-z0-9._~+\/=:-]{1,4096}$/;
 // O código de teste do gerenciador de eventos. Vazio é o pedido de desligar o modo de
 // teste — sem ele, um campo ausente significa "não mudou", e não haveria como sair.
+// O nome do evento como está no Realize: sensível a maiúsculas, sem espaço nas pontas.
+// https://developers.taboola.com/pixel/docs/the-postback-url
+const NOME_DE_EVENTO_TABOOLA = /^\S(?:.{0,98}\S)?$/;
 const CODIGO_DE_TESTE = /^(?:[A-Za-z0-9_-]{1,64})?$/;
 const PROVIDER_VALUE_RULES = {
   meta: { pixel_id: /^\d{1,20}$/, access_token: CREDENTIAL, test_event_code: CODIGO_DE_TESTE },
   tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/, access_token: CREDENTIAL, test_event_code: CODIGO_DE_TESTE },
   google: { operating_account_id: /^\d{1,20}$/, conversion_action_id: /^\d{1,20}$/, oauth_access_token: CREDENTIAL },
   linkedin: { conversion_urn: /^urn:lla:llaPartnerConversion:\d{1,20}$/, access_token: CREDENTIAL, linkedin_version: /^\d{6}$/ },
-  taboola: {},
+  taboola: { account_id: /^\d{1,20}$/, lead_event_name: NOME_DE_EVENTO_TABOOLA, initiate_checkout_event_name: NOME_DE_EVENTO_TABOOLA, purchase_event_name: NOME_DE_EVENTO_TABOOLA },
 };
 const PUBLIC_PROVIDER_FIELDS = {
   meta: { pixel_id: /^\d{1,20}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/ }, tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/ },
-  google: { measurement_id: /^G-[A-Z0-9]{4,20}$/ }, linkedin: { partner_id: /^\d{1,30}$/ }, taboola: { account_id: /^[A-Za-z0-9_-]{1,255}$/ },
+  google: { measurement_id: /^G-[A-Z0-9]{4,20}$/ }, linkedin: { partner_id: /^\d{1,30}$/ }, taboola: { account_id: /^\d{1,20}$/ },
 };
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
@@ -224,7 +228,10 @@ export class TrackingRepository {
       // O código de teste não é segredo — a plataforma o mostra às claras — e a tela precisa
       // saber que o destino está em modo de teste, ou "Entregue" pareceria entrega de verdade.
       const teste = configuracaoEfetiva.test_event_code ? { test_event_code: configuracaoEfetiva.test_event_code } : {};
-      const derived = provider === 'meta' ? { pixel_id: configuracaoEfetiva.pixel_id, ...teste } : provider === 'tiktok' ? { pixel_code: configuracaoEfetiva.pixel_code, ...teste } : {};
+      const derived = provider === 'meta' ? { pixel_id: configuracaoEfetiva.pixel_id, ...teste }
+        : provider === 'tiktok' ? { pixel_code: configuracaoEfetiva.pixel_code, ...teste }
+        : provider === 'taboola' ? { account_id: configuracaoEfetiva.account_id }
+        : {};
       const publicValue = publicConfiguration === undefined ? derived : publicConfiguration;
       if (!publicValue || typeof publicValue !== 'object' || Array.isArray(publicValue) || Object.keys(publicValue).some((key) => !Object.hasOwn(PUBLIC_PROVIDER_FIELDS[provider], key) || typeof publicValue[key] !== 'string' || !PUBLIC_PROVIDER_FIELDS[provider][key].test(publicValue[key]))) throw fail('Configuração pública do destino inválida.');
       const plain = JSON.stringify(configuracaoEfetiva);

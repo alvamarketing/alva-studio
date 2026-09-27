@@ -251,16 +251,24 @@ const linkedin = {
 
 const CLIQUE_DA_TABOOLA = /^[A-Za-z0-9._~-]{1,200}$/;
 
+// A Taboola só registra o evento com o nome definido no Realize ("Event Name" nas
+// configurações da conversão) — "otherwise Taboola will not receive the event". O nome
+// interno não serve; cada evento precisa do seu configurado.
+// https://developers.taboola.com/pixel/docs/the-postback-url
+const EVENTOS_DA_TABOOLA = Object.freeze({ lead: 'lead_event_name', initiate_checkout: 'initiate_checkout_event_name', purchase: 'purchase_event_name' });
+
 const taboola = {
   chave: 'taboola',
-  podeAtribuir: (evento) => CLIQUE_DA_TABOOLA.test(texto(evento.click_ids?.taboola_click_id)),
+  podeAtribuir: (evento) => Object.hasOwn(EVENTOS_DA_TABOOLA, String(evento.event_name)) && CLIQUE_DA_TABOOLA.test(texto(evento.click_ids?.taboola_click_id)),
   // A Taboola não recebe corpo: o evento inteiro cabe na URL do GET.
-  requisicao(evento) {
+  requisicao(evento, credenciais = {}) {
     if (!taboola.podeAtribuir(evento)) throw recusa('destination_identifier_required');
+    const nome = texto(credenciais[EVENTOS_DA_TABOOLA[evento.event_name]]);
+    if (!nome) throw recusa('destination_event_name_missing');
     const clique = texto(evento.click_ids?.taboola_click_id);
     return {
       metodo: 'GET',
-      url: `https://trc.taboola.com/actions-handler/log/3/s2s-action?click-id=${encodeURIComponent(clique)}&name=${encodeURIComponent(evento.event_name)}`,
+      url: `https://trc.taboola.com/actions-handler/log/3/s2s-action?click-id=${encodeURIComponent(clique)}&name=${encodeURIComponent(nome)}`,
       cabecalhos: [],
       corpo: null,
     };

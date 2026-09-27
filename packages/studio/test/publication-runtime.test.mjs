@@ -101,7 +101,8 @@ test('bootstraps dos cinco providers preparam contratos antes do SDK e só rodam
     { provider: 'ga4', id: 'G-ABCD1234', verify: ({ scripts }) => { assert.equal(scripts[0].src, 'https://www.googletagmanager.com/gtag/js?id=G-ABCD1234'); assert.equal(scripts[0].dataLayer[1][0], 'config'); assert.equal(scripts[0].dataLayer[1][1], 'G-ABCD1234'); } },
     { provider: 'tiktok', id: 'pixel_1', verify: ({ scripts }) => { const capture = scripts[0].tiktok; assert.equal(scripts[0].src, 'https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=pixel_1&lib=ttq'); assert.deepEqual(capture.queue, [['load', 'pixel_1'], ['page']]); assert.ok(capture.i.pixel_1); assert.equal(typeof capture.t.pixel_1, 'number'); assert.deepEqual(capture.o.pixel_1, {}); } },
     { provider: 'linkedin', id: '456', verify: ({ scripts }) => { assert.equal(scripts[0].src, 'https://snap.licdn.com/li.lms-analytics/insight.min.js'); assert.equal(scripts[0].linkedin.id, '456'); assert.deepEqual(scripts[0].linkedin.ids, ['456']); } },
-    { provider: 'taboola', id: 'tab_1', verify: ({ scripts }) => { assert.equal(scripts[0].src, 'https://cdn.taboola.com/libtrc/unip/loader.js'); assert.deepEqual(scripts[0].taboola, [{ notify: 'page_view', id: 'tab_1' }]); } },
+    // https://developers.taboola.com/pixel/docs/add-the-base-pixel-manually
+    { provider: 'taboola', id: '1234567', verify: ({ scripts }) => { assert.equal(scripts[0].src, 'https://cdn.taboola.com/libtrc/unip/1234567/tfa.js'); assert.deepEqual(scripts[0].taboola, [{ notify: 'event', name: 'page_view', id: 1234567 }]); } },
   ];
   for (const item of cases) {
     const dom = await runLoader(item);

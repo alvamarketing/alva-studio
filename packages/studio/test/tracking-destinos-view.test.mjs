@@ -70,12 +70,13 @@ test('quem já entregou aparece como enviando, e quem só tem credencial não', 
   assert.equal(modelo.find((linha) => linha.provider === 'tiktok').stateLabel, 'Configurado');
 });
 
-// A Taboola entrega pelo clique que vem na URL: não há credencial para guardar. Um
-// formulário vazio com botão "Salvar" seria um convite a procurar o que não existe.
-test('Taboola ativa sem credencial, e diz isso em vez de mostrar formulário vazio', () => {
+// A Taboola não pede token — a conta sai do clique —, mas pede o ID da conta (para o
+// pixel) e o nome de cada evento como está no Realize, sem o qual ela não registra nada.
+// https://developers.taboola.com/pixel/docs/the-postback-url
+test('a Taboola pede o ID da conta e o nome do evento de lead, e nenhum token', () => {
   const taboola = destinosDeConversaoModel([], []).find((linha) => linha.provider === 'taboola');
-  assert.deepEqual(taboola.fields, []);
-  assert.equal(taboola.semCredencial, true);
+  assert.deepEqual(taboola.fields.filter((campo) => campo.required).map((campo) => campo.name), ['account_id', 'lead_event_name']);
+  assert.equal(taboola.fields.some((campo) => campo.secret), false);
 });
 
 const metaConfigurado = destinosDeConversaoModel(
@@ -110,9 +111,9 @@ test('campo que não pertence ao destino não sobe, mesmo se vier no formulário
   assert.deepEqual(Object.keys(enviado), ['pixel_id']);
 });
 
-test('a Taboola sobe configuração vazia, que é o que ativá-la significa', () => {
+test('a Taboola sobe o ID da conta e os nomes de evento preenchidos', () => {
   const taboola = destinosDeConversaoModel([], []).find((linha) => linha.provider === 'taboola');
-  assert.deepEqual(configuracaoParaSalvar(taboola, {}), {});
+  assert.deepEqual(configuracaoParaSalvar(taboola, { account_id: ' 1234567 ', lead_event_name: 'lead_formulario', purchase_event_name: '' }), { account_id: '1234567', lead_event_name: 'lead_formulario' });
 });
 
 // A tela de rastreamento abre com permissão de leitura de analytics, mas gravar credencial

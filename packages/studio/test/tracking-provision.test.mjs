@@ -113,7 +113,7 @@ test('ciphertext de binding é vinculado criptograficamente ao escopo e não ace
   } finally { await database.close(); }
 });
 
-test('destinos aceitam somente o contrato de cada plataforma e Taboola pode ser ativado sem credenciais', async (t) => {
+test('destinos aceitam somente o contrato de cada plataforma, e a Taboola sem token', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
   await migrate(database);
@@ -125,7 +125,7 @@ test('destinos aceitam somente o contrato de cada plataforma e Taboola pode ser 
       tiktok: { pixel_code: 'pixel-code', access_token: 'token' },
       google: { operating_account_id: '123', conversion_action_id: '9', oauth_access_token: 'token' },
       linkedin: { conversion_urn: 'urn:lla:llaPartnerConversion:1', access_token: 'token', linkedin_version: '202608' },
-      taboola: {},
+      taboola: { account_id: '1234567', lead_event_name: 'lead_formulario' },
     };
     for (const [provider, configuration] of Object.entries(configurations)) await repository.saveDestination({ companyId: seeded.company.id, projectId: seeded.project.id, environment: 'production', provider, configuration });
     await assert.rejects(

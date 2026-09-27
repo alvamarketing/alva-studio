@@ -83,10 +83,10 @@ test('LinkedIn: o instante vai em milissegundos, não em segundos', () => {
 });
 
 test('Taboola: é GET com o clique na URL, e o clique é validado', () => {
-  const pedido = destinoPara('taboola').requisicao(evento({ click_ids: { taboola_click_id: 'abc-123' } }), {});
+  const pedido = destinoPara('taboola').requisicao(evento({ click_ids: { taboola_click_id: 'abc-123' } }), { account_id: '1234567', lead_event_name: 'lead_formulario' });
   assert.equal(pedido.metodo, 'GET');
   assert.match(pedido.url, /click-id=abc-123/);
-  assert.throws(() => destinoPara('taboola').requisicao(evento({ click_ids: { taboola_click_id: 'a b' } }), {}), /destination_identifier_required/);
+  assert.throws(() => destinoPara('taboola').requisicao(evento({ click_ids: { taboola_click_id: 'a b' } }), { account_id: '1234567', lead_event_name: 'lead_formulario' }), /destination_identifier_required/);
 });
 
 test('nenhum destino recebe e-mail ou telefone em claro', () => {

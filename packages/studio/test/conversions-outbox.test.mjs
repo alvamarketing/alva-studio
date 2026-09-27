@@ -35,7 +35,7 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
   try {
     const ids = await seed(database);
     const vault = new SecretVault({ masterKey: 'task-6-master-key' });
-    await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' }, taboola: {} });
+    await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' }, taboola: { account_id: '1234567', lead_event_name: 'lead_formulario' } });
     const outbox = new ConversionsOutboxRepository(database, { vault });
     const event = { companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' }, attribution: { gclid: 'google-click', tblci: 'tb-clique', unknown: 'blocked' } };
     await database.transaction((client) => outbox.enqueue(client, event));
@@ -45,10 +45,11 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
     await database.transaction((client) => outbox.enqueue(client, vsl));
     await database.transaction((client) => outbox.enqueue(client, { ...vsl, trackingEventId: 'b1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29' }));
     const rows = await database.query('SELECT property_id, tracking_event_id, event_name, destination, payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [ids.company.id, ids.project.id]);
-    // Três eventos distintos, dois destinos configurados: seis entregas. O evento repetido
-    // não acrescenta nenhuma — a identidade da linha inclui o destino, então cada plataforma
-    // recebe uma vez e tem a própria tentativa.
-    assert.equal(rows.rowCount, 6);
+    // Três eventos distintos, dois destinos configurados. O lead vai aos dois; os eventos
+    // da VSL, só à Meta — a Taboola só registra evento com nome definido no Realize, e VSL
+    // não tem. Quatro entregas. O evento repetido não acrescenta nenhuma: a identidade da
+    // linha inclui o destino, então cada plataforma recebe uma vez.
+    assert.equal(rows.rowCount, 4);
     const leads = rows.rows.filter((row) => row.event_name === 'lead');
     assert.deepEqual(leads.map((row) => row.destination).sort(), ['meta', 'taboola']);
     const lead = leads[0];
@@ -180,7 +181,7 @@ test('o identificador de clique sai da fila e chega ao corpo que vai para a plat
     await prepararDestinos(database, vault, ids, {
       meta: { pixel_id: '123', access_token: 'token' },
       tiktok: { pixel_code: 'PX', access_token: 'token' },
-      taboola: {},
+      taboola: { account_id: '1234567', lead_event_name: 'lead_formulario' },
     });
     const outbox = new ConversionsOutboxRepository(database, { vault });
     await database.transaction((client) => outbox.enqueue(client, {
@@ -206,7 +207,7 @@ test('o identificador de clique sai da fila e chega ao corpo que vai para a plat
 
     // A Taboola recusa o evento sem o clique: sem a ponte, esse destino nunca entregaria
     // nada, em nenhum projeto.
-    const pedidoTaboola = destinoPara('taboola').requisicao(payload('taboola'), {});
+    const pedidoTaboola = destinoPara('taboola').requisicao(payload('taboola'), { account_id: '1234567', lead_event_name: 'lead_formulario' });
     assert.match(pedidoTaboola.url, /click-id=tb-clique/);
   } finally { await database.close(); }
 });
