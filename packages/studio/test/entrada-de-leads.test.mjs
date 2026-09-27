@@ -236,9 +236,18 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
   if (process.env.ENTRADA_DE_LEADS_RELATORIO) await writeFile(process.env.ENTRADA_DE_LEADS_RELATORIO, JSON.stringify(relatorio, null, 2));
 
   // O que precisa valer hoje.
+  // Cada destino só recebe o que consegue atribuir. Meta e TikTok fazem a própria
+  // correspondência e recebem todo lead; o Google só recebe quem veio de um anúncio dele.
+  // Até 27/09 o Google recebia todos e recusava os que não eram dele, e a tela o mostraria
+  // como quebrado.
+  const DO_GOOGLE = new Set(['Google Ads · pesquisa', 'Google Ads · iOS (gbraid)', 'Google Ads · iOS web (wbraid)', 'Clique · dois identificadores juntos']);
   for (const linha of relatorio) {
     assert.equal(linha.leadCapturado, true, `${linha.cenario}: o lead não foi capturado (envio ${linha.envio})`);
-    assert.deepEqual(linha.filaDestinos, ['google', 'meta', 'tiktok'], `${linha.cenario}: a fila não endereçou os três destinos`);
+    const esperados = DO_GOOGLE.has(linha.cenario) ? ['google', 'meta', 'tiktok'] : ['meta', 'tiktok'];
+    assert.deepEqual(linha.filaDestinos, esperados, `${linha.cenario}: a fila endereçou os destinos errados`);
+    for (const [destino, saida] of Object.entries(linha.saida)) {
+      assert.equal(saida.vai, true, `${linha.cenario}: ${destino} está na fila mas recusaria o evento (${saida.motivo})`);
+    }
   }
   const porNome = Object.fromEntries(relatorio.map((linha) => [linha.cenario, linha]));
   assert.match(porNome['Facebook · anúncio'].saida.meta.fbc ?? '', /^fb\.1\.\d+\.IwAR0fb_clique_1$/, 'o clique do Facebook não chegou à Meta');

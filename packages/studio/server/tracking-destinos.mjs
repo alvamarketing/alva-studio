@@ -28,6 +28,8 @@ function semVazios(objeto) {
 
 const meta = {
   chave: 'meta',
+  // A Meta faz a própria correspondência: aceita o evento mesmo sem clique nem contato.
+  podeAtribuir: () => true,
   corpo(evento) {
     return {
       data: [{
@@ -67,6 +69,7 @@ const meta = {
 
 const tiktok = {
   chave: 'tiktok',
+  podeAtribuir: () => true,
   corpo(evento, credenciais) {
     return {
       event_source: 'web',
@@ -95,8 +98,15 @@ const tiktok = {
   },
 };
 
+const TEM_CLIQUE_DO_GOOGLE = (evento) => Boolean(evento.click_ids?.gclid || evento.click_ids?.gbraid || evento.click_ids?.wbraid);
+const TEM_CONTATO = (evento) => Boolean(evento.user?.email_sha256 || evento.user?.phone_sha256);
+
 const google = {
   chave: 'google',
+  // Sem o clique dele e sem contato hasheado, o Google não tem a quem atribuir. A fila faz
+  // esta mesma pergunta antes de endereçar: um lead de Facebook não vira entrega morta
+  // para o Google.
+  podeAtribuir: (evento) => TEM_CLIQUE_DO_GOOGLE(evento) || TEM_CONTATO(evento),
   corpo(evento, credenciais) {
     const identificadoresDeAnuncio = semVazios({
       gclid: evento.click_ids?.gclid,
@@ -107,10 +117,7 @@ const google = {
       evento.user?.email_sha256 ? { emailAddress: evento.user.email_sha256 } : null,
       evento.user?.phone_sha256 ? { phoneNumber: evento.user.phone_sha256 } : null,
     ].filter(Boolean);
-    // Sem clique nem contato não há a quem atribuir a conversão: recusar aqui evita mandar
-    // um evento que a plataforma descartaria de qualquer forma.
-    if (!Object.keys(identificadoresDeAnuncio).length && !identificadoresDePessoa.length)
-      throw recusa('destination_identifier_required');
+    if (!google.podeAtribuir(evento)) throw recusa('destination_identifier_required');
 
     const consentiu = (evento.consent_state ?? 'pending') === 'granted' ? 'GRANTED' : 'DENIED';
     const conversao = {
@@ -150,6 +157,7 @@ const google = {
 
 const linkedin = {
   chave: 'linkedin',
+  podeAtribuir: (evento) => Boolean(evento.user?.email_sha256 || evento.click_ids?.linkedin_tracking_uuid),
   corpo(evento, credenciais) {
     const identificadores = [
       evento.user?.email_sha256 ? { idType: 'SHA256_EMAIL', idValue: evento.user.email_sha256 } : null,
@@ -157,7 +165,7 @@ const linkedin = {
         ? { idType: 'LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID', idValue: evento.click_ids.linkedin_tracking_uuid }
         : null,
     ].filter(Boolean);
-    if (!identificadores.length) throw recusa('destination_identifier_required');
+    if (!linkedin.podeAtribuir(evento)) throw recusa('destination_identifier_required');
 
     const corpo = {
       conversion: credenciais.conversion_urn,
@@ -189,12 +197,15 @@ const linkedin = {
   },
 };
 
+const CLIQUE_DA_TABOOLA = /^[A-Za-z0-9._~-]{1,200}$/;
+
 const taboola = {
   chave: 'taboola',
+  podeAtribuir: (evento) => CLIQUE_DA_TABOOLA.test(texto(evento.click_ids?.taboola_click_id)),
   // A Taboola não recebe corpo: o evento inteiro cabe na URL do GET.
   requisicao(evento) {
+    if (!taboola.podeAtribuir(evento)) throw recusa('destination_identifier_required');
     const clique = texto(evento.click_ids?.taboola_click_id);
-    if (!/^[A-Za-z0-9._~-]{1,200}$/.test(clique)) throw recusa('destination_identifier_required');
     return {
       metodo: 'GET',
       url: `https://trc.taboola.com/actions-handler/log/3/s2s-action?click-id=${encodeURIComponent(clique)}&name=${encodeURIComponent(evento.event_name)}`,

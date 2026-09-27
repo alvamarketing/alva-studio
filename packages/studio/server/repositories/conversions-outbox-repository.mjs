@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { SecretVault } from './publication-repository.mjs';
 import { IDENTIFICADORES_DE_CLIQUE, NOME_NA_PLATAFORMA, PARAMETROS_UTM } from '../conversion-consent-policy.mjs';
 import { qualidadeDaCorrespondencia, resumoDaCorrespondencia } from '../qualidade-de-correspondencia.mjs';
+import { destinoPara } from '../tracking-destinos.mjs';
 
 const EVENTS = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
 const ENVIRONMENTS = new Set(['preview', 'production']);
@@ -159,11 +160,16 @@ export class ConversionsOutboxRepository {
     const utm = utmDe(rawAttribution);
     const visitante = contextoDoVisitante(cliente);
     const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), ...(Object.keys(visitante).length ? { client: visitante } : {}), params: { ...funil.params, ...utm, ...params } };
+    // Só vai para a fila o destino que consegue atribuir o evento — a mesma pergunta que o
+    // adaptador faz antes de recusar. Um lead de Facebook não vira entrega morta para o
+    // Google, e a tela deixa de mostrar como falha o que era só "não tinha o que receber".
+    const enderecados = configurados.filter((destino) => destinoPara(destino).podeAtribuir(payload));
+    if (!enderecados.length) return null;
     await client.query(
       `INSERT INTO conversions_outbox (company_id, project_id, environment, property_id, tracking_event_id, event_name, destination, payload)
        SELECT $1, $2, $3, $4, $5, $6, destino, $7::jsonb FROM unnest($8::varchar[]) AS destino
        ON CONFLICT (company_id, project_id, property_id, tracking_event_id, event_name, destination) DO NOTHING`,
-      [companyId, projectId, environment, propertyId, trackingEventId, eventName, JSON.stringify(payload), configurados],
+      [companyId, projectId, environment, propertyId, trackingEventId, eventName, JSON.stringify(payload), enderecados],
     );
     // O retorno é o que ficou na fila, inserido agora ou já existente: é assim que o
     // chamador sabe que o evento está endereçado sem depender de ter sido o primeiro.

@@ -69,7 +69,7 @@ em vez de ser reescrito.
 | 4 | Uma pessoa que clica num anúncio da Meta e envia o formulário gera exatamente uma conversão no Gerenciador de Eventos da Meta. | 94 | ❌ nenhum evento real chegou à Meta ainda |
 | 5 | Quando a pessoa veio de um anúncio da Meta, a conversão chega à Meta com o identificador do clique (`fbc`). | 86 | ✅ até o corpo enviado, pelo gateway real · ❌ dentro da Meta |
 | 6 | Quem veio de um anúncio do Google chega ao Google com o `gclid`; quem veio do TikTok chega ao TikTok com o `ttclid`. | 86 | ✅ até o corpo enviado |
-| 7 | O Google não recebe conversão de quem não veio de um anúncio do Google. | 86 | ❌ hoje recebe e recusa |
+| 7 | O Google não recebe conversão de quem não veio de um anúncio do Google. | 86 | ✅ a fila só endereça a quem consegue atribuir — vale também para Taboola e LinkedIn |
 | 8 | A campanha, a origem e a mídia (UTM) do anúncio chegam junto com a conversão. | 85 | ✅ até o corpo enviado, em 17 de 25 cenários — os 8 restantes não têm UTM válida para levar |
 
 ### Uma vez só
@@ -102,10 +102,10 @@ verdade: ele é o meio de conferir, não uma necessidade do cliente. Mas sem ele
 
 ## O que falta para o rastreamento ficar pronto
 
-Nove critérios estão cumpridos. Os que faltam, na ordem de trabalho:
+Dez critérios estão cumpridos. Os que faltam, na ordem de trabalho:
 
 1. ~~**UTM até a conversão** — critério 8.~~ Feito em 27/09.
-2. **O Google só recebe o que é dele** — critério 7.
+2. ~~**O Google só recebe o que é dele** — critério 7.~~ Feito em 27/09.
 3. **O motivo da falha na tela** — critério 12. Pequeno: o motivo já é gravado
    na fila, só não é mostrado.
 4. **O pixel do navegador** — critério 9. É preciso descobrir primeiro se ele

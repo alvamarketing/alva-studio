@@ -37,7 +37,7 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
     const vault = new SecretVault({ masterKey: 'task-6-master-key' });
     await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' }, taboola: {} });
     const outbox = new ConversionsOutboxRepository(database, { vault });
-    const event = { companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' }, attribution: { gclid: 'google-click', unknown: 'blocked' } };
+    const event = { companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' }, attribution: { gclid: 'google-click', tblci: 'tb-clique', unknown: 'blocked' } };
     await database.transaction((client) => outbox.enqueue(client, event));
     await database.transaction((client) => outbox.enqueue(client, event));
     const vsl = { ...event, trackingEventId: 'a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'vsl_progress', answers: {}, params: { content_id: 'vsl-123', value: 75 } };
@@ -58,7 +58,9 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
       email_sha256: createHash('sha256').update('pessoa@example.test').digest('hex'),
       phone_sha256: createHash('sha256').update('5511999999999').digest('hex'),
     });
-    assert.deepEqual(payload.attribution, { gclid: 'google-click' });
+    // A Taboola só recebe o lead porque ele traz o clique dela: sem `tblci` ela não tem a
+    // quem atribuir, e a fila não a endereçaria.
+    assert.deepEqual(payload.attribution, { gclid: 'google-click', tblci: 'tb-clique' });
     assert.equal(JSON.stringify(payload).includes('Pessoa@Example'), false);
     assert.equal(JSON.stringify(payload).includes('Nunca enviar'), false);
     const status = await outbox.status({ companyId: ids.company.id, projectId: ids.project.id });
@@ -289,5 +291,39 @@ test('a UTM vai para os parâmetros do evento, e dali para a plataforma', async 
     const corpo = destinoPara('meta').requisicao(payload, { pixel_id: '123', access_token: 'token' }).corpo;
     assert.equal(corpo.data[0].custom_data.utm_source, 'facebook');
     assert.equal(corpo.data[0].custom_data.utm_campaign, 'lançamento set');
+  } finally { await database.close(); }
+});
+
+// A fila só endereça ao destino que consegue atribuir o evento. Um lead de Facebook não
+// vira entrega morta para o Google — e a tela deixa de mostrar o Google como quebrado
+// quando ele só não tinha o que receber.
+test('a fila não endereça ao destino que não consegue atribuir o evento', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const ids = await seed(database);
+    const vault = new SecretVault({ masterKey: 'task-6-master-key' });
+    await prepararDestinos(database, vault, ids, {
+      meta: { pixel_id: '123', access_token: 'token' },
+      google: { operating_account_id: '123', conversion_action_id: '9', oauth_access_token: 'token' },
+    });
+    const outbox = new ConversionsOutboxRepository(database, { vault });
+    const enfileirar = (trackingEventId, extra) => database.transaction((client) => outbox.enqueue(client, {
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId, eventName: 'lead', ...extra,
+    }));
+    const destinos = async (trackingEventId) => (await database.query(
+      'SELECT destination FROM conversions_outbox WHERE tracking_event_id = $1 ORDER BY destination', [trackingEventId],
+    )).rows.map((linha) => linha.destination);
+
+    await enfileirar('a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', { attribution: { fbclid: 'IwAR-facebook' } });
+    assert.deepEqual(await destinos('a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29'), ['meta'], 'lead de Facebook não vai para o Google');
+
+    await enfileirar('b1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', { attribution: { gclid: 'Cj0-google' } });
+    assert.deepEqual(await destinos('b1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29'), ['google', 'meta'], 'lead do Google vai para os dois');
+
+    // Com consentimento e e-mail, o Google casa a pessoa mesmo sem o clique dele.
+    await enfileirar('c1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', { consentState: 'granted', answers: { email: 'pessoa@alva.test' } });
+    assert.deepEqual(await destinos('c1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29'), ['google', 'meta']);
   } finally { await database.close(); }
 });

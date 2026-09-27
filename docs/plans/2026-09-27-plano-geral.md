@@ -199,7 +199,7 @@ ordem combinada, depois dela:
 |---|---|---|
 | **7** | **Sinais de seção no tracker** — rolagem, tempo, vídeo e clique por bloco | Puck: cada bloco precisa de identidade estável |
 | **5** | **Públicos automáticos na Meta** a partir dos eventos | fase 1: os eventos precisam estar certos |
-| **9** | **Jev no quiz** | fase 4 |
+| **9** | **Jev no quiz** — e, lembrado pelo dono em 27/09, talvez também na VSL | fase 4 |
 | **8** | **Painel de sanidade** — navegador × servidor | fase 1 e tráfego real |
 | **10** | **Auto-aperfeiçoamento da landing em lote** | etapas 7 e 9 |
 
