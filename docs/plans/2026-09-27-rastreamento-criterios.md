@@ -76,7 +76,7 @@ em vez de ser reescrito.
 
 | # | Critério | Jev | Hoje |
 |---|---|---|---|
-| 9 | No Gerenciador de Eventos da Meta, um lead enviado pelo navegador e pelo servidor aparece como recebido pelas duas fontes e contado uma única vez. | 87 | ❓ depende do pixel do navegador na página, que está atrás de uma flag desligada (`PIXELS_ENABLED`) e nunca foi exercitado |
+| 9 | No Gerenciador de Eventos da Meta, um lead enviado pelo navegador e pelo servidor aparece como recebido pelas duas fontes e contado uma única vez. | 87 | ✅ até o disparo: navegador e servidor com o mesmo nome (`Lead`) e o mesmo id, pelo gateway publicado (commit `b37b9c7`) · ❓ dentro da Meta · ⚠️ os pixels seguem atrás de `PIXELS_ENABLED`, desligada por padrão |
 | 10 | Reenviar o formulário ou recarregar a página de obrigado não gera uma segunda conversão. | 89 | ✅ na fila (identidade por evento e destino) · ❓ dentro da Meta |
 
 ### Dizer a verdade
@@ -84,7 +84,7 @@ em vez de ser reescrito.
 | # | Critério | Jev | Hoje |
 |---|---|---|---|
 | 11 | No detalhe de um evento na Meta, o IP e o navegador registrados são os do aparelho da pessoa que converteu, e não um endereço de servidor repetido em todos os eventos. | 89 | ✅ até o corpo enviado (commit `315d842`) · ❌ dentro da Meta |
-| 12 | Se a Meta recusar o evento por credencial errada, a tela mostra que o envio falhou e o motivo, em vez de mostrá-lo como enviado. | 90 | ⚠️ mostra "Encerrada", não mostra o motivo |
+| 12 | Se a Meta recusar o evento por credencial errada, a tela mostra que o envio falhou e o motivo, em vez de mostrá-lo como enviado. | 90 | ✅ na tela, com recusa semeada (commit `46ff77f`) · ❓ com recusa real da Meta |
 | 13 | Uma conversão que chega à Meta sem IP e navegador da pessoa aparece na tela de qualidade da correspondência com o item "Endereço e navegador de quem converteu" marcado como faltando. | 86 | ✅ |
 | 14 | Com o consentimento negado, o evento que chega à Meta não traz o campo de e-mail hasheado (`em`). | 84 | ✅ |
 
@@ -102,15 +102,15 @@ verdade: ele é o meio de conferir, não uma necessidade do cliente. Mas sem ele
 
 ## O que falta para o rastreamento ficar pronto
 
-Dez critérios estão cumpridos. Os que faltam, na ordem de trabalho:
+Doze critérios estão cumpridos até onde dá para provar sem a Meta. Os que faltam, na ordem de trabalho:
 
 1. ~~**UTM até a conversão** — critério 8.~~ Feito em 27/09.
 2. ~~**O Google só recebe o que é dele** — critério 7.~~ Feito em 27/09.
-3. **O motivo da falha na tela** — critério 12. Pequeno: o motivo já é gravado
-   na fila, só não é mostrado.
-4. **O pixel do navegador** — critério 9. É preciso descobrir primeiro se ele
-   funciona: a flag está desligada e nada o exercitou. Se não funcionar, é o
-   maior item desta lista.
+3. ~~**O motivo da falha na tela** — critério 12.~~ Feito em 27/09.
+4. ~~**O pixel do navegador** — critério 9.~~ Feito em 27/09. No caminho
+   apareceu um defeito maior: o servidor mandava o nome interno `lead`, não o
+   evento padrão `Lead`. Falta decidir ligar `PIXELS_ENABLED` por padrão — com
+   ela desligada, a página publicada não tem pixel nem banner de consentimento.
 5. **Modo de teste** — critério 15, se o dono mantiver.
 6. **A prova na Meta de verdade** — critérios 4, 5, 9, 10 e 11. Exige um pixel e
    um token da Meta. Sem ela, esses critérios ficam "certos até o envio", que é
