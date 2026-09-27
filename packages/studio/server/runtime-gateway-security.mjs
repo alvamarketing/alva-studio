@@ -1,4 +1,4 @@
-import { verifyRuntimeRequest } from './publication-runtime.mjs';
+import { verifyRuntimeRequest, visitanteCanonico } from './publication-runtime.mjs';
 import { derivePublicationRuntimeKey } from './vercel-runtime-gateway.mjs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
@@ -92,9 +92,18 @@ export async function verifyRuntimeGatewayEnvelope({ repository, rootSecret, met
     timestamp: Number(header(headers, 'x-alva-runtime-timestamp')),
     nonce: header(headers, 'x-alva-runtime-nonce'),
     body: Buffer.isBuffer(body) ? body : Buffer.from(body || ''),
+    // Lido dos cabeçalhos do gateway, mas só vale porque entra na conferência abaixo:
+    // se alguém o forjou ou o alterou no caminho, a assinatura não bate.
+    client: { ip: header(headers, 'x-alva-client-ip') || null, userAgent: header(headers, 'x-alva-client-ua') || null },
   };
   const key = derivePublicationRuntimeKey(rootSecret, manifest);
   const verified = await verifyRuntimeRequest(request, header(headers, 'x-alva-runtime-signature'), key, { now, replay: { claim: (id, nonce, expiresAt) => repository.claimNonce({ publicationId: id, nonce, expiresAt: new Date(expiresAt * 1000) }) } });
   if (!verified) throw fail('Assinatura de runtime inválida ou replay detectado.');
-  return { manifest, host, origin: manifest.origin, publicationId, derivedKey: key };
+  const visitante = visitanteCanonico(request.client);
+  return {
+    manifest, host, origin: manifest.origin, publicationId, derivedKey: key,
+    // Devolvido só depois de a assinatura conferir. É a única fonte de IP e navegador que
+    // o Studio aceita para uma captura publicada.
+    client: visitante ? Object.fromEntries(Object.entries(visitante).filter(([, valor]) => valor)) : {},
+  };
 }

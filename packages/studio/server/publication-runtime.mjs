@@ -15,10 +15,24 @@ function fail(message, status = 400) { return Object.assign(new Error(message), 
 function origin(value) {
   try { const url = new URL(value); if (!['https:', 'http:'].includes(url.protocol) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error(); return url.origin; } catch { throw fail('Origem da publicação inválida.', 400); }
 }
+// O visitante — IP e navegador de quem está na página publicada — entra no que é
+// assinado. Só assim o Studio pode confiar nele: o gateway o lê da requisição que a
+// Vercel entrega, e um cabeçalho solto com esses dados qualquer um forjaria.
+//
+// Sem visitante, o canônico é exatamente o de sempre, e gateways já publicados continuam
+// valendo. Nas duas direções adulterar quebra a assinatura: arrancar o visitante de uma
+// requisição assinada com ele, ou acrescentá-lo a uma assinada sem ele.
+export function visitanteCanonico(client) {
+  const ip = typeof client?.ip === 'string' && client.ip ? client.ip : null;
+  const userAgent = typeof client?.userAgent === 'string' && client.userAgent ? client.userAgent : null;
+  return ip || userAgent ? { ip, userAgent } : null;
+}
+
 function canonical(value) {
   if (!value || !ENVIRONMENTS.has(value.environment) || typeof value.path !== 'string' || !value.path.startsWith('/') || typeof value.nonce !== 'string' || !/^[A-Za-z0-9._~-]{16,160}$/.test(value.nonce)) throw fail('Envelope de runtime inválido.');
   const body = typeof value.body === 'string' ? Buffer.from(value.body, 'utf8') : Buffer.from(value.body || '');
-  return JSON.stringify({ method: String(value.method).toUpperCase(), path: value.path, publicationId: value.publicationId, environment: value.environment, timestamp: Number(value.timestamp), nonce: value.nonce, bodyHash: createHash('sha256').update(body).digest('hex') });
+  const visitante = visitanteCanonico(value.client);
+  return JSON.stringify({ method: String(value.method).toUpperCase(), path: value.path, publicationId: value.publicationId, environment: value.environment, timestamp: Number(value.timestamp), nonce: value.nonce, bodyHash: createHash('sha256').update(body).digest('hex'), ...(visitante ? { client: visitante } : {}) });
 }
 function hmac(value, secret) { return createHmac('sha256', secret).update(canonical(value)).digest('hex'); }
 

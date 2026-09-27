@@ -110,9 +110,11 @@ const CENARIOS = [
   { nome: 'Clique · dois identificadores juntos', plataforma: 'meta', url: '/oferta?fbclid=IwAR_duplo&gclid=Cj0_duplo&utm_source=facebook' },
 ];
 
-// O user-agent de cada visitante é diferente, como na vida real. Se ele chegar à
-// plataforma, tem de ser este — não o do cliente HTTP da função.
+// Cada visitante tem o próprio navegador e o próprio IP, como na vida real. A Vercel
+// entrega o IP à função em `x-real-ip`; é esse que tem de chegar à plataforma — não o do
+// cliente HTTP da função, que o proxy continua anotando em `x-forwarded-for`.
 const UA_DA_PESSOA = (indice) => `Mozilla/5.0 (iPhone; CPU iPhone OS 17_${indice} like Mac OS X) Safari/604.1`;
+const IP_DA_PESSOA = (indice) => `189.68.172.${indice + 10}`;
 
 test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 120_000 }, async (t) => {
   const anterior = process.env.TRACKING_MASTER_KEY;
@@ -169,6 +171,7 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
   const relatorio = [];
   for (const [indice, cenario] of CENARIOS.entries()) {
     const ua = UA_DA_PESSOA(indice);
+    const ip = IP_DA_PESSOA(indice);
     const enderecoDaPagina = `https://${DOMINIO}${cenario.url}`;
     const cookiesDoNavegador = cenario.fbp ? `_fbp=${cenario.fbp}` : '';
 
@@ -176,7 +179,7 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
     //    runtime, e o gateway lê a URL da página (o Referer) para gravar a atribuição.
     const carregador = await gateway({
       method: 'GET', path: '/_alva/runtime.js',
-      headers: { referer: enderecoDaPagina, 'user-agent': ua, ...(cookiesDoNavegador ? { cookie: cookiesDoNavegador } : {}), ...(cenario.referrer ? {} : {}) },
+      headers: { referer: enderecoDaPagina, 'user-agent': ua, 'x-real-ip': ip, ...(cookiesDoNavegador ? { cookie: cookiesDoNavegador } : {}) },
     });
     const cookieDeAtribuicao = [carregador.headers['set-cookie']].flat().filter(Boolean)
       .map((linha) => linha.split(';')[0]).find((par) => par.startsWith('alva_runtime_attribution='));
@@ -186,7 +189,7 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
     const email = `lead${indice}@exemplo.test`;
     const envio = await gateway({
       method: 'POST', path: acao,
-      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, 'user-agent': ua, ...(cookies ? { cookie: cookies } : {}) },
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: `https://${DOMINIO}`, 'user-agent': ua, 'x-real-ip': ip, ...(cookies ? { cookie: cookies } : {}) },
       body: Buffer.from(`email=${encodeURIComponent(email)}`),
     });
 
@@ -224,6 +227,7 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
       utmNaFila: Object.fromEntries(Object.entries(naFila[0]?.payload?.params ?? {}).filter(([chave]) => chave.startsWith('utm'))),
       clienteNaFila: naFila[0]?.payload?.client ?? null,
       uaDaPessoa: ua,
+      ipDaPessoa: ip,
       saida,
     });
   }
@@ -244,4 +248,16 @@ test('entrada de leads de ponta a ponta, pelo gateway de verdade', { timeout: 12
     assert.equal(porNome[nome].clickIdsNaFila, null, `${nome}: tráfego sem anúncio não pode carregar identificador de clique`);
   }
   assert.equal(porNome['UTM · no fragmento (#), não na query'].clickIdsNaFila, null, 'o fragmento da URL não pode ser lido como atribuição');
+
+  // O IP e o navegador que chegam à Meta são os de cada pessoa. Até 27/09 eram os da
+  // função da Vercel, iguais para todo lead — este bloco era só relatado; o conserto do
+  // gateway o transformou em asserção.
+  for (const linha of relatorio) {
+    assert.equal(linha.saida.meta.ip, linha.ipDaPessoa, `${linha.cenario}: o IP que chega à Meta não é o da pessoa`);
+    assert.equal(linha.saida.meta.ua, linha.uaDaPessoa, `${linha.cenario}: o navegador que chega à Meta não é o da pessoa`);
+  }
+  const ipsEnviados = new Set(relatorio.map((linha) => linha.saida.meta.ip));
+  assert.equal(ipsEnviados.size, relatorio.length, 'visitantes diferentes precisam chegar com IPs diferentes');
+  assert.equal(ipsEnviados.has(IP_DA_FUNCAO_VERCEL), false, 'o IP da função da Vercel não pode chegar a plataforma nenhuma');
+  assert.equal(relatorio.some((linha) => linha.saida.meta.ua === UA_DO_FETCH_DA_FUNCAO), false, 'o navegador da função não pode chegar a plataforma nenhuma');
 });

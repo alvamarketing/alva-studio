@@ -146,13 +146,10 @@ async function runtimeNamespaceMatches(database, manifest, companySlug, projectS
   );
   return rows.length === 1 && rows[0].company_slug === companySlug && rows[0].project_slug === projectSlug;
 }
-// O endereço e o navegador de quem está convertendo. A página publicada chega por um
-// gateway, então o endereço real vem no cabeçalho que ele encaminha; o do socket seria o
-// do próprio proxy, e juntaria visitantes diferentes sob um endereço só.
-function clienteDaRequisicao(req) {
-  const encaminhado = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return { ip: encaminhado || req.socket?.remoteAddress, userAgent: req.headers['user-agent'] };
-}
+// O visitante de uma captura publicada vem só de `runtimeGateway.client`: o IP e o
+// navegador que o gateway leu da Vercel e assinou. Antes vinham do `x-forwarded-for` desta
+// requisição — que, para uma captura, é o endereço da função da Vercel, igual para todo
+// visitante. Sem assinatura, nada é enviado: nada é melhor que dado falso.
 function runtimeAttribution(cookie, gateway, rootSecret) {
   const value = String(cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_attribution='))?.slice('alva_runtime_attribution='.length);
   return gateway ? verifiedRuntimeAttribution(value, gateway.manifest, rootSecret) : {};
@@ -698,7 +695,7 @@ export function createApp({
         if (origin !== runtimeGateway.origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);
         const subjectId = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length);
-        await content.submitPublishedPageCapture({ companyId: manifest.companyId, projectId: manifest.projectId, pageId: entry.contentId, pageVersionId: entry.versionId, captureId: pageCaptureRequest.captureId, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDaRequisicao(req), publicationId: runtimeGateway.publicationId, subjectId });
+        await content.submitPublishedPageCapture({ companyId: manifest.companyId, projectId: manifest.projectId, pageId: entry.contentId, pageVersionId: entry.versionId, captureId: pageCaptureRequest.captureId, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: runtimeGateway?.client ?? {}, publicationId: runtimeGateway.publicationId, subjectId });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${path}`);
@@ -708,12 +705,12 @@ export function createApp({
         if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);
         const saved = domainScope
-          ? await content.submitPublicFormForDomain({ host: effectiveHost, route: publicFormRequest.route, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDaRequisicao(req), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length) })
+          ? await content.submitPublicFormForDomain({ host: effectiveHost, route: publicFormRequest.route, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: runtimeGateway?.client ?? {}, publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length) })
           : await content.submitPublicFormForProject({
             companySlug: publicFormRequest.companySlug,
             projectSlug: publicFormRequest.projectSlug,
             route: publicFormRequest.route,
-            input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDaRequisicao(req), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length),
+            input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: runtimeGateway?.client ?? {}, publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length),
           });
         await analytics?.recordLead({
           companyId: saved.form.companyId,
