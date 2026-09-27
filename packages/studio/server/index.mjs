@@ -504,6 +504,11 @@ export function createApp({
       }
       // Report-Only por enquanto: só reporta violação, nunca bloqueia — a migração para modo
       // reforçado é decisão futura, depois que todo script inline aceitar o nonce.
+      // A página de obrigado só chama os pixels quando eles estão ligados e o envio veio
+      // pela publicação verificada — é ela que diz qual publicação os carrega.
+      const conversaoParaOsPixels = (id) => (runtimeFlags.pixels === true && runtimeGateway?.publicationId && id
+        ? { evento: 'lead', id, publicationId: runtimeGateway.publicationId }
+        : null);
       const publicHtmlNonce = (actionOrigin) => {
         const nonce = createNonce();
         res.setHeader('Content-Security-Policy-Report-Only', formContentSecurityPolicy({
@@ -695,11 +700,11 @@ export function createApp({
         if (origin !== runtimeGateway.origin) throw error('Origem publicada obrigatória para conversões.', 403);
         const input = await publicAnswers(req);
         const subjectId = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length);
-        await content.submitPublishedPageCapture({ companyId: manifest.companyId, projectId: manifest.projectId, pageId: entry.contentId, pageVersionId: entry.versionId, captureId: pageCaptureRequest.captureId, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: runtimeGateway?.client ?? {}, publicationId: runtimeGateway.publicationId, subjectId });
+        const capturado = await content.submitPublishedPageCapture({ companyId: manifest.companyId, projectId: manifest.projectId, pageId: entry.contentId, pageVersionId: entry.versionId, captureId: pageCaptureRequest.captureId, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: runtimeGateway?.client ?? {}, publicationId: runtimeGateway.publicationId, subjectId });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${path}`);
-        return res.end(renderCompletion('Obrigado!', 'Recebemos suas respostas.', { nonce }));
+        return res.end(renderCompletion('Obrigado!', 'Recebemos suas respostas.', { nonce, conversao: conversaoParaOsPixels(capturado?.eventId) }));
       }
       if (req.method === 'POST' && content && publicFormRequest) {
         if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);
@@ -728,7 +733,7 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
-        return res.end(renderCompletion(completion.title, completion.message, { nonce }));
+        return res.end(renderCompletion(completion.title, completion.message, { nonce, conversao: conversaoParaOsPixels(saved.eventId) }));
       }
       if (content && submission) throw error('Formulário publicado não encontrado.', 404);
       if (req.method === 'POST' && submission) {

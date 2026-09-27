@@ -10,7 +10,7 @@ import { quizRuntimeScript, quizRuntimeCss } from '../public/quiz-runtime.js';
 const pagina = (corpo, destino) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>${quizRuntimeCss}</style></head>`
   + `<body data-alva-quiz="true">${corpo}<script>${quizRuntimeScript({ destino })}</script></body></html>`;
 
-async function abrir(corpo, { envios = [], destino = '/api/respostas' } = {}) {
+async function abrir(corpo, { envios = [], destino = '/api/respostas', respostaOk = true, conversoes = null } = {}) {
   const dom = new JSDOM(pagina(corpo, destino), {
     url: 'https://exemplo.test/quiz',
     runScripts: 'dangerously',
@@ -18,8 +18,10 @@ async function abrir(corpo, { envios = [], destino = '/api/respostas' } = {}) {
       window.scrollTo = () => {};
       window.fetch = async (...args) => {
         envios.push(args);
-        return { ok: true, json: async () => ({}) };
+        return { ok: respostaOk, json: async () => ({}) };
       };
+      // O carregador de pixels, quando está na página, expõe onde avisar a conversão.
+      if (conversoes) window.alvaRuntime = { conversao: (...args) => conversoes.push(args) };
     },
   });
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -74,6 +76,36 @@ test('chegar na última etapa envia as respostas juntas', async () => {
   assert.equal(envios.length, 1, 'as respostas vão uma vez, no fim');
   const corpo = JSON.parse(envios[0][1].body);
   assert.deepEqual(corpo.answers, { nome: 'Taian' });
+  dom.window.close();
+});
+
+// O quiz envia por `fetch` e continua na mesma página: não passa pela página de obrigado,
+// que é onde os pixels ficam sabendo do lead nos outros envios. Ele mesmo avisa, com o id
+// que mandou ao servidor — o mesmo que o servidor manda às plataformas.
+test('o quiz avisa os pixels do lead com o mesmo id que mandou ao servidor', async () => {
+  const envios = [];
+  const conversoes = [];
+  const dom = await abrir(TRES_ETAPAS, { envios, conversoes });
+  const { document } = dom.window;
+  document.querySelector('#a button').click();
+  document.querySelector('[name="nome"]').value = 'Taian';
+  document.querySelector('#b button').click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const { trackingEventId } = JSON.parse(envios[0][1].body);
+  assert.match(trackingEventId, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(conversoes, [['lead', trackingEventId]]);
+  dom.window.close();
+});
+
+test('envio recusado pelo servidor não vira lead nos pixels', async () => {
+  const conversoes = [];
+  const dom = await abrir(TRES_ETAPAS, { conversoes, respostaOk: false });
+  const { document } = dom.window;
+  document.querySelector('#a button').click();
+  document.querySelector('[name="nome"]').value = 'Taian';
+  document.querySelector('#b button').click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(conversoes, []);
   dom.window.close();
 });
 

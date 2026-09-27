@@ -14,6 +14,8 @@
 // A outra regra: daqui não sai contato em claro. O e-mail e o telefone já chegam
 // hasheados em SHA-256 e é isso que as plataformas esperam.
 
+import { nomeNaPlataforma } from './nomes-de-evento.mjs';
+
 function recusa(motivo) {
   return Object.assign(new Error(motivo), { destino: true });
 }
@@ -33,7 +35,7 @@ const meta = {
   corpo(evento) {
     return {
       data: [{
-        event_name: evento.event_name,
+        event_name: nomeNaPlataforma('meta', evento.event_name),
         event_time: evento.event_time,
         event_id: evento.tracking_event_id,
         action_source: 'website',
@@ -75,7 +77,7 @@ const tiktok = {
       event_source: 'web',
       event_source_id: credenciais.pixel_code ?? null,
       data: [{
-        event: evento.event_name,
+        event: nomeNaPlataforma('tiktok', evento.event_name),
         event_time: evento.event_time,
         event_id: evento.tracking_event_id,
         user: semVazios({

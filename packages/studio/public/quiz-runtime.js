@@ -124,6 +124,9 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
         body: JSON.stringify({ answers: respostas, ...(trackingEventId ? { trackingEventId } : {}) }),
       });
       if (!resposta.ok) throw new Error('Resposta inválida do servidor.');
+      // O lead foi gravado: os pixels do navegador disparam com o mesmo id que o servidor
+      // manda às plataformas, e a plataforma conta os dois como um só.
+      try { if (trackingEventId) window.alvaRuntime?.conversao?.('lead', trackingEventId); } catch {}
       return true;
     } catch {
       avisar(etapa, null, 'Não foi possível enviar suas respostas. Tente novamente.');

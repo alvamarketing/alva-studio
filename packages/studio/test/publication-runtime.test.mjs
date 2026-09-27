@@ -80,6 +80,7 @@ function runtimeDom(state) {
     head: { appendChild: (node) => scripts.push({ src: node.src, provider: node.dataset.alvaRuntimeProvider, metaQueue: window.fbq?.queue?.map((entry) => [...entry]), dataLayer: window.dataLayer?.slice(), tiktok: window.ttq && { queue: window.ttq.slice(), i: window.ttq._i, t: window.ttq._t, o: window.ttq._o }, linkedin: { id: window._linkedin_partner_id, ids: window._linkedin_data_partner_ids?.slice() }, taboola: window._tfa?.slice() }) },
     body: { appendChild: () => {} },
     querySelectorAll: () => [],
+    querySelector: () => null,
   };
   const window = {};
   const fetch = async () => ({ ok: true, json: async () => ({ state }) });
