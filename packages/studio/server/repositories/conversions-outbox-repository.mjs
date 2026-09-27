@@ -3,6 +3,7 @@ import { SecretVault } from './publication-repository.mjs';
 import { IDENTIFICADORES_DE_CLIQUE, NOME_NA_PLATAFORMA, PARAMETROS_UTM } from '../conversion-consent-policy.mjs';
 import { qualidadeDaCorrespondencia, resumoDaCorrespondencia } from '../qualidade-de-correspondencia.mjs';
 import { destinoPara } from '../tracking-destinos.mjs';
+import { hashesDeContato } from '../contato.mjs';
 
 const EVENTS = new Set(['lead', 'initiate_checkout', 'purchase', 'vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
 const ENVIRONMENTS = new Set(['preview', 'production']);
@@ -28,18 +29,6 @@ const BACKOFF_MS = [30_000, 120_000, 600_000, 3_600_000, 14_400_000, 43_200_000]
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
 function bindingScope({ companyId, projectId, environment }) { return `tracking-binding:${companyId}:${projectId}:${environment}:conversions`; }
-function hash(value) { return createHash('sha256').update(value).digest('hex'); }
-function contact(answers = {}) {
-  const entries = Object.entries(answers && typeof answers === 'object' ? answers : {});
-  const email = entries.find(([key, value]) => /e-?mail/i.test(key) && typeof value === 'string')?.[1];
-  const phone = entries.find(([key, value]) => /(telefone|phone|celular|whatsapp)/i.test(key) && typeof value === 'string')?.[1];
-  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-  const normalizedPhone = typeof phone === 'string' ? phone.replace(/\D/g, '') : '';
-  return Object.fromEntries([
-    ...(normalizedEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ? [['email_sha256', hash(normalizedEmail)]] : []),
-    ...(normalizedPhone.length >= 8 && normalizedPhone.length <= 15 ? [['phone_sha256', hash(normalizedPhone)]] : []),
-  ]);
-}
 function attribution(values = {}) {
   if (!values || typeof values !== 'object' || Array.isArray(values)) throw fail('Identificadores de atribuição inválidos.');
   return Object.fromEntries(Object.entries(values).flatMap(([key, value]) => ATTRIBUTION_KEYS.has(key) && typeof value === 'string' && value.length > 0 && value.length <= 512 ? [[key, value]] : []));
@@ -159,7 +148,7 @@ export class ConversionsOutboxRepository {
     const funil = contextoDoFunil(contexto);
     const utm = utmDe(rawAttribution);
     const visitante = contextoDoVisitante(cliente);
-    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? contact(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), ...(Object.keys(visitante).length ? { client: visitante } : {}), params: { ...funil.params, ...utm, ...params } };
+    const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? hashesDeContato(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), ...(Object.keys(visitante).length ? { client: visitante } : {}), params: { ...funil.params, ...utm, ...params } };
     // Só vai para a fila o destino que consegue atribuir o evento — a mesma pergunta que o
     // adaptador faz antes de recusar. Um lead de Facebook não vira entrega morta para o
     // Google, e a tela deixa de mostrar como falha o que era só "não tinha o que receber".

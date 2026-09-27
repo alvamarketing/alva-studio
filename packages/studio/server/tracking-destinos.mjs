@@ -90,7 +90,7 @@ const tiktok = {
         event_id: evento.tracking_event_id,
         user: semVazios({
           email: evento.user?.email_sha256,
-          phone: evento.user?.phone_sha256,
+          phone: evento.user?.phone_e164_sha256,
           ttclid: evento.click_ids?.ttclid,
         }),
         properties: evento.params ?? {},
@@ -109,7 +109,7 @@ const tiktok = {
 };
 
 const TEM_CLIQUE_DO_GOOGLE = (evento) => Boolean(evento.click_ids?.gclid || evento.click_ids?.gbraid || evento.click_ids?.wbraid);
-const TEM_CONTATO = (evento) => Boolean(evento.user?.email_sha256 || evento.user?.phone_sha256);
+const TEM_CONTATO = (evento) => Boolean(evento.user?.email_google_sha256 || evento.user?.phone_e164_sha256);
 
 const google = {
   chave: 'google',
@@ -124,18 +124,20 @@ const google = {
       wbraid: evento.click_ids?.wbraid,
     });
     const identificadoresDePessoa = [
-      evento.user?.email_sha256 ? { emailAddress: evento.user.email_sha256 } : null,
-      evento.user?.phone_sha256 ? { phoneNumber: evento.user.phone_sha256 } : null,
+      evento.user?.email_google_sha256 ? { emailAddress: evento.user.email_google_sha256 } : null,
+      evento.user?.phone_e164_sha256 ? { phoneNumber: evento.user.phone_e164_sha256 } : null,
     ].filter(Boolean);
     if (!google.podeAtribuir(evento)) throw recusa('destination_identifier_required');
 
-    const consentiu = (evento.consent_state ?? 'pending') === 'granted' ? 'GRANTED' : 'DENIED';
+    // https://developers.google.com/data-manager/api/reference/rest/v1/Consent — só dois
+    // campos, valores CONSENT_GRANTED/CONSENT_DENIED.
+    const consentiu = (evento.consent_state ?? 'pending') === 'granted' ? 'CONSENT_GRANTED' : 'CONSENT_DENIED';
     const conversao = {
       transactionId: evento.params?.transaction_id ?? evento.tracking_event_id,
       eventTimestamp: new Date(Number(evento.event_time) * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z'),
       eventSource: 'WEB',
       eventName: evento.event_name,
-      consent: { adUserData: consentiu, adPersonalization: consentiu, adStorage: consentiu, analyticsStorage: consentiu },
+      consent: { adUserData: consentiu, adPersonalization: consentiu },
     };
     if (Object.keys(identificadoresDeAnuncio).length) conversao.adIdentifiers = identificadoresDeAnuncio;
     if (identificadoresDePessoa.length) conversao.userData = { userIdentifiers: identificadoresDePessoa };

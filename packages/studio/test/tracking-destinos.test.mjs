@@ -10,7 +10,7 @@ const evento = ({ nome = 'lead', ...resto } = {}) => ({
   event_name: nome,
   event_time: 1_764_200_000,
   tracking_event_id: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29',
-  user: { email_sha256: 'a'.repeat(64), phone_sha256: 'b'.repeat(64) },
+  user: { email_sha256: 'a'.repeat(64), email_google_sha256: 'c'.repeat(64), phone_sha256: 'b'.repeat(64), phone_e164_sha256: 'd'.repeat(64) },
   click_ids: {},
   params: {},
   consent_state: 'granted',
@@ -54,13 +54,16 @@ test('Google: exige ao menos um identificador, senão não há a quem atribuir',
   );
 });
 
-test('Google: consentimento negado vira DENIED em todos os campos', () => {
-  const pedido = destinoPara('google').requisicao(
-    evento({ consent_state: 'denied' }),
-    { operating_account_id: '1', conversion_action_id: '2', oauth_access_token: 'tok' },
-  );
-  const consent = pedido.corpo.events[0].consent;
-  assert.deepEqual(Object.values(consent), ['DENIED', 'DENIED', 'DENIED', 'DENIED']);
+// O objeto Consent da Data Manager API tem só dois campos, com valores CONSENT_*:
+// https://developers.google.com/data-manager/api/reference/rest/v1/Consent
+// Até 27/09 o corpo levava também adStorage e analyticsStorage (do Consent Mode do gtag,
+// não desta API) e valores GRANTED/DENIED, que a API não conhece.
+test('Google: o consentimento vai no formato da Data Manager API', () => {
+  const credenciais = { operating_account_id: '1', conversion_action_id: '2', oauth_access_token: 'tok' };
+  const negado = destinoPara('google').requisicao(evento({ consent_state: 'denied' }), credenciais).corpo.events[0].consent;
+  assert.deepEqual(negado, { adUserData: 'CONSENT_DENIED', adPersonalization: 'CONSENT_DENIED' });
+  const dado = destinoPara('google').requisicao(evento({ consent_state: 'granted' }), credenciais).corpo.events[0].consent;
+  assert.deepEqual(dado, { adUserData: 'CONSENT_GRANTED', adPersonalization: 'CONSENT_GRANTED' });
 });
 
 test('LinkedIn: sem e-mail nem uuid de rastreio, recusa', () => {
@@ -87,7 +90,7 @@ test('Taboola: é GET com o clique na URL, e o clique é validado', () => {
 });
 
 test('nenhum destino recebe e-mail ou telefone em claro', () => {
-  const cru = { ...evento(), user: { email_sha256: 'a'.repeat(64), email: 'pessoa@exemplo.test', phone: '+5511999999999' } };
+  const cru = { ...evento(), user: { email_sha256: 'a'.repeat(64), email_google_sha256: 'c'.repeat(64), email: 'pessoa@exemplo.test', phone: '+5511999999999' } };
   const credenciais = {
     meta: { pixel_id: '1', access_token: 't' },
     tiktok: { pixel_code: 'P', access_token: 't' },

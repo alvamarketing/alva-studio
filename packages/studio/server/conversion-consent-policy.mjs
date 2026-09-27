@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { hashesDeContato } from './contato.mjs';
 
 const STATES = new Set(['pending', 'denied', 'granted']);
 const PROVIDERS = new Set(['meta', 'google', 'tiktok', 'linkedin', 'taboola']);
@@ -34,7 +34,6 @@ const SCOPE_FIELDS = Object.freeze(['companyId', 'projectId', 'publicationId', '
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function fail(message) { throw Object.assign(new Error(message), { status: 400, statusCode: 400 }); }
-function hash(value) { return createHash('sha256').update(value).digest('hex'); }
 function text(value, max = 255) { return typeof value === 'string' && value.length > 0 && value.length <= max; }
 
 export function consentScope(manifest) {
@@ -48,15 +47,6 @@ export function resolveConsentState({ manifest, storedConsent } = {}) {
   return storedConsent.state;
 }
 
-function normalizedContact(answers = {}) {
-  const values = Object.entries(answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {});
-  const email = values.find(([key, value]) => /e-?mail/i.test(key) && typeof value === 'string')?.[1]?.trim().toLowerCase() || '';
-  const phone = values.find(([key, value]) => /(telefone|phone|celular|whatsapp)/i.test(key) && typeof value === 'string')?.[1]?.replace(/\D/g, '') || '';
-  return Object.fromEntries([
-    ...(email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? [['email_sha256', hash(email)]] : []),
-    ...(phone.length >= 8 && phone.length <= 15 ? [['phone_sha256', hash(phone)]] : []),
-  ]);
-}
 
 function browserEvent(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some((key) => !BROWSER_FIELDS.has(key))) fail('Campo de navegador inválido.');
@@ -95,7 +85,7 @@ export function buildProviderConversion({ provider, manifest, consentState, brow
   };
   if (provider === 'google') payload.google_consent = Object.fromEntries(['ad_user_data', 'ad_personalization', 'ad_storage', 'analytics_storage'].map((signal) => [signal, consentState === 'granted' ? 'granted' : 'denied']));
   if (consentState === 'granted') {
-    const user = normalizedContact(serverAnswers);
+    const user = hashesDeContato(serverAnswers);
     if (Object.keys(user).length) payload.user = user;
   }
   return payload;
@@ -116,7 +106,7 @@ export function buildConversion({ manifest, consentState, browserEvent: rawEvent
     attribution: event.attribution,
   };
   if (consentState === 'granted') {
-    const user = normalizedContact(serverAnswers);
+    const user = hashesDeContato(serverAnswers);
     if (Object.keys(user).length) payload.user = user;
   }
   return payload;

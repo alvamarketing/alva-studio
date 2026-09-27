@@ -32,9 +32,14 @@ for (const provider of Object.keys(expectedClickId)) {
       assert.equal(JSON.stringify(payload).includes('forged'), false);
       assert.deepEqual(Object.keys(payload.attribution || {}).sort(), expectedClickId[provider].sort());
       if (consentState === 'granted') {
+        const sha = (valor) => createHash('sha256').update(valor).digest('hex');
+        // Um hash por formato de plataforma: a Meta quer o telefone só com dígitos, TikTok
+        // e Google em E.164 com o +; o Google tira os pontos do Gmail (este não é Gmail).
         assert.deepEqual(payload.user, {
-          email_sha256: createHash('sha256').update('pessoa@example.test').digest('hex'),
-          phone_sha256: createHash('sha256').update('5511999999999').digest('hex'),
+          email_sha256: sha('pessoa@example.test'),
+          email_google_sha256: sha('pessoa@example.test'),
+          phone_sha256: sha('5511999999999'),
+          phone_e164_sha256: sha('+5511999999999'),
         });
       } else {
         assert.equal('user' in payload, false);

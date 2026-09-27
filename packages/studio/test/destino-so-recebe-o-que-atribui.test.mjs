@@ -30,7 +30,9 @@ test('o Google atribui com o clique dele, ou com contato hasheado', () => {
   assert.equal(google.podeAtribuir(base), false, 'sem nada, não há a quem atribuir');
   assert.equal(google.podeAtribuir({ ...base, click_ids: { fbc: 'fb.1.1.x' } }), false, 'clique da Meta não serve ao Google');
   for (const clique of ['gclid', 'gbraid', 'wbraid']) assert.equal(google.podeAtribuir({ ...base, click_ids: { [clique]: 'x' } }), true, clique);
-  assert.equal(google.podeAtribuir({ ...base, user: { email_sha256: HASH } }), true, 'e-mail hasheado permite casar a pessoa');
+  // O Google usa o e-mail no formato dele (sem os pontos do Gmail) e o telefone em E.164.
+  assert.equal(google.podeAtribuir({ ...base, user: { email_google_sha256: HASH } }), true, 'e-mail hasheado permite casar a pessoa');
+  assert.equal(google.podeAtribuir({ ...base, user: { phone_e164_sha256: HASH } }), true, 'telefone hasheado também');
 });
 
 test('o LinkedIn atribui com e-mail hasheado ou com o identificador dele', () => {

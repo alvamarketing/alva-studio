@@ -54,9 +54,12 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
     const lead = leads[0];
     assert.equal(lead.property_id, 'alva_preview_property');
     const payload = lead.payload;
+    const sha = (valor) => createHash('sha256').update(valor).digest('hex');
     assert.deepEqual(payload.user, {
-      email_sha256: createHash('sha256').update('pessoa@example.test').digest('hex'),
-      phone_sha256: createHash('sha256').update('5511999999999').digest('hex'),
+      email_sha256: sha('pessoa@example.test'),
+      email_google_sha256: sha('pessoa@example.test'),
+      phone_sha256: sha('5511999999999'),
+      phone_e164_sha256: sha('+5511999999999'),
     });
     // A Taboola só recebe o lead porque ele traz o clique dela: sem `tblci` ela não tem a
     // quem atribuir, e a fila não a endereçaria.

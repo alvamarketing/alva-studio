@@ -64,6 +64,11 @@ ids aceitos, `li_fat_id` → `LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID`, escopos
 `rw_conversions` + `r_ads` — [conversions API](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversions-api).
 A versão padrão `202608` vale; a mais antiga no ar é `202510`.
 
+Não confirmado: a página da Conversions API não diz como normalizar o e-mail antes
+do hash; o Studio usa minúsculas sem espaços nas pontas. A mesma página aceita o IP de
+quem converteu como identificador (`PLAINTEXT_IP_ADDRESS`) ✔︎ lido — o Studio já tem
+esse IP e ainda não o manda.
+
 Riscos: o token dura **60 dias** ([authorization code flow](https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow)),
 e renovar por programa é só para parceiros aprovados; conversão com mais de 90
 dias é recusada.
