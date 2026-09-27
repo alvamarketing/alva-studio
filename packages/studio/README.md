@@ -90,9 +90,12 @@ Os motores internos comerciais nascem desligados. Somente o valor literal
 indisponível:
 
 - `CONVERSIONS_ENABLED`
-- `PIXELS_ENABLED`
 - `MEDIA_PIPELINE_ENABLED`
 - `BILLING_ENFORCEMENT`
+
+A exceção é `PIXELS_ENABLED`, ligada por padrão: sem ela a página publicada não tem
+pixel do navegador nem banner de consentimento, e o lead não é deduplicado entre
+navegador e servidor. Só o valor literal `false` a desliga.
 
 As flags não provisionam serviços, não expõem painéis nem tornam uma integração
 ativa por si mesmas. O analytics é nativo do Studio e não depende de flag: o

@@ -468,8 +468,13 @@ export function createApp({
       const publicMcp = Boolean(mcp && path === '/mcp');
       const publicRuntimeConsent = runtimeConsentGateway && path === '/_alva/consent' && ['GET', 'POST'].includes(req.method);
       const publicRuntimeLoader = runtimeConsents && path === '/_alva/runtime.js' && req.method === 'GET';
+      // O formulário também abre direto no domínio do Studio (o link `/f/...` entregue ao
+      // dono), e esse envio nunca passa pelo gateway. Por isso só se exige a assinatura de
+      // quem diz vir pelo gateway; o envio direto segue sem atribuição verificada, como
+      // sempre seguiu com os pixels desligados. Recusá-lo quebraria o link do dono.
+      const formularioPeloGateway = Boolean(publicFormRequest && ['POST', 'OPTIONS'].includes(req.method) && req.headers['x-alva-runtime-gateway'] !== undefined);
       const runtimeGatewayProtected = Boolean(
-        (runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || (publicFormRequest && ['POST', 'OPTIONS'].includes(req.method))))
+        (runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || formularioPeloGateway))
         || (runtimeManifests && pageCaptureRequest && ['POST', 'OPTIONS'].includes(req.method)),
       );
       const runtimeGateway = runtimeGatewayProtected

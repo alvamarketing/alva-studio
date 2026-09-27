@@ -9,7 +9,8 @@ export function billingRuntimeEnvironment(environment = process.env) {
 export function readRuntimeFlags(environment = process.env) {
   return Object.freeze({
     conversions: enabled(environment, 'CONVERSIONS_ENABLED'),
-    pixels: enabled(environment, 'PIXELS_ENABLED'),
+    // Ligados por padrão (decisão do dono, 27/09/2026): desligar exige o "false" literal.
+    pixels: environment?.PIXELS_ENABLED !== 'false',
     mediaPipeline: enabled(environment, 'MEDIA_PIPELINE_ENABLED'),
     billingEnforcement: enabled(environment, 'BILLING_ENFORCEMENT'),
   });

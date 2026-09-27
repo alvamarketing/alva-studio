@@ -284,7 +284,9 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         return { status: 'passed' };
       },
       publication_rollback: async () => {
-        assert.deepEqual(readRuntimeFlags({}), { conversions: false, pixels: false, mediaPipeline: false, billingEnforcement: false });
+        // Os pixels vêm ligados por padrão (27/09); não geram saída do servidor — quem
+        // carrega os scripts é o navegador de quem visita.
+        assert.deepEqual(readRuntimeFlags({}), { conversions: false, pixels: true, mediaPipeline: false, billingEnforcement: false });
         assert.equal(fakePublicationCalls.some((call) => call.snapshotHash === 'a'.repeat(64)), true);
         return { status: 'passed' };
       },

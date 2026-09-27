@@ -22,9 +22,10 @@ export const LOCAL_SECRET_INVENTORY = Object.freeze([
   Object.freeze({ name: 'ASAAS_PRODUCTION_WEBHOOK_TOKEN', location: 'cofre produção', purpose: 'autenticação do webhook produção' }),
 ]);
 
+// Flags que fariam o servidor falar com fora. `PIXELS_ENABLED` não está aqui: vem ligada
+// por padrão desde 27/09 e só muda o que o navegador de quem visita carrega.
 const REQUIRED_OFF_FLAGS = Object.freeze([
   'CONVERSIONS_ENABLED',
-  'PIXELS_ENABLED',
   'MEDIA_PIPELINE_ENABLED',
   'BILLING_ENFORCEMENT',
 ]);

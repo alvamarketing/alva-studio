@@ -1120,7 +1120,7 @@ test('overview de projeto expõe conteúdo real, domínio verificado e estados p
   assert.deepEqual(overview.runtime, {
     analytics: true,
     conversions: false,
-    pixels: false,
+    pixels: true,
     media: false,
     billing: false,
   });

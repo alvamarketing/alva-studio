@@ -155,7 +155,7 @@ test('runtime Compose declara os serviços do Studio, o banco privado e imagens 
   assert.match(compose, /PUBLIC_ORIGIN: \$\{PUBLIC_ORIGIN:\?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify\}/);
   assert.match(compose, /WEBHOOK_WORKER_ENABLED: "false"/);
   assert.match(compose, /TRACKING_PROVISION_ENABLED: \$\{TRACKING_PROVISION_ENABLED:-false\}/);
-  assert.match(compose, /PIXELS_ENABLED: \$\{PIXELS_ENABLED:-false\}/);
+  assert.match(compose, /PIXELS_ENABLED: \$\{PIXELS_ENABLED:-true\}/);
   assert.match(compose, /PUBLICATION_RUNTIME_HMAC_SECRET: \$\{PUBLICATION_RUNTIME_HMAC_SECRET:-\}/);
   assert.match(compose, /TRACKING_MASTER_KEY: \$\{TRACKING_MASTER_KEY:\?Defina TRACKING_MASTER_KEY no ambiente do Coolify\}/);
   assert.match(compose, /VERCEL_MASTER_KEY: \$\{VERCEL_MASTER_KEY:\?Defina VERCEL_MASTER_KEY no ambiente do Coolify\}/);
