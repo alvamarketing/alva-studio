@@ -1,3 +1,4 @@
+import { registroRecomendado } from './dns-do-dominio.mjs';
 import { Publisher } from './publisher.mjs';
 import { runtimeGatewayArtifacts } from './vercel-runtime-gateway.mjs';
 import { buildRuntimeManifest } from './publication-runtime.mjs';
@@ -133,6 +134,15 @@ export class PublicationService {
     const { publisher } = await this.publisher({ companyId, projectId });
     const state = await publisher.status(run.externalDeploymentId);
     return this.deployments.updateStatus({ companyId, projectId, runId, status: state.state, url: state.url });
+  }
+
+  // O registro que o domínio do projeto precisa no provedor, pelo que a Vercel recomenda.
+  async dns({ companyId, projectId }) {
+    const atual = this.domains?.atual ? await this.domains.atual({ companyId, projectId }) : null;
+    if (!atual) return { dominio: null };
+    const { credentials, publisher } = await this.publisher({ companyId, projectId });
+    const config = await publisher.domainConfig({ projectId: credentials.vercelProjectId, domain: atual.domain });
+    return registroRecomendado(atual.domain, config);
   }
 
   async domain({ companyId, projectId, requestedBy, runId, domain }) {

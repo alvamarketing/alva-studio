@@ -359,6 +359,16 @@ export class DeploymentRepository {
 
 export class ProjectDomainRepository {
   constructor(database, { billingPolicy = null } = {}) { this.database = database; this.billingPolicy = billingPolicy; }
+  // O domínio de produção do projeto: o canônico, ou o último conectado que ainda espera DNS.
+  async atual({ companyId, projectId }) {
+    const { rows } = await this.database.query(
+      `SELECT domain, verification_status FROM project_domains
+       WHERE company_id = $1 AND project_id = $2 AND environment = 'production' AND (is_canonical OR verification_status = 'pending')
+       ORDER BY is_canonical DESC, updated_at DESC LIMIT 1`,
+      [companyId, projectId],
+    );
+    return rows[0] ? { domain: rows[0].domain, verificationStatus: rows[0].verification_status } : null;
+  }
   async save({ companyId, projectId, environment = 'production', domain, verificationStatus = 'pending', reserve = false }) {
     const value = String(domain || '').trim().toLowerCase();
     if (!value || value.length > 253) throw fail('Domínio inválido.', 400);

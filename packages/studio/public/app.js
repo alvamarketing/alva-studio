@@ -917,6 +917,21 @@ async function renderMcpKeys(projectId) {
     status.textContent = error.message || 'Não foi possível carregar as chaves MCP.';
   }
 }
+// O registro exato que o domínio do projeto precisa, perguntado à Vercel: a pessoa copia
+// daqui para o provedor do domínio, sem abrir a Vercel.
+async function mostrarRegistroDeDns(projectId) {
+  const caixa = $('#publication-dns-record');
+  if (!caixa || !projectId) return;
+  try {
+    const dns = await api(`/projects/${projectId}/publication/domain`);
+    caixa.hidden = !dns?.dominio;
+    if (!dns?.dominio) return;
+    caixa.innerHTML = `<p class="publication-dns-status" data-pronto="${dns.pronto}">${dns.pronto ? 'Pronto: ' + escape(dns.dominio) + ' já aponta para este projeto.' : 'Crie este registro no provedor de ' + escape(dns.dominio) + ':'}</p>`
+      + `<table class="domain-records"><thead><tr><th>Tipo</th><th>Nome</th><th>Valor</th></tr></thead><tbody><tr><td>${escape(dns.tipo)}</td><td>${escape(dns.nome)}</td><td><code>${escape(dns.valor)}</code></td></tr></tbody></table>`;
+  } catch {
+    caixa.hidden = true;
+  }
+}
 function renderPublication(overview, publication = {}) {
   const configured = publication.integration?.connectionStatus === 'configured' || overview.integrations?.vercel === 'configured';
   const publishedRoutes = (overview.content || []).filter((item) => item.published);
@@ -932,6 +947,7 @@ function renderPublication(overview, publication = {}) {
   $('#publication-preview').disabled = !model.canPreview;
   $('#publication-production').disabled = !model.canProduction;
   $('#publication-domain-form').hidden = !model.canProduction || !studioShell.can('integration.manage');
+  if (!$('#publication-domain-form').hidden) mostrarRegistroDeDns(studioShell.state().currentProject?.id);
   const connection = $('#publication-connection-form');
   connection.elements.vercelProjectId.value = publication.integration?.vercelProjectId || '';
 }

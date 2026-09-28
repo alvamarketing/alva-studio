@@ -505,6 +505,7 @@ export function createProjectApi({
         await sessionService.authorize(context, 'deployment.publish', projectId);
         return json(await publication.status({ companyId: context.companyId, projectId, runId: value }));
       }
+      if (action === 'domain' && method === 'GET') return json(await publication.dns({ companyId: context.companyId, projectId }));
       if (action === 'domain' && method === 'POST') {
         await sessionService.authorize(context, 'integration.manage', projectId);
         const input = await body(req);

@@ -2076,3 +2076,10 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .publication-dns ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .publication-dns code { font-size: var(--text-sm); background: var(--alva-cloud); border-radius: var(--radius-xs); padding: 1px 5px; }
 .publication-dns a { color: var(--alva-blue); }
+.publication-dns-record { margin-top: 12px; display: grid; gap: 8px; font-size: var(--text-md); }
+.publication-dns-record p { margin: 0; }
+.publication-dns-status[data-pronto="true"] { color: var(--alva-success); font-weight: 600; }
+.publication-dns-record table { border-collapse: collapse; width: 100%; }
+.publication-dns-record th, .publication-dns-record td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--alva-line); }
+.publication-dns-record th { font-size: var(--text-xs); color: var(--alva-muted); text-transform: uppercase; letter-spacing: .06em; }
+.publication-dns-record code { font-size: var(--text-sm); word-break: break-all; }

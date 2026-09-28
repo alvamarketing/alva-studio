@@ -96,4 +96,11 @@ export class Publisher {
     return { name: result.name, verified: result.verified, verification: result.verification || [] };
   }
   configureDomain(input) { return this.domain(input); }
+  // O que a Vercel recomenda para o domínio apontar para o projeto (registro A no raiz,
+  // CNAME no subdomínio) e se já está pronto. GET /v6/domains/{domain}/config.
+  async domainConfig({ projectId, domain }) {
+    if (!domain) throw fail('Informe um domínio.', 400);
+    const consulta = projectId ? '?projectIdOrName=' + encodeURIComponent(projectId) : '';
+    return this.request('/v6/domains/' + encodeURIComponent(domain) + '/config' + consulta);
+  }
 }
