@@ -113,10 +113,23 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
     root: {
       fields: {
         title: { type: 'text', label: quiz ? 'Título do quiz (aba do navegador)' : 'Título da página (aba do navegador)' },
+        // O cabeçalho fixo do quiz (contrato: "Vamos conhecer você?"): marca e barra.
+        ...(quiz ? { marca: { type: 'text', label: 'Marca no topo (vazio usa o título)' }, logo: campoDeImagem('Logo no topo (opcional)', enviarImagem) } : {}),
         [SLOT]: { type: 'slot', allow: quiz ? ['etapa'] : ['section', ...secoesProntas.map((pronta) => pronta.id)] },
       },
       defaultProps: { title: '', [SLOT]: [] },
-      render: ({ [SLOT]: Itens }) => <Itens as="main" className={quiz ? 'alva-pagina alva-quiz-no-editor' : 'alva-pagina'} minEmptyHeight={400} />,
+      render: ({ [SLOT]: Itens, title, marca, logo }) => (quiz
+        ? (
+          <div data-alva-quiz="true">
+            <header className="alva-quiz-topo">
+              <span className="alva-quiz-marca">{logo ? <img src={logo} alt={marca || title || ''} /> : (marca || title || 'Sua marca')}</span>
+              <div className="alva-quiz-progresso"><i style={{ width: '25%' }} /></div>
+              <small className="alva-quiz-porcento">25%</small>
+            </header>
+            <Itens as="main" className="alva-pagina alva-quiz-no-editor" minEmptyHeight={400} />
+          </div>
+        )
+        : <Itens as="main" className="alva-pagina" minEmptyHeight={400} />),
     },
     components: {
       ...prontas,

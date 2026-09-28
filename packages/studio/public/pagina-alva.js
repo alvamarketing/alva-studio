@@ -9,8 +9,10 @@ import { runtimeCss, templateCss } from './templates.js';
 import { materialSymbolsFontCss } from './quiz-elements.js';
 
 export const FORMATO_ALVA = 'alva/1';
+export const FONTE_DO_CONTRATO = 'body{font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}';
 export const ehEstadoAlva = (estado) => estado?.formato === FORMATO_ALVA;
 
+const LOGO = /^(?:https:\/\/|\/i\/)[^\s"'()\\<>]{1,1000}$/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const novoId = () => globalThis.crypto.randomUUID();
 
@@ -28,8 +30,11 @@ export function normalizarEstadoAlva(estado, uuid = novoId) {
   };
   const titulo = String(estado?.root?.title ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200);
   // O quiz é a página inteira como uma captura só: a identidade dela mora na raiz.
+  // A marca do cabeçalho do quiz: texto (ou o título, se vazio) e, opcional, a logo.
+  const marca = String(estado?.root?.marca ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 60);
+  const logo = LOGO.test(String(estado?.root?.logo ?? '')) ? String(estado.root.logo) : '';
   const quiz = estado?.root?.tipo === 'quiz'
-    ? { tipo: 'quiz', captureId: UUID.test(estado.root.captureId ?? '') ? estado.root.captureId : uuid() }
+    ? { tipo: 'quiz', captureId: UUID.test(estado.root.captureId ?? '') ? estado.root.captureId : uuid(), ...(marca ? { marca } : {}), ...(logo ? { logo } : {}) }
     : {};
   return {
     formato: FORMATO_ALVA,
@@ -43,17 +48,22 @@ export const ehQuiz = (estado) => estado?.root?.tipo === 'quiz';
 export function documentoDaPagina(estado, { publicOrigin = '', previa = false } = {}) {
   const limpo = normalizarEstadoAlva(estado, () => { throw new Error('Estado sem identificadores: normalize antes de desenhar.'); });
   const quiz = ehQuiz(limpo);
-  const folhas = materialSymbolsFontCss(publicOrigin) + runtimeCss + templateCss + elementosCss + (quiz ? escolhaCss + quizRuntimeCss : '');
+  // A fonte do contrato visual (token --font-sans do Studio) vence a do modelo antigo.
+  const folhas = materialSymbolsFontCss(publicOrigin) + runtimeCss + templateCss + FONTE_DO_CONTRATO + elementosCss + (quiz ? escolhaCss + quizRuntimeCss : '');
+  const nomeDaMarca = limpo.root.marca || limpo.root.title || '';
+  const topo = quiz
+    ? `<header class="alva-quiz-topo"><span class="alva-quiz-marca">${limpo.root.logo ? `<img src="${escapeHtml(limpo.root.logo)}" alt="${escapeHtml(nomeDaMarca)}">` : escapeHtml(nomeDaMarca)}</span><div class="alva-quiz-progresso"><i></i></div><small class="alva-quiz-porcento">0%</small></header>`
+    : '';
   // O quiz: todas as etapas dentro de uma captura (o runtime mostra uma por vez e envia no
   // fim). O script vai com o marcador de nonce que a publicação troca pelo da CSP — sem
   // ele, a página publicada bloquearia o próprio quiz.
   const corpo = quiz
-    ? `<body data-alva-quiz="true" data-alva-quiz-voltar="true"><main class="alva-pagina"><form class="alva-quiz" data-alva-capture-id="${escapeHtml(limpo.root.captureId)}" action="#" method="post" novalidate>${renderTree(limpo.content)}</form></main>`
+    ? `<body data-alva-quiz="true" data-alva-quiz-voltar="true">${topo}<main class="alva-pagina"><form class="alva-quiz" data-alva-capture-id="${escapeHtml(limpo.root.captureId)}" action="#" method="post" novalidate>${renderTree(limpo.content)}</form></main>`
       + `<script nonce="__ALVA_RUNTIME_NONCE__">${quizRuntimeScript({ previa })}</script></body>`
     : `<body><main class="alva-pagina">${renderTree(limpo.content)}</main></body>`;
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-    + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">'
+    + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">'
     + `<title>${escapeHtml(limpo.root.title)}</title><style>${folhas}</style></head>`
     + `${corpo}</html>`;
 }

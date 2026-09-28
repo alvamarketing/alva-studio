@@ -79,6 +79,24 @@ test('o documento do quiz marca o corpo, junta as etapas numa captura e leva o r
   assert.match(html, /\.alva-opcao:has\(input:checked\)/, 'escolhido é visualmente diferente de passar o cursor');
 });
 
+// O cabeçalho fixo do contrato (seção "Vamos conhecer você?" do wireframe): marca, barra e
+// percentual — antes o runtime desenhava só a barra.
+test('o quiz publicado tem o cabeçalho com a marca, a barra e o percentual', () => {
+  const estado = quiz();
+  estado.root.marca = 'Alva Marketing';
+  const html = documentoDaPagina(normalizarEstadoAlva(estado));
+  assert.match(html, /<header class="alva-quiz-topo"><span class="alva-quiz-marca">Alva Marketing<\/span><div class="alva-quiz-progresso"><i><\/i><\/div><small class="alva-quiz-porcento">0%<\/small><\/header>/);
+  estado.root.logo = 'https://cdn.exemplo.test/logo.png';
+  assert.match(documentoDaPagina(normalizarEstadoAlva(estado)), /<span class="alva-quiz-marca"><img src="https:\/\/cdn.exemplo.test\/logo.png" alt="Alva Marketing"><\/span>/);
+  assert.match(documentoDaPagina(quiz()), /<span class="alva-quiz-marca">Diagnóstico<\/span>/, 'sem marca, vale o título do quiz');
+});
+
+test('a página do esquema novo usa a fonte do contrato (Inter)', () => {
+  const html = documentoDaPagina(quiz());
+  assert.match(html, /family=Inter:/);
+  assert.match(html, /body\{font-family:"Inter"/);
+});
+
 test('a captura do quiz tem uma etapa por tela e a regra da opção que ramifica', () => {
   const estado = quiz();
   const { forms } = capturasDoEstado(estado);
@@ -130,9 +148,12 @@ test('escolher avança sozinho, a opção que ramifica pula a etapa e o fim envi
   const dom = await abrir(quiz(), { envios, conversoes });
   const { document } = dom.window;
   assert.deepEqual(visivel(document), ['etapa-1']);
+  assert.equal(document.querySelector('.alva-quiz-porcento').textContent, '25%');
+  assert.equal(document.querySelectorAll('.alva-quiz-progresso').length, 1, 'o runtime usa a barra do cabeçalho, sem criar outra');
   document.querySelector('input[value="Já tenho"]').click();
   await esperar();
   assert.deepEqual(visivel(document), ['etapa-3'], '"Já tenho" leva direto ao contato');
+  assert.equal(document.querySelector('.alva-quiz-porcento').textContent, '75%');
   document.querySelector('[data-alva-etapa="etapa-3"] a.cta').click();
   await esperar();
   assert.deepEqual(visivel(document), ['etapa-3'], 'e-mail obrigatório vazio segura');

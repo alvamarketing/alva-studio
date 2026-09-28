@@ -10,7 +10,8 @@ import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
 import { ArrowLeft, CircleCheck, CircleDot, Eye, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
 import { Estrutura } from './estrutura.jsx';
-import { documentoDaPagina, ehQuiz, normalizarEstadoAlva } from '../public/pagina-alva.js';
+import { FONTE_DO_CONTRATO, documentoDaPagina, ehQuiz, normalizarEstadoAlva } from '../public/pagina-alva.js';
+import { quizRuntimeCss } from '../public/quiz-runtime.js';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
 import { elementosCss, escolhaCss } from '../public/catalogo-elementos.js';
 import { runtimeCss, templateCss } from '../public/templates.js';
@@ -37,14 +38,15 @@ async function api(caminho, metodo = 'GET', dados) {
 const ROTULOS_DAS_ETAPAS = `.alva-quiz-no-editor{counter-reset:etapa}
 .alva-quiz-no-editor .alva-etapa{counter-increment:etapa;position:relative;border-bottom:1px dashed #98a2b3}
 .alva-quiz-no-editor .alva-etapa::before{content:'Etapa ' counter(etapa);position:absolute;top:10px;left:14px;font:600 12px/1 Inter,system-ui,sans-serif;color:#667085;letter-spacing:.02em}
-.alva-quiz-no-editor .alva-etapa:last-of-type::before{content:'Tela final'}`;
-const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + elementosCss + escolhaCss + ROTULOS_DAS_ETAPAS;
+.alva-quiz-no-editor .alva-etapa:last-of-type::before{content:'Tela final'}
+.alva-quiz-no-editor .alva-etapa .alva-conteudo>*:has(.answer-wrap){flex:0 0 100%}`;
+const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + FONTE_DO_CONTRATO + elementosCss + escolhaCss + quizRuntimeCss + ROTULOS_DAS_ETAPAS;
 function IframeComFolhas({ children, document: doc }) {
   useEffect(() => {
     if (!doc || doc.getElementById('alva-folhas')) return;
     const fonte = doc.createElement('link');
     fonte.rel = 'stylesheet';
-    fonte.href = 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap';
+    fonte.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
     const estilo = doc.createElement('style');
     estilo.id = 'alva-folhas';
     estilo.textContent = FOLHAS;

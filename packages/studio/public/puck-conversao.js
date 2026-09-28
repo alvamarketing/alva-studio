@@ -50,7 +50,7 @@ export function puckParaAlva(dados) {
   return {
     formato: 'alva/1',
     // O quiz leva o tipo e a captura na raiz; a landing, só o título.
-    root: { title: dados?.root?.props?.title ?? '', ...(dados?.root?.props?.tipo === 'quiz' ? { tipo: 'quiz', captureId: dados.root.props.captureId } : {}) },
+    root: { title: dados?.root?.props?.title ?? '', ...(dados?.root?.props?.tipo === 'quiz' ? { tipo: 'quiz', captureId: dados.root.props.captureId, marca: dados.root.props.marca ?? '', logo: dados.root.props.logo ?? '' } : {}) },
     content: [...(dados?.root?.props?.[SLOT] ?? []), ...(dados?.content ?? [])].map(converter),
   };
 }

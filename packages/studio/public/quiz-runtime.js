@@ -26,6 +26,25 @@ export const quizRuntimeCss = `
 }
 [data-alva-quiz] .alva-quiz-voltar .material-symbols-outlined { font-size: 18px; }
 [data-alva-quiz] section:has(> .alva-quiz-voltar) { padding-top: max(64px, 1em); }
+[data-alva-quiz] .alva-quiz-topo {
+  position: sticky; top: 0; z-index: 9;
+  height: 64px; padding: 0 32px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 30px;
+  border-bottom: 1px solid #e1e7ef; background: #ffffff; color: #101828;
+}
+[data-alva-quiz] .alva-quiz-topo .alva-quiz-progresso {
+  position: static; flex: 1; height: 6px; border-radius: 10px; background: #edf0f5; overflow: hidden;
+}
+[data-alva-quiz] .alva-quiz-marca {
+  flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 16px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+}
+[data-alva-quiz] .alva-quiz-marca img { display: block; max-height: 32px; max-width: 160px; object-fit: contain; }
+[data-alva-quiz] .alva-quiz-porcento { flex: none; color: #667085; font-size: 12px; font-weight: 600; min-width: 3ch; text-align: right; }
+@media (max-width: 640px) {
+  [data-alva-quiz] .alva-quiz-topo { padding: 0 16px; gap: 16px; }
+  [data-alva-quiz] .alva-quiz-marca { font-size: 14px; }
+}
 [data-alva-quiz] [data-alva-quiz-erro] {
   margin: 10px 0 0; color: #ba3535; font-size: 14px;
 }
@@ -57,10 +76,16 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
   const trackingEventId = globalThis.crypto?.randomUUID?.() || '';
   let atual = 0;
 
-  const barra = document.createElement('div');
-  barra.className = 'alva-quiz-progresso';
-  barra.innerHTML = '<i></i>';
-  corpo.prepend(barra);
+  // O quiz do esquema do Alva já traz o cabeçalho (marca, barra e percentual); o antigo
+  // recebe só a barra.
+  let barra = document.querySelector('.alva-quiz-progresso');
+  if (!barra) {
+    barra = document.createElement('div');
+    barra.className = 'alva-quiz-progresso';
+    barra.innerHTML = '<i></i>';
+    corpo.prepend(barra);
+  }
+  const porcento = document.querySelector('.alva-quiz-porcento');
 
   const camposDa = (etapa) => [...etapa.querySelectorAll('input, select, textarea')];
 
@@ -115,7 +140,9 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
   const mostrar = (indice) => {
     atual = indice;
     etapas.forEach((etapa, i) => { etapa.hidden = i !== indice; });
-    barra.firstElementChild.style.width = Math.round(((indice + 1) / etapas.length) * 100) + '%';
+    const progresso = Math.round(((indice + 1) / etapas.length) * 100) + '%';
+    barra.firstElementChild.style.width = progresso;
+    if (porcento) porcento.textContent = progresso;
     // Quem avançou espera ver o começo da etapa nova, não o meio da página.
     window.scrollTo({ top: 0, behavior: 'smooth' });
     const foco = etapas[indice].querySelector('h1, h2, [tabindex], input, select, textarea');
