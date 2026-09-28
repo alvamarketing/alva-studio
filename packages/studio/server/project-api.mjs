@@ -123,7 +123,9 @@ export function createProjectApi({
   mcpAudit,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
-    if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
+    // A sessão já diz se o envio de vídeo (VSL) está ligado: o menu precisa saber disso em
+    // qualquer tela, não só depois que a Visão geral carrega.
+    if (method === 'GET' && path === '/api/session') return json({ ...(await sessionService.state(req)), runtime: { media: runtimeFlags?.mediaPipeline === true } });
     if (method === 'POST' && path === '/api/setup') {
       limit?.(req.socket.remoteAddress);
       // Como no n8n: o primeiro acesso cria a conta de dono, e só ele — com uma conta

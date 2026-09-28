@@ -37,6 +37,19 @@ export function vslUiAccessPolicy({ can = () => false, hasVideo = false } = {}) 
 
 function field(form, name) { return form.elements.namedItem(name); }
 
+let hlsPromessa = null;
+function carregarHls() {
+  if (globalThis.Hls) return Promise.resolve(globalThis.Hls);
+  hlsPromessa ||= new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/vendor/hls.min.js';
+    script.onload = () => (globalThis.Hls?.isSupported?.() ? resolve(globalThis.Hls) : reject(new Error('HLS indisponível')));
+    script.onerror = () => { hlsPromessa = null; reject(new Error('Não foi possível carregar o player.')); };
+    document.head.append(script);
+  });
+  return hlsPromessa;
+}
+
 export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const resolveShell = typeof getShell === 'function' ? getShell : () => shell;
   const currentShell = () => resolveShell();
@@ -67,6 +80,28 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     const url = field(target, 'posterUrl').value.trim();
     poster.hidden = !url;
     if (url) poster.src = url;
+    tocarNaPrevia(field(target, 'sourceUrl').value.trim(), field(target, 'sourceType').value, url);
+  };
+  // A prévia toca o vídeo de verdade: HLS (Cloudflare Stream) pelo hls.js que o Studio já
+  // serve; MP4 direto. Era só um resumo com a capa, e parecia um vídeo quebrado.
+  let hlsDaPrevia = null;
+  const tocarNaPrevia = (endereco, tipo, capa) => {
+    const video = document.querySelector('#vsl-preview-video');
+    if (!video) return;
+    if (capa) video.poster = capa; else video.removeAttribute('poster');
+    if (video.dataset.src === endereco) return;
+    video.dataset.src = endereco;
+    hlsDaPrevia?.destroy?.();
+    hlsDaPrevia = null;
+    video.hidden = !endereco;
+    if (!endereco) { video.removeAttribute('src'); video.load(); return; }
+    if (tipo !== 'hls' || video.canPlayType('application/vnd.apple.mpegurl')) { video.src = endereco; return; }
+    carregarHls().then((Hls) => {
+      if (video.dataset.src !== endereco) return;
+      hlsDaPrevia = new Hls();
+      hlsDaPrevia.loadSource(endereco);
+      hlsDaPrevia.attachMedia(video);
+    }).catch(() => toast('Este navegador não conseguiu tocar a prévia do vídeo.'));
   };
   // A curva só existe para VSL já salva: antes disso não há público nem eventos.
   const pintarRetencao = async (video) => {
@@ -227,7 +262,21 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   };
   if (typeof document !== 'undefined' && form()) {
     form().addEventListener('input', updatePreview);
-    form().onsubmit = async (event) => {
+    // Campo obrigatório vazio: o navegador só pintava de vermelho. Agora diz qual falta.
+    let avisouCampo = false;
+    form().addEventListener('invalid', (event) => {
+      if (avisouCampo) return;
+      avisouCampo = true;
+      setTimeout(() => { avisouCampo = false; }, 300);
+      const rotulo = event.target.closest('label')?.childNodes?.[0]?.textContent?.trim() || event.target.name;
+      toast(`Falta preencher: ${rotulo}.`);
+    }, true);
+    // O erro do servidor (endereço inválido, VSL mudou em outra aba…) vira aviso na tela;
+    // antes, ele se perdia e o botão parecia não fazer nada.
+    const comAviso = (tarefa) => async (event) => {
+      try { await tarefa(event); } catch (erro) { toast(erro?.message || 'Não foi possível salvar a VSL.'); }
+    };
+    form().onsubmit = comAviso(async (event) => {
       event.preventDefault();
       if (!vslUiAccessPolicy({ hasVideo: Boolean(current), can: (capability) => currentShell()?.can?.(capability) ?? false }).canEdit) return;
       const projectId = currentShell().state().currentProject.id;
@@ -235,15 +284,15 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
         ? await api(`/projects/${projectId}/videos/${current.id}`, 'PUT', { ...collect(), lockVersion: current.lockVersion })
         : await api(`/projects/${projectId}/videos`, 'POST', collect());
       current = saved; showForm(saved); toast('VSL salva.'); await load();
-    };
-    field(form(), 'publish').onclick = async () => {
+    });
+    field(form(), 'publish').onclick = comAviso(async () => {
       if (!current) throw new Error('Salve a VSL antes de publicar.');
       if (!vslUiAccessPolicy({ hasVideo: true, can: (capability) => currentShell()?.can?.(capability) ?? false }).canPublish)
         throw new Error('Você não tem permissão para publicar VSLs neste projeto.');
       const projectId = currentShell().state().currentProject.id;
       await api(`/projects/${projectId}/videos/${current.id}/publish`, 'POST', { lockVersion: current.lockVersion });
       toast('VSL publicada.'); await load();
-    };
+    });
   }
   return { show: async () => { root().hidden = false; await load(); }, hide: () => { if (root()) root().hidden = true; }, edit: showForm, editById, reload: load };
 }

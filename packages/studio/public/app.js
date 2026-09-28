@@ -89,6 +89,7 @@ function setActiveNavigation(view) {
   applyDashboardNavigation(Object.fromEntries(Object.entries(navigation).filter(([, element]) => element)), activeView);
 }
 function abrirView(view, options = {}) {
+  if (view === 'vsl') return void action(() => abrirVsl(options))();
   if (view === 'pages') return void action(abrirPaginas)();
   if (view === 'forms') return void action(abrirFormularios)();
   if (view === 'analytics') return void action(abrirAnalytics)();
@@ -97,6 +98,18 @@ function abrirView(view, options = {}) {
   if (view === 'agents') return void action(abrirAgentes)();
   if (view === 'publication') return void action(abrirPublicacao)();
   return setDashboardView(view, options);
+}
+// Ao recarregar em #/vsl, a tela ainda não sabe se o envio de vídeo está ligado (isso vem
+// do painel do projeto): pergunta antes, em vez de concluir que está desligado e mandar a
+// pessoa para a Visão geral.
+async function abrirVsl(options = {}) {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!mediaPipelineEnabled && projectId) {
+    const overview = await api(`/projects/${projectId}/overview`).catch(() => null);
+    mediaPipelineEnabled = overview?.runtime?.media === true;
+    updateVslNavigation();
+  }
+  return setDashboardView('vsl', options);
 }
 function sidebarContextFor(view, hasProject = false) {
   if (view === 'home') return 'studio';
@@ -2301,9 +2314,11 @@ projectSubmission = createProjectSubmission({
 ownerUI = createOwnerUI({
   api,
   toast,
-  onAuthenticated: async () => {
+  onAuthenticated: async (sessao) => {
+    if (sessao?.runtime?.media === true) mediaPipelineEnabled = true;
     await studioShell.initialize();
     dashboardContextFlow.bootstrap();
+    updateVslNavigation();
     await refreshConfig();
     $('#dashboard').hidden = false;
     const rota = window.location.hash.length > 1 ? viewRouter.current() : null;
