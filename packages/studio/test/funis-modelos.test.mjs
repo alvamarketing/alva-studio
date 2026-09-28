@@ -50,3 +50,10 @@ test('a miniatura do cartão desenha cada etapa na cor do grupo e cada seta', as
   assert.match(svg, /class="funil-mini-pagina"/);
   assert.match(miniaturaDoFunil({ nos: [], setas: [] }), /<svg class="funil-mini"/, 'funil vazio não quebra');
 });
+
+test('a galeria só traz modelos com ao menos uma página do Studio', async () => {
+  const { modelosDaGaleria } = await import('../public/funis-view.js');
+  assert.ok(modelosDaGaleria.length >= 15);
+  assert.ok(modelosDaGaleria.every((modelo) => modelo.nos.some((no) => etapaViraPagina(no.k))));
+  assert.equal(modelosDaGaleria.some((modelo) => modelo.id === 'funil-agendamento-clinica-estetica'), false);
+});

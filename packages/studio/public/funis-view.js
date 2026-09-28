@@ -55,17 +55,22 @@ function cartaoDoFunil(projectId, funil) {
   </a>`;
 }
 
+// Só entram na galeria os modelos com ao menos uma página do Studio: um funil feito só de
+// etapas que acontecem fora (agenda, WhatsApp, reunião) serve para entender, não para
+// trabalhar aqui. Os outros continuam em funis-modelos.js para quando houver integração.
+export const modelosDaGaleria = modelosDeFunil.filter((modelo) => modelo.nos.some((no) => etapaViraPagina(no.k)));
+
 export async function renderFunis({ root, api, projectId, podeEscrever, onError = () => {} }) {
   const lista = root.querySelector('#funnels-list');
   const galeria = root.querySelector('#funnels-models');
   const filtros = root.querySelector('#funnels-filters');
-  const tipos = [...new Set(modelosDeFunil.map((modelo) => modelo.tipo))].sort((a, b) => a.localeCompare(b));
+  const tipos = [...new Set(modelosDaGaleria.map((modelo) => modelo.tipo))].sort((a, b) => a.localeCompare(b));
   let tipoAtivo = '';
   let busca = '';
 
   filtros.innerHTML = `<label class="funnels-busca"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" placeholder="Buscar funil ou modelo" aria-label="Buscar funil ou modelo"></label>`
     + `<div class="funnels-tipos" role="group" aria-label="Filtrar modelos por tipo"><button type="button" class="funnels-tipo" aria-pressed="true" data-tipo="">Todos</button>`
-    + tipos.map((tipo) => `<button type="button" class="funnels-tipo" aria-pressed="false" data-tipo="${escapar(tipo)}">${escapar(tipo)} <b>${modelosDeFunil.filter((m) => m.tipo === tipo).length}</b></button>`).join('')
+    + tipos.map((tipo) => `<button type="button" class="funnels-tipo" aria-pressed="false" data-tipo="${escapar(tipo)}">${escapar(tipo)} <b>${modelosDaGaleria.filter((m) => m.tipo === tipo).length}</b></button>`).join('')
     + '</div>';
 
   const aplicar = () => {
@@ -89,7 +94,7 @@ export async function renderFunis({ root, api, projectId, podeEscrever, onError 
 
   lista.innerHTML = '<p class="empty-state">Carregando funis…</p>';
   galeria.innerHTML = `<button type="button" class="funil-modelo funil-em-branco" data-modelo=""><span class="funil-modelo-previa"><span class="material-symbols-outlined" aria-hidden="true">add</span></span><strong>Funil em branco</strong><span class="funil-modelo-para">Comece com um anúncio e uma página, e desenhe o resto.</span></button>`
-    + [...modelosDeFunil].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.nome.localeCompare(b.nome)).map(cartaoDoModelo).join('')
+    + [...modelosDaGaleria].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.nome.localeCompare(b.nome)).map(cartaoDoModelo).join('')
     + '<p id="funnels-models-vazio" class="empty-state" hidden>Nenhum modelo com esse filtro.</p>';
   galeria.hidden = !podeEscrever;
   root.querySelector('#funnels-models-title').hidden = !podeEscrever;

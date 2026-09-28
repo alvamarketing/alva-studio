@@ -49,6 +49,8 @@ export class FunnelRepository {
   async criar({ companyId, projectId, actorId, name, modelId }) {
     const modelo = modelId ? modelosDeFunil.find((item) => item.id === modelId) : null;
     if (modelId && !modelo) throw falhar('Modelo de funil desconhecido.');
+    // Modelo sem nenhuma página do Studio não está na galeria (ver funis-view.js).
+    if (modelo && !modelo.nos.some((no) => etapaViraPagina(no.k))) throw falhar('Este modelo ainda não tem páginas que o Studio cria.');
     const nome = nomeLimpo(name) || modelo?.nome || 'Funil sem nome';
     const grafo = modelo ? grafoDoModelo(modelo) : normalizarGrafo({ nos: [{ id: 'n1', k: 'meta', nome: 'Anúncio', x: 0, y: 0 }, { id: 'n2', k: 'pagina', nome: 'Página de vendas', x: 320, y: 0 }], setas: [{ id: 's1', de: 'n1', para: 'n2' }] });
     const { rows } = await this.database.query(

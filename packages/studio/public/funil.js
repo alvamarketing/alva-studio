@@ -66,3 +66,61 @@ export function destinosDaEtapa(grafo, etapaId, enderecoDaPagina = () => '') {
   const aceite = saidas.find((seta) => seta !== recusa) ?? (recusa && saidas.length === 1 ? null : saidas[0]);
   return { proxima: aceite ? endereco(aceite) : '#', alternativa: recusa ? endereco(recusa) : '#' };
 }
+
+// "Organizar": coloca as etapas em colunas pela ordem das setas. A coluna de uma etapa é o
+// caminho mais longo desde o começo do funil; seta que volta (laço: "não fechou, volta")
+// não empurra a etapa para frente. Dentro da coluna, a ordem segue a média da posição das
+// etapas de onde as setas vêm, para as setas se cruzarem menos.
+export const ESPACO_ENTRE_COLUNAS = 300;
+export const ESPACO_ENTRE_LINHAS = 150;
+export function organizarGrafo(grafo) {
+  const ids = grafo.nos.map((no) => no.id);
+  const entradas = new Map(ids.map((id) => [id, []]));
+  const saidas = new Map(ids.map((id) => [id, []]));
+  for (const seta of grafo.setas) {
+    if (!entradas.has(seta.para) || !saidas.has(seta.de) || seta.de === seta.para) continue;
+    saidas.get(seta.de).push(seta.para);
+    entradas.get(seta.para).push(seta.de);
+  }
+  // Setas de retorno: as que fecham um ciclo numa busca a partir das origens.
+  const retorno = new Set();
+  const estado = new Map();
+  const visitar = (id) => {
+    estado.set(id, 'aberto');
+    for (const alvo of saidas.get(id)) {
+      if (estado.get(alvo) === 'aberto') retorno.add(`${id}>${alvo}`);
+      else if (!estado.has(alvo)) visitar(alvo);
+    }
+    estado.set(id, 'fechado');
+  };
+  const origens = ids.filter((id) => !entradas.get(id).length);
+  for (const id of [...origens, ...ids]) if (!estado.has(id)) visitar(id);
+  const coluna = new Map();
+  const colunaDe = (id, pilha = new Set()) => {
+    if (coluna.has(id)) return coluna.get(id);
+    pilha.add(id);
+    const anteriores = entradas.get(id).filter((de) => !retorno.has(`${de}>${id}`) && !pilha.has(de));
+    const valor = anteriores.length ? Math.max(...anteriores.map((de) => colunaDe(de, pilha) + 1)) : 0;
+    pilha.delete(id);
+    coluna.set(id, valor);
+    return valor;
+  };
+  ids.forEach((id) => colunaDe(id));
+  const colunas = [];
+  for (const id of ids) (colunas[coluna.get(id)] ||= []).push(id);
+  const linha = new Map();
+  colunas.forEach((lista = [], indice) => {
+    if (indice > 0) {
+      const media = (id) => {
+        const vindos = entradas.get(id).filter((de) => linha.has(de) && coluna.get(de) < indice);
+        return vindos.length ? vindos.reduce((soma, de) => soma + linha.get(de), 0) / vindos.length : Number.MAX_SAFE_INTEGER;
+      };
+      lista.sort((a, b) => media(a) - media(b));
+    }
+    lista.forEach((id, i) => linha.set(id, i - (lista.length - 1) / 2));
+  });
+  return {
+    ...grafo,
+    nos: grafo.nos.map((no) => ({ ...no, x: coluna.get(no.id) * ESPACO_ENTRE_COLUNAS, y: Math.round(linha.get(no.id) * ESPACO_ENTRE_LINHAS) })),
+  };
+}

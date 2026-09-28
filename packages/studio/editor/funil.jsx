@@ -9,12 +9,12 @@ import { createRoot } from 'react-dom/client';
 import { Background, Controls, Handle, MiniMap, Position, ReactFlow, ReactFlowProvider, addEdge, useEdgesState, useNodesState, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  ArrowLeft, BookOpen, CalendarClock, CircleCheck, CircleDot, CircleX, ClipboardList, CreditCard, ExternalLink, FilePlus2, FileText,
+  ArrowLeft, BookOpen, LayoutGrid, CalendarClock, CircleCheck, CircleDot, CircleX, ClipboardList, CreditCard, ExternalLink, FilePlus2, FileText,
   Handshake, Mail, Megaphone, MessageCircle, MousePointerClick, Plus, Save, Send, ShoppingCart, StickyNote, Trash2, TrendingDown, TrendingUp,
   UserCheck, Users, Video, Wallet, Database, Trophy, Camera, Search, Share2, PartyPopper,
 } from 'lucide-react';
 import { TIPOS_DE_ETAPA, etapaViraPagina, tipoDaEtapa } from '../public/funis-etapas.js';
-import { normalizarGrafo } from '../public/funil.js';
+import { normalizarGrafo, organizarGrafo } from '../public/funil.js';
 
 const ICONE = {
   meta: Megaphone, anuncio: Megaphone, instagram: Camera, conteudo: Share2, indicacao: Users, prospeccao: Search, dm: Send,
@@ -88,7 +88,7 @@ function Editor() {
   const [menu, setMenu] = useState(false);
   const [nos, setNos, aoMudarNos] = useNodesState([]);
   const [setas, setSetas, aoMudarSetas] = useEdgesState([]);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const area = useRef(null);
   const avisar = (texto) => { setAviso(texto); setTimeout(() => setAviso(''), 4000); };
 
@@ -138,6 +138,14 @@ function Editor() {
     setNos((atuais) => [...atuais.map((no) => ({ ...no, selected: false })), { id, type: 'etapa', position: { x: centro.x - 90 + (atuais.length % 3) * 24, y: centro.y - 40 + (atuais.length % 3) * 24 }, data: { k, nome: tipoDaEtapa(k).rotulo, texto: '' }, selected: true }]);
     setAlterado(true);
   };
+  // Encaixa as etapas em colunas pela ordem das setas (public/funil.js, organizarGrafo).
+  const organizar = () => {
+    const organizado = organizarGrafo(paraGrafo(nos, setas));
+    const posicao = new Map(organizado.nos.map((no) => [no.id, { x: no.x, y: no.y }]));
+    setNos((atuais) => atuais.map((no) => (posicao.has(no.id) ? { ...no, position: posicao.get(no.id) } : no)));
+    setAlterado(true);
+    requestAnimationFrame(() => fitView({ padding: 0.15, duration: 300 }));
+  };
   const remover = () => {
     if (selecionado) { setNos((atuais) => atuais.filter((no) => no.id !== selecionado.id)); setSetas((atuais) => atuais.filter((seta) => seta.source !== selecionado.id && seta.target !== selecionado.id)); }
     else if (setaSelecionada) setSetas((atuais) => atuais.filter((seta) => seta.id !== setaSelecionada.id));
@@ -156,6 +164,7 @@ function Editor() {
         <input className="fn-nome" aria-label="Nome do funil" value={funil.name} onChange={(evento) => { setFunil({ ...funil, name: evento.target.value }); setAlterado(true); }} />
         <span className={`fn-salvo${alterado ? ' fn-pendente' : ''}`} role="status">{alterado ? <><CircleDot size={16} aria-hidden="true" /> Alterações não salvas</> : <><CircleCheck size={16} aria-hidden="true" /> Salvo</>}</span>
         <div className="fn-acoes">
+          <button type="button" className="fn-botao" onClick={organizar} title="Alinhar as etapas em colunas, na ordem das setas"><LayoutGrid size={16} aria-hidden="true" /> Organizar</button>
           <div className="fn-menu">
             <button type="button" className="fn-botao" aria-expanded={menu} onClick={() => setMenu(!menu)}><BookOpen size={16} aria-hidden="true" /> Como configurar o funil</button>
             {menu ? (

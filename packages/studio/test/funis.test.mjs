@@ -64,3 +64,25 @@ test('funil do modelo Tripwire: cria as páginas ligadas, uma vez só', { timeou
   assert.equal(salvo.name, 'Ebook (v2)');
   assert.equal((await funis.listar(escopo)).length, 1);
 });
+
+test('organizar põe cada etapa na coluna da sua distância desde o começo, e laço não empurra', async () => {
+  const { organizarGrafo, ESPACO_ENTRE_COLUNAS } = await import('../public/funil.js');
+  const grafo = normalizarGrafo({
+    nos: [{ id: 'a', k: 'meta', x: 900, y: 40 }, { id: 'b', k: 'pagina', x: 10, y: 500 }, { id: 'c', k: 'checkout', x: 333, y: 7 }, { id: 'd', k: 'upsellpg', x: 5, y: 5 }, { id: 'e', k: 'downsell', x: 5, y: 5 }],
+    setas: [{ de: 'a', para: 'b' }, { de: 'b', para: 'c' }, { de: 'c', para: 'd' }, { de: 'c', para: 'e' }, { de: 'e', para: 'b', rotulo: 'volta' }],
+  });
+  const organizado = organizarGrafo(grafo);
+  const x = Object.fromEntries(organizado.nos.map((no) => [no.id, no.x / ESPACO_ENTRE_COLUNAS]));
+  assert.deepEqual(x, { a: 0, b: 1, c: 2, d: 3, e: 3 });
+  const y = Object.fromEntries(organizado.nos.map((no) => [no.id, no.y]));
+  assert.notEqual(y.d, y.e, 'duas etapas na mesma coluna não se sobrepõem');
+  assert.equal(y.a, 0, 'coluna de uma etapa fica centralizada');
+});
+
+test('todo modelo da galeria organiza sem sobrepor etapas', async () => {
+  const { organizarGrafo } = await import('../public/funil.js');
+  for (const modelo of modelosDeFunil) {
+    const posicoes = organizarGrafo(grafoDoModelo(modelo)).nos.map((no) => `${no.x},${no.y}`);
+    assert.equal(new Set(posicoes).size, posicoes.length, modelo.nome);
+  }
+});
