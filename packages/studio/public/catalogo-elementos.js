@@ -107,3 +107,32 @@ export const blocoDoCatalogo = (id) => {
   const elemento = elementoPorId(id);
   return [elemento.id, elemento.nome, elemento.grupo, elemento.render()];
 };
+
+// A pergunta de escolha do quiz (esquema do Alva). Fica fora de `elementosCss` porque só o
+// quiz a usa. Os três estados são distintos: parado, cursor em cima (borda) e escolhido
+// (borda cheia, fundo e marca) — antes, "em cima" e "escolhido" eram idênticos. As cores são
+// as da paleta do Studio.
+export const escolhaCss = `
+.alva-quiz{display:contents}
+.alva-quiz>*{flex:0 0 100%;min-width:0}
+.alva-escolha{border:0;margin:0 auto;padding:0;min-width:0;width:100%;max-width:640px}
+.alva-bloco:has(>.alva-escolha){width:100%;align-self:stretch}
+.alva-conteudo-centro .alva-escolha-pergunta{text-align:center}
+.alva-etapa .alva-conteudo>.answer-wrap,.alva-etapa .alva-conteudo>*:has(>.answer-wrap){flex:0 0 100%}
+.alva-etapa .answer-wrap{display:grid;gap:6px;width:100%;max-width:520px;margin:0 auto;text-align:left}
+.alva-escolha-pergunta{display:block;width:100%;margin:0 0 16px;padding:0;font-size:22px;font-weight:700;line-height:1.25;color:inherit}
+.alva-opcoes{display:grid;gap:10px}
+.alva-escolha-grade .alva-opcoes{grid-template-columns:repeat(2,minmax(0,1fr))}
+.alva-opcao{position:relative;display:flex;align-items:center;gap:12px;min-height:56px;padding:14px 16px;border:1px solid #e1e7ef;border-radius:12px;background:#ffffff;color:#101828;font-size:16px;font-weight:600;text-align:left;cursor:pointer;transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease}
+.alva-escolha-grade .alva-opcao{flex-direction:column;justify-content:center;text-align:center}
+.alva-opcao input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.alva-opcao .material-symbols-outlined{font-size:24px;color:#286eea}
+.alva-opcao-imagem{display:block;width:100%;max-height:160px;object-fit:cover;border-radius:8px}
+@media (hover:hover){.alva-opcao:hover{border-color:#5b8cff}}
+.alva-opcao:has(input:focus-visible){outline:2px solid #286eea;outline-offset:2px}
+.alva-opcao:has(input:checked){border-color:#286eea;background:#edf4ff;box-shadow:inset 0 0 0 1px #286eea}
+.alva-opcao:has(input:checked)::after{content:'check_circle';font-family:'Material Symbols Outlined';font-size:22px;line-height:1;color:#286eea;margin-left:auto}
+.alva-escolha-grade .alva-opcao:has(input:checked)::after{position:absolute;top:8px;right:8px}
+.alva-opcao:has(input:disabled){opacity:.5;cursor:not-allowed}
+@media (max-width:640px){.alva-escolha-grade .alva-opcoes{grid-template-columns:1fr}}
+`;

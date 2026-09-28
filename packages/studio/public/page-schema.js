@@ -43,6 +43,13 @@ function nomeDeCampo(valor) {
   return limpo.slice(0, 60) || 'campo';
 }
 
+// O nome da resposta de uma pergunta de escolha: o que a pessoa escreveu, ou um derivado
+// da identidade do nó — duas perguntas sem nome não podem cair na mesma resposta.
+export function nomeDaEscolha(node) {
+  const dado = String(node?.props?.name ?? '').trim();
+  return dado ? nomeDeCampo(dado) : nomeDeCampo(`pergunta_${String(node?.id ?? '').slice(-12)}`);
+}
+
 // As classes dos contêineres, numa função só: o servidor desenha com elas e o editor (Puck)
 // também — duas listas divergiriam.
 const FUNDOS = { branco: '', suave: ' alva-secao-suave', escuro: ' alva-secao-escura' };
@@ -168,6 +175,31 @@ const ELEMENTOS = {
     // VSL sumir da página publicada sem erro.
     render: (node) => `<div class="alva-vsl" data-alva-vsl="${escapeHtml(texto(node.props.publicId, 80))}"><p class="alva-vsl-empty">VSL</p></div>`,
   },
+  // A etapa do quiz: uma faixa como a seção, com a identidade que o runtime e a
+  // ramificação usam para saber para onde ir.
+  etapa: {
+    render: (node, desenharFilhos) => {
+      const estilo = estiloDaSecao(node.props);
+      return `<section class="${classeDaSecao(node.props).replace('alva-secao', 'alva-secao alva-etapa')}" data-alva-etapa="${escapeHtml(texto(node.id, 80))}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
+    },
+  },
+  // A pergunta de escolha do quiz. Cada opção é um rótulo clicável com o input dentro; o
+  // escolhido se distingue pelo `:has(input:checked)` da folha. A opção pode levar a outra
+  // etapa (`data-alva-destino`), e a escolha única pode avançar sozinha (`data-alva-avanca`).
+  escolha: {
+    render: (node) => {
+      const { pergunta, multipla, obrigatoria, avancar, colunas, opcoes } = node.props;
+      const nome = escapeHtml(nomeDaEscolha(node));
+      const tipo = multipla ? 'checkbox' : 'radio';
+      const extras = `${obrigatoria ? ' required' : ''}${!multipla && avancar ? ' data-alva-avanca' : ''}`;
+      const itens = opcoes.map((opcao) => `<label class="alva-opcao"><input type="${tipo}" name="${nome}" value="${escapeHtml(opcao.rotulo)}"${extras}${opcao.destino ? ` data-alva-destino="${escapeHtml(opcao.destino)}"` : ''}>`
+        + (opcao.imagem ? `<img class="alva-opcao-imagem" src="${escapeHtml(opcao.imagem)}" alt="">` : '')
+        + (opcao.icone ? `<span class="material-symbols-outlined" aria-hidden="true">${escapeHtml(opcao.icone)}</span>` : '')
+        + `<span class="alva-opcao-rotulo">${escapeHtml(opcao.rotulo)}</span></label>`).join('');
+      return `<fieldset class="alva-escolha${Number(colunas) === 2 ? ' alva-escolha-grade' : ''}" data-alva-quiz-question${obrigatoria ? ' data-alva-quiz-required' : ''}>`
+        + `<legend class="alva-escolha-pergunta">${escapeHtml(texto(pergunta, 300))}</legend><div class="alva-opcoes">${itens}</div></fieldset>`;
+    },
+  },
   field: {
     render: (node) => {
       const { label, name, fieldType, placeholder, required } = node.props;
@@ -201,6 +233,22 @@ export function normalizeNode(node) {
     props.name = nomeDeCampo(props.name || props.label);
     props.required = props.required === true;
   }
+  if (type === 'escolha') {
+    props.pergunta = texto(props.pergunta, 300);
+    props.multipla = props.multipla === true;
+    props.obrigatoria = props.obrigatoria === true;
+    props.avancar = props.avancar === true;
+    props.opcoes = (Array.isArray(props.opcoes) ? props.opcoes : []).slice(0, 20).map((bruta) => {
+      const opcao = bruta && typeof bruta === 'object' ? bruta : {};
+      const limpa = { rotulo: texto(opcao.rotulo, 120).trim() };
+      const icone = texto(opcao.icone, 60).trim();
+      if (icone) limpa.icone = icone;
+      if (IMAGEM_DE_FUNDO.test(String(opcao.imagem ?? ''))) limpa.imagem = String(opcao.imagem);
+      const destino = String(opcao.destino ?? '').trim();
+      if (/^[a-zA-Z0-9_-]{1,80}$/.test(destino)) limpa.destino = destino;
+      return limpa;
+    }).filter((opcao) => opcao.rotulo);
+  }
   return {
     ...(node.id ? { id: String(node.id).slice(0, 80) } : {}),
     type,
@@ -211,7 +259,7 @@ export function normalizeNode(node) {
 
 // Seção é a faixa da página, e campo mora dentro do formulário: os dois não entram no
 // layout de bloco. Todo o resto ganha a caixa com largura e alinhamento.
-const SEM_CAIXA = new Set(['section', 'field']);
+const SEM_CAIXA = new Set(['section', 'etapa', 'field']);
 
 // O miolo de um bloco, sem a caixa de layout — é o que o editor desenha dentro da caixa
 // dele, para o Puck poder arrastar a caixa inteira.

@@ -11,6 +11,7 @@ import { SLOT } from '../public/puck-conversao.js';
 const usePuck = createUsePuck();
 const RAIZ = `root:${SLOT}`;
 const BLOCOS_DO_MAIS = ['heading', 'text', 'button', 'image', 'icon', 'video', 'row', 'form'];
+const BLOCOS_DO_MAIS_NO_QUIZ = ['escolha', 'field', 'heading', 'text', 'button', 'image', 'icon', 'video'];
 
 const curto = (texto, limite = 30) => {
   const limpo = String(texto ?? '').replace(/<[^>]*>/g, '').trim();
@@ -20,6 +21,7 @@ const filhos = (item) => (Array.isArray(item?.props?.[SLOT]) ? item.props[SLOT] 
 const primeiroTitulo = (item) => {
   for (const filho of filhos(item)) {
     if (filho.type === 'heading' && curto(filho.props.text)) return curto(filho.props.text);
+    if (filho.type === 'escolha' && curto(filho.props.pergunta)) return curto(filho.props.pergunta);
     const dentro = primeiroTitulo(filho);
     if (dentro) return dentro;
   }
@@ -27,7 +29,7 @@ const primeiroTitulo = (item) => {
 };
 const contem = (item, id) => filhos(item).some((filho) => filho.props.id === id || contem(filho, id));
 
-export function Estrutura() {
+export function Estrutura({ quiz = false }) {
   const dados = usePuck((estado) => estado.appState.data);
   const selecionado = usePuck((estado) => estado.selectedItem?.props?.id);
   const dispatch = usePuck((estado) => estado.dispatch);
@@ -38,6 +40,7 @@ export function Estrutura() {
   const rotulo = (item) => config.components[item.type]?.label ?? item.type;
   const nome = (item, nivel) => {
     if (item.type === 'heading') return curto(item.props.text) || rotulo(item);
+    if (item.type === 'escolha') return curto(item.props.pergunta) || rotulo(item);
     if (nivel === 0) return primeiroTitulo(item) || rotulo(item);
     return rotulo(item);
   };
@@ -94,7 +97,7 @@ export function Estrutura() {
     <div className="alva-estrutura">
       <div className="alva-eyebrow">Página</div>
       <h2>Estrutura</h2>
-      <p className="alva-ajuda">Organize seções e elementos em uma única árvore.</p>
+      <p className="alva-ajuda">{quiz ? 'Cada etapa aparece sozinha para quem responde. A última é a tela final.' : 'Organize seções e elementos em uma única árvore.'}</p>
       <div role="tree" aria-label="Estrutura da página" className="alva-arvore">
         {secoes.map((secao, index) => {
           const ativa = secao.props.id === selecionado || contem(secao, selecionado);
@@ -107,7 +110,7 @@ export function Estrutura() {
                   <button type="button" className="alva-botao-tracejado" aria-expanded={menu} onClick={() => setMenu(!menu)}>+ Elemento</button>
                   {menu ? (
                     <div className="alva-arvore-menu" role="menu">
-                      {BLOCOS_DO_MAIS.filter((tipo) => config.components[tipo]).map((tipo) => {
+                      {(quiz ? BLOCOS_DO_MAIS_NO_QUIZ : BLOCOS_DO_MAIS).filter((tipo) => config.components[tipo]).map((tipo) => {
                         const Icone = ICONE_DO_BLOCO[tipo];
                         return (
                           <button key={tipo} type="button" role="menuitem" onClick={() => inserir(tipo, zona, filhos(secao).length)}>
@@ -123,7 +126,7 @@ export function Estrutura() {
           );
         })}
       </div>
-      <button type="button" className="alva-botao-tracejado" onClick={() => inserir('section', RAIZ, secoes.length)}>+ Nova seção</button>
+      <button type="button" className="alva-botao-tracejado" onClick={() => inserir(quiz ? 'etapa' : 'section', RAIZ, secoes.length)}>{quiz ? '+ Nova etapa' : '+ Nova seção'}</button>
     </div>
   );
 }

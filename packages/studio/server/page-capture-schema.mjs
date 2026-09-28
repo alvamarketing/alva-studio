@@ -124,7 +124,10 @@ export function extractPageCaptureSchema(editorState, { webhook = '' } = {}) {
   return { forms: captures };
 }
 
+// O quiz do esquema do Alva publica as próprias etapas, com a ramificação; a captura da
+// landing é uma etapa só.
 export function pageCaptureValidationSchema(capture) {
+  if (Array.isArray(capture.steps) && capture.steps.length) return { steps: capture.steps };
   return { steps: [{ id: capture.captureId, elements: capture.fields }] };
 }
 

@@ -1,7 +1,7 @@
 // Os ícones do editor (Lucide): um por bloco na biblioteca, nos campos principais e nos
 // botões do cabeçalho. Só o editor carrega isto; a página publicada não.
 import {
-  AlignCenter, ArrowLeft, CircleCheck, CircleDot, Clapperboard, Eye, ClipboardList, Columns2, Columns3, GripVertical, Heading, Image, LayoutGrid,
+  AlignCenter, ArrowLeft, CircleCheck, ListChecks, Milestone, CircleDot, Clapperboard, Eye, ClipboardList, Columns2, Columns3, GripVertical, Heading, Image, LayoutGrid,
   Link, Mail, Megaphone, MousePointerClick, MoveHorizontal, PaintBucket, Palette, PanelTop, Quote, Rocket, Rows3,
   Save, Sparkles, Square, Star, StretchVertical, TextCursorInput, Type, Video,
 } from 'lucide-react';
@@ -23,6 +23,8 @@ export const ICONE_DO_BLOCO = {
   video: Video,
   vsl: Clapperboard,
   form: ClipboardList,
+  etapa: Milestone,
+  escolha: ListChecks,
   field: TextCursorInput,
 };
 

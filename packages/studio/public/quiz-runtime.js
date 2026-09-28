@@ -139,7 +139,12 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
     if (pendente) { avisar(etapa, pendente); return; }
     etapa.querySelector('[data-alva-quiz-erro]')?.remove();
     guardar(etapa);
-    const proxima = atual + 1;
+    // Ramificação: a primeira opção marcada que leva a outra etapa decide; sem ela (ou com
+    // destino que não existe mais, ou para trás), segue a ordem. É a mesma regra que o
+    // servidor confere ao receber as respostas.
+    const escolhida = etapa.querySelector('input[data-alva-destino]:checked');
+    const saltoPara = escolhida ? etapas.findIndex((item) => item.dataset.alvaEtapa === escolhida.dataset.alvaDestino) : -1;
+    const proxima = saltoPara > atual ? saltoPara : atual + 1;
     if (proxima >= etapas.length) return;
     // A etapa final só aparece depois da captura confirmada. Em falha, a pessoa fica na
     // etapa atual e pode tentar novamente sem perder as respostas preenchidas.
@@ -169,6 +174,14 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
     if (!etapa || etapa !== etapas[atual]) return;
     evento.preventDefault();
     avancar(etapa);
+  });
+  // Escolha única marcada para avançar sozinha: tocar na opção já leva adiante — o jeito
+  // que se espera de um quiz no celular.
+  corpo.addEventListener('change', (evento) => {
+    const campo = evento.target;
+    if (!campo?.matches?.('input[data-alva-avanca]') || !campo.checked) return;
+    const etapa = campo.closest('section');
+    if (etapa === etapas[atual]) avancar(etapa);
   });
   // Enter num campo do form raiz deve passar pela mesma validação e confirmação do botão.
   // Sem isso o navegador enviaria a action nativa antes de completar as etapas.

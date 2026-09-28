@@ -10,9 +10,9 @@ import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
 import { ArrowLeft, CircleCheck, CircleDot, Eye, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
 import { Estrutura } from './estrutura.jsx';
-import { documentoDaPagina, normalizarEstadoAlva } from '../public/pagina-alva.js';
+import { documentoDaPagina, ehQuiz, normalizarEstadoAlva } from '../public/pagina-alva.js';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
-import { elementosCss } from '../public/catalogo-elementos.js';
+import { elementosCss, escolhaCss } from '../public/catalogo-elementos.js';
 import { runtimeCss, templateCss } from '../public/templates.js';
 import { materialSymbolsFontCss } from '../public/quiz-elements.js';
 
@@ -32,7 +32,13 @@ async function api(caminho, metodo = 'GET', dados) {
 
 // As folhas da página publicada, dentro do iframe do editor: o que se vê editando é o
 // que vai ao ar.
-const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + elementosCss;
+// No quiz, o editor mostra todas as etapas uma embaixo da outra, com o nome de cada uma —
+// quem visita vê uma por vez.
+const ROTULOS_DAS_ETAPAS = `.alva-quiz-no-editor{counter-reset:etapa}
+.alva-quiz-no-editor .alva-etapa{counter-increment:etapa;position:relative;border-bottom:1px dashed #98a2b3}
+.alva-quiz-no-editor .alva-etapa::before{content:'Etapa ' counter(etapa);position:absolute;top:10px;left:14px;font:600 12px/1 Inter,system-ui,sans-serif;color:#667085;letter-spacing:.02em}
+.alva-quiz-no-editor .alva-etapa:last-of-type::before{content:'Tela final'}`;
+const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + elementosCss + escolhaCss + ROTULOS_DAS_ETAPAS;
 function IframeComFolhas({ children, document: doc }) {
   useEffect(() => {
     if (!doc || doc.getElementById('alva-folhas')) return;
@@ -61,7 +67,7 @@ function Acoes({ pagina, aoSalvar, aviso, pendente, alterada }) {
       <button type="button" className="alva-acao alva-acao-icone" aria-label="Voltar para as páginas" title="Voltar" onClick={() => {
         if (pendente.current && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
         pendente.current = false;
-        location.href = '/#/paginas';
+        location.href = ehQuiz(pagina.editorState) ? '/#/quizzes' : '/#/paginas';
       }}>
         <ArrowLeft size={18} aria-hidden="true" />
       </button>
@@ -71,7 +77,7 @@ function Acoes({ pagina, aoSalvar, aviso, pendente, alterada }) {
       <button type="button" className="alva-acao" onClick={() => {
         // A prévia é o mesmo documento que o servidor publica, montado aqui com o que está na
         // tela — inclusive o que ainda não foi salvo.
-        const html = documentoDaPagina(normalizarEstadoAlva(puckParaAlva(dados)), { publicOrigin: location.origin });
+        const html = documentoDaPagina(normalizarEstadoAlva(puckParaAlva(dados)), { publicOrigin: location.origin, previa: true });
         const endereco = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
         window.open(endereco, '_blank');
         setTimeout(() => URL.revokeObjectURL(endereco), 60_000);
@@ -120,7 +126,7 @@ function Editor() {
         leitor.onerror = () => rejeitar(new Error('Não foi possível ler o arquivo.'));
         leitor.readAsDataURL(arquivo);
       });
-      setConfig(criarConfig({ vsls: (Array.isArray(videos) ? videos : []).filter((video) => video.publishedVersionId), enviarImagem }));
+      setConfig(criarConfig({ vsls: (Array.isArray(videos) ? videos : []).filter((video) => video.publishedVersionId), enviarImagem, quiz: ehQuiz(aberta.editorState) }));
       salvo.current = JSON.stringify(puckParaAlva(alvaParaPuck(aberta.editorState)));
       setPagina(aberta);
     })().catch((falha) => setErro(falha.message));
@@ -149,7 +155,7 @@ function Editor() {
         onChange={(dados) => { pendente.current = JSON.stringify(puckParaAlva(dados)) !== salvo.current; setAlterada(pendente.current); }}
         overrides={{
           iframe: IframeComFolhas,
-          outline: () => <Estrutura />,
+          outline: () => <Estrutura quiz={ehQuiz(pagina.editorState)} />,
           headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aviso={aviso} pendente={pendente} alterada={alterada} />,
           drawerItem: ({ name }) => <ItemDaBiblioteca name={name} rotulo={config.components[name]?.label} />,
         }}

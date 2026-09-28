@@ -10,7 +10,7 @@
 import { classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
 import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
 import { secoesProntas } from '../public/secoes-prontas.js';
-import { campoDeCor, campoDeIcone, campoDeImagem, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
+import { campoDeCor, campoDeDestino, campoDeIcone, campoDeImagem, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
 import { SlidersHorizontal } from 'lucide-react';
 import { ICONE_DO_CAMPO } from './icones.jsx';
 
@@ -78,7 +78,7 @@ const semIds = (itens) => itens.map(({ type, props: { id: _id, ...props } }) => 
 
 // As VSLs publicadas do projeto viram uma lista para escolher: digitar um identificador era
 // convite ao erro, e VSL não publicada impede a página de publicar.
-export function criarConfig({ vsls = [], enviarImagem = async () => { throw new Error('Envio de imagem indisponível.'); } } = {}) {
+export function criarConfig({ vsls = [], enviarImagem = async () => { throw new Error('Envio de imagem indisponível.'); }, quiz = false } = {}) {
   const opcoesDeVsl = vsls.length
     ? [{ label: 'Escolha uma VSL', value: '' }, ...vsls.map((vsl) => ({ label: vsl.name, value: vsl.publicId }))]
     : [{ label: 'Nenhuma VSL publicada neste projeto', value: '' }];
@@ -89,25 +89,73 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
     // um id fixo aqui faria duas inserções da mesma seção dividirem os mesmos ids.
     [SLOT]: semIds(alvaParaPuck({ content: pronta.conteudo() }).root.props[SLOT]),
   })]));
-  return {
-    categories: {
+  // O quiz: etapas no lugar de seções, perguntas no lugar de formulário. A página inteira é
+  // a captura, então campo e pergunta entram direto na etapa.
+  const categorias = quiz
+    ? {
+      etapas: { title: 'Etapas', components: ['etapa'], defaultExpanded: true },
+      perguntas: { title: 'Perguntas', components: ['escolha', 'field'] },
+      conteudo: { title: 'Conteúdo', components: BLOCOS_SOLTOS },
+      estrutura: { title: 'Layout', components: ['row', 'columns'] },
+      other: { visible: false },
+    }
+    : {
       prontas: { title: 'Seções prontas', components: secoesProntas.map((pronta) => pronta.id), defaultExpanded: true },
       estrutura: { title: 'Layout', components: ['section', 'row', 'columns'] },
       conteudo: { title: 'Conteúdo', components: BLOCOS_SOLTOS },
       captacao: { title: 'Captação', components: ['form', 'field'] },
-    },
-    // A página recebe só seções: bloco solto na raiz ficava sem espaçamento e sem layout.
+      other: { visible: false },
+    };
+  return {
+    categories: categorias,
+    // A página recebe só seções (o quiz, só etapas): bloco solto na raiz ficava sem
+    // espaçamento e sem layout.
     root: {
       fields: {
-        title: { type: 'text', label: 'Título da página (aba do navegador)' },
-        [SLOT]: { type: 'slot', allow: ['section', ...secoesProntas.map((pronta) => pronta.id)] },
+        title: { type: 'text', label: quiz ? 'Título do quiz (aba do navegador)' : 'Título da página (aba do navegador)' },
+        [SLOT]: { type: 'slot', allow: quiz ? ['etapa'] : ['section', ...secoesProntas.map((pronta) => pronta.id)] },
       },
       defaultProps: { title: '', [SLOT]: [] },
-      render: ({ [SLOT]: Itens }) => <Itens as="main" className="alva-pagina" minEmptyHeight={400} />,
+      render: ({ [SLOT]: Itens }) => <Itens as="main" className={quiz ? 'alva-pagina alva-quiz-no-editor' : 'alva-pagina'} minEmptyHeight={400} />,
     },
     components: {
       ...prontas,
       section: secao('Seção vazia', enviarImagem, { fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' }),
+      etapa: {
+        label: 'Etapa',
+        inline: true,
+        fields: { ...camposDaSecao(enviarImagem), [SLOT]: { type: 'slot', disallow: ['etapa', 'section', 'form', ...secoesProntas.map((pronta) => pronta.id)] } },
+        defaultProps: { fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' },
+        render: ({ puck, id: _id, [SLOT]: Itens, ...props }) => (
+          <section ref={puck.dragRef} className={classeDaSecao(props).replace('alva-secao', 'alva-secao alva-etapa')} style={estiloParaReact(estiloDaSecao(props))}>
+            <Itens className={classeDoConteudo(props)} collisionAxis="dynamic" minEmptyHeight={120} />
+          </section>
+        ),
+      },
+      escolha: bloco('escolha', 'Pergunta de escolha', {
+        pergunta: { type: 'textarea', label: 'Pergunta' },
+        opcoes: {
+          type: 'array',
+          label: 'Opções',
+          getItemSummary: (opcao, indice) => opcao?.rotulo || `Opção ${indice + 1}`,
+          defaultItemProps: { rotulo: 'Nova opção', icone: '', imagem: '', destino: '' },
+          arrayFields: {
+            rotulo: { type: 'text', label: 'Texto da opção' },
+            icone: { type: 'text', label: 'Ícone (nome do Material Symbols, opcional)' },
+            imagem: campoDeImagem('Imagem (opcional)', enviarImagem),
+            destino: campoDeDestino('Ao escolher, ir para'),
+          },
+        },
+        multipla: { type: 'radio', label: 'Quantas a pessoa pode marcar', options: [{ label: 'Uma', value: false }, { label: 'Várias', value: true }] },
+        avancar: { type: 'radio', label: 'Avançar ao escolher (só com uma)', options: simNao },
+        obrigatoria: { type: 'radio', label: 'Obrigatória', options: simNao },
+        colunas: { type: 'radio', label: 'Opções em', options: [{ label: 'Lista', value: 1 }, { label: 'Grade 2×', value: 2 }] },
+        name: { type: 'text', label: 'Nome da resposta no lead (opcional)' },
+      }, {
+        pergunta: 'Qual opção descreve melhor você?',
+        opcoes: [{ rotulo: 'Opção A', icone: '', imagem: '', destino: '' }, { rotulo: 'Opção B', icone: '', imagem: '', destino: '' }],
+        multipla: false, avancar: true, obrigatoria: true, colunas: 1, name: '',
+      }),
       row: {
         label: 'Linha (lado a lado)',
         inline: true,

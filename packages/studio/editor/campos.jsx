@@ -1,6 +1,6 @@
 // Campos próprios do editor: imagem (endereço ou anexo do computador) e cor.
 import { useRef, useState } from 'react';
-import { AutoField, FieldLabel } from '@puckeditor/core';
+import { AutoField, FieldLabel, createUsePuck } from '@puckeditor/core';
 import { ICONE_DO_CAMPO } from './icones.jsx';
 
 const estiloDoCampo = { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 14, padding: '8px 10px', border: '1px solid var(--alva-line)', borderRadius: 8 };
@@ -167,6 +167,42 @@ function SeletorDeIcone({ rotulo, valor, aoMudar, somenteLeitura }) {
         </div>
         <input type="text" style={estiloDoCampo} placeholder="ou o nome exato no Material Symbols" value={valor ?? ''} disabled={somenteLeitura} onChange={(evento) => aoMudar(evento.target.value.trim())} />
       </div>
+    </FieldLabel>
+  );
+}
+
+// Para onde a opção leva: "a próxima etapa" ou uma etapa escolhida pelo nome dela (o
+// primeiro título). A lista vem do que está no editor agora, então acompanha etapas novas.
+const usePuckDoCampo = createUsePuck();
+const primeiroTitulo = (item) => {
+  for (const filho of Array.isArray(item?.props?.itens) ? item.props.itens : []) {
+    if (filho.type === 'heading' && filho.props?.text) return String(filho.props.text);
+    if (filho.type === 'escolha' && filho.props?.pergunta) return String(filho.props.pergunta);
+    const dentro = primeiroTitulo(filho);
+    if (dentro) return dentro;
+  }
+  return '';
+};
+export function campoDeDestino(rotulo) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => <SeletorDeDestino rotulo={rotulo} valor={value} aoMudar={onChange} somenteLeitura={readOnly} />,
+  };
+}
+function SeletorDeDestino({ rotulo, valor, aoMudar, somenteLeitura }) {
+  const etapas = usePuckDoCampo((estado) => estado.appState.data.root?.props?.itens ?? []);
+  const curto = (texto) => (texto.length > 40 ? `${texto.slice(0, 39)}…` : texto);
+  return (
+    <FieldLabel label={rotulo} readOnly={somenteLeitura} el="div">
+      <select style={estiloDoCampo} value={valor ?? ''} disabled={somenteLeitura} onChange={(evento) => aoMudar(evento.target.value)}>
+        <option value="">Próxima etapa</option>
+        {etapas.map((etapa, indice) => (
+          <option key={etapa.props.id} value={etapa.props.id}>
+            {indice === etapas.length - 1 ? 'Tela final' : `Etapa ${indice + 1}`}{primeiroTitulo(etapa) ? ` — ${curto(primeiroTitulo(etapa))}` : ''}
+          </option>
+        ))}
+      </select>
     </FieldLabel>
   );
 }

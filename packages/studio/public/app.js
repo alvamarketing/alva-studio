@@ -12,7 +12,7 @@ import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
-import { FORMATO_ALVA, documentoDaPagina, normalizarEstadoAlva } from './pagina-alva.js';
+import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { estadoDoModelo, modelosAlva } from './modelos-alva.js';
 import { conteudoDaLista, contagemDaLista, textosDaLista } from './quiz-mecanica.js';
 const $ = (s) => document.querySelector(s);
@@ -1312,9 +1312,8 @@ $('#create-form').onsubmit = action(async (event) => {
   button.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(event.target));
-    // A landing nova nasce no esquema do Alva e abre no editor novo (Puck). O quiz segue no
-    // editor antigo até a vez dele.
-    const inicio = tipoDeConteudo === 'quiz' ? {} : { template: '', editorState: estadoDoModelo(data.template, data.name) };
+    // Landing e quiz novos nascem no esquema do Alva e abrem no editor novo (Puck).
+    const inicio = { template: '', editorState: tipoDeConteudo === 'quiz' ? estadoDoQuiz(data.name) : estadoDoModelo(data.template, data.name) };
     const p = await api('/pages', 'POST', { ...data, ...inicio, kind: tipoDeConteudo });
     $('#create-dialog').close();
     event.target.reset();

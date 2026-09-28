@@ -11,7 +11,7 @@
 export const SLOT = 'itens';
 import { TIPOS_DE_SECAO_PRONTA } from './secoes-prontas.js';
 
-export const CONTEINERES = new Set(['section', 'row', 'columns', 'form', ...TIPOS_DE_SECAO_PRONTA]);
+export const CONTEINERES = new Set(['section', 'etapa', 'row', 'columns', 'form', ...TIPOS_DE_SECAO_PRONTA]);
 const UUID_NO_FIM = /([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export function alvaParaPuck(estado) {
@@ -26,7 +26,7 @@ export function alvaParaPuck(estado) {
   // As seções moram num slot da raiz: é como o editor restringe a página a receber só
   // seções — bloco solto na raiz ficava sem espaçamento e sem layout.
   return {
-    root: { props: { title: estado?.root?.title ?? '', [SLOT]: (estado?.content ?? []).map(converter) } },
+    root: { props: { ...(estado?.root ?? {}), title: estado?.root?.title ?? '', [SLOT]: (estado?.content ?? []).map(converter) } },
     content: [],
   };
 }
@@ -49,7 +49,8 @@ export function puckParaAlva(dados) {
   };
   return {
     formato: 'alva/1',
-    root: { title: dados?.root?.props?.title ?? '' },
+    // O quiz leva o tipo e a captura na raiz; a landing, só o título.
+    root: { title: dados?.root?.props?.title ?? '', ...(dados?.root?.props?.tipo === 'quiz' ? { tipo: 'quiz', captureId: dados.root.props.captureId } : {}) },
     content: [...(dados?.root?.props?.[SLOT] ?? []), ...(dados?.content ?? [])].map(converter),
   };
 }
