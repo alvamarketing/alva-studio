@@ -12,7 +12,8 @@ import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
-import { FORMATO_ALVA, paginaInicial } from './pagina-alva.js';
+import { FORMATO_ALVA, documentoDaPagina, normalizarEstadoAlva } from './pagina-alva.js';
+import { estadoDoModelo, modelosAlva } from './modelos-alva.js';
 import { conteudoDaLista, contagemDaLista, textosDaLista } from './quiz-mecanica.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
@@ -1297,11 +1298,10 @@ $('#new-page').onclick = () => {
   dialogo.querySelector('button.primary').textContent = textos.criar;
   // Quiz não começa de modelo de landing: a galeria some e ele nasce com uma etapa.
   const quiz = tipoDeConteudo === 'quiz';
-  // A landing nova começa pelo começo pronto do editor novo; os modelos antigos voltam
-  // quando forem convertidos para o esquema.
-  $('#template-filter').hidden = true;
-  $('#template-gallery').hidden = true;
-  $('#create-form').elements.template.value = quiz ? '' : 'services';
+  $('#template-filter').hidden = quiz;
+  $('#template-gallery').hidden = quiz;
+  // A landing nova nasce de um modelo do editor novo (esquema do Alva).
+  $('#create-form').elements.template.value = quiz ? '' : 'rapido';
   $('#create-form').elements.name.placeholder = quiz ? 'Ex.: Diagnóstico de vendas' : 'Ex.: LP Alva Marketing';
   if (!quiz) renderTemplates();
   dialogo.showModal();
@@ -1314,7 +1314,7 @@ $('#create-form').onsubmit = action(async (event) => {
     const data = Object.fromEntries(new FormData(event.target));
     // A landing nova nasce no esquema do Alva e abre no editor novo (Puck). O quiz segue no
     // editor antigo até a vez dele.
-    const inicio = tipoDeConteudo === 'quiz' ? {} : { template: '', editorState: paginaInicial(data.name) };
+    const inicio = tipoDeConteudo === 'quiz' ? {} : { template: '', editorState: estadoDoModelo(data.template, data.name) };
     const p = await api('/pages', 'POST', { ...data, ...inicio, kind: tipoDeConteudo });
     $('#create-dialog').close();
     event.target.reset();
@@ -1488,8 +1488,15 @@ window.addEventListener('beforeunload', (event) => {
 });
 const templateDocument = (template) => documentoDeModelo(template);
 let templateCategory = 'Todos';
+// A miniatura é o documento que a publicação desenharia: prévia que mente sobre o modelo é
+// pior que nenhuma.
+const modelosDaGaleria = modelosAlva.map((modelo) => ({
+  ...modelo,
+  documento: () => documentoDaPagina(normalizarEstadoAlva(estadoDoModelo(modelo.id, modelo.name)), { publicOrigin: location.origin }),
+}));
 function renderTemplates() {
-  const selected = $('#create-form').elements.template.value || 'services';
+  const templates = modelosDaGaleria;
+  const selected = $('#create-form').elements.template.value || 'rapido';
   const filter = $('#template-filter');
   filter.replaceChildren();
   for (const category of ['Todos', ...new Set(templates.map((t) => t.category))]) {
@@ -1521,7 +1528,7 @@ function renderTemplates() {
     frame.sandbox = '';
     frame.tabIndex = -1;
     frame.title = 'Modelo ' + template.name;
-    frame.srcdoc = templateDocument(template);
+    frame.srcdoc = template.documento();
     button.querySelector('.template-thumb').append(frame);
     button.onclick = () => {
       $('#create-form').elements.template.value = template.id;

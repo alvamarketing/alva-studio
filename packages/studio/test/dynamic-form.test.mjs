@@ -276,8 +276,10 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // E cresceram 213 bytes em 27/09: elementosCss ganhou .alva-colunas e .alva-imagem, as
   // regras que faltavam para o esquema de página do editor novo. Mesmo motivo de sempre:
   // CSS morto embutido no formulário, nenhum seletor dele usado aqui.
-  assert.equal(html.length, 29531);
-  assert.equal(createHash('sha256').update(html).digest('hex'), 'e03fe4873e069b89f53c430359e8dea477675a97f023616087a65b20f2659538');
+  // E de novo no mesmo dia, pelas variações do esquema: fundo de seção (suave, escuro) e
+  // três colunas. Mesmo motivo: CSS morto embutido no formulário.
+  assert.equal(html.length, 29792);
+  assert.equal(createHash('sha256').update(html).digest('hex'), 'a2ceefef0185210542ebf5957dbb29ff8a06ae2c844b8ec349eb5acf59c9fffd');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {

@@ -3,7 +3,7 @@
 // Um catálogo só: a pré-visualização dos elementos simples é o HTML do mesmo `renderNode`
 // que o servidor usa para publicar. Os contêineres (seção, colunas, formulário) desenham a
 // mesma casca com um slot dentro, que é como o Puck deixa arrastar para dentro deles.
-import { renderNode } from '../public/page-schema.js';
+import { classeDaSecao, classeDasColunas, renderNode } from '../public/page-schema.js';
 import { SLOT } from '../public/puck-conversao.js';
 
 const Html = ({ type, props }) => {
@@ -38,13 +38,23 @@ export function criarConfig({ vsls = [] } = {}) {
   components: {
     section: {
       label: 'Seção',
-      fields: { [SLOT]: { type: 'slot' } },
-      render: ({ [SLOT]: Itens }) => <section className="alva-secao"><Itens /></section>,
+      fields: {
+        fundo: { type: 'select', label: 'Fundo', options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
+        [SLOT]: { type: 'slot' },
+      },
+      defaultProps: { fundo: 'branco' },
+      render: ({ fundo, [SLOT]: Itens }) => <section className={classeDaSecao({ fundo })}><Itens /></section>,
     },
     columns: {
-      label: 'Duas colunas',
-      fields: { [SLOT]: { type: 'slot' } },
-      render: ({ [SLOT]: Itens }) => <div className="alva-colunas"><Itens /></div>,
+      label: 'Colunas',
+      fields: {
+        quantidade: { type: 'select', label: 'Quantas colunas', options: [{ label: 'Duas', value: 2 }, { label: 'Três', value: 3 }] },
+        [SLOT]: { type: 'slot' },
+      },
+      defaultProps: { quantidade: 2 },
+      // O slot do Puck desenha um elemento próprio: é ele que vira a grade, para os blocos
+      // serem filhos diretos dela, como na página publicada.
+      render: ({ quantidade, [SLOT]: Itens }) => <Itens as="div" className={classeDasColunas({ quantidade })} collisionAxis="x" />,
     },
     heading: {
       label: 'Título',

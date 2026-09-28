@@ -43,14 +43,18 @@ function nomeDeCampo(valor) {
   return limpo.slice(0, 60) || 'campo';
 }
 
+// As classes dos contêineres, numa função só: o servidor desenha com elas e o editor (Puck)
+// também — duas listas divergiriam.
+const FUNDOS = { branco: '', suave: ' alva-secao-suave', escuro: ' alva-secao-escura' };
+export const classeDaSecao = (props = {}) => `alva-secao${FUNDOS[props.fundo] ?? ''}`;
+export const classeDasColunas = (props = {}) => `alva-colunas${Number(props.quantidade) === 3 ? ' alva-colunas-3' : ''}`;
+
 const ELEMENTOS = {
   section: {
-    render: (node, desenharFilhos) => `<section class="alva-secao">${desenharFilhos(node)}</section>`,
-    vazio: '<section class="alva-secao"></section>',
+    render: (node, desenharFilhos) => `<section class="${classeDaSecao(node.props)}">${desenharFilhos(node)}</section>`,
   },
   columns: {
-    render: (node, desenharFilhos) => `<div class="alva-colunas">${desenharFilhos(node)}</div>`,
-    vazio: '<div class="alva-colunas"></div>',
+    render: (node, desenharFilhos) => `<div class="${classeDasColunas(node.props)}">${desenharFilhos(node)}</div>`,
   },
   heading: {
     render: (node) => {
