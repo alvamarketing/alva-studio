@@ -3,7 +3,7 @@
 // Antes isto era uma chamada de rede: o Studio pedia a um gateway PHP que criasse uma
 // "propriedade", e esperava a resposta para marcar o binding como pronto. Com a entrega
 // acontecendo aqui dentro, não há a quem pedir — estar pronto passa a significar uma
-// coisa só: existe credencial de algum destino que sabemos entregar.
+// coisa só: nenhum destino configurado é de um tipo que não sabemos entregar.
 //
 // O identificador da propriedade continua existindo porque o payload do evento o carrega,
 // mas é derivado do próprio binding. Mesma entrada, mesmo identificador, sempre — sem
@@ -26,8 +26,8 @@ export function criarProvisionadorLocal({ tracking } = {}) {
     async provision({ companyId, projectId, environment, bindingId } = {}) {
       const destinos = await tracking.conversionDestinations({ companyId, projectId, environment });
       const configurados = Object.keys(destinos || {});
-      if (!configurados.length)
-        throw falhar('Nenhum destino de conversão configurado neste projeto.');
+      // Sem destino não há o que entregar, e o rastreamento está pronto do mesmo jeito: a
+      // fila não enfileira nada. Recusar travava a publicação do projeto.
 
       // Um destino que não sabemos entregar marcaria o projeto como pronto e depois falharia
       // em toda entrega, sem ninguém entender por quê.

@@ -12,16 +12,16 @@ export const ehEstadoAlva = (estado) => estado?.formato === FORMATO_ALVA;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const novoId = () => globalThis.crypto.randomUUID();
 
-// O estado limpo: cada nó normalizado, e cada formulário com um identificador estável e
-// único — é por ele que a resposta publicada diz de qual formulário veio.
+// O estado limpo: cada nó normalizado e com identidade estável e única — o editor precisa
+// dela para cada bloco, e o formulário, para a resposta publicada dizer de onde veio (no
+// formulário, a identidade é um UUID, que é o que a publicação aceita).
 export function normalizarEstadoAlva(estado, uuid = novoId) {
   const vistos = new Set();
   const garantir = (node) => {
     const limpo = normalizeNode(node);
-    if (limpo.type === 'form') {
-      limpo.id = UUID.test(limpo.id ?? '') && !vistos.has(limpo.id) ? limpo.id : uuid();
-      vistos.add(limpo.id);
-    }
+    const valido = limpo.type === 'form' ? UUID.test(limpo.id ?? '') : Boolean(limpo.id);
+    limpo.id = valido && !vistos.has(limpo.id) ? limpo.id : uuid();
+    vistos.add(limpo.id);
     return { ...limpo, children: limpo.children.map(garantir) };
   };
   const titulo = String(estado?.root?.title ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200);
@@ -54,5 +54,29 @@ export function capturasDoEstado(estado, { webhook = '' } = {}) {
       webhook,
       completion: {},
     })),
+  };
+}
+
+// O começo de uma landing nova: topo com chamada e botão, e uma seção de contato com
+// formulário — o mínimo para ela já capturar lead ao ser publicada.
+export function paginaInicial(nome = '') {
+  return {
+    formato: FORMATO_ALVA,
+    root: { title: String(nome).slice(0, 200) },
+    content: [
+      { type: 'section', props: {}, children: [
+        { type: 'heading', props: { text: 'Diga em uma frase o que a pessoa ganha', level: 1 }, children: [] },
+        { type: 'text', props: { text: 'Explique em duas linhas para quem é e por que agora.' }, children: [] },
+        { type: 'button', props: { text: 'Quero saber mais', href: '#contato', newTab: false }, children: [] },
+      ] },
+      { type: 'section', props: {}, children: [
+        { type: 'heading', props: { text: 'Fale com a gente', level: 2 }, children: [] },
+        { type: 'form', props: { submitLabel: 'Enviar' }, children: [
+          { type: 'field', props: { label: 'Nome', name: 'nome', fieldType: 'text', placeholder: 'Seu nome', required: true }, children: [] },
+          { type: 'field', props: { label: 'E-mail', name: 'email', fieldType: 'email', placeholder: 'voce@exemplo.com', required: true }, children: [] },
+          { type: 'field', props: { label: 'WhatsApp', name: 'whatsapp', fieldType: 'tel', placeholder: '(11) 91234-5678', required: false }, children: [] },
+        ] },
+      ] },
+    ],
   };
 }

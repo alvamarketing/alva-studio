@@ -131,11 +131,15 @@ test('worker de tracking permanece em heartbeat sem consumir fila enquanto a fla
 
 test('worker de tracking inicia a outbox comercial somente com a flag de conversões', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'alva-runtime-commercial-worker-'));
-  const heartbeatFile = join(directory, 'heartbeat.json'); let started = false;
+  const heartbeatFile = join(directory, 'heartbeat.json'); let started = false; let provisionando = false;
   const runtime = await startRuntimeWorker({
     role: 'tracking', connectionString: 'postgres://nao-registre-esta-url', heartbeatFile,
     createDatabaseFn: () => ({ query: async () => {}, close: async () => {} }), migrateFn: async () => {},
     commercialRepositoryFactory: () => ({ queue: true }),
+    // Com conversões ligadas, o provisionamento (local) também sobe: sem ele o rastreamento
+    // nunca fica pronto e a publicação fica bloqueada.
+    trackingRepositoryFactory: () => ({}), trackingClientsFactory: () => ({}),
+    startTrackingWorkerFn: () => { provisionando = true; return { stop: () => {} }; },
     // O cliente entrega direto aos destinos e por isso lê credencial cifrada; injetá-lo
     // mantém o teste sobre o que ele afirma — que a flag liga o worker.
     commercialClientFactory: () => ({ sendEvent: async () => {} }),
@@ -144,6 +148,7 @@ test('worker de tracking inicia a outbox comercial somente com a flag de convers
   });
   t.after(() => rm(directory, { recursive: true, force: true }));
   assert.equal(started, true);
+  assert.equal(provisionando, true);
   await runtime.close();
 });
 

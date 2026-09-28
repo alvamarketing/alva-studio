@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Editor de landing · Alva Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/build/editor.css">
+  <style>
+    html, body, #editor { height: 100%; margin: 0; }
+    body { font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif; color: #101828; }
+    .alva-acao { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 1px solid #E7ECF3; border-radius: 12px; background: #ffffff; color: #101828; cursor: pointer; }
+    .alva-acao:disabled { opacity: .6; cursor: progress; }
+    .alva-acao-principal { background: #286EEA; border-color: #286EEA; color: #ffffff; }
+    .alva-acao:focus-visible { outline: 2px solid #286EEA; outline-offset: 2px; }
+    .alva-carregando, .alva-erro { padding: 32px; font-size: 15px; }
+    .alva-erro { color: #b42318; }
+    .alva-aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 12px 18px; border-radius: 12px; background: #101828; color: #ffffff; font-size: 14px; z-index: 10; }
+  </style>
+</head>
+<body>
+  <div id="editor"></div>
+  <script type="module" src="/build/editor.js"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@
 // navegador e os campos eram achados num formato interno do GrapesJS.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FORMATO_ALVA, capturasDoEstado, documentoDaPagina, normalizarEstadoAlva } from '../public/pagina-alva.js';
+import { FORMATO_ALVA, capturasDoEstado, documentoDaPagina, normalizarEstadoAlva, paginaInicial } from '../public/pagina-alva.js';
 import { extractVslReferences } from '../server/publication-snapshot.mjs';
 import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { ContentRepository } from '../server/repositories/content-repository.mjs';
@@ -97,4 +97,22 @@ test('salvar no esquema, publicar e receber o lead', { timeout: 60_000 }, async 
     input: { answers: { nome: 'Ana', email: 'ana@exemplo.test', whatsapp: '11987654321' } }, origin: 'https://lp.exemplo.test',
   });
   assert.match(lead.eventId, UUID);
+});
+
+test('a landing nova já nasce capturando lead', () => {
+  const estado = normalizarEstadoAlva(paginaInicial('Minha oferta'));
+  assert.equal(estado.root.title, 'Minha oferta');
+  assert.deepEqual(capturasDoEstado(estado).forms[0].fields.map((campo) => campo.id), ['nome', 'email', 'whatsapp']);
+  assert.match(documentoDaPagina(estado), /<a href="#contato" class="cta">/);
+});
+
+// O editor (Puck) quebra com item sem id, e os sinais por bloco vão precisar dela.
+test('todo nó ganha identidade estável e única', () => {
+  const estado = normalizarEstadoAlva(paginaInicial('x'));
+  const ids = [];
+  const coletar = (nos) => nos.forEach((no) => { ids.push(no.id); coletar(no.children); });
+  coletar(estado.content);
+  assert.ok(ids.every(Boolean));
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(normalizarEstadoAlva(estado), estado, 'normalizar de novo não muda nada');
 });

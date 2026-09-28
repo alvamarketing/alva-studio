@@ -28,12 +28,13 @@ test('o mesmo binding dá sempre o mesmo identificador', async () => {
   assert.equal(primeiro.remoteId, segundo.remoteId);
 });
 
-test('sem nenhum destino configurado, recusa em vez de marcar pronto', async () => {
+// Projeto sem destino não tem o que entregar — e isso não pode travar a publicação, que
+// exige o rastreamento pronto. Até 27/09 a recusa aqui deixava todo projeto sem destino
+// no ambiente de prévia impedido de publicar com as conversões ligadas.
+test('sem nenhum destino configurado, fica pronto: não há o que entregar', async () => {
   const provisionador = criarProvisionadorLocal({ tracking: { conversionDestinations: async () => ({}) } });
-  await assert.rejects(
-    () => provisionador.provision({ companyId: 'c1', projectId: 'p1', environment: 'production', bindingId: 'b1' }),
-    /nenhum destino/i,
-  );
+  const resultado = await provisionador.provision({ companyId: 'c1', projectId: 'p1', environment: 'preview', bindingId: 'b1' });
+  assert.equal(resultado.remoteId, 'alva_b1');
 });
 
 test('destino desconhecido não passa: só os cinco que sabemos entregar', async () => {

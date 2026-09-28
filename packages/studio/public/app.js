@@ -12,6 +12,7 @@ import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
+import { FORMATO_ALVA, paginaInicial } from './pagina-alva.js';
 import { conteudoDaLista, contagemDaLista, textosDaLista } from './quiz-mecanica.js';
 const $ = (s) => document.querySelector(s);
 createUIPreferences();
@@ -1237,6 +1238,10 @@ function syncPagePublishControl() {
 
 async function openPage(id) {
   const result = await api('/pages/' + id);
+  if (result.editorState?.formato === FORMATO_ALVA) {
+    location.href = '/editor.html?pagina=' + encodeURIComponent(id);
+    return;
+  }
   page = result;
   const projectId = page.projectId || studioShell?.state().currentProject?.id;
   let vslVideos = [];
@@ -1292,8 +1297,10 @@ $('#new-page').onclick = () => {
   dialogo.querySelector('button.primary').textContent = textos.criar;
   // Quiz não começa de modelo de landing: a galeria some e ele nasce com uma etapa.
   const quiz = tipoDeConteudo === 'quiz';
-  $('#template-filter').hidden = quiz;
-  $('#template-gallery').hidden = quiz;
+  // A landing nova começa pelo começo pronto do editor novo; os modelos antigos voltam
+  // quando forem convertidos para o esquema.
+  $('#template-filter').hidden = true;
+  $('#template-gallery').hidden = true;
   $('#create-form').elements.template.value = quiz ? '' : 'services';
   $('#create-form').elements.name.placeholder = quiz ? 'Ex.: Diagnóstico de vendas' : 'Ex.: LP Alva Marketing';
   if (!quiz) renderTemplates();
@@ -1305,7 +1312,10 @@ $('#create-form').onsubmit = action(async (event) => {
   button.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(event.target));
-    const p = await api('/pages', 'POST', { ...data, kind: tipoDeConteudo });
+    // A landing nova nasce no esquema do Alva e abre no editor novo (Puck). O quiz segue no
+    // editor antigo até a vez dele.
+    const inicio = tipoDeConteudo === 'quiz' ? {} : { template: '', editorState: paginaInicial(data.name) };
+    const p = await api('/pages', 'POST', { ...data, ...inicio, kind: tipoDeConteudo });
     $('#create-dialog').close();
     event.target.reset();
     await openPage(p.id);

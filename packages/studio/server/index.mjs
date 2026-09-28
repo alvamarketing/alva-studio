@@ -441,6 +441,12 @@ export function createApp({
     '/editor-novo.html': ['public/editor-novo.html', 'text/html'],
     '/editor-novo.css': ['public/editor-novo.css', 'text/css'],
     '/studio-sdk-editor.js': ['public/studio-sdk-editor.js', 'text/javascript'],
+    // O editor de landing (Puck). React e o build moram só aqui; a página publicada é HTML puro.
+    '/editor.html': ['public/editor.html', 'text/html'],
+    '/pagina-alva.js': ['public/pagina-alva.js', 'text/javascript'],
+    '/page-schema.js': ['public/page-schema.js', 'text/javascript'],
+    '/build/editor.js': ['public/build/editor.js', 'text/javascript'],
+    '/build/editor.css': ['public/build/editor.css', 'text/css'],
   };
   const server = createServer(async (req, res) => {
     const json = (data, status = 200) => {

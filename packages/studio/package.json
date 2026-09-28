@@ -10,7 +10,8 @@
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "start:legacy": "node --env-file-if-exists=.env server/index.mjs --legacy",
     "bootstrap:owner": "node --env-file-if-exists=.env server/bootstrap-owner.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "build:editor": "esbuild editor/main.jsx --bundle --minify --format=esm --jsx=automatic --loader:.js=jsx --define:process.env.NODE_ENV='\"production\"' --outfile=public/build/editor.js"
   },
   "dependencies": {
     "@grapesjs/studio-sdk": "1.2.1",
@@ -21,6 +22,10 @@
     "postcss": "8.5.26"
   },
   "devDependencies": {
-    "jsdom": "27.4.0"
+    "@puckeditor/core": "0.23.0",
+    "esbuild": "0.25",
+    "jsdom": "27.4.0",
+    "react": "19",
+    "react-dom": "19"
   }
 }

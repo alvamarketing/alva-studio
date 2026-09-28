@@ -65,7 +65,9 @@ export async function startRuntimeWorker({
         intervalMs: webhookIntervalMs,
       });
     }
-    if (assume('tracking') && trackingProvisionEnabled) {
+    // O provisionamento é local (não chama serviço de fora) e sem ele o rastreamento nunca
+    // fica pronto — e a publicação fica bloqueada. Conversões ligadas bastam para ele rodar.
+    if (assume('tracking') && (trackingProvisionEnabled || conversoesHabilitadas)) {
       trackingWorker = startTrackingWorkerFn({
         repository: trackingRepositoryFactory(database),
         clients: trackingClientsFactory(database),
