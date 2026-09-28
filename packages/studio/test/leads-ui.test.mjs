@@ -9,15 +9,15 @@ const stylesPath = new URL('../public/styles.css', import.meta.url);
 
 test('normaliza uma resposta de lead para células de leitura segura', () => {
   const row = normalizeLeadRow({
-    id: 'lead-1', formId: 'form-1', formName: 'Diagnóstico',
+    id: 'lead-1', sourceId: 'page-1', sourceName: 'Diagnóstico',
     submittedAt: '2026-09-05T11:00:00.000Z', webhookStatus: 'delivered',
     answers: { nome: '<Ana>', interesses: ['Sites', 'Tráfego'], vazio: null },
   });
 
   assert.deepEqual(row, {
-    id: 'lead-1', formId: 'form-1', formName: 'Diagnóstico',
+    id: 'lead-1',
     submittedAt: '2026-09-05T11:00:00.000Z', deliveryLabel: 'Entregue',
-    sourceKind: 'form', sourceId: 'form-1', sourceVersionId: '', sourceName: 'Diagnóstico', sourcePath: '',
+    sourceKind: 'page', sourceId: 'page-1', sourceVersionId: '', sourceName: 'Diagnóstico', sourcePath: '',
     captureId: '', captureName: '', fields: [],
     answers: [
       { field: 'nome', value: '<Ana>' },
@@ -26,14 +26,6 @@ test('normaliza uma resposta de lead para células de leitura segura', () => {
     ],
   });
   assert.equal(displayLeadAnswer({ objeto: true }), '{"objeto":true}');
-});
-
-test('gera exportação CSV para o projeto e formulário selecionados', () => {
-  assert.equal(
-    leadsCsvUrl('project/a', 'form & 1'),
-    '/api/projects/project%2Fa/leads.csv?formId=form+%26+1',
-  );
-  assert.equal(leadsCsvUrl('project-a', ''), '');
 });
 
 test('normaliza origem page com captura, campos do snapshot, arrays e labels históricos', () => {
@@ -45,7 +37,7 @@ test('normaliza origem page com captura, campos do snapshot, arrays e labels his
   });
 
   assert.deepEqual(row, {
-    id: 'lead-page-1', formId: '', formName: '', submittedAt: '', deliveryLabel: 'Não enviado',
+    id: 'lead-page-1', submittedAt: '', deliveryLabel: 'Não enviado',
     sourceKind: 'page', sourceId: 'page/1', sourceVersionId: 'version & 2', sourceName: 'Landing histórica', sourcePath: '/captacao',
     captureId: 'capture-1', captureName: 'Contato',
     fields: [{ id: 'email', title: 'E-mail' }, { id: 'sem-titulo', title: '' }],
@@ -63,10 +55,7 @@ test('gera CSV por origem page e exige sourceId no filtro em objeto', () => {
     '/api/projects/project%2Fa/leads.csv?sourceKind=page&sourceId=page%2F1&captureId=capture+%26+1',
   );
   assert.equal(leadsCsvUrl('project-a', { sourceKind: 'page', captureId: 'capture-1' }), '');
-  assert.equal(
-    leadsCsvUrl('project-a', { sourceKind: 'form', sourceId: 'form-1' }),
-    '/api/projects/project-a/leads.csv?sourceKind=form&sourceId=form-1',
-  );
+  assert.equal(leadsCsvUrl('project-a', null), '');
 });
 
 test('separa os estados de carregamento, erro e lista vazia de leads', () => {

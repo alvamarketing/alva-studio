@@ -1,8 +1,6 @@
 import { withTransaction } from '../db/postgres.mjs';
-import { hasCapability, normalizeProjectSlug, normalizeRoute } from '../domain/access.mjs';
+import { hasCapability, normalizeRoute } from '../domain/access.mjs';
 import { createHash, randomUUID } from 'node:crypto';
-import { validateFormAnswers } from '../form-answer-validation.mjs';
-import { normalizeFormInput } from '../form-store.mjs';
 import { allowedPublicationOrigin } from '../publication-cors.mjs';
 import { extractVslReferences } from '../publication-snapshot.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from '../vsl-reference.mjs';
@@ -125,41 +123,6 @@ function pageRecord(row) {
   };
 }
 
-function formRecord(row) {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    projectId: row.project_id,
-    companySlug: row.company_slug,
-    projectSlug: row.project_slug,
-    publicPath: row.company_slug && row.project_slug && (row.published_route ?? row.route)
-      ? publicFormPath(row.company_slug, row.project_slug, row.published_route ?? row.route)
-      : null,
-    name: row.name,
-    route: row.route,
-    draftSchema: row.draft_schema,
-    lockVersion: row.lock_version,
-    publishedVersionId: row.published_version_id,
-    createdBy: row.created_by,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    submissionCount: Number(row.submission_count ?? 0),
-  };
-}
-
-function publicRoute(value) {
-  try {
-    return normalizeRoute(value);
-  } catch {
-    throw fail('Formulário publicado não encontrado.', 404);
-  }
-}
-
-function publicFormPath(companySlug, projectSlug, path) {
-  const encodedRoute = path === '/' ? '' : path.slice(1).split('/').map(encodeURIComponent).join('/');
-  return `/f/${encodeURIComponent(companySlug)}/${encodeURIComponent(projectSlug)}/${encodedRoute}`;
-}
-
 function domain(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (!normalized) return '';
@@ -196,32 +159,11 @@ function pageVersionRecord(row) {
   };
 }
 
-function formVersionRecord(row) {
-  return {
-    id: row.id,
-    companyId: row.company_id,
-    projectId: row.project_id,
-    formId: row.form_id,
-    versionNumber: row.version_number,
-    publishedPath: row.published_path,
-    schema: row.schema,
-    createdBy: row.created_by,
-    createdAt: row.created_at,
-  };
-}
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function uuid(value, label) {
   if (typeof value !== 'string' || !UUID.test(value)) throw fail(`${label} inválido.`, 400);
   return value;
-}
-
-function versionFields(schema) {
-  const steps = Array.isArray(schema?.steps) ? schema.steps : [];
-  return steps.flatMap((step) => Array.isArray(step?.elements) ? step.elements : [step])
-    .filter((field) => field && typeof field.id === 'string')
-    .map((field) => ({ id: field.id, title: String(field.title ?? field.id) }));
 }
 
 function leadCursor(value) {
@@ -235,14 +177,14 @@ function leadCursor(value) {
   }
   if (Buffer.from(decoded).toString('base64url') !== value) throw fail('Cursor inválido.', 400);
   const [submittedAt, id, sourceKind, ...extra] = decoded.split('|');
-  if (extra.length || !submittedAt || !UUID.test(id ?? '') || (sourceKind && !['form', 'page'].includes(sourceKind)) || Number.isNaN(Date.parse(submittedAt)))
+  if (extra.length || !submittedAt || !UUID.test(id ?? '') || sourceKind !== 'page' || Number.isNaN(Date.parse(submittedAt)))
     throw fail('Cursor inválido.', 400);
-  return { submittedAt, id, sourceKind: sourceKind || 'form' };
+  return { submittedAt, id };
 }
 
-function encodedLeadCursor(submittedAt, id, sourceKind) {
+function encodedLeadCursor(submittedAt, id) {
   const timestamp = submittedAt instanceof Date ? submittedAt.toISOString() : new Date(submittedAt).toISOString();
-  return Buffer.from(`${timestamp}|${id}|${sourceKind}`).toString('base64url');
+  return Buffer.from(`${timestamp}|${id}|page`).toString('base64url');
 }
 
 async function authorizedProject(client, { companyId, projectId, actorId, capability }) {
@@ -289,31 +231,6 @@ async function scopedPage(client, { companyId, projectId, pageId, lock }) {
   return rows[0];
 }
 
-async function scopedForm(client, { companyId, projectId, formId, lock }) {
-  const { rows } = await client.query(
-    `SELECT f.*, company.slug AS company_slug, project.slug AS project_slug, route.path AS route,
-            published_version.published_path AS published_route,
-            (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = f.id) AS submission_count
-     FROM forms f
-     JOIN companies company ON company.id = f.company_id
-     JOIN projects project ON project.id = f.project_id AND project.company_id = f.company_id
-     LEFT JOIN form_versions published_version ON published_version.id = f.published_version_id
-     JOIN project_routes route
-       ON route.id = f.route_id
-      AND route.company_id = f.company_id
-      AND route.project_id = f.project_id
-      AND route.deleted_at IS NULL
-     WHERE f.company_id = $1
-       AND f.project_id = $2
-       AND f.id = $3
-       AND f.deleted_at IS NULL
-     ${lock ? 'FOR UPDATE OF f' : ''}`,
-    [companyId, projectId, formId],
-  );
-  if (!rows.length) throw fail('Formulário não encontrado.', 404);
-  return rows[0];
-}
-
 async function updateRoute(client, { companyId, projectId, routeId, path }) {
   const { rowCount } = await client.query(
     `UPDATE project_routes
@@ -337,9 +254,7 @@ async function createRoute(client, { companyId, projectId, path, contentType }) 
   return rows[0].id;
 }
 
-async function assertPublishedPathAvailable(client, { companyId, projectId, path, contentId, contentType }) {
-  const pageId = contentType === 'page' ? contentId : null;
-  const formId = contentType === 'form' ? contentId : null;
+async function assertPublishedPathAvailable(client, { companyId, projectId, path, pageId }) {
   const { rowCount } = await client.query(
     `SELECT 1
      FROM pages page
@@ -349,17 +264,8 @@ async function assertPublishedPathAvailable(client, { companyId, projectId, path
        AND page.deleted_at IS NULL
        AND lower(version.published_path) = lower($3)
        AND ($4::uuid IS NULL OR page.id <> $4)
-     UNION ALL
-     SELECT 1
-     FROM forms form
-     JOIN form_versions version ON version.id = form.published_version_id
-     WHERE form.company_id = $1
-       AND form.project_id = $2
-       AND form.deleted_at IS NULL
-       AND lower(version.published_path) = lower($3)
-       AND ($5::uuid IS NULL OR form.id <> $5)
      LIMIT 1`,
-    [companyId, projectId, path, pageId, formId],
+    [companyId, projectId, path, pageId],
   );
   if (rowCount) throw fail('Esta rota publicada já está em uso no projeto.', 409);
 }
@@ -418,33 +324,6 @@ export class ContentRepository {
     }
   }
 
-  async createForm({ companyId, projectId, actorId, name, route: routeValue, draftSchema = {}, client: suppliedClient = null }) {
-    const formName = requiredName(name, 'Nome do formulário');
-    const formRoute = route(routeValue);
-    const schema = normalizeFormInput(draftSchema);
-    try {
-      const create = async (client) => {
-        await authorizedProject(client, { companyId, projectId, actorId, capability: 'form.write' });
-        const routeId = await createRoute(client, { companyId, projectId, path: formRoute, contentType: 'form' });
-        const { rows } = await client.query(
-          `INSERT INTO forms (company_id, project_id, route_id, name, draft_schema, created_by)
-           VALUES ($1, $2, $3, $4, $5::jsonb, $6)
-           RETURNING *`,
-          [companyId, projectId, routeId, formName, JSON.stringify(schema), actorId],
-        );
-        const project = await client.query(
-          `SELECT company.slug AS company_slug, project.slug AS project_slug
-           FROM projects project JOIN companies company ON company.id = project.company_id
-           WHERE project.company_id = $1 AND project.id = $2`, [companyId, projectId],
-        );
-        return formRecord({ ...rows[0], route: formRoute, ...project.rows[0] });
-      };
-      return suppliedClient ? await create(suppliedClient) : await withTransaction(this.database, create);
-    } catch (error) {
-      throw routeConflict(error);
-    }
-  }
-
   async listPages({ companyId, projectId, actorId }) {
     await authorizedProject(this.database, { companyId, projectId, actorId });
     const { rows } = await this.database.query(
@@ -458,32 +337,9 @@ export class ContentRepository {
     return rows.map(pageRecord);
   }
 
-  async listForms({ companyId, projectId, actorId }) {
-    await authorizedProject(this.database, { companyId, projectId, actorId });
-    const { rows } = await this.database.query(
-    `SELECT f.*, company.slug AS company_slug, project.slug AS project_slug, route.path AS route,
-            published_version.published_path AS published_route,
-            (SELECT count(*)::int FROM form_submissions submission WHERE submission.form_id = f.id) AS submission_count
-       FROM forms f
-       JOIN companies company ON company.id = f.company_id
-       JOIN projects project ON project.id = f.project_id AND project.company_id = f.company_id
-       LEFT JOIN form_versions published_version ON published_version.id = f.published_version_id
-       JOIN project_routes route ON route.id = f.route_id AND route.deleted_at IS NULL
-       WHERE f.company_id = $1 AND f.project_id = $2 AND f.deleted_at IS NULL
-       ORDER BY f.created_at, f.id`,
-      [companyId, projectId],
-    );
-    return rows.map(formRecord);
-  }
-
   async getPage({ companyId, projectId, actorId, pageId }) {
     await authorizedProject(this.database, { companyId, projectId, actorId });
     return pageRecord(await scopedPage(this.database, { companyId, projectId, pageId }));
-  }
-
-  async getForm({ companyId, projectId, actorId, formId }) {
-    await authorizedProject(this.database, { companyId, projectId, actorId });
-    return formRecord(await scopedForm(this.database, { companyId, projectId, formId }));
   }
 
   async updatePage({ companyId, projectId, actorId, pageId, lockVersion: expectedLockVersion, ...patch }) {
@@ -530,44 +386,6 @@ export class ContentRepository {
     }
   }
 
-  async updateForm({ companyId, projectId, actorId, formId, lockVersion: expectedLockVersion, ...patch }) {
-    const expected = lockVersion(expectedLockVersion);
-    try {
-      return await withTransaction(this.database, async (client) => {
-        await authorizedProject(client, { companyId, projectId, actorId, capability: 'form.write' });
-        const current = await scopedForm(client, { companyId, projectId, formId, lock: true });
-        if (current.lock_version !== expected) throw fail('O formulário mudou em outra aba. Reabra antes de salvar.', 409);
-        const next = {
-          name: patch.name === undefined ? current.name : requiredName(patch.name, 'Nome do formulário'),
-          route: patch.route === undefined ? current.route : route(patch.route),
-          draftSchema: normalizeFormInput(patch.draftSchema === undefined ? current.draft_schema : patch.draftSchema),
-        };
-        const { rows } = await client.query(
-          `UPDATE forms
-           SET name = $4,
-               draft_schema = $5::jsonb,
-               lock_version = lock_version + 1,
-               updated_at = now()
-           WHERE id = $1 AND project_id = $2 AND company_id = $3
-             AND lock_version = $6 AND deleted_at IS NULL
-           RETURNING *`,
-          [formId, projectId, companyId, next.name, JSON.stringify(next.draftSchema), expected],
-        );
-        if (!rows.length) {
-          await scopedForm(client, { companyId, projectId, formId });
-          throw fail('O formulário mudou em outra aba. Reabra antes de salvar.', 409);
-        }
-        if (next.route !== current.route) await updateRoute(client, { companyId, projectId, routeId: current.route_id, path: next.route });
-        return formRecord({
-          ...rows[0], route: next.route, company_slug: current.company_slug,
-          project_slug: current.project_slug, published_route: current.published_route,
-        });
-      });
-    } catch (error) {
-      throw routeConflict(error);
-    }
-  }
-
   async removePage({ companyId, projectId, actorId, pageId, lockVersion: expectedLockVersion }) {
     return withTransaction(this.database, async (client) => {
       await authorizedProject(client, { companyId, projectId, actorId, capability: 'page.write' });
@@ -581,30 +399,6 @@ export class ContentRepository {
         [companyId, projectId, pageId],
       );
       if (page.rowCount !== 1) throw fail('Página não encontrada.', 404);
-      const route = await client.query(
-        `UPDATE project_routes
-         SET deleted_at = now()
-         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
-        [companyId, projectId, current.route_id],
-      );
-      if (route.rowCount !== 1) throw fail('Rota não encontrada.', 404);
-      return { ok: true };
-    });
-  }
-
-  async removeForm({ companyId, projectId, actorId, formId, lockVersion: expectedLockVersion }) {
-    return withTransaction(this.database, async (client) => {
-      await authorizedProject(client, { companyId, projectId, actorId, capability: 'form.write' });
-      const current = await scopedForm(client, { companyId, projectId, formId, lock: true });
-      if (expectedLockVersion !== undefined && current.lock_version !== lockVersion(expectedLockVersion))
-        throw fail('O formulário mudou em outra aba. Reabra antes de excluir.', 409);
-      const form = await client.query(
-        `UPDATE forms
-         SET deleted_at = now(), updated_at = now()
-         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
-        [companyId, projectId, formId],
-      );
-      if (form.rowCount !== 1) throw fail('Formulário não encontrado.', 404);
       const route = await client.query(
         `UPDATE project_routes
          SET deleted_at = now()
@@ -636,54 +430,13 @@ export class ContentRepository {
     }
   }
 
-  async duplicateForm({ companyId, projectId, actorId, formId }) {
-    try {
-      return await withTransaction(this.database, async (client) => {
-        await authorizedProject(client, { companyId, projectId, actorId, capability: 'form.write' });
-        const source = await scopedForm(client, { companyId, projectId, formId, lock: false });
-        const nextRoute = copyRoute(source.route);
-        const routeId = await createRoute(client, { companyId, projectId, path: nextRoute, contentType: 'form' });
-        const schema = { ...source.draft_schema, webhook: '' };
-        const { rows } = await client.query(
-          `INSERT INTO forms (company_id, project_id, route_id, name, draft_schema, created_by)
-           VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING *`,
-          [companyId, projectId, routeId, `${source.name} — cópia`.slice(0, 100), JSON.stringify(schema), actorId],
-        );
-        return formRecord({ ...rows[0], route: nextRoute, company_slug: source.company_slug, project_slug: source.project_slug });
-      });
-    } catch (error) {
-      throw routeConflict(error);
-    }
-  }
-
-  async submissions({ companyId, projectId, actorId, formId }) {
+  async projectSubmissions({ companyId, projectId, actorId, sourceKind, sourceId, captureId, limit = 50, cursor }) {
     await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'submission.read' });
-    await scopedForm(this.database, { companyId, projectId, formId });
-    const { rows } = await this.database.query(
-      `SELECT id, answers, submitted_at
-       FROM form_submissions
-       WHERE company_id = $1 AND project_id = $2 AND form_id = $3
-       ORDER BY submitted_at DESC, id DESC`,
-      [companyId, projectId, formId],
-    );
-    return rows.map((row) => ({ id: row.id, formId, answers: row.answers, submittedAt: row.submitted_at }));
-  }
-
-  async projectSubmissions({ companyId, projectId, actorId, formId, sourceKind, sourceId, captureId, limit = 50, cursor }) {
-    await authorizedProject(this.database, { companyId, projectId, actorId, capability: 'submission.read' });
-    if (formId) {
-      uuid(formId, 'Formulário');
-      await scopedForm(this.database, { companyId, projectId, formId });
-      if (sourceKind && (sourceKind !== 'form' || sourceId !== formId)) throw fail('Filtros de origem conflitantes.', 400);
-      sourceKind = 'form';
-      sourceId = formId;
-    }
-    if (sourceKind !== undefined && !['form', 'page'].includes(sourceKind)) throw fail('Tipo de origem inválido.', 400);
+    if (sourceKind !== undefined && sourceKind !== 'page') throw fail('Tipo de origem inválido.', 400);
     if (sourceId !== undefined) uuid(sourceId, 'Origem');
     if (captureId !== undefined) uuid(captureId, 'Captura');
     if (sourceKind && !sourceId) throw fail('Informe a origem.', 400);
     if (captureId && sourceKind !== 'page') throw fail('Captura requer uma página.', 400);
-    if (sourceKind === 'form') await scopedForm(this.database, { companyId, projectId, formId: sourceId });
     if (sourceKind === 'page') {
       await scopedPage(this.database, { companyId, projectId, pageId: sourceId });
       if (captureId) {
@@ -700,78 +453,56 @@ export class ContentRepository {
     const pageSize = Math.min(100, Math.max(1, Number.isInteger(limit) ? limit : 50));
     const after = leadCursor(cursor);
     const { rows } = await this.database.query(
-      `WITH all_submissions AS (
-         SELECT submission.id, 'form'::text AS source_kind, submission.form_id AS source_id,
-                submission.form_version_id AS source_version_id, form.name AS source_name,
-                version.published_path AS source_path, NULL::uuid AS capture_id, NULL::text AS capture_name,
-                version.schema AS source_schema, submission.answers, submission.submitted_at, delivery.status AS webhook_status
-         FROM form_submissions submission
-         JOIN forms form ON form.id = submission.form_id AND form.company_id = submission.company_id AND form.project_id = submission.project_id AND form.deleted_at IS NULL
-         JOIN form_versions version ON version.id = submission.form_version_id AND version.form_id = form.id
-         LEFT JOIN webhook_deliveries delivery ON delivery.company_id = submission.company_id AND delivery.project_id = submission.project_id
-           AND delivery.source_kind = 'form' AND delivery.submission_id = submission.id
-         WHERE submission.company_id = $1 AND submission.project_id = $2
-         UNION ALL
-         SELECT submission.id, 'page'::text AS source_kind, submission.page_id AS source_id,
-                submission.page_version_id AS source_version_id, page.name AS source_name,
-                version.published_path AS source_path, submission.capture_id, NULL::text AS capture_name,
-                version.capture_schema AS source_schema, submission.answers, submission.submitted_at, delivery.status AS webhook_status
-         FROM page_submissions submission
-         JOIN pages page ON page.id = submission.page_id AND page.company_id = submission.company_id AND page.project_id = submission.project_id AND page.deleted_at IS NULL
-         JOIN page_versions version ON version.id = submission.page_version_id AND version.page_id = page.id
-         LEFT JOIN webhook_deliveries delivery ON delivery.company_id = submission.company_id AND delivery.project_id = submission.project_id
-           AND delivery.source_kind = 'page' AND delivery.page_submission_id = submission.id
-         WHERE submission.company_id = $1 AND submission.project_id = $2
-       )
-       SELECT * FROM all_submissions
-       WHERE ($3::text IS NULL OR source_kind = $3)
-         AND ($4::uuid IS NULL OR source_id = $4)
-         AND ($5::uuid IS NULL OR capture_id = $5)
-         AND ($6::timestamptz IS NULL OR (submitted_at, source_kind, id) < ($6::timestamptz, $7::text, $8::uuid))
-       ORDER BY submitted_at DESC, source_kind DESC, id DESC
-       LIMIT $9`,
-      [companyId, projectId, sourceKind ?? null, sourceId ?? null, captureId ?? null, after?.submittedAt ?? null, after?.sourceKind ?? null, after?.id ?? null, pageSize + 1],
+      `SELECT submission.id, submission.page_id AS source_id,
+              submission.page_version_id AS source_version_id, page.name AS source_name,
+              version.published_path AS source_path, submission.capture_id,
+              version.capture_schema AS source_schema, submission.answers, submission.submitted_at, delivery.status AS webhook_status
+       FROM page_submissions submission
+       JOIN pages page ON page.id = submission.page_id AND page.company_id = submission.company_id AND page.project_id = submission.project_id AND page.deleted_at IS NULL
+       JOIN page_versions version ON version.id = submission.page_version_id AND version.page_id = page.id
+       LEFT JOIN webhook_deliveries delivery ON delivery.company_id = submission.company_id AND delivery.project_id = submission.project_id
+         AND delivery.page_submission_id = submission.id
+       WHERE submission.company_id = $1 AND submission.project_id = $2
+         AND ($3::uuid IS NULL OR submission.page_id = $3)
+         AND ($4::uuid IS NULL OR submission.capture_id = $4)
+         AND ($5::timestamptz IS NULL OR (submission.submitted_at, submission.id) < ($5::timestamptz, $6::uuid))
+       ORDER BY submission.submitted_at DESC, submission.id DESC
+       LIMIT $7`,
+      [companyId, projectId, sourceId ?? null, captureId ?? null, after?.submittedAt ?? null, after?.id ?? null, pageSize + 1],
     );
     const hasNext = rows.length > pageSize;
     const items = rows.slice(0, pageSize).map((row) => {
-      const capture = row.source_kind === 'page'
-        ? row.source_schema?.forms?.find((item) => item?.captureId === row.capture_id)
-        : null;
+      const capture = row.source_schema?.forms?.find((item) => item?.captureId === row.capture_id);
       return {
-        id: row.id, sourceKind: row.source_kind, sourceId: row.source_id, sourceVersionId: row.source_version_id,
+        id: row.id, sourceKind: 'page', sourceId: row.source_id, sourceVersionId: row.source_version_id,
         sourceName: row.source_name || '', sourcePath: row.source_path || '', captureId: row.capture_id || '',
-        captureName: capture?.name || row.capture_name || '', fields: row.source_kind === 'page' ? (capture?.fields ?? []) : versionFields(row.source_schema),
-        ...(row.source_kind === 'form' ? { formId: row.source_id, formName: row.source_name || '' } : {}),
+        captureName: capture?.name || '', fields: capture?.fields ?? [],
         answers: row.answers, submittedAt: row.submitted_at,
         webhookStatus: row.webhook_status === 'dead' ? 'failed' : (row.webhook_status || ''),
       };
     });
     const last = items.at(-1);
     const sources = await this.projectSubmissionSources({ companyId, projectId });
-    return { items, nextCursor: hasNext ? encodedLeadCursor(last.submittedAt, last.id, last.sourceKind) : null, sources };
+    return { items, nextCursor: hasNext ? encodedLeadCursor(last.submittedAt, last.id) : null, sources };
   }
 
   async projectSubmissionSources({ companyId, projectId }) {
     const { rows } = await this.database.query(
-      `SELECT 'form'::text AS source_kind, form.id AS source_id, form.name AS source_name, version.id AS source_version_id,
-              version.published_path AS source_path, NULL::uuid AS capture_id, NULL::jsonb AS capture
-       FROM forms form LEFT JOIN form_versions version ON version.form_id = form.id
-       WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL
-       UNION ALL
-       SELECT 'page'::text, page.id, page.name, version.id, version.published_path, (capture->>'captureId')::uuid, capture
+      `SELECT page.id AS source_id, page.name AS source_name, version.id AS source_version_id,
+              version.published_path AS source_path, (capture->>'captureId')::uuid AS capture_id, capture
        FROM pages page JOIN page_versions version ON version.page_id = page.id
        CROSS JOIN LATERAL jsonb_array_elements(version.capture_schema->'forms') capture
        WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL
-       ORDER BY source_kind, source_name, source_id, source_version_id`,
+       ORDER BY source_name, source_id, source_version_id`,
       [companyId, projectId],
     );
     const unique = new Map();
     for (const row of rows) {
       const source = {
-        sourceKind: row.source_kind, sourceId: row.source_id, sourceName: row.source_name || '',
+        sourceKind: 'page', sourceId: row.source_id, sourceName: row.source_name || '',
         sourcePath: row.source_path || '', captureId: row.capture_id || '', captureName: row.capture?.name || '',
       };
-      const key = `${source.sourceKind}:${source.sourceId}:${source.captureId}`;
+      const key = `${source.sourceId}:${source.captureId}`;
       if (!unique.has(key)) unique.set(key, source);
     }
     return [...unique.values()];
@@ -879,73 +610,6 @@ export class ContentRepository {
     }
   }
 
-  async publishedFormForProject(client, { companySlug, projectSlug, route: routeValue, slug }) {
-    const publishedPath = publicRoute(routeValue ?? slug);
-    const normalizedCompany = normalizeProjectSlug(companySlug);
-    const normalizedProject = normalizeProjectSlug(projectSlug);
-    const { rows } = await client.query(
-      `SELECT form.id, form.company_id, form.project_id, form.name, version.id AS version_id, version.schema,
-              company.slug AS company_slug, project.slug AS project_slug, version.published_path
-       FROM forms form
-       JOIN companies company ON company.id = form.company_id
-       JOIN projects project ON project.id = form.project_id AND project.company_id = form.company_id
-       JOIN form_versions version ON version.id = form.published_version_id
-       WHERE company.slug = $1
-         AND company.status = 'active'
-         AND project.slug = $2
-         AND project.status = 'active'
-         AND version.published_path = $3
-         AND form.deleted_at IS NULL`,
-      [normalizedCompany, normalizedProject, publishedPath],
-    );
-    if (rows.length !== 1) throw fail('Formulário publicado não encontrado.', 404);
-    return rows[0];
-  }
-
-  async publishedFormForDomain(client, { host, route: routeValue, slug }) {
-    const publishedPath = publicRoute(routeValue ?? slug);
-    const normalizedHost = domain(String(host).replace(/^\[/, '').replace(/\]$/, '').split(':')[0]);
-    if (!normalizedHost) throw fail('Formulário publicado não encontrado.', 404);
-    const { rows } = await client.query(
-      `SELECT form.id, form.company_id, form.project_id, form.name, version.id AS version_id, version.schema,
-              company.slug AS company_slug, project.slug AS project_slug, version.published_path
-       FROM project_domains project_domain
-       JOIN companies company ON company.id = project_domain.company_id
-       JOIN projects project ON project.id = project_domain.project_id AND project.company_id = project_domain.company_id
-       JOIN forms form ON form.project_id = project.id AND form.company_id = project.company_id AND form.deleted_at IS NULL
-       JOIN form_versions version ON version.id = form.published_version_id
-       WHERE lower(project_domain.domain) = lower($1)
-         AND project_domain.environment = 'production'
-         AND project_domain.is_canonical
-         AND project_domain.verification_status = 'verified'
-         AND company.status = 'active'
-         AND project.status = 'active'
-         AND version.published_path = $2`, [normalizedHost, publishedPath],
-    );
-    if (rows.length !== 1) throw fail('Formulário publicado não encontrado.', 404);
-    return rows[0];
-  }
-
-  publicFormRecord(form, routeValue) {
-    return {
-      id: form.id,
-      companyId: form.company_id,
-      projectId: form.project_id,
-      companySlug: form.company_slug,
-      projectSlug: form.project_slug,
-      publicPath: publicFormPath(form.company_slug, form.project_slug, form.published_path),
-      versionId: form.version_id,
-      name: form.name,
-      slug: routeValue === '/' ? '' : routeValue.replace(/^\//, ''),
-      ...form.schema,
-    };
-  }
-
-  async publicFormForProject({ companySlug, projectSlug, route: routeValue, slug }) {
-    const path = publicRoute(routeValue ?? slug);
-    return this.publicFormRecord(await this.publishedFormForProject(this.database, { companySlug, projectSlug, route: path }), path);
-  }
-
   async publicationOrigins({ companySlug, projectSlug, environment }) {
     const { rows } = await this.database.query(
       `SELECT domain AS origin FROM project_domains domain
@@ -964,29 +628,6 @@ export class ContentRepository {
 
   async isPublicOriginAllowed({ companySlug, projectSlug, origin }) {
     return allowedPublicationOrigin(origin, await this.publicationOrigins({ companySlug, projectSlug }));
-  }
-
-  async publicFormForDomain({ host, route: routeValue, slug }) {
-    const path = publicRoute(routeValue ?? slug);
-    return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, route: path }), path);
-  }
-
-  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
-    const path = publicRoute(routeValue ?? slug);
-    return this.submitPublishedForm({
-      resolve: (client) => this.publishedFormForProject(client, { companySlug, projectSlug, route: path }),
-      route: path,
-      input, origin, attribution, cliente, remetente, publicationId, subjectId,
-    });
-  }
-
-  async submitPublicFormForDomain({ host, route: routeValue, slug, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
-    const path = publicRoute(routeValue ?? slug);
-    return this.submitPublishedForm({
-      resolve: (client) => this.publishedFormForDomain(client, { host, route: path }),
-      route: path,
-      input, origin, attribution, cliente, remetente, publicationId, subjectId,
-    });
   }
 
   async submitPublishedPageCapture({ companyId, projectId, pageId, pageVersionId, captureId, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
@@ -1058,87 +699,6 @@ export class ContentRepository {
     });
   }
 
-  async submitPublishedForm({ resolve, route: routeValue, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
-    return withTransaction(this.database, async (client) => {
-      const form = await resolve(client);
-      const answers = validateFormAnswers(form.schema, input);
-      // O mesmo envio repetido pela mesma pessoa é o mesmo lead (ver a captura de página).
-      const visitante = chaveDoVisitante({ pageId: form.id, captureId: 'form', subjectId, remetente: remetente ?? cliente });
-      const reenvio = visitante
-        ? (await client.query(
-          `SELECT id, tracking_event_id, submitted_at FROM form_submissions
-           WHERE company_id = $1 AND project_id = $2 AND form_id = $3 AND visitor_key = $4
-             AND answers = $5::jsonb AND submitted_at > now() - make_interval(mins => $6)
-           ORDER BY submitted_at DESC LIMIT 1`,
-          [form.company_id, form.project_id, form.id, visitante, JSON.stringify(answers), JANELA_DE_REENVIO_MIN],
-        )).rows[0]
-        : null;
-      if (reenvio) {
-        return {
-          id: reenvio.id, eventId: reenvio.tracking_event_id, reenvio: true, webhookDelivery: null,
-          form: { id: form.id, companyId: form.company_id, projectId: form.project_id, name: form.name, slug: routeValue === '/' ? '' : routeValue.replace(/^\//, ''), companySlug: form.company_slug, projectSlug: form.project_slug },
-          schema: form.schema, answers, submittedAt: reenvio.submitted_at,
-        };
-      }
-      const { rows } = await client.query(
-        `INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers, visitor_key)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING id, tracking_event_id, submitted_at`,
-        [form.company_id, form.project_id, form.id, form.version_id, JSON.stringify(answers), visitante],
-      );
-      const submissionId = rows[0].id;
-      const eventId = rows[0].tracking_event_id;
-      if (this.commercialOutbox) {
-        const environment = await this.publicationEnvironment(client, { companyId: form.company_id, projectId: form.project_id, origin });
-        if (!environment) throw fail('Origem publicada obrigatória para conversões.', 403);
-        const consentState = this.commercialConsentResolver ? await this.commercialConsentResolver({ companyId: form.company_id, projectId: form.project_id, environment, origin, publicationId, subjectId }) : 'pending';
-        await this.commercialOutbox.enqueue(client, {
-          companyId: form.company_id, projectId: form.project_id, environment,
-          trackingEventId: eventId, eventName: 'lead', consentState, answers, attribution, cliente, at: rows[0].submitted_at,
-          contexto: { sourceUrl: enderecoPublicado(origin, form.published_path), contentId: form.id, contentName: form.name },
-        });
-      }
-      let webhookDelivery = null;
-      if (form.schema.webhook) {
-        // Enfileira na mesma transação da submissão: a entrega nunca fica órfã (submissão sem
-        // fila) nem duplicada (fila sem submissão) — os dois só existem juntos, ou nenhum existe.
-        await this.webhookDeliveries.enqueue(client, {
-          companyId: form.company_id,
-          projectId: form.project_id,
-          formId: form.id,
-          submissionId,
-          url: form.schema.webhook,
-          event: {
-            eventId,
-            event: 'form.submitted',
-            companyId: form.company_id,
-            projectId: form.project_id,
-            formId: form.id,
-            submittedAt: rows[0].submitted_at,
-            answers,
-          },
-        });
-        webhookDelivery = { status: 'queued' };
-      }
-      return {
-        id: submissionId,
-        eventId,
-        form: {
-          id: form.id,
-          companyId: form.company_id,
-          projectId: form.project_id,
-          name: form.name,
-          slug: routeValue === '/' ? '' : routeValue.replace(/^\//, ''),
-          companySlug: form.company_slug,
-          projectSlug: form.project_slug,
-        },
-        schema: form.schema,
-        answers,
-        submittedAt: rows[0].submitted_at,
-        webhookDelivery,
-      };
-    });
-  }
-
   async publicationEnvironment(client, { companyId, projectId, origin }) {
     let normalized;
     try { normalized = new URL(String(origin)).origin; } catch { return null; }
@@ -1176,9 +736,7 @@ export class ContentRepository {
           [companyId, projectId, pageId, JSON.stringify(normalizedEditorState)],
         );
       }
-      await assertPublishedPathAvailable(client, {
-        companyId, projectId, path: page.route, contentId: pageId, contentType: 'page',
-      });
+      await assertPublishedPathAvailable(client, { companyId, projectId, path: page.route, pageId });
       const number = await client.query(
         'SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number FROM page_versions WHERE page_id = $1',
         [pageId],
@@ -1199,37 +757,6 @@ export class ContentRepository {
     });
   }
 
-  async publishForm({ companyId, projectId, actorId, formId, lockVersion: expectedLockVersion }) {
-    return withTransaction(this.database, async (client) => {
-      await authorizedProject(client, { companyId, projectId, actorId, capability: 'deployment.publish' });
-      const form = await scopedForm(client, { companyId, projectId, formId, lock: true });
-      if (expectedLockVersion !== undefined && form.lock_version !== lockVersion(expectedLockVersion))
-        throw fail('O formulário mudou em outra aba. Reabra antes de publicar.', 409);
-      const schema = normalizeFormInput(form.draft_schema);
-      await this.assertPublishedVslReferences(client, { companyId, projectId, schema });
-      await assertPublishedPathAvailable(client, {
-        companyId, projectId, path: form.route, contentId: formId, contentType: 'form',
-      });
-      const number = await client.query(
-        'SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number FROM form_versions WHERE form_id = $1',
-        [formId],
-      );
-      const { rows } = await client.query(
-        `INSERT INTO form_versions (company_id, project_id, form_id, version_number, published_path, schema, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
-         RETURNING *`,
-        [companyId, projectId, formId, number.rows[0].version_number, form.route, JSON.stringify(schema), actorId],
-      );
-      await client.query(
-        `UPDATE forms
-         SET published_version_id = $4, updated_at = now()
-         WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
-        [companyId, projectId, formId, rows[0].id],
-      );
-      return formVersionRecord(rows[0]);
-    });
-  }
-
   async getPublicContent({ companyId, projectId, route: routeValue }) {
     const path = route(routeValue);
     const page = await this.database.query(
@@ -1242,36 +769,15 @@ export class ContentRepository {
          AND lower(version.published_path) = lower($3)`,
       [companyId, projectId, path],
     );
-    if (page.rowCount) {
-      const content = page.rows[0];
-      return {
-        type: 'page',
-        id: content.id,
-        pageId: content.page_id,
-        versionNumber: content.version_number,
-        editorState: content.editor_state,
-        renderedHtml: content.rendered_html,
-        publishedAt: content.created_at,
-      };
-    }
-    const form = await this.database.query(
-      `SELECT version.*
-       FROM forms form
-       JOIN form_versions version ON version.id = form.published_version_id
-       WHERE form.company_id = $1
-         AND form.project_id = $2
-         AND form.deleted_at IS NULL
-         AND lower(version.published_path) = lower($3)`,
-      [companyId, projectId, path],
-    );
-    if (!form.rowCount) throw fail('Conteúdo publicado não encontrado.', 404);
-    const content = form.rows[0];
+    if (!page.rowCount) throw fail('Conteúdo publicado não encontrado.', 404);
+    const content = page.rows[0];
     return {
-      type: 'form',
+      type: 'page',
       id: content.id,
-      formId: content.form_id,
+      pageId: content.page_id,
       versionNumber: content.version_number,
-      schema: content.schema,
+      editorState: content.editor_state,
+      renderedHtml: content.rendered_html,
       publishedAt: content.created_at,
     };
   }

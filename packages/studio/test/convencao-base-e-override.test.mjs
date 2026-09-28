@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import postcss, { list } from 'postcss';
 import { elementosCss } from '../public/catalogo-elementos.js';
-import { quizElementCss } from '../public/quiz-elements.js';
 import { embedVideoCss, formCss, runtimeCss, templateCss } from '../public/templates.js';
 
 // "Base e override do mesmo seletor moram no mesmo módulo."
@@ -15,12 +14,11 @@ import { embedVideoCss, formCss, runtimeCss, templateCss } from '../public/templ
 // override ANTES da base, mesma especificidade — e o donut do mobile perdeu o tamanho.
 // Nenhuma prova acusava, porque cada módulo, lido sozinho, estava coerente.
 //
-// Os módulos aqui são arquivos-fonte, não folhas compostas: quizElementCss contém
-// elementosCss inteiro, então ler a composição não distinguiria quem declarou o quê. As
-// duas subtrações abaixo desfazem a composição e devolvem o que cada arquivo escreveu.
+// Os módulos aqui são arquivos-fonte, não folhas compostas: templateCss contém formCss e
+// embedVideoCss inteiros, então ler a composição não distinguiria quem declarou o quê. A
+// subtração abaixo desfaz a composição e devolve o que cada arquivo escreveu.
 const modulos = {
   'catalogo-elementos.js': elementosCss,
-  'quiz-elements.js': quizElementCss.split(elementosCss).join(''),
   'templates.js (templateCss)': templateCss.split(formCss).join('').split(embedVideoCss).join(''),
   'templates.js (formCss)': formCss,
   'templates.js (runtimeCss)': runtimeCss,
@@ -45,8 +43,6 @@ for (const [nome, folha] of Object.entries(modulos)) {
 test('a subtração devolve mesmo o que cada arquivo escreveu', () => {
   // Se a composição mudar de forma, a subtração vira no-op e a prova abaixo passaria a
   // ler a folha inteira — verde por acidente. Esta é a âncora.
-  assert.ok(modulos['quiz-elements.js'].includes('.funnel-header{'), 'o módulo do quiz precisa manter o que é dele');
-  assert.ok(!modulos['quiz-elements.js'].includes('.choice{'), 'e perder o que veio de catalogo-elementos.js');
   assert.ok(modulos['templates.js (templateCss)'].includes('.hero-grid{'));
   assert.ok(!modulos['templates.js (templateCss)'].includes('.alva-form{'), 'formCss é módulo próprio');
 });

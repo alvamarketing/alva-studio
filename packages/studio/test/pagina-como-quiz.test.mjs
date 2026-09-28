@@ -126,14 +126,3 @@ test('o painel do projeto conta o quiz como quiz, não como página', async (t) 
   assert.equal(painel.content.find((item) => item.id === quiz.id).kind, 'form');
 });
 
-test('o formulário do editor antigo não aparece mais no painel', async (t) => {
-  const { content, empresa, projeto, dono, database } = await palco(t);
-  const { ProjectRepository } = await import('../server/repositories/project-repository.mjs');
-  const antigo = await content.createForm({ companyId: empresa, projectId: projeto, actorId: dono, name: 'Quiz antigo', route: '/antigo', draftSchema: {
-    steps: [{ id: 'e1', type: 'short_text', title: 'Nome', required: true }],
-    completion: { title: 'Obrigado!', message: 'Recebemos.' },
-  } });
-  const painel = await new ProjectRepository(database).overview({ companyId: empresa, projectId: projeto, userId: dono });
-  assert.equal(painel.counts.forms, 0);
-  assert.equal(painel.content.some((item) => item.id === antigo.id), false);
-});

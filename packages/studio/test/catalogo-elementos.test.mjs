@@ -1,10 +1,8 @@
-import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import postcss from 'postcss';
-import { elementosCss, catalogo, elementoPorId } from '../public/catalogo-elementos.js';
-import { quizElementCss } from '../public/quiz-elements.js';
-import { templateCss, formCss, templates } from '../public/templates.js';
+import { elementosCss } from '../public/catalogo-elementos.js';
+import { formCss } from '../public/templates.js';
 
 test('a folha dos elementos desenha peças, não a página', () => {
   assert.match(elementosCss, /\.choice\{/);
@@ -21,57 +19,6 @@ test('a paleta da folha vem de variáveis próprias', () => {
   assert.doesNotMatch(elementosCss, /var\(--accent\)/);
 });
 
-test('os formulários dinâmicos publicados continuam com a folha inteira', () => {
-  assert.match(quizElementCss, /\.choice\{/);
-  assert.match(quizElementCss, /body\{/);
-  assert.match(quizElementCss, /\.funnel-header\{/);
-});
-
-test('o seletor de um elemento é sempre uma classe', () => {
-  // Seletor de tag tornaria esta prova inútil: toda folha contém a letra "p".
-  // Exigir classe é o que faz o elemento ter um endereço só dele.
-  for (const elemento of catalogo) {
-    assert.ok(elemento.seletor.startsWith('.'), `${elemento.id} precisa declarar uma classe, não ${elemento.seletor}`);
-  }
-});
-
-const nomeDoCanvas = (quizCanvas) => quizCanvas ? 'quiz' : 'landing';
-
-test('o HTML do elemento casa com o seletor que ele declara', () => {
-  for (const elemento of catalogo) {
-    const classe = elemento.seletor.slice(1);
-    assert.match(elemento.render(), new RegExp(`class="[^"]*\\b${classe}\\b`), `${elemento.id} não emite a classe ${classe}`);
-  }
-});
-
-test('elemento não carrega cor nem tamanho embutidos no HTML', () => {
-  for (const elemento of catalogo) {
-    assert.doesNotMatch(elemento.render(), /style="[^"]*(color|font-size|background)/i, `${elemento.id} embute estilo no HTML`);
-  }
-});
-
-test('elementoPorId acha e devolve indefinido para o que não existe', () => {
-  assert.equal(elementoPorId('heading')?.nome, 'Título');
-  assert.equal(elementoPorId('inexistente'), undefined);
-});
-
-test('lista, escala e arquivo nascem com a classe do sistema', () => {
-  assert.match(elementoPorId('quiz-select').render(), /class="answer"/);
-  assert.match(elementoPorId('quiz-range').render(), /class="scale"/);
-  assert.match(elementoPorId('quiz-file').render(), /class="upload"/);
-});
-
-test('a escala mostra o valor escolhido', () => {
-  const html = elementoPorId('quiz-range').render();
-  assert.match(html, /<output/, 'sem output a pessoa move o controle e não sabe onde parou');
-});
-
-test('o campo de texto solto encontra regra fora do formulário', () => {
-  const html = elementoPorId('input').render();
-  assert.match(html, /class="answer-wrap"/);
-  assert.match(html, /class="answer"/);
-});
-
 test('o campo aninhado dentro do formulário devolve o foco ao tratamento do formulário', () => {
   // .answer:focus (0,2,0) sozinho vazava para dentro de .alva-form: formCss só cobre
   // :focus-visible (outline), não :focus puro, então um clique deixava o campo aninhado
@@ -80,12 +27,6 @@ test('o campo aninhado dentro do formulário devolve o foco ao tratamento do for
   // valores que .alva-form input já tem em repouso (formCss), não inventar cor nova.
   assert.match(formCss, /var\(--field-border\)/, 'o token que a correção reusa precisa existir em formCss');
   assert.match(elementosCss, /\.alva-form \.answer:focus\{border-top-color:var\(--field-border\);border-right-color:var\(--field-border\);border-bottom-color:var\(--field-border\);border-left-color:var\(--field-border\);box-shadow:none\}/);
-});
-
-test('a área de envio diz o que aceita em português', () => {
-  const html = elementoPorId('quiz-file').render();
-  assert.doesNotMatch(html, /Choose File/i);
-  assert.match(html, /Escolher arquivo|Envie/i);
 });
 
 test('nenhum atalho com var() na folha, porque o atalho não sobrevive ao GrapesJS', () => {

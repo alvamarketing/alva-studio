@@ -73,6 +73,12 @@ test('runner local executa a matriz comercial em ordem e exige flags seguras', a
   assert.throws(() => runLocalCommercialCertification({ environment: { MEDIA_PIPELINE_ENABLED: 'true' }, steps: {} }), /MEDIA_PIPELINE_ENABLED/);
 });
 
+const CAPTURA_A = '11111111-1111-4111-8111-111111111111';
+const CAPTURA_B = '22222222-2222-4222-8222-222222222222';
+const campo = (rotulo, name, type) => ({ tagName: 'label', components: [{ type: 'textnode', content: rotulo }, { tagName: 'input', attributes: { name, type, required: '' } }] });
+const quizComCaptura = (captureId) => ({ components: [{ tagName: 'form', attributes: { 'data-alva-capture-id': captureId }, components: [campo('Nome', 'nome', 'text'), campo('E-mail', 'email', 'email'), campo('Telefone', 'telefone', 'tel')] }] });
+const quizPublicado = (captureId) => `<main><form data-alva-capture-id="${captureId}" action="#"><input name="nome"><input name="email" type="email"><input name="telefone" type="tel"></form></main>`;
+
 test('matriz comercial local percorre dois tenants sem egress e preserva a última publicação pronta', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });
@@ -105,18 +111,12 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         records.projectB = await projects.create({ companyId: records.companyB.id, actorUserId: records.ownerB.id, name: 'Projeto B', slug: 'projeto-b' });
         records.page = await content.createPage({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id, name: 'Landing local', route: '/landing', editorState: {}, renderedHtml: '<main>local</main>' });
         records.pageB = await content.createPage({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id, name: 'Landing local B', route: '/landing', editorState: {}, renderedHtml: '<main>local b</main>' });
-        records.form = await content.createForm({
-          companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id, name: 'Quiz local', route: '/quiz',
-          draftSchema: { headerElements: [], steps: [{ id: 'nome', type: 'text', title: 'Nome', required: true }, { id: 'email', type: 'email', title: 'E-mail', required: true }, { id: 'telefone', type: 'text', title: 'Telefone', required: true }], completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' }, webhook: '' },
-        });
-        records.formB = await content.createForm({
-          companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id, name: 'Quiz local B', route: '/quiz',
-          draftSchema: { headerElements: [], steps: [{ id: 'nome', type: 'text', title: 'Nome', required: true }, { id: 'email', type: 'email', title: 'E-mail', required: true }, { id: 'telefone', type: 'text', title: 'Telefone', required: true }], completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' }, webhook: '' },
-        });
+        records.quiz = await content.createPage({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id, name: 'Quiz local', route: '/quiz', kind: 'quiz', editorState: quizComCaptura(CAPTURA_A), renderedHtml: quizPublicado(CAPTURA_A) });
+        records.quizB = await content.createPage({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id, name: 'Quiz local B', route: '/quiz', kind: 'quiz', editorState: quizComCaptura(CAPTURA_B), renderedHtml: quizPublicado(CAPTURA_B) });
         await content.publishPage({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id, pageId: records.page.id });
-        await content.publishForm({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id, formId: records.form.id });
+        records.quizVersion = await content.publishPage({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id, pageId: records.quiz.id });
         await content.publishPage({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id, pageId: records.pageB.id });
-        await content.publishForm({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id, formId: records.formB.id });
+        records.quizVersionB = await content.publishPage({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id, pageId: records.quizB.id });
         return { status: 'passed' };
       },
       provisioning_local: async () => {
@@ -181,30 +181,22 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         return { status: 'passed' };
       },
       visit_and_lead: async () => {
-        const publicForm = await content.publicFormForProject({ companySlug: 'certificacao-a', projectSlug: 'projeto-a', route: '/quiz' });
-        assert.equal(publicForm.id, records.form.id);
-        const publicFormB = await content.publicFormForProject({ companySlug: 'certificacao-b', projectSlug: 'projeto-b', route: '/quiz' });
-        assert.equal(publicFormB.id, records.formB.id);
-        await assert.rejects(() => content.publicFormForProject({ companySlug: 'certificacao-a', projectSlug: 'projeto-b', route: '/quiz' }), /não encontrado/);
-        await assert.rejects(() => content.publicFormForProject({ companySlug: 'certificacao-b', projectSlug: 'projeto-a', route: '/quiz' }), /não encontrado/);
-        await assert.rejects(() => content.submitPublicFormForProject({ companySlug: 'certificacao-a', projectSlug: 'projeto-b', route: '/quiz', origin: records.originA, input: { answers: {} } }), /não encontrado/);
-        await assert.rejects(() => content.submitPublicFormForProject({ companySlug: 'certificacao-b', projectSlug: 'projeto-a', route: '/quiz', origin: records.originB, input: { answers: {} } }), /não encontrado/);
-        records.submission = await content.submitPublicFormForProject({
-          companySlug: 'certificacao-a', projectSlug: 'projeto-a', route: '/quiz', origin: records.originA, publicationId: records.preview.id,
-          subjectId: 'local-certification-subject-0001', attribution: { fbclid: 'fb-local-cert-a' },
-          cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
-          input: { answers: { nome: 'Nome local A', email: 'lead-a@local-cert.test', telefone: '+55 11 99999-0001' } },
+        const captura = ({ companyId, projectId, pageId, pageVersionId, captureId }) => (input, extra = {}) => content.submitPublishedPageCapture({ companyId, projectId, pageId, pageVersionId, captureId, input, ...extra });
+        const doA = { companyId: records.companyA.id, projectId: records.projectA.id, pageId: records.quiz.id, pageVersionId: records.quizVersion.id, captureId: CAPTURA_A };
+        const doB = { companyId: records.companyB.id, projectId: records.projectB.id, pageId: records.quizB.id, pageVersionId: records.quizVersionB.id, captureId: CAPTURA_B };
+        // O quiz de um tenant não é alcançável pelo escopo do outro.
+        await assert.rejects(() => captura({ ...doA, companyId: records.companyB.id, projectId: records.projectB.id })({ answers: {} }, { origin: records.originB }), /não encontrada/);
+        await assert.rejects(() => captura({ ...doB, companyId: records.companyA.id, projectId: records.projectA.id })({ answers: {} }, { origin: records.originA }), /não encontrada/);
+        records.submission = await captura(doA)({ answers: { nome: 'Nome local A', email: 'lead-a@local-cert.test', telefone: '+55 11 99999-0001' } }, {
+          origin: records.originA, publicationId: records.preview.id, subjectId: 'local-certification-subject-0001',
+          attribution: { fbclid: 'fb-local-cert-a' }, cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
         });
-        records.submissionB = await content.submitPublicFormForProject({
-          companySlug: 'certificacao-b', projectSlug: 'projeto-b', route: '/quiz', origin: records.originB, publicationId: records.previewB.id,
-          subjectId: 'local-certification-subject-0002', attribution: { fbclid: 'fb-local-cert-b' },
-          cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
-          input: { answers: { nome: 'Nome local B', email: 'lead-b@local-cert.test', telefone: '+55 11 99999-0002' } },
+        records.submissionB = await captura(doB)({ answers: { nome: 'Nome local B', email: 'lead-b@local-cert.test', telefone: '+55 11 99999-0002' } }, {
+          origin: records.originB, publicationId: records.previewB.id, subjectId: 'local-certification-subject-0002',
+          attribution: { fbclid: 'fb-local-cert-b' }, cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
         });
-        assert.equal(records.submission.form.projectId, records.projectA.id);
-        assert.equal(records.submissionB.form.projectId, records.projectB.id);
-        assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions WHERE company_id = $1', [records.companyA.id])).rows[0].count, 1);
-        assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions WHERE company_id = $1', [records.companyB.id])).rows[0].count, 1);
+        assert.equal((await database.query('SELECT count(*)::int AS count FROM page_submissions WHERE company_id = $1 AND project_id = $2', [records.companyA.id, records.projectA.id])).rows[0].count, 1);
+        assert.equal((await database.query('SELECT count(*)::int AS count FROM page_submissions WHERE company_id = $1 AND project_id = $2', [records.companyB.id, records.projectB.id])).rows[0].count, 1);
         const outboxA = (await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [records.companyA.id, records.projectA.id])).rows[0].payload;
         const outboxB = (await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1 AND project_id = $2', [records.companyB.id, records.projectB.id])).rows[0].payload;
         assertSanitizedOutboxPayload(outboxA, { trackingEventId: records.submission.eventId, fbclid: 'fb-local-cert-a', personalValues: ['Nome local A', 'lead-a@local-cert.test', '+55 11 99999-0001'] });
@@ -223,7 +215,7 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         const manifest = { companyId: records.companyA.id, projectId: records.projectA.id, publicationId: records.preview.id, snapshotHash: 'a'.repeat(64), policyVersion: 1, origin: 'https://local-cert-a.example.test', domain: 'local-cert-a.example.test', environment: 'preview' };
         const outcome = await service.deliver({
           manifest, storedConsent: { scope: manifest, state: 'pending' }, serverAnswers: records.submission.answers,
-          browserEvent: { trackingEventId: records.submission.eventId, eventName: 'lead', eventTime: 1_700_000_000, contentId: records.form.id, attribution: { fbclid: 'fb-local-cert-a' } }, enabledProviders: ['meta'],
+          browserEvent: { trackingEventId: records.submission.eventId, eventName: 'lead', eventTime: 1_700_000_000, contentId: records.quiz.id, attribution: { fbclid: 'fb-local-cert-a' } }, enabledProviders: ['meta'],
         });
         assert.equal(outcome.trackingEventId, records.submission.eventId);
         assert.equal(JSON.stringify(conversionCalls).includes('lead-a@local-cert.test'), false);
@@ -278,13 +270,14 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         return { status: 'passed' };
       },
       tenant_isolation: async () => {
-        assert.deepEqual((await content.listPages({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id })).map((page) => page.projectId), [records.projectA.id, records.projectA.id]);
-        assert.deepEqual((await content.listPages({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id })).map((page) => page.projectId), [records.projectB.id]);
+        // A: landing, quiz e o rascunho criado pelo MCP. B: landing e quiz.
+        assert.deepEqual((await content.listPages({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerA.id })).map((page) => page.projectId), [records.projectA.id, records.projectA.id, records.projectA.id]);
+        assert.deepEqual((await content.listPages({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerB.id })).map((page) => page.projectId), [records.projectB.id, records.projectB.id]);
         await assert.rejects(() => content.listPages({ companyId: records.companyA.id, projectId: records.projectA.id, actorId: records.ownerB.id }), /Projeto não encontrado/);
         await assert.rejects(() => content.listPages({ companyId: records.companyB.id, projectId: records.projectB.id, actorId: records.ownerA.id }), /Projeto não encontrado/);
         await assert.rejects(() => projects.getAuthorized({ companyId: records.companyA.id, projectId: records.projectB.id, userId: records.ownerA.id }), /Projeto não encontrado/);
-        assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions WHERE company_id = $1', [records.companyA.id])).rows[0].count, 1);
-        assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions WHERE company_id = $1', [records.companyB.id])).rows[0].count, 1);
+        assert.equal((await database.query('SELECT count(*)::int AS count FROM page_submissions WHERE company_id = $1', [records.companyA.id])).rows[0].count, 1);
+        assert.equal((await database.query('SELECT count(*)::int AS count FROM page_submissions WHERE company_id = $1', [records.companyB.id])).rows[0].count, 1);
         return { status: 'passed' };
       },
       publication_rollback: async () => {

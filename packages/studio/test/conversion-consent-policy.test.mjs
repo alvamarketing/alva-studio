@@ -69,9 +69,3 @@ test('manifest scope mismatch and future revocation fall back to pending without
   assert.ok(historical.user.email_sha256);
 });
 
-test('aviso de privacidade explica identificadores pseudônimos e processamento limitado sem PII direta', async () => {
-  const templates = await readFile(new URL('../public/templates.js', import.meta.url), 'utf8');
-  assert.match(templates, /identificadores pseudônimos de atribuição/i);
-  assert.match(templates, /processamento limitado/i);
-  assert.match(templates, /sem autorização de PII direta/i);
-});

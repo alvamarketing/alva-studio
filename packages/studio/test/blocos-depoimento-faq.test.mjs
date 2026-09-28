@@ -1,8 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blocks, runtimeCss, blockDescriptions } from '../public/templates.js';
-
-const conteudo = (id) => blocks.find(([blocoId]) => blocoId === id)[3];
+import { runtimeCss } from '../public/templates.js';
 
 
 test('o carrossel desliza sozinho, sem depender de javascript', () => {

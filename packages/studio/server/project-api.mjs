@@ -1,8 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import { normalizeProjectSlug, normalizeRoute } from './domain/access.mjs';
 import { renderLeadsCsv } from './leads-csv.mjs';
 import { publicRuntimeCapabilities } from './runtime-flags.mjs';
-import { renderDynamicForm } from './dynamic-form.mjs';
 import { buildJourneyGraph } from './analytics-journey.mjs';
 
 function fail(message, status = 400) {
@@ -11,13 +9,6 @@ function fail(message, status = 400) {
 
 function rejectsLegacyProject(input) {
   if (Object.hasOwn(input ?? {}, 'project')) throw fail('Use editorState para o estado do editor.', 400);
-}
-
-function rejectsInvalidDraftSchema(input) {
-  if (!Object.hasOwn(input ?? {}, 'draftSchema')) return;
-  const value = input.draftSchema;
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype)
-    throw fail('Rascunho do formulário inválido.', 400);
 }
 
 function routeFor(name) {
@@ -38,13 +29,6 @@ function analyticsRange(fromRaw, toRaw) {
     throw fail('Informe um intervalo de datas válido.', 400);
   }
   return { from, to };
-}
-
-function formFields(schema) {
-  const steps = Array.isArray(schema?.steps) ? schema.steps : [];
-  return steps.flatMap((step) => Array.isArray(step?.elements) ? step.elements : [step])
-    .filter((field) => field && typeof field.id === 'string')
-    .map((field) => ({ id: field.id, title: String(field.title ?? field.id) }));
 }
 
 function sendCsv(res, csv) {
@@ -69,15 +53,6 @@ function pageInput(input = {}) {
   };
 }
 
-function formInput(input = {}) {
-  return {
-    name: input.name,
-    route: input.route,
-    draftSchema: input.draftSchema,
-    lockVersion: input.lockVersion,
-  };
-}
-
 function legacyPage(page, settings = {}) {
   return {
     ...page,
@@ -87,49 +62,6 @@ function legacyPage(page, settings = {}) {
     deployment: null,
     domain: settings.domain ?? '',
     webhook: settings.webhook ?? '',
-  };
-}
-
-function initialLegacyForm() {
-  return {
-    headerElements: [],
-    steps: [{
-      id: crypto.randomUUID(),
-      title: 'Nova etapa',
-      elements: [{ id: crypto.randomUUID(), type: 'short_text', title: 'Sua resposta', required: true }],
-    }],
-    completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' },
-    webhook: '',
-  };
-}
-
-function legacyForm(form) {
-  const schema = form.draftSchema ?? initialLegacyForm();
-  return {
-    ...form,
-    slug: form.route.replace(/^\//, ''),
-    headerElements: schema.headerElements ?? [],
-    headerCanvas: schema.headerCanvas,
-    steps: schema.steps ?? [],
-    completion: schema.completion ?? initialLegacyForm().completion,
-    webhook: schema.webhook ?? '',
-    ...(schema.calculations === undefined ? {} : { calculations: schema.calculations }),
-    revision: form.lockVersion,
-    stepCount: (schema.steps ?? []).length,
-    submissionCount: form.submissionCount ?? 0,
-  };
-}
-
-function legacyFormPatch(input, form) {
-  const schema = { ...(form.draftSchema ?? initialLegacyForm()), ...(input.draftSchema ?? {}) };
-  for (const key of ['headerElements', 'headerCanvas', 'steps', 'completion', 'webhook', 'calculations']) {
-    if (Object.hasOwn(input, key)) schema[key] = input[key];
-  }
-  return {
-    name: input.name ?? form.name,
-    route: input.slug ?? input.route ?? form.route,
-    draftSchema: schema,
-    lockVersion: input.revision ?? input.lockVersion,
   };
 }
 
@@ -327,23 +259,22 @@ export function createProjectApi({
     if (leads && method === 'GET') {
       const [, projectId, format] = leads;
       const search = new URL(req.url, 'http://localhost').searchParams;
-      const formId = search.get('formId') || undefined;
       const sourceKind = search.get('sourceKind') || undefined;
       const sourceId = search.get('sourceId') || undefined;
       const captureId = search.get('captureId') || undefined;
       const limitValue = queryLimit(search.get('limit'));
       if (format === 'leads') {
         return json(await content.projectSubmissions({
-          companyId: context.companyId, projectId, actorId: context.user.id, formId, sourceKind, sourceId, captureId,
+          companyId: context.companyId, projectId, actorId: context.user.id, sourceKind, sourceId, captureId,
           limit: limitValue, cursor: search.get('cursor') || undefined,
         }));
       }
-      if (!formId && !(sourceKind && sourceId)) throw fail('Informe a origem para exportar leads.', 400);
+      if (!(sourceKind && sourceId)) throw fail('Informe a origem para exportar leads.', 400);
       const submissions = [];
       let cursor;
       do {
         const page = await content.projectSubmissions({
-          companyId: context.companyId, projectId, actorId: context.user.id, formId, sourceKind, sourceId, captureId, limit: 100, cursor,
+          companyId: context.companyId, projectId, actorId: context.user.id, sourceKind, sourceId, captureId, limit: 100, cursor,
         });
         submissions.push(...page.items);
         cursor = page.nextCursor;
@@ -513,27 +444,16 @@ export function createProjectApi({
       }
     }
 
-    const collection = path.match(/^\/api\/projects\/([^/]+)\/(pages|forms)$/);
+    const collection = path.match(/^\/api\/projects\/([^/]+)\/pages$/);
     if (collection) {
-      const [, projectId, kind] = collection;
+      const [, projectId] = collection;
       await sessionService.authorize(context, null, projectId);
-      if (method === 'GET') {
-        return json(kind === 'pages'
-          ? await content.listPages({ companyId: context.companyId, projectId, actorId: context.user.id })
-          : await content.listForms({ companyId: context.companyId, projectId, actorId: context.user.id }));
-      }
+      if (method === 'GET') return json(await content.listPages({ companyId: context.companyId, projectId, actorId: context.user.id }));
       if (method === 'POST') {
-        await sessionService.authorize(context, kind === 'pages' ? 'page.write' : 'form.write', projectId);
+        await sessionService.authorize(context, 'page.write', projectId);
         const input = await body(req);
         rejectsLegacyProject(input);
-        if (kind === 'forms' && input.draftSchema?.webhook !== undefined) {
-          await sessionService.authorize(context, 'integration.manage', projectId);
-          if (input.draftSchema.webhook) input.draftSchema.webhook = await validateWebhook(input.draftSchema.webhook);
-        }
-        const record = kind === 'pages'
-          ? await content.createPage({ ...pageInput(input), companyId: context.companyId, projectId, actorId: context.user.id })
-          : await content.createForm({ ...formInput(input), companyId: context.companyId, projectId, actorId: context.user.id });
-        return json(record, 201);
+        return json(await content.createPage({ ...pageInput(input), companyId: context.companyId, projectId, actorId: context.user.id }), 201);
       }
     }
 
@@ -644,95 +564,48 @@ export function createProjectApi({
       }
     }
 
-    const legacy = path.match(/^\/api\/(pages|forms)(?:\/([^/]+)(?:\/(duplicate|preview|publish|status|domain|submissions))?)?$/);
+    // A rota curta `/api/pages` é o que o painel usa para a página do projeto atual.
+    const legacy = path.match(/^\/api\/pages(?:\/([^/]+)(?:\/(duplicate|publish|status|domain))?)?$/);
     if (!legacy) throw fail('Não encontrado.', 404);
-    const [, kind, id, action] = legacy;
+    const [, id, action] = legacy;
     const projectId = context.currentProjectId;
     if (!projectId) throw fail('Escolha um projeto ativo.', 409);
     await sessionService.authorize(context, null, projectId);
-    const isPage = kind === 'pages';
-    const capability = isPage ? 'page.write' : 'form.write';
 
     if (!id) {
       if (method === 'GET') {
-        const records = isPage
-          ? await content.listPages({ companyId: context.companyId, projectId, actorId: context.user.id })
-          : await content.listForms({ companyId: context.companyId, projectId, actorId: context.user.id });
-        return json(isPage
-          ? await Promise.all(records.map((page) => legacyPageFor(content, context, page)))
-          : records.map(legacyForm));
+        const records = await content.listPages({ companyId: context.companyId, projectId, actorId: context.user.id });
+        return json(await Promise.all(records.map((page) => legacyPageFor(content, context, page))));
       }
       if (method === 'POST') {
-        await sessionService.authorize(context, capability, projectId);
+        await sessionService.authorize(context, 'page.write', projectId);
         const input = await body(req);
-        const requestedWebhook = !isPage ? (input.webhook ?? input.draftSchema?.webhook) : undefined;
-        if (!isPage && requestedWebhook !== undefined) {
-          await sessionService.authorize(context, 'integration.manage', projectId);
-          if (requestedWebhook) {
-            const safeWebhook = await validateWebhook(requestedWebhook);
-            input.webhook = safeWebhook;
-            input.draftSchema = { ...(input.draftSchema ?? {}), webhook: safeWebhook };
-          }
-        }
-        const record = isPage
-          ? await content.createPage({
-            name: input.name,
-            route: input.route ?? routeFor(input.name),
-            template: input.template,
-            editorState: input.editorState ?? input.project,
-            renderedHtml: input.renderedHtml ?? input.html,
-            // A marca vem do botão que abriu o editor: Páginas cria página, Quizzes cria quiz.
-            kind: input.kind,
-            companyId: context.companyId,
-            projectId,
-            actorId: context.user.id,
-          })
-          : await content.createForm({
-            name: input.name,
-            route: input.route ?? input.slug ?? routeFor(input.name),
-            draftSchema: { ...(input.draftSchema ?? initialLegacyForm()), ...(input.webhook === undefined ? {} : { webhook: input.webhook }) },
-            companyId: context.companyId,
-            projectId,
-            actorId: context.user.id,
-          });
-        return json(isPage ? legacyPage(record) : legacyForm(record), 201);
-      }
-    }
-
-    if (!isPage && method === 'GET' && action === 'preview') {
-      // getForm is the existing read-scoped repository path; keep preview read-only.
-      await sessionService.authorize(context, null, projectId);
-      const record = await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-      const previewFormat = new URL(req.url, 'http://studio.local').searchParams.get('format');
-      if (previewFormat === 'html') {
-        const nonce = randomUUID().replaceAll('-', '');
-        const html = renderDynamicForm(legacyForm(record), `/api/forms/${id}/preview`, { preview: true, nonce });
-        res.writeHead(200, {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'no-store',
-          'X-Content-Type-Options': 'nosniff',
-          'Referrer-Policy': 'no-referrer',
-          'Content-Security-Policy': `default-src 'none'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:; media-src https:; frame-src https:; connect-src 'none'; form-action 'none'; frame-ancestors 'self'; base-uri 'none'`,
+        const record = await content.createPage({
+          name: input.name,
+          route: input.route ?? routeFor(input.name),
+          template: input.template,
+          editorState: input.editorState ?? input.project,
+          renderedHtml: input.renderedHtml ?? input.html,
+          // A marca vem do botão que abriu o editor: Páginas cria página, Quizzes cria quiz.
+          kind: input.kind,
+          companyId: context.companyId,
+          projectId,
+          actorId: context.user.id,
         });
-        return res.end(html);
+        return json(legacyPage(record), 201);
       }
-      return json({ html: renderDynamicForm(legacyForm(record), `/api/forms/${id}/preview`, { preview: true }) });
     }
 
     if (!action) {
       if (method === 'GET') {
-        const record = isPage
-          ? await content.getPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })
-          : await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-        return json(isPage ? await legacyPageFor(content, context, record) : legacyForm(record));
+        const record = await content.getPage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id });
+        return json(await legacyPageFor(content, context, record));
       }
       if (method === 'PUT') {
-        await sessionService.authorize(context, capability, projectId);
+        await sessionService.authorize(context, 'page.write', projectId);
         const input = await body(req);
-        if (!isPage) rejectsInvalidDraftSchema(input);
         let pageSettingsPatch = {};
-        let currentForm = null;
-        if (isPage && (input.domain !== undefined || input.webhook !== undefined)) {
+        if (input.domain !== undefined || input.webhook !== undefined) {
           const currentSettings = await content.pageSettings({
             companyId: context.companyId, projectId, actorId: context.user.id, pageId: id,
           });
@@ -746,84 +619,37 @@ export function createProjectApi({
             if (pageSettingsPatch.webhook) pageSettingsPatch.webhook = await validateWebhook(pageSettingsPatch.webhook);
           }
         }
-        if (!isPage) {
-          currentForm = await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-          const requestedWebhook = input.webhook ?? input.draftSchema?.webhook;
-          if (requestedWebhook !== undefined && String(requestedWebhook).trim() !== String(currentForm.draftSchema?.webhook ?? '').trim()) {
-            await sessionService.authorize(context, 'integration.manage', projectId);
-            if (requestedWebhook) {
-              const safeWebhook = await validateWebhook(requestedWebhook);
-              input.webhook = safeWebhook;
-              input.draftSchema = { ...(input.draftSchema ?? {}), webhook: safeWebhook };
-            }
-          }
-        }
-        const record = isPage
-          ? await content.updatePage({
-            name: input.name,
-            route: input.route,
-            template: input.template,
-            editorState: input.editorState ?? input.project,
-            renderedHtml: input.renderedHtml ?? input.html,
-            lockVersion: input.lockVersion ?? input.revision,
-            companyId: context.companyId,
-            projectId,
-            actorId: context.user.id,
-            pageId: id,
-          })
-          : await content.updateForm({
-            ...legacyFormPatch(input, currentForm),
-            companyId: context.companyId,
-            projectId,
-            actorId: context.user.id,
-            formId: id,
-          });
-        const settings = isPage
-          ? await content.updatePageSettings({
-            companyId: context.companyId, projectId, actorId: context.user.id, pageId: id,
-            ...pageSettingsPatch,
-          })
-          : null;
-        return json(isPage ? legacyPage(record, settings) : legacyForm(record));
+        const record = await content.updatePage({
+          name: input.name,
+          route: input.route,
+          template: input.template,
+          editorState: input.editorState ?? input.project,
+          renderedHtml: input.renderedHtml ?? input.html,
+          lockVersion: input.lockVersion ?? input.revision,
+          companyId: context.companyId,
+          projectId,
+          actorId: context.user.id,
+          pageId: id,
+        });
+        const settings = await content.updatePageSettings({
+          companyId: context.companyId, projectId, actorId: context.user.id, pageId: id,
+          ...pageSettingsPatch,
+        });
+        return json(legacyPage(record, settings));
       }
       if (method === 'DELETE') {
-        await sessionService.authorize(context, capability, projectId);
+        await sessionService.authorize(context, 'page.write', projectId);
         await body(req);
-        const record = isPage
-          ? await content.removePage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })
-          : await content.removeForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-        return json(record);
+        return json(await content.removePage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id }));
       }
     }
 
     if (method === 'POST' && action === 'duplicate') {
-      await sessionService.authorize(context, capability, projectId);
+      await sessionService.authorize(context, 'page.write', projectId);
       await body(req);
-      const record = isPage
-        ? await content.duplicatePage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })
-        : await content.duplicateForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id });
-      return json(isPage ? legacyPage(record) : legacyForm(record), 201);
+      return json(legacyPage(await content.duplicatePage({ companyId: context.companyId, projectId, actorId: context.user.id, pageId: id })), 201);
     }
-    if (!isPage && method === 'POST' && action === 'publish') {
-      await sessionService.authorize(context, 'deployment.publish', projectId);
-      const input = await body(req);
-      await content.publishForm({
-        companyId: context.companyId, projectId, actorId: context.user.id, formId: id,
-        lockVersion: input.revision ?? input.lockVersion,
-      });
-      if (publication && integrations) {
-        const deployment = await publication.preview({ companyId: context.companyId, projectId, requestedBy: context.user.id, expectedRevision: input.revision ?? input.lockVersion ?? 0 });
-        return json({ ...legacyForm(await content.getForm({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id })), deployment }, 201);
-      }
-      return json(legacyForm(await content.getForm({
-        companyId: context.companyId, projectId, actorId: context.user.id, formId: id,
-      })), 201);
-    }
-    if (!isPage && method === 'GET' && action === 'submissions') {
-      await sessionService.authorize(context, 'submission.read', projectId);
-      return json(await content.submissions({ companyId: context.companyId, projectId, actorId: context.user.id, formId: id }));
-    }
-    if (isPage && ['publish', 'status', 'domain'].includes(action)) {
+    if (['publish', 'status', 'domain'].includes(action)) {
       await sessionService.authorize(context, action === 'publish' ? 'deployment.publish' : 'integration.manage', projectId);
       if (!publication || !integrations) { if (method === 'POST') await body(req); throw fail('A publicação Vercel por projeto ainda está pendente.', 409); }
       if (action === 'publish' && method === 'POST') {

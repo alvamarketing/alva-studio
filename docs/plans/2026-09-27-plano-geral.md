@@ -166,8 +166,8 @@ o **Puck AI fica de fora** (é pago, e a geração por IA chama a API direto).
 |---|---|
 | 4.1 | **Ligar as engines órfãs.** Ramificação condicional e cálculo sobre respostas existem, são puras e testadas — e nada do quiz que o Studio cria hoje as usa. O quiz atual avança em linha reta. *Aprovado pelo dono em 26/09.* **Feito em 28/09 (ramificação):** a opção "ao escolher, ir para" vira regra da captura, conferida por `quiz-navigation` no servidor e seguida pelo runtime. O cálculo (pontuação/resultado) fica para a fase 2. |
 | 4.2 | **O quiz no Puck**: telas, ordem, campo obrigatório segurando o avanço. **Feito em 28/09:** quiz novo nasce em `alva/1` (`root.tipo = 'quiz'`), com etapa, pergunta de escolha, voltar e avançar ao tocar (`test/quiz-alva.test.mjs`). Quizzes antigos seguem no GrapesJS. |
-| 4.3 | **Fechar a rota legada da tabela `forms`.** A API ainda aceita escrita nela; a interface só escreve em `pages`. *Pendente de decisão: formulários antigos podem estar publicados recebendo respostas — conferir o banco de produção antes de fechar a escrita.* |
-| 4.4 | **Os ~13 tipos legados** — carrossel de depoimentos, gráfico, contagem regressiva, cronômetro, loader, CTA no meio do fluxo. Têm CSS, comportamento e inspetor prontos, mas nenhum bloco na paleta. *Decisão: resgatar ou aposentar.* O que não for decidido some na migração sem ninguém notar. |
+| 4.3 | **Fechar a rota legada da tabela `forms`.** A API ainda aceita escrita nela; a interface só escreve em `pages`. **Feito em 28/09:** o dono confirmou que nenhum formulário da tabela antiga tinha dado real, e o produto antigo saiu inteiro — rotas administrativas (`/api/forms`, `/api/projects/:id/forms`), rotas públicas (`/f/...`, `/api/public/forms/...`, `/api/_alva/forms` no gateway), modo sem banco, publicação e importação local. Leads e CSV vêm só de `page_submissions`. A migração `028_remove_forms.sql` apaga `forms`, `form_versions`, `form_submissions` e o lado de formulário de `webhook_deliveries`. |
+| 4.4 | **Os ~13 tipos legados** — carrossel de depoimentos, gráfico, contagem regressiva, cronômetro, loader, CTA no meio do fluxo. Têm CSS, comportamento e inspetor prontos, mas nenhum bloco na paleta. *Decisão: resgatar ou aposentar.* O que não for decidido some na migração sem ninguém notar. **Feito em 28/09: aposentados.** Só o formulário antigo os desenhava; saíram com ele `renderQuizElement` e os tipos. O cálculo (`quiz-calculations.js`) fica, puro e testado, para a fase 2 do 4.1. A folha do carrossel em `runtimeCss` fica, porque landings publicadas ainda a usam. |
 | 4.5 | **Os estados da escolha.** Hoje "cursor em cima" e "escolhido" são visualmente idênticos — a pessoa não enxerga o que marcou; e não existe estado desabilitado. **Feito em 28/09 no quiz novo** (`escolhaCss`): escolhido com fundo, borda e marca; cursor em cima só com mouse; desabilitado esmaecido. |
 
 ---
@@ -269,7 +269,7 @@ Nada abaixo trava a fase 1; cada uma trava só o item citado.
 | D2 | UTM até a conversão | **sim** | 1.2 |
 | D3 | Google e leads que não são dele | **não enfileirar** | 1.3 |
 | D4 | Os seis modelos de página | converter os que são usados; aposentar os outros | 2.4 |
-| D5 | Os ~13 tipos legados de elemento | decidir um a um | 4.4 |
+| D5 | Os ~13 tipos legados de elemento | **aposentados em 28/09** | 4.4 |
 | D6 | Fechar o `editor-novo.html` | **sim** — é uma porta aberta que grava por cima das páginas | 3.6 |
 | D7 | Credenciais da Cloudflare Stream | — | 5.2 |
 | D8 | "Aurora · Umami + NVS" no wireframe | trocar o nome | 7 |

@@ -198,16 +198,17 @@ export class CompanyRepository {
          )
          SELECT
            (SELECT count(*)::int FROM authorized_projects) AS projects,
+           -- Um quiz é uma página marcada; o painel conta os dois separados, como no projeto.
            (SELECT count(*)::int FROM pages page
             WHERE page.company_id = $1 AND page.project_id IN (SELECT id FROM authorized_projects)
-              AND page.deleted_at IS NULL) AS pages,
-           (SELECT count(*)::int FROM forms form
-            WHERE form.company_id = $1 AND form.project_id IN (SELECT id FROM authorized_projects)
-              AND form.deleted_at IS NULL) AS forms,
-           (SELECT count(*)::int FROM form_submissions submission
-            JOIN forms form ON form.id = submission.form_id
+              AND page.deleted_at IS NULL AND page.kind = 'page') AS pages,
+           (SELECT count(*)::int FROM pages page
+            WHERE page.company_id = $1 AND page.project_id IN (SELECT id FROM authorized_projects)
+              AND page.deleted_at IS NULL AND page.kind = 'quiz') AS forms,
+           (SELECT count(*)::int FROM page_submissions submission
+            JOIN pages page ON page.id = submission.page_id
             WHERE submission.company_id = $1 AND submission.project_id IN (SELECT id FROM authorized_projects)
-              AND form.deleted_at IS NULL) AS submissions,
+              AND page.deleted_at IS NULL) AS submissions,
            CASE WHEN $3 THEN (
              SELECT count(*)::int FROM company_memberships member
              WHERE member.company_id = $1 AND member.status = 'active'
