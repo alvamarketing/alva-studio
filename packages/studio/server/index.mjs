@@ -292,6 +292,8 @@ export function createApp({
   const videos = database ? new VideoRepository(database) : null;
   // Hospedagem do vídeo na conta Cloudflare de quem opera o Studio. Fica desligada até
   // as credenciais existirem no ambiente: sem elas o Studio segue aceitando URL externa.
+  if (runtimeFlags.mediaPipeline && !(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_STREAM_TOKEN))
+    console.warn(JSON.stringify({ level: 'warn', event: 'media.pipeline.sem_credenciais', message: 'MEDIA_PIPELINE_ENABLED=true sem CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_STREAM_TOKEN: o envio de VSL vai falhar.' }));
   const videoHosting = runtimeFlags.mediaPipeline
     ? new CloudflareStream({
         accountId: process.env.CLOUDFLARE_ACCOUNT_ID || '',

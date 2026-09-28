@@ -49,9 +49,21 @@ PIXELS_ENABLED=true
 TRACKING_PROVISION_ENABLED=false
 CONVERSIONS_ENABLED=false
 ASAAS_ENVIRONMENT=sandbox
+MEDIA_PIPELINE_ENABLED=false
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_STREAM_TOKEN=
 ENV
   echo "runtime/.env criado com segredos novos."
 fi
+
+# Um .env de antes da VSL não tem as chaves da Cloudflare: acrescenta vazias, para quem
+# for ligar saber onde colocar.
+for chave in MEDIA_PIPELINE_ENABLED CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_STREAM_TOKEN; do
+  if ! grep -q "^$chave=" "$pasta/.env"; then
+    valor=""; [[ "$chave" == MEDIA_PIPELINE_ENABLED ]] && valor=false
+    echo "$chave=$valor" >> "$pasta/.env"
+  fi
+done
 
 if [[ " $* " != *" --tunel "* ]]; then
   gravar_origem "$origem_local"
