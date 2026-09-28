@@ -146,3 +146,17 @@ test('opções do player vão da edição para a versão publicada e para a leit
     await database.close();
   }
 });
+
+test('endereço .m3u8 é gravado como HLS, mesmo que o formulário mande MP4', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const seeded = await seed(database, 'hls');
+  const repository = new VideoRepository(database);
+  try {
+    const created = await repository.createVideo(input(seeded, { sourceUrl: 'https://customer-x.cloudflarestream.com/abc/manifest/video.m3u8', sourceType: 'mp4' }));
+    assert.equal(created.sourceType, 'hls');
+  } finally {
+    await database.close();
+  }
+});

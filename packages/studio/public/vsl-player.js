@@ -309,7 +309,9 @@ export function mountVslPlayer(container, config = {}) {
   const autoplay = config.autoplayMuted !== false
     ? autoplayWhenReady(video, { onBlocked: () => { status.textContent = 'Clique em reproduzir para iniciar o vídeo.'; }, podeTocar: () => retomar.hidden })
     : Promise.resolve();
-  if (config.sourceType === 'hls' && !video.canPlayType('application/vnd.apple.mpegurl')) {
+  // Versões publicadas antes da correção do tipo podem dizer MP4 para um .m3u8.
+  const ehHls = config.sourceType === 'hls' || /\.m3u8(?:$|[?#])/i.test(String(config.sourceUrl ?? ''));
+  if (ehHls && !video.canPlayType('application/vnd.apple.mpegurl')) {
     loadHls(video, config.sourceUrl).catch((error) => { controller.setError(error.message); render(); });
   } else { video.src = config.sourceUrl; video.load(); }
   autoplay.catch(() => {});

@@ -32,7 +32,8 @@ function safeUrl(value, { required = false, label = 'URL da mídia', relative = 
 }
 
 function sourceType(value, sourceUrl) {
-  const type = value || (/\.m3u8(?:$|[?#])/i.test(sourceUrl) ? 'hls' : 'mp4');
+  // Um .m3u8 é HLS, diga o formulário o que disser: gravado como MP4, o navegador não o toca.
+  const type = /\.m3u8(?:$|[?#])/i.test(sourceUrl) ? 'hls' : (value || 'mp4');
   if (!['mp4', 'hls'].includes(type)) throw fail('Tipo de mídia inválido.');
   return type;
 }

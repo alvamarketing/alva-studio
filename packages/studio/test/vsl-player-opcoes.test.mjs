@@ -152,3 +152,8 @@ test('o player avisa a página que o embute: tempo e marcos', () => {
     Object.defineProperty(window, 'parent', { value: original, configurable: true });
   }
 });
+
+test('endereço .m3u8 toca como HLS mesmo se a versão publicada disser MP4', () => {
+  const { video } = montar({ sourceType: 'mp4', sourceUrl: 'https://customer-x.cloudflarestream.com/abc/manifest/video.m3u8' });
+  assert.equal(video.getAttribute('src'), null, 'o .m3u8 não vai direto para o <video>, que não toca HLS fora do Safari');
+});

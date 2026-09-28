@@ -110,7 +110,8 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     const resumo = document.querySelector('.vsl-preview-screen');
     if (resumo) resumo.hidden = Boolean(endereco);
     if (!endereco) { video.removeAttribute('src'); video.load(); return; }
-    if (tipo !== 'hls' || video.canPlayType('application/vnd.apple.mpegurl')) { video.src = endereco; return; }
+    const ehHls = tipo === 'hls' || /\.m3u8(?:$|[?#])/i.test(endereco);
+    if (!ehHls || video.canPlayType('application/vnd.apple.mpegurl')) { video.src = endereco; return; }
     carregarHls().then((Hls) => {
       if (video.dataset.src !== endereco) return;
       hlsDaPrevia = new Hls();
@@ -283,6 +284,10 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     return parseVslFormValues({ ...values, ...marcadas, autoplayMuted: field(target, 'autoplayMuted').checked, resumeEnabled: field(target, 'resumeEnabled').checked });
   };
   if (typeof document !== 'undefined' && form()) {
+    // Endereço .m3u8 é HLS: o seletor acompanha, para ninguém salvar HLS como MP4.
+    form().addEventListener('input', (event) => {
+      if (event.target?.name === 'sourceUrl' && /\.m3u8(?:$|[?#])/i.test(event.target.value)) field(form(), 'sourceType').value = 'hls';
+    });
     form().addEventListener('input', updatePreview);
     // Campo obrigatório vazio: o navegador só pintava de vermelho. Agora diz qual falta.
     let avisouCampo = false;
