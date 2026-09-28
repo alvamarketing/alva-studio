@@ -12,12 +12,6 @@ test('configurações são uma view interna acessível e reaproveitam o formulá
   assert.match(html, /id="settings-view"/);
   assert.match(app, /settings:\s*'#settings-view'/);
   assert.match(app, /setDashboardView\('settings'\)/);
-  assert.match(app, /setDashboardView\('settings', \{ settingsTab: 'vercel' \}\)/);
-  assert.match(app, /await save\(\);[\s\S]*#dashboard'\)\.hidden = false;[\s\S]*setDashboardView\('settings', \{ settingsTab: 'vercel' \}\)/);
-  assert.match(app, /\$\('#page-vercel-settings'\)\.onclick = action\(async/);
-  assert.match(app, /button\.disabled = true;[\s\S]*finally \{\s*button\.disabled = false;/);
-  assert.doesNotMatch(app, /finally \{[\s\S]*if \(!\$\('#editing'\)\.hidden\) button\.disabled = false/);
-  assert.match(app, /await setDashboardView\('settings', \{ settingsTab: 'vercel' \}\)/);
   assert.match(app, /settingsMount:\s*\$\('#settings-view'\)/);
   assert.match(owner, /dialogNode\?\.tagName === 'DIALOG'/);
   assert.match(owner, /dialogNode\.replaceWith\(section\)/);
@@ -76,15 +70,6 @@ test('abas laterais alternam painel exclusivo e Vercel permanece em Preferência
   assert.equal(selectSettingsTab({ container, tabList, requestedTab: 'vercel', canManageIntegration: true }), 'account');
   assert.equal(tabs[0].attributes['aria-selected'], 'true');
   assert.equal(panels['#panel-account'].hidden, false);
-});
-test('fluxo Vercel libera o botão para o próximo editor', async () => {
-  const app = await readFile(appPath, 'utf8');
-  const flowStart = app.indexOf("$('#page-vercel-settings').onclick");
-  const save = app.indexOf('await save();', flowStart);
-  const dashboard = app.indexOf("$('#dashboard').hidden = false;", flowStart);
-  const settings = app.indexOf("await setDashboardView('settings', { settingsTab: 'vercel' });", flowStart);
-  const unlock = app.indexOf('button.disabled = false;', settings);
-  assert.ok(flowStart >= 0 && save > flowStart && dashboard > save && settings > dashboard && unlock > settings);
 });
 test('a confirmação evita criar ou trocar senha digitada diferente', () => {
   assert.throws(() => validatePasswordConfirmation('frase-segura-123', 'outra-frase-123'), /não conferem/);

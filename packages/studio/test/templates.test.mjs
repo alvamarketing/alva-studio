@@ -2,7 +2,6 @@ import { JSDOM } from 'jsdom';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import grapesjs from 'grapesjs';
 import { templates, getTemplate, services, templateCss, formCss, chartCss, chartDonutBackgroundCss, blocks, normalizeForms, syncFormDelivery, normalizeCharts, donutBackgroundFromData } from '../public/templates.js';
 
 test('galeria de modelos mantém prévias proporcionais e seleção acessível', async () => {
@@ -171,41 +170,6 @@ test('normalização de gráficos repara circular sem fundo e preserva fundo per
   assert.equal(normalizeCharts(editor), false);
 });
 
-test('normalização real do GrapesJS preserva CSS customizado e repara somente o fallback legado', async () => {
-  const dom = new JSDOM('<!doctype html>');
-  const previous = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
-  globalThis.window = dom.window;
-  globalThis.document = dom.window.document;
-  globalThis.DOMParser = dom.window.DOMParser;
-  globalThis.Node = dom.window.Node;
-  const editor = grapesjs.init({ headless: true, storageManager: false });
-  try {
-    editor.setStyle('.alva-donut{background-image:linear-gradient(red,blue);width:310px}');
-    const custom = editor.getWrapper().append({ tagName: 'div', classes: ['alva-donut'] })[0];
-    const legacy = editor.getWrapper().append({
-      tagName: 'div', classes: ['alva-donut'],
-      attributes: { 'data-alva-chart-data': '[["A",30],["B",20]]' },
-    })[0];
-    legacy.addStyle({ background: 'conic-gradient(#286eea, #80d6c2, #ffc76b)' });
-    assert.equal(normalizeCharts(editor), true);
-    const css = editor.getCss();
-    assert.match(css, /background-image:linear-gradient\(red, blue\)/);
-    assert.match(css, /width:310px/);
-    assert.deepEqual(custom.getStyle(), {});
-    assert.match(legacy.getStyle().background, /0% 60%/);
-    const saved = JSON.stringify(editor.getProjectData());
-    assert.equal(normalizeCharts(editor), false);
-    assert.equal(JSON.stringify(editor.getProjectData()), saved);
-  } finally {
-    editor.destroy();
-    globalThis.window = previous.window;
-    globalThis.document = previous.document;
-    globalThis.DOMParser = previous.DOMParser;
-    globalThis.Node = previous.Node;
-    dom.window.close();
-  }
-});
-
 test('fundo circular calcula as proporções do dado salvo sem limitar quantidades', () => {
   assert.match(donutBackgroundFromData(JSON.stringify([['A', 30], ['B', 20]])), /0% 60%/);
   assert.match(donutBackgroundFromData(JSON.stringify([['A', 300], ['B', 200]])), /0% 60%/);
@@ -229,52 +193,4 @@ test('CSS personalizado do formulário prevalece quando GrapesJS mescla seletore
     },
   });
   assert.deepEqual(style, { padding: '71px', color: 'purple', display: 'block' });
-});
-
-test('normalização preserva captureIds após salvar, reabrir, clonar e reordenar formulários', () => {
-  const editor = grapesjs.init({ headless: true, storageManager: false });
-  const ids = [
-    '11111111-1111-4111-8111-111111111111',
-    '33333333-3333-4333-8333-333333333333',
-  ];
-  try {
-    const wrapper = editor.getWrapper();
-    wrapper.append({ tagName: 'form', attributes: { 'data-alva-capture-id': ids[0] } });
-    wrapper.append({ tagName: 'form', attributes: { 'data-alva-capture-id': ids[1] } });
-    const formsIn = (instance) => instance.getWrapper().components().models.filter((form) => form.get('tagName') === 'form');
-    normalizeForms(editor);
-
-    assert.deepEqual(
-      formsIn(editor).map((form) => form.getAttributes()['data-alva-capture-id']),
-      ids,
-    );
-    assert.match(editor.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[0]}["']`));
-    assert.match(editor.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[1]}["']`));
-
-    const saved = editor.getProjectData();
-    const reopened = grapesjs.init({ headless: true, storageManager: false });
-    try {
-      reopened.loadProjectData(saved);
-      normalizeForms(reopened);
-      assert.deepEqual(
-        formsIn(reopened).map((form) => form.getAttributes()['data-alva-capture-id']),
-        ids,
-      );
-      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[0]}["']`));
-      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[1]}["']`));
-
-      const reopenedForms = formsIn(reopened);
-      const clone = reopenedForms[0].clone();
-      reopened.getWrapper().append(clone);
-      const reordered = reopened.getWrapper().components().models;
-      reordered.splice(0, reordered.length, reordered[1], reordered[0], reordered[2]);
-      normalizeForms(reopened, () => '22222222-2222-4222-8222-222222222222');
-
-      assert.equal(reopenedForms[0].getAttributes()['data-alva-capture-id'], ids[0]);
-      assert.equal(reopenedForms[1].getAttributes()['data-alva-capture-id'], ids[1]);
-      assert.equal(clone.getAttributes()['data-alva-capture-id'], '22222222-2222-4222-8222-222222222222');
-      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[0]}["']`));
-      assert.match(reopened.getHtml(), new RegExp(`data-alva-capture-id=["']${ids[1]}["']`));
-    } finally { reopened.destroy(); }
-  } finally { editor.destroy(); }
 });

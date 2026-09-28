@@ -7,23 +7,6 @@ const cssPath = new URL('../public/styles.css', import.meta.url);
 const ownerCssPath = new URL('../public/owner.css', import.meta.url);
 const ownerJsPath = new URL('../public/owner.js', import.meta.url);
 
-test('ações do editor usam ícones com nome acessível e ajuda no hover', async () => {
-  const html = await readFile(htmlPath, 'utf8');
-  const actionIds = ['back', 'settings', 'preview', 'download', 'save', 'publish'];
-
-  for (const id of actionIds) {
-    const button = html.match(new RegExp(`<button[^>]*id="${id}"[\\s\\S]*?</button>`))?.[0];
-    assert.ok(button, `botão #${id} existe`);
-    assert.match(button, /aria-label="[^"]+"/, `#${id} tem nome acessível`);
-    assert.match(button, /title="[^"]+"/, `#${id} tem label no hover`);
-    assert.match(button, /data-tooltip="[^"]+"/, `#${id} tem tooltip visual`);
-    assert.match(button, /<svg[\s>]/, `#${id} usa ícone vetorial`);
-  }
-
-  assert.match(html, /class="device-control"[^>]*data-tooltip="[^"]+"/);
-  assert.doesNotMatch(html, /id="editor-account"/);
-});
-
 test('tema do Studio declara os tokens canônicos da Alva', async () => {
   const css = await readFile(cssPath, 'utf8');
 

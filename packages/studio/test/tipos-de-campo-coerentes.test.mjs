@@ -19,21 +19,6 @@ function campo(type) {
   ] } }] }] }, () => '11111111-1111-4111-8111-111111111111');
 }
 
-// O inspetor de campo oferece sete tipos de resposta. A captação de uma landing aceitava
-// cinco deles, e a divergência só aparecia no botão Publicar — depois de a pessoa ter
-// montado a página inteira, com uma mensagem que não diz qual campo nem o que fazer.
-test('todo tipo que o editor oferece é aceito na captação de uma landing', async () => {
-  const shell = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
-  const oferecidos = Object.keys(JSON.parse(
-    `{${shell.match(/const TIPOS_DE_CAMPO = \{([^}]+)\}/)[1].replace(/(\w+):/g, '"$1":').replace(/'/g, '"')}}`,
-  ));
-  assert.ok(oferecidos.length >= 6, `esperava a lista do inspetor, veio ${oferecidos}`);
-  for (const tipo of oferecidos) {
-    if (tipo === 'textarea') continue; // textarea é tag, não type de input
-    assert.doesNotThrow(() => extractPageCaptureSchema(campo(tipo)), `tipo ${tipo} recusado na captação`);
-  }
-});
-
 // Um elemento decorativo marcado como obrigatório tornava o quiz impossível de enviar: a
 // tela publicada não desenha campo nenhum para ele, e o servidor exigia resposta de algo
 // que a pessoa não tem como preencher nem enxergar.

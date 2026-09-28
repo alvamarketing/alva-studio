@@ -14,8 +14,6 @@
     "build:editor": "esbuild editor=editor/main.jsx funil=editor/funil.jsx --bundle --minify --format=esm --jsx=automatic --loader:.js=jsx --define:process.env.NODE_ENV='\"production\"' --outdir=public/build"
   },
   "dependencies": {
-    "@grapesjs/studio-sdk": "1.2.1",
-    "grapesjs": "0.23.6",
     "hls.js": "^1.5.17",
     "parse5": "8.0.1",
     "pg": "^8.23.0",

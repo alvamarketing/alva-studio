@@ -1,12 +1,10 @@
 import { JSDOM } from 'jsdom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import grapesjs from 'grapesjs';
 import postcss from 'postcss';
 import { elementosCss, catalogo, elementoPorId } from '../public/catalogo-elementos.js';
 import { quizElementCss } from '../public/quiz-elements.js';
 import { templateCss, formCss, templates } from '../public/templates.js';
-import { folhasDoCanvas } from '../public/editor-shell.js';
 
 test('a folha dos elementos desenha peças, não a página', () => {
   assert.match(elementosCss, /\.choice\{/);
@@ -29,21 +27,6 @@ test('os formulários dinâmicos publicados continuam com a folha inteira', () =
   assert.match(quizElementCss, /\.funnel-header\{/);
 });
 
-test('todo elemento do catálogo declara identidade completa', () => {
-  assert.ok(catalogo.length > 0);
-  for (const elemento of catalogo) {
-    assert.ok(elemento.id, 'id');
-    assert.ok(elemento.nome, `nome de ${elemento.id}`);
-    assert.ok(elemento.grupo, `grupo de ${elemento.id}`);
-    assert.ok(elemento.seletor, `seletor de ${elemento.id}`);
-    assert.equal(typeof elemento.render, 'function', `render de ${elemento.id}`);
-    // registro diz onde o elemento mora: 'pagina' entra em blocks (templates.js), 'quiz'
-    // entra em quizBlocks (editor-shell.js). Sem essa declaração, um elemento novo podia
-    // escapar da prova de catalogo-blocos.test.mjs sem que nada acusasse.
-    assert.ok(['pagina', 'quiz'].includes(elemento.registro), `registro de ${elemento.id} precisa ser 'pagina' ou 'quiz', não ${elemento.registro}`);
-  }
-});
-
 test('o seletor de um elemento é sempre uma classe', () => {
   // Seletor de tag tornaria esta prova inútil: toda folha contém a letra "p".
   // Exigir classe é o que faz o elemento ter um endereço só dele.
@@ -52,35 +35,7 @@ test('o seletor de um elemento é sempre uma classe', () => {
   }
 });
 
-// Onde cada elemento pode ser solto. A paleta do quiz é `[...blocks, ...quizBlocks]`
-// (editor-shell.js), então tudo que tem registro: 'pagina' também é arrastável DENTRO de
-// um quiz; só o registro: 'quiz' é exclusivo. A prova abaixo confere essa afirmação no
-// fonte, para a tabela não virar convenção esquecida.
-const canvasesDoElemento = (elemento) => elemento.registro === 'quiz' ? [true] : [false, true];
 const nomeDoCanvas = (quizCanvas) => quizCanvas ? 'quiz' : 'landing';
-
-test('a paleta do quiz soma os blocos de página aos do quiz', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const fonte = await readFile(new URL('../public/editor-shell.js', import.meta.url), 'utf8');
-  assert.match(fonte, /blocks: \[\.\.\.blocks, \.\.\.quizBlocks\]/, 'se a paleta do quiz mudar, a tabela canvasesDoElemento precisa mudar junto');
-});
-
-test('nenhum elemento nasce sem regra que o alcance, em nenhum canvas onde é arrastável', () => {
-  // Esta prova já foi `elementosCss + templateCss`, uma união que nenhum canvas recebe: a
-  // landing veste elementosCss+templateCss, o quiz veste quizCanvasCss. Com a união, o
-  // `button` passava verde porque .cta morava em templateCss — folha que o quiz não
-  // recebe — enquanto no quiz ele nascia sem regra nenhuma. Perguntar por canvas, usando
-  // o mesmo folhasDoCanvas que o editor usa, é o que fecha esse buraco.
-  for (const elemento of catalogo) {
-    for (const quizCanvas of canvasesDoElemento(elemento)) {
-      const folha = folhasDoCanvas({ quizCanvas, cssExistente: '' }).folhas.join('');
-      assert.ok(
-        folha.includes(`${elemento.seletor}{`) || folha.includes(`${elemento.seletor},`) || folha.includes(`${elemento.seletor} `),
-        `${elemento.id} declara o seletor ${elemento.seletor}, que não abre regra em nenhuma folha do canvas de ${nomeDoCanvas(quizCanvas)}`,
-      );
-    }
-  }
-});
 
 test('o HTML do elemento casa com o seletor que ele declara', () => {
   for (const elemento of catalogo) {
@@ -180,54 +135,5 @@ test('cartão de escolha, campo e crachá declaram border-style, que é o que o 
     assert.equal(declaracoes.get('border-style'), 'solid', `${seletor} sem border-style: o estado escolhido não tem o que colorir`);
     for (const face of ['top', 'right', 'bottom', 'left'])
       assert.equal(declaracoes.get(`border-${face}-color`), 'var(--alva-el-line)', `${seletor} sem border-${face}-color`);
-  }
-});
-
-test('a moldura sobrevive a uma ida e volta pelo GrapesJS de verdade', () => {
-  const dom = new JSDOM('<!doctype html>');
-  const anterior = { window: globalThis.window, document: globalThis.document, DOMParser: globalThis.DOMParser, Node: globalThis.Node };
-  Object.assign(globalThis, { window: dom.window, document: dom.window.document, DOMParser: dom.window.DOMParser, Node: dom.window.Node });
-  const editor = grapesjs.init({ headless: true, storageManager: false });
-  try {
-    editor.setComponents('<input class="answer"><label class="choice"><span class="choice-key">1</span></label>');
-    editor.addStyle(elementosCss);
-    const css = editor.getCss();
-    for (const seletor of ['.answer', '.choice', '.choice-key']) {
-      const regra = css.match(new RegExp(`[};]${seletor.slice(1)}\\{[^}]*\\}`))?.[0] || css.match(new RegExp(`\\${seletor}\\{[^}]*\\}`))[0];
-      assert.match(regra, /border-style:\s*solid/, `${seletor} perdeu border-style na serialização`);
-      assert.match(regra, /border-width:\s*1px/, `${seletor} perdeu border-width na serialização`);
-      for (const face of ['top', 'right', 'bottom', 'left'])
-        assert.match(regra, new RegExp(`border-${face}-color:\\s*var\\(--alva-el-line\\)`), `${seletor} perdeu border-${face}-color na serialização`);
-    }
-  } finally {
-    editor.destroy();
-    Object.assign(globalThis, anterior);
-    dom.window.close();
-  }
-});
-
-test('nenhum modelo disputa um seletor com o catálogo', () => {
-  // O editor acrescenta elementosCss DEPOIS da folha do modelo (a semente já traz
-  // templateCss, então folhasDoCanvas só empurra os elementos). Mesma especificidade,
-  // vence quem vem por último: a regra do catálogo apaga a do modelo sem avisar. Foi
-  // assim que `.countdown` do lançamento — cartão escuro no herói escuro — virou o
-  // cartão branco largo do catálogo na página PUBLICADA, não só na miniatura.
-  //
-  // A saída não é renomear: o contador continua sendo o elemento do catálogo, para
-  // herdar painel e propriedades. O modelo que quiser outra pele pesa mais no seletor
-  // (`.launch-hero .countdown`). Este teste é o alarme para a próxima vez.
-  const seletores = (css) => {
-    const fora = new Set();
-    for (const bloco of String(css).matchAll(/(?:^|\}|\{)\s*([^{}@]+?)\s*\{/g))
-      for (const parte of bloco[1].split(','))
-        if (parte.trim().startsWith('.')) fora.add(parte.trim());
-    return fora;
-  };
-  const doCatalogo = seletores(elementosCss);
-  const daBase = seletores(templateCss);
-  for (const modelo of templates) {
-    const proprios = [...seletores(modelo.css)].filter((s) => !daBase.has(s));
-    const choque = proprios.filter((s) => doCatalogo.has(s));
-    assert.deepEqual(choque, [], `o modelo ${modelo.id} declara ${choque.join(', ')} com a mesma força do catálogo: o catálogo vence e a pele do modelo some`);
   }
 });

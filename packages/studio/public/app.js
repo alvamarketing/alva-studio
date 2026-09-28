@@ -1,7 +1,3 @@
-import { flushChanges } from './save-cycle.js';
-import { templates, getTemplate, normalizeForms, syncFormDelivery } from './templates.js';
-import { buildPageExportHtml, createFriendlyEditor, documentoDeModelo, embutirFonteDeIcones, folhasDoCanvas } from './editor-shell.js';
-import { inicioDoQuiz, materialSymbolsFontUrl } from './quiz-elements.js';
 import { createOwnerUI } from './owner.js';
 import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
@@ -27,15 +23,9 @@ const escape = (value) =>
 // Quiz e landing page são a mesma coisa no editor; o que muda é a marca. Esta variável
 // diz qual das duas a tela de conteúdo está mostrando agora.
 let tipoDeConteudo = 'page';
-let editor,
-  page,
-  pages = [],
+let pages = [],
   loading = false,
-  dirty = false,
-  change = 0,
-  timer,
   toastTimer,
-  saving,
   ownerUI,
   studioShell,
   dashboardContextFlow,
@@ -543,27 +533,6 @@ async function renderCompany() {
     status.dataset.state = 'error';
     content.append(emptyCard('Não foi possível carregar a empresa.', 'Tente novamente em instantes.'));
   }
-}
-function markDirty() {
-  if (loading) return;
-  dirty = true;
-  change++;
-  $('#save-state').textContent = 'Alterações por salvar';
-  clearTimeout(timer);
-  timer = setTimeout(() => save().catch((e) => toast(e.message)), 1500);
-}
-function exportHtml({ previa = false } = {}) {
-  return buildPageExportHtml({
-    previa,
-    title: $('#page-name').value.trim(),
-    css: editor.getCss(),
-    html: editor.getHtml(),
-    js: editor.getJs(),
-    publicOrigin: window.location.origin,
-    // O que separa o quiz da landing na publicação é esta marca: com ela o HTML sai com o
-    // script que mostra uma etapa por vez.
-    quiz: page?.kind === 'quiz',
-  });
 }
 function projectEmpty(title, text) {
   const element = document.createElement('div');
@@ -1098,57 +1067,6 @@ async function renderProject() {
     list.append(projectEmpty('Não foi possível carregar o projeto.', model.message));
   }
 }
-async function save() {
-  await flushChanges(() => dirty, saveOnce);
-  return page;
-}
-async function saveOnce() {
-  clearTimeout(timer);
-  if (saving) {
-    await saving;
-    if (dirty) return saveOnce();
-    return page;
-  }
-  if (!page || !dirty) return page;
-  loading = true;
-  try {
-    // Terceiro caminho pelo qual formCss chegava ao quiz: salvar. normalizeForms injeta a
-    // folha do formulário assim que acha um <form>, e a raiz do quiz é o <form> de
-    // captura — a folha entrava aqui e ficava salva no projeto, achatando o cartão de
-    // escolha na reabertura. Quem decide é folhasDoCanvas, como no editor.
-    if (folhasDoCanvas({ quizCanvas: page.kind === 'quiz' }).normalizarFormularios) normalizeForms(editor);
-    editor.getWrapper().find('form').forEach((form) => syncFormDelivery(form, page.webhook));
-  } finally {
-    loading = false;
-  }
-  const snapshot = change;
-  const currentId = page.id;
-  const payload = {
-    revision: page.revision,
-    name: $('#page-name').value.trim(),
-    project: editor.getProjectData(),
-    html: exportHtml(),
-    domain: page.domain,
-    webhook: page.webhook,
-  };
-  $('#save-state').textContent = 'Salvando…';
-  saving = api('/pages/' + currentId, 'PUT', payload)
-    .then((result) => {
-      if (page?.id === currentId) {
-        page = { ...result, name: $('#page-name').value, domain: page.domain, webhook: page.webhook };
-        dirty = change !== snapshot;
-        $('#save-state').textContent = dirty ? 'Alterações por salvar' : 'Salvo neste computador';
-      }
-      return result;
-    })
-    .catch((error) => {
-      $('#save-state').textContent = 'Não salvo — tente novamente';
-      clearTimeout(timer);
-      throw error;
-    })
-    .finally(() => (saving = null));
-  return saving;
-}
 const pageList = createContextList({
   load: () => api('/pages'),
   apply: (next) => {
@@ -1221,80 +1139,21 @@ function renderList() {
     card.querySelector('.thumbnail').replaceChildren(frame);
     api('/pages/' + p.id)
       .then((full) => {
-        frame.srcdoc = full.html || templateDocument(getTemplate(full.template) || getTemplate('services'));
+        // Recém-criada, a página ainda não tem HTML salvo: a miniatura desenha o estado dela.
+        frame.srcdoc = full.html || (full.editorState?.formato === FORMATO_ALVA ? documentoDaPagina(normalizarEstadoAlva(full.editorState), { publicOrigin: location.origin }) : '<p>Prévia indisponível</p>');
       })
       .catch(() => {
         frame.srcdoc = '<p>Prévia indisponível</p>';
       });
   }
 }
-function syncPagePublishControl() {
-  const publish = $('#publish');
-  if (!publish) return;
-  const canPublish = Boolean(studioShell?.can?.('deployment.publish'));
-  const connected = Boolean(config.vercelConnected);
-  publish.disabled = !canPublish || !connected;
-  publish.title = canPublish
-    ? (connected ? 'Publicar página' : 'Conecte a Vercel nas configurações do app')
-    : 'Você não tem permissão para publicar. Peça acesso a um administrador.';
-  const help = $('#publish-help');
-  if (help) help.textContent = !canPublish
-    ? 'Você não tem permissão para publicar. Peça acesso a um administrador.'
-    : connected ? '' : 'Conecte a Vercel nas configurações do app para publicar.';
-}
 
+// Landing e quiz abrem no editor novo (Puck). Página fora do esquema do Alva era do editor
+// antigo (GrapesJS), que saiu em 28/09/2026 — não havia conteúdo real nele.
 async function openPage(id) {
   const result = await api('/pages/' + id);
-  if (result.editorState?.formato === FORMATO_ALVA) {
-    location.href = '/editor.html?pagina=' + encodeURIComponent(id);
-    return;
-  }
-  page = result;
-  const projectId = page.projectId || studioShell?.state().currentProject?.id;
-  let vslVideos = [];
-  let vslLoadError = '';
-  if (mediaPipelineEnabled && studioShell?.can?.('video.read') && projectId) {
-    try {
-      vslVideos = await api(`/projects/${projectId}/videos`);
-    } catch {
-      vslLoadError = 'Não foi possível carregar as VSLs. Tente novamente.';
-    }
-  }
-  // Quem abre um quiz pelo painel do projeto não passou pela lista: a marca da própria
-  // página é que diz de onde ela veio e para onde o botão de voltar leva.
-  tipoDeConteudo = page.kind === 'quiz' ? 'quiz' : 'page';
-  const textos = textosDaLista(tipoDeConteudo);
-  loading = true;
-  dirty = false;
-  change = 0;
-  $('#dashboard').hidden = true;
-  $('#editing').hidden = false;
-  $('#back').setAttribute('aria-label', `Voltar para ${textos.voltar.toLocaleLowerCase('pt-BR')}`);
-  $('#back').title = textos.voltar;
-  $('#back').dataset.tooltip = textos.voltar;
-  $('#page-name').setAttribute('aria-label', textos.nomeDoConteudo);
-  $('#page-name').value = page.name;
-  $('#save-state').textContent = 'Salvo neste computador';
-  if (editor) editor.destroy();
-  const template = page.kind === 'quiz' ? inicioDoQuiz : (getTemplate(page.template) || getTemplate('services'));
-  editor = createFriendlyEditor({
-    container: '#editor',
-    headerContext: textos.contexto,
-    project: page.project,
-    html: template.html,
-    css: template.css,
-    onChange: markDirty,
-    onOpenFormSettings: () => abrirConfiguracoesDaPagina('respostas'),
-    vslVideos,
-    vslLoadError,
-    mediaEnabled: () => mediaPipelineEnabled,
-    publicOrigin: window.location.origin,
-    can: (capability) => studioShell?.can?.(capability),
-    quizCanvas: page.kind === 'quiz',
-  });
-  loading = false;
-  if (!page.project || editor.__alvaMigrated) markDirty();
-  syncPagePublishControl();
+  if (result.editorState?.formato !== FORMATO_ALVA) throw new Error('Esta página foi criada no editor antigo, que não existe mais. Crie a página de novo.');
+  location.href = '/editor.html?pagina=' + encodeURIComponent(id);
 }
 $('#new-page').onclick = () => {
   const textos = textosDaLista(tipoDeConteudo);
@@ -1329,169 +1188,9 @@ $('#create-form').onsubmit = action(async (event) => {
   }
 });
 $('#search').oninput = renderList;
-$('#page-name').oninput = () => {
-  page.name = $('#page-name').value;
-  markDirty();
-};
-$('#save').onclick = action(async () => {
-  await save();
-  toast('Página salva.');
-});
-$('#back').onclick = action(async () => {
-  const projectId = page?.projectId;
-  await save();
-  clearTimeout(timer);
-  if (editor) {
-    editor.destroy();
-    editor = null;
-  }
-  page = null;
-  $('#editing').hidden = true;
-  $('#dashboard').hidden = false;
-  await returnToProject(projectId);
-  // O botão promete a lista de onde a pessoa veio; devolvê-la à visão geral do projeto
-  // fazia com que ela tivesse de procurar o caminho de novo.
-  await mostrarConteudo(tipoDeConteudo);
-});
-// Buscada uma vez, fora do sandbox da prévia; ver embutirFonteDeIcones.
-let fonteDeIconesEmbutida = null;
-function fonteDeIcones() {
-  fonteDeIconesEmbutida ||= fetch(materialSymbolsFontUrl(window.location.origin))
-    .then((resposta) => (resposta.ok ? resposta.blob() : Promise.reject(new Error('fonte indisponível'))))
-    .then((blob) => new Promise((resolver, falhar) => {
-      const leitor = new FileReader();
-      leitor.onload = () => resolver(String(leitor.result).replace(/^data:[^;,]*/, 'data:font/woff2'));
-      leitor.onerror = falhar;
-      leitor.readAsDataURL(blob);
-    }))
-    // Sem a fonte, a prévia abre mesmo assim, com os ícones em texto; a próxima tenta de novo.
-    .catch(() => { fonteDeIconesEmbutida = null; return ''; });
-  return fonteDeIconesEmbutida;
-}
-$('#preview').onclick = action(async () => {
-  await save();
-  const dados = await fonteDeIcones();
-  $('#preview-dialog iframe').srcdoc = embutirFonteDeIcones(exportHtml({ previa: true }), window.location.origin, dados);
-  $('#preview-dialog').showModal();
-});
-$('#download').onclick = action(async () => {
-  await save();
-  const url = URL.createObjectURL(new Blob([exportHtml()], { type: 'text/html;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = (page.name.replace(/[^a-zA-Z0-9_-]/g, '-') || 'landing-page') + '.html';
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  toast('HTML exportado. Configure o destino do formulário antes de usar.');
-});
-function showDeployment() {
-  const p = page.deployment;
-  $('#deployment-state').textContent = p
-    ? 'Publicação: ' +
-      ({
-        READY: 'No ar',
-        BUILDING: 'Preparando a página',
-        QUEUED: 'Na fila',
-        ERROR: 'Não publicada — ocorreu um erro',
-        CANCELED: 'Cancelada',
-      }[p.state] || p.state) +
-      ' · ' +
-      (p.url || '')
-    : 'Nenhuma publicação enviada.';
-  $('#check-publication').disabled = !p || !config.vercelConnected;
-  $('#connect-domain').disabled = !p || p.state !== 'READY' || !config.vercelConnected;
-}
-$('#settings').onclick = () => {
-  const form = $('#settings-form');
-  form.elements.webhook.value = page.webhook;
-  form.elements.domain.value = page.domain;
-  $('#vercel-state').textContent = config.vercelConnected
-    ? '● Conexão Vercel salva. Você pode conferir o acesso em Configurações do app.'
-    : '○ Conecte a Vercel nas configurações do app para publicar.';
-  $('#domain-result').replaceChildren();
-  showDeployment();
-  $('#settings-dialog').showModal();
-};
-$('#settings-form').onsubmit = action(async (event) => {
-  event.preventDefault();
-  await save();
-  const data = Object.fromEntries(new FormData(event.target));
-  const webhook = data.webhook.trim();
-  if (webhook) {
-    const u = new URL(webhook);
-    if (u.protocol !== 'https:' || u.username || u.password)
-      throw new Error('Informe um endereço HTTPS sem credenciais.');
-  }
-  const domain = data.domain.trim().toLowerCase();
-  if (domain && !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain))
-    throw new Error('Informe o domínio sem https ou caminho.');
-  page.webhook = webhook;
-  page.domain = domain;
-  editor.getWrapper().find('form').forEach((form) => syncFormDelivery(form, page.webhook));
-  markDirty();
-  await save();
-  toast('Configurações salvas.');
-  $('#settings-dialog').close();
-});
-$('#publish').onclick = action(async () => {
-  if (!studioShell?.can?.('deployment.publish')) throw new Error('Você não tem permissão para publicar. Peça acesso a um administrador.');
-  await save();
-  if (!(await confirmarAcao({ titulo: 'Publicar “' + page.name + '”?', descricao: 'A versão atual vai para a Vercel e fica visível para quem acessar o endereço.', confirmar: 'Publicar' }))) return;
-  $('#publish').disabled = true;
-  try {
-    page.deployment = await api('/pages/' + page.id + '/publish', 'POST', { revision: page.revision });
-    toast('Enviada à Vercel. Consulte o andamento em Configurar.');
-  } finally {
-    syncPagePublishControl();
-  }
-});
-$('#check-publication').onclick = action(async () => {
-  page.deployment = await api('/pages/' + page.id + '/status');
-  showDeployment();
-  toast(page.deployment?.state === 'READY' ? 'A Vercel confirmou a publicação.' : 'Estado atualizado.');
-});
-$('#connect-domain').onclick = action(async () => {
-  await save();
-  if (!page.domain) throw new Error('Preencha e salve um domínio primeiro.');
-  if (!(await confirmarAcao({ titulo: 'Conectar ' + page.domain + '?', descricao: 'O domínio passa a apontar para o projeto desta página na Vercel.', confirmar: 'Conectar domínio' }))) return;
-  const result = await api('/pages/' + page.id + '/domain', 'POST', {});
-  const domainNode = $('#domain-result');
-  domainNode.textContent = result.verified
-    ? 'Domínio adicionado. Confira o apontamento DNS na Vercel.'
-    : 'Domínio adicionado. Verifique os registros abaixo no provedor do domínio.';
-  if (result.verification?.length) {
-    const table = document.createElement('table');
-    table.className = 'domain-records';
-    table.innerHTML = '<thead><tr><th>Tipo</th><th>Nome</th><th>Valor</th></tr></thead>';
-    const body = document.createElement('tbody');
-    for (const record of result.verification) {
-      const row = document.createElement('tr');
-      for (const value of [record.type, record.domain, record.value]) {
-        const cell = document.createElement('td');
-        cell.textContent = value || '';
-        row.append(cell);
-      }
-      body.append(row);
-    }
-    table.append(body);
-    domainNode.append(table);
-  }
-  toast(
-    result.verified
-      ? 'Domínio adicionado. Confira o apontamento DNS na Vercel.'
-      : 'Domínio adicionado; verifique a propriedade e o DNS na Vercel.',
-  );
-});
 document
   .querySelectorAll('[data-close]')
   .forEach((button) => (button.onclick = () => button.closest('dialog').close()));
-window.addEventListener('beforeunload', (event) => {
-  if (dirty) {
-    event.preventDefault();
-    event.returnValue = '';
-  }
-});
-const templateDocument = (template) => documentoDeModelo(template);
 let templateCategory = 'Todos';
 // A miniatura é o documento que a publicação desenharia: prévia que mente sobre o modelo é
 // pior que nenhuma.
@@ -1545,11 +1244,9 @@ function renderTemplates() {
 async function refreshConfig() {
   if (!studioShell?.state().currentProject || !studioShell.can('integration.manage')) {
     config = { vercelConnected: false };
-    syncPagePublishControl();
     return config;
   }
   config = await api('/config');
-  syncPagePublishControl();
 }
 async function closeOpenEditors() {
   await contextBoundary.close();
@@ -1557,7 +1254,6 @@ async function closeOpenEditors() {
 function resetPageList() {
   pageList.invalidate();
   pages = [];
-  dirty = false;
   $('#page-list').replaceChildren();
 }
 async function returnToProject(projectId) {
@@ -1565,14 +1261,9 @@ async function returnToProject(projectId) {
 }
 const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
 contextBoundary = createStudioContextBoundary({
-  savePage: save,
-  closePageEditor: () => {
-    clearTimeout(timer);
-    if (editor) editor.destroy();
-    editor = null;
-    page = null;
-    $('#editing').hidden = true;
-  },
+  // O editor abre em outra página (/editor.html): não há editor aberto aqui para salvar.
+  savePage: async () => {},
+  closePageEditor: () => {},
   clearPageList: resetPageList,
 });
 studioShell = createStudioShell({
@@ -2604,18 +2295,13 @@ ownerUI = createOwnerUI({
     await studioShell.initialize();
     dashboardContextFlow.bootstrap();
     await refreshConfig();
-    if (page) {
-      $('#editing').hidden = false;
-      $('#dashboard').hidden = true;
-    } else {
-      $('#dashboard').hidden = false;
-      const rota = window.location.hash.length > 1 ? viewRouter.current() : null;
-      const hasProject = Boolean(studioShell.state().currentProject);
-      abrirView(viewToRestore(rota, { hasProject }), { settingsTab: rota?.settingsTab ?? 'account' });
-      viewRouter.start();
-    }
+    $('#dashboard').hidden = false;
+    const rota = window.location.hash.length > 1 ? viewRouter.current() : null;
+    const hasProject = Boolean(studioShell.state().currentProject);
+    abrirView(viewToRestore(rota, { hasProject }), { settingsTab: rota?.settingsTab ?? 'account' });
+    viewRouter.start();
   },
-  beforeLogout: save,
+  beforeLogout: async () => {},
   onCompanySettings: () => {
     const state = studioShell?.state();
     $('#settings-company-name').textContent = state?.currentCompany?.name || 'Empresa atual';
@@ -2635,12 +2321,7 @@ ownerUI = createOwnerUI({
   onSettingsClosed: () => setDashboardView(studioShell?.state().currentProject ? 'project' : 'home'),
   canManageIntegration: () => !studioShell?.state().session?.user || studioShell.can('integration.manage'),
   onLoggedOut: async () => {
-    clearTimeout(timer);
-    editor?.destroy();
-    editor = null;
-    page = null;
     resetPageList();
-    $('#editing').hidden = true;
     $('#dashboard').hidden = true;
     companyOverviewRequest++;
     $('#project-switcher').replaceChildren();
@@ -2649,29 +2330,6 @@ ownerUI = createOwnerUI({
   settingsMount: $('#settings-view'),
 });
 $('#app-settings').onclick = () => setDashboardView('settings');
-$('#page-vercel-settings').onclick = action(async (event) => {
-  const button = event.currentTarget;
-  button.disabled = true;
-  try {
-  if (!studioShell.can('integration.manage')) {
-    toast('Você não tem permissão para configurar integrações.');
-    return;
-  }
-  const projectId = page?.projectId;
-  await save();
-  clearTimeout(timer);
-  if (editor) editor.destroy();
-  editor = null;
-  page = null;
-  $('#editing').hidden = true;
-  $('#dashboard').hidden = false;
-  await returnToProject(projectId);
-  $('#settings-dialog').close();
-  await setDashboardView('settings', { settingsTab: 'vercel' });
-  } finally {
-    button.disabled = false;
-  }
-});
 try {
   await ownerUI.initialize();
   $('#startup').remove();

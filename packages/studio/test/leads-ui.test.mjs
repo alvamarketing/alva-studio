@@ -83,8 +83,10 @@ test('a visão de projeto oferece Leads somente com permissão, estados e contro
   assert.match(html, /id="project-leads-controls"/);
   assert.match(html, /id="project-leads-form"[^>]*aria-label="Filtrar leads por origem"/);
   assert.match(html, /id="project-leads-export"[^>]*download/);
-  assert.match(html, /As respostas ficam disponíveis no Studio/);
-  assert.match(html, /Opcionalmente, envie uma cópia em JSON para seu CRM ou automação/);
+  // O destino dos leads de cada página mora no editor (botão Leads), não mais num diálogo do app.
+  const editor = await readFile(new URL('../editor/main.jsx', import.meta.url), 'utf8');
+  assert.match(editor, /As respostas ficam disponíveis no Studio/);
+  assert.match(editor, /Opcionalmente, envie uma cópia em JSON para seu CRM ou automação/);
   assert.match(app, /studioShell\?\.can\?\.\('submission\.read'\)/);
   assert.match(app, /api\(`\/projects\/\$\{state\.currentProject\.id\}\/leads/);
   assert.match(app, /params\.set\('sourceKind', leadsSource\.sourceKind\)/);

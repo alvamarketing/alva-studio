@@ -2071,7 +2071,7 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 
 /* Guia de DNS na Publicação. */
 .publication-dns { margin-top: 12px; border: 1px solid var(--alva-line); border-radius: var(--radius-md); padding: 10px 14px; background: var(--alva-white); }
-.publication-dns summary { cursor: pointer; font-weight: 650; font-size: var(--text-md); }
+.publication-dns summary { cursor: pointer; font-weight: 600; font-size: var(--text-md); }
 .publication-dns ol { margin: 10px 0; padding-left: 20px; display: grid; gap: 8px; font-size: var(--text-md); line-height: 1.5; }
 .publication-dns ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .publication-dns code { font-size: var(--text-sm); background: var(--alva-cloud); border-radius: var(--radius-xs); padding: 1px 5px; }

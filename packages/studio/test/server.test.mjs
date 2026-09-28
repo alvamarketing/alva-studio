@@ -140,15 +140,6 @@ test('configuração indica desconexão e não inclui credenciais', async (t) =>
   assert.deepEqual(result, { vercelConnected: false });
 });
 
-test('locale português é executável no navegador sem CommonJS', async (t) => {
-  const { base, request } = await setup(t);
-  const response = await fetch(base + '/vendor/pt.js');
-  assert.equal(response.status, 200);
-  const context = { window: {} };
-  runInNewContext(await response.text(), context);
-  assert.ok(context.window.alvaLocale.assetManager);
-});
-
 test('controlador de aparência é entregue como módulo do Studio', async (t) => {
   const { base } = await setup(t);
   const response = await fetch(base + '/ui-preferences.js');

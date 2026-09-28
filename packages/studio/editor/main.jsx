@@ -8,7 +8,7 @@ import { Puck, createUsePuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
 import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
-import { ArrowLeft, CircleCheck, CircleDot, Eye, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
+import { ArrowLeft, CircleCheck, CircleDot, Eye, Inbox, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
 import { Estrutura } from './estrutura.jsx';
 import { FONTE_DO_CONTRATO, documentoDaPagina, ehQuiz, normalizarEstadoAlva } from '../public/pagina-alva.js';
 import { quizRuntimeCss } from '../public/quiz-runtime.js';
@@ -55,7 +55,38 @@ function IframeComFolhas({ children, document: doc }) {
   return <>{children}</>;
 }
 
-function Acoes({ pagina, aoSalvar, aviso, pendente, alterada }) {
+// Para onde vão os leads desta página: sempre para o Studio (aba Leads) e, se a pessoa
+// quiser, uma cópia em JSON para um webhook (CRM, automação). Era o diálogo de
+// configurações do editor antigo; o servidor já guardava e validava o endereço.
+function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
+  const [aberto, setAberto] = useState(false);
+  const [valor, setValor] = useState(pagina.webhook ?? '');
+  const [estado, setEstado] = useState('');
+  return (
+    <div className="alva-menu">
+      <button type="button" className="alva-acao" aria-expanded={aberto} onClick={() => setAberto(!aberto)}>
+        <Inbox size={16} aria-hidden="true" /> Leads
+      </button>
+      {aberto ? (
+        <form className="alva-menu-painel" onSubmit={async (evento) => {
+          evento.preventDefault();
+          setEstado('Salvando…');
+          try { await aoSalvarWebhook(valor.trim()); setEstado('Destino salvo.'); } catch (erro) { setEstado(erro.message); }
+        }}>
+          <strong>Para onde vão as respostas</strong>
+          <p>As respostas ficam disponíveis no Studio, na aba Leads do projeto.</p>
+          <label>Opcionalmente, envie uma cópia em JSON para seu CRM ou automação
+            <input type="url" placeholder="https://" value={valor} onChange={(evento) => setValor(evento.target.value)} />
+          </label>
+          <button type="submit" className="alva-acao alva-acao-principal">Salvar destino</button>
+          {estado ? <small role="status">{estado}</small> : null}
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
+function Acoes({ pagina, aoSalvar, aoSalvarWebhook, aviso, pendente, alterada }) {
   const dados = usePuck((estado) => estado.appState.data);
   const [ocupado, setOcupado] = useState(false);
   const executar = (tarefa) => async () => {
@@ -76,6 +107,7 @@ function Acoes({ pagina, aoSalvar, aviso, pendente, alterada }) {
       <span className={`alva-salvo${alterada ? ' alva-salvo-pendente' : ''}`} role="status">
         {alterada ? <><CircleDot size={16} aria-hidden="true" /> Alterações não salvas</> : <><CircleCheck size={16} aria-hidden="true" /> Salvo</>}
       </span>
+      <DestinoDosLeads pagina={pagina} aoSalvarWebhook={(webhook) => aoSalvarWebhook(dados, webhook)} />
       <button type="button" className="alva-acao" onClick={() => {
         // A prévia é o mesmo documento que o servidor publica, montado aqui com o que está na
         // tela — inclusive o que ainda não foi salvo.
@@ -134,6 +166,14 @@ function Editor() {
     })().catch((falha) => setErro(falha.message));
   }, []);
   const aviso = (texto) => { setMensagem(texto); setTimeout(() => setMensagem(''), 4000); };
+  const aoSalvarWebhook = async (dados, webhook) => {
+    const salva = await api(`/pages/${pagina.id}`, 'PUT', { revision: pagina.revision, editorState: puckParaAlva(dados), webhook });
+    salvo.current = JSON.stringify(puckParaAlva(dados));
+    pendente.current = false;
+    setAlterada(false);
+    setPagina({ ...salva, webhook });
+    return salva;
+  };
   const aoSalvar = async (dados) => {
     const salva = await api(`/pages/${pagina.id}`, 'PUT', { revision: pagina.revision, editorState: puckParaAlva(dados) });
     salvo.current = JSON.stringify(puckParaAlva(dados));
@@ -158,7 +198,7 @@ function Editor() {
         overrides={{
           iframe: IframeComFolhas,
           outline: () => <Estrutura quiz={ehQuiz(pagina.editorState)} />,
-          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aviso={aviso} pendente={pendente} alterada={alterada} />,
+          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aoSalvarWebhook={aoSalvarWebhook} aviso={aviso} pendente={pendente} alterada={alterada} />,
           drawerItem: ({ name }) => <ItemDaBiblioteca name={name} rotulo={config.components[name]?.label} />,
         }}
       />

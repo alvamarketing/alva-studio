@@ -43,19 +43,3 @@ test('mantém o primeiro ID de clone e regenera somente o duplicado', () => {
   assert.equal(normalized.components[0].attributes['data-alva-capture-id'], id);
   assert.equal(normalized.components[1].attributes['data-alva-capture-id'], '22222222-2222-4222-8222-222222222222');
 });
-
-test('extrai getProjectData real com alva-field e mantém IDs após reorder', async () => {
-  const { default: grapesjs } = await import('grapesjs');
-  const editor = grapesjs.init({ headless: true, storageManager: false });
-  try {
-    editor.DomComponents.addType('alva-field', { isComponent: (element) => element?.tagName === 'INPUT', model: { defaults: { tagName: 'input', void: true, droppable: false } } });
-    editor.getWrapper().append({ tagName: 'form', components: [{ tagName: 'h3', components: [{ type: 'textnode', content: 'Contato' }] }, { tagName: 'label', components: [{ type: 'textnode', content: 'E-mail' }, { type: 'alva-field', attributes: { name: 'email', type: 'email', required: '' } }] }] });
-    const first = normalizePageCaptureIds(editor.getProjectData());
-    const captureId = extractPageCaptureSchema(first).forms[0].captureId;
-    const page = first.pages[0];
-    page.frames[0].component.components.reverse();
-    const second = normalizePageCaptureIds(first);
-    assert.equal(extractPageCaptureSchema(second).forms[0].captureId, captureId);
-    assert.equal(extractPageCaptureSchema(second).forms[0].fields[0].required, true);
-  } finally { editor.destroy(); }
-});

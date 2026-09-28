@@ -11,9 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/material-symbols.css" />
-    <link rel="stylesheet" href="/vendor/grapes.min.css" />
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/editor-shell.css" />
     <link rel="stylesheet" href="/forms.css" />
     <link rel="stylesheet" href="/owner.css" />
   </head>
@@ -491,93 +489,6 @@
         </section>
       </main>
     </section>
-    <section id="editing" hidden>
-      <header class="editor-header">
-        <button
-          class="icon-button"
-          id="back"
-          aria-label="Voltar para minhas páginas"
-          title="Minhas páginas"
-          data-tooltip="Minhas páginas"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
-        </button>
-        <input id="page-name" aria-label="Nome da página" maxlength="100" />
-        <span id="save-state" role="status">Salvo</span>
-        <div class="editor-actions">
-          <span class="device-control" title="Tamanho da tela" data-tooltip="Tamanho da tela">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="13" rx="2" />
-              <path d="M8 21h8M12 17v4" />
-            </svg>
-            <select id="device" aria-label="Tamanho da tela" title="Tamanho da tela">
-              <option value="Desktop">Computador</option>
-              <option value="Tablet">Tablet</option>
-              <option value="Mobile">Celular</option>
-            </select>
-          </span>
-          <button
-            class="icon-button"
-            id="settings"
-            aria-label="Configurar página"
-            title="Configurar página"
-            data-tooltip="Configurar página"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="3" />
-              <path
-                d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21h-4v-.08a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3v-4h.08a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3h4v.08a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21v4h-.08a1.7 1.7 0 0 0-1.52 1Z"
-              />
-            </svg>
-          </button>
-          <button
-            class="icon-button"
-            id="preview"
-            aria-label="Visualizar página"
-            title="Visualizar página"
-            data-tooltip="Visualizar página"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
-              <circle cx="12" cy="12" r="2.5" />
-            </svg>
-          </button>
-          <button
-            class="icon-button"
-            id="download"
-            aria-label="Baixar HTML"
-            title="Baixar HTML"
-            data-tooltip="Baixar HTML"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" /></svg>
-          </button>
-          <button
-            class="icon-button"
-            id="save"
-            aria-label="Salvar página"
-            title="Salvar página"
-            data-tooltip="Salvar página"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M5 3h12l2 2v16H5Z" />
-              <path d="M8 3v6h8V3M8 21v-7h8v7" />
-            </svg>
-          </button>
-          <button
-            class="icon-button primary"
-            id="publish"
-            aria-label="Publicar página"
-            title="Publicar página"
-            aria-describedby="publish-help"
-            data-tooltip="Publicar página"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 5 5m-5-5L7 8m5-5v13M5 21h14" /></svg>
-          </button>
-        </div>
-        <span id="publish-help" class="editor-action-help" role="status"></span>
-      </header>
-      <div id="editor"></div>
-    </section>
     <dialog id="create-dialog">
       <form id="create-form">
         <div class="eyebrow">UMA NOVA CAMPANHA</div>
@@ -626,40 +537,6 @@
         </div>
       </form>
     </dialog>
-    <dialog id="settings-dialog">
-      <form id="settings-form">
-        <div class="eyebrow">CONFIGURAÇÕES DA PÁGINA</div>
-        <h2>Do editor para o mundo.</h2>
-        <section class="dialog-section" id="settings-respostas">
-          <h3>Respostas do formulário</h3>
-          <p class="help">
-            As respostas ficam disponíveis no Studio, em Leads. Se quiser, envie também uma cópia para outro sistema.
-          </p>
-          <label
-            >Enviar cópia para (opcional)<input name="webhook" type="url" placeholder="https://seu-sistema.com/formulario"
-          /></label>
-          <p class="help">Opcionalmente, envie uma cópia em JSON para seu CRM ou automação.</p>
-        </section>
-        <section class="dialog-section" id="settings-publicacao">
-          <h3>Publicação e domínio</h3>
-          <label>Domínio ou subdomínio<input name="domain" placeholder="lp.suaempresa.com.br" /></label>
-          <p class="help">Após publicar, conecte o domínio. O apontamento DNS é configurado no provedor do domínio.</p>
-        <div id="vercel-state" class="connection"></div>
-        <div class="page-connection-actions">
-          <button type="button" id="page-vercel-settings">Configurar conexão Vercel</button>
-        </div>
-        <div id="deployment-state" class="help"></div>
-        <div id="domain-result" class="domain-result" role="status"></div>
-        <div class="dialog-actions">
-          <button type="button" id="check-publication">Consultar publicação</button
-          ><button type="button" id="connect-domain">Conectar domínio</button>
-        </div>
-        </section>
-        <div class="dialog-actions">
-          <button type="button" data-close>Fechar</button><button class="primary">Salvar configurações</button>
-        </div>
-      </form>
-    </dialog>
     <dialog id="preview-dialog">
       <div class="preview-header">
         <strong>Prévia da página</strong><span>O quiz funciona como publicado. Nada que você preencher aqui é enviado.</span
@@ -672,8 +549,6 @@
       <iframe title="Prévia da landing page" sandbox="allow-scripts"></iframe>
     </dialog>
     <div id="toast" role="status" hidden></div>
-    <script src="/vendor/grapes.min.js"></script>
-    <script src="/vendor/pt.js"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

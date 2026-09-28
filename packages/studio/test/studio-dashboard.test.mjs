@@ -444,14 +444,6 @@ test('analista pode ler e exportar leads, enquanto quem não tem submission.read
   assert.match(html, /data-project-filter="leads"[^>]*>Leads/);
 });
 
-test('publicação no editor declara bloqueio acionável para quem não pode publicar', async () => {
-  const [html, app] = await Promise.all([readFile(htmlPath, 'utf8'), readFile(appPath, 'utf8')]);
-  assert.match(html, /id="publish"[^>]+aria-describedby="publish-help"/);
-  assert.match(html, /id="publish-help"[^>]*role="status"/);
-  assert.match(app, /deployment\.publish/);
-  assert.match(app, /Você não tem permissão para publicar/);
-});
-
 test('ações de conteúdo respeitam as capacidades de escrita por tipo', () => {
   const denied = { can: () => false };
   const page = { kind: 'page' };
@@ -599,9 +591,4 @@ test('duas entradas de navegação para a mesma seção não se anulam', () => {
 
 test('uma view desconhecida esconde tudo, em vez de deixar duas telas à mostra', () => {
   assert.deepEqual(secoesEscondidas({ home: '#home', pages: '#pages' }, 'nada'), { '#home': true, '#pages': true });
-});
-
-test('sair do editor devolve para a lista de onde a pessoa veio', async () => {
-  const app = await readFile(appPath, 'utf8');
-  assert.match(app, /await mostrarConteudo\(tipoDeConteudo\);/);
 });

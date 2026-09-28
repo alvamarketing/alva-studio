@@ -1,7 +1,7 @@
 // Os ícones do editor (Lucide): um por bloco na biblioteca, nos campos principais e nos
 // botões do cabeçalho. Só o editor carrega isto; a página publicada não.
 import {
-  AlignCenter, ArrowLeft, CircleCheck, ListChecks, Milestone, CircleDot, Clapperboard, Eye, ClipboardList, Columns2, Columns3, GripVertical, Heading, Image, LayoutGrid,
+  AlignCenter, ArrowLeft, CircleCheck, Inbox, ListChecks, Milestone, CircleDot, Clapperboard, Eye, ClipboardList, Columns2, Columns3, GripVertical, Heading, Image, LayoutGrid,
   Link, Mail, Megaphone, MousePointerClick, MoveHorizontal, PaintBucket, Palette, PanelTop, Quote, Rocket, Rows3,
   Save, Sparkles, Square, Star, StretchVertical, TextCursorInput, Type, Video,
 } from 'lucide-react';
@@ -40,7 +40,7 @@ export const ICONE_DO_CAMPO = {
   estrutura: <Rows3 size={16} />,
 };
 
-export { ArrowLeft, CircleCheck, CircleDot, Eye, Rocket, Save };
+export { ArrowLeft, CircleCheck, CircleDot, Eye, Inbox, Rocket, Save };
 
 // O item da biblioteca: ícone, nome e a alça de arrastar.
 export function ItemDaBiblioteca({ name, rotulo }) {

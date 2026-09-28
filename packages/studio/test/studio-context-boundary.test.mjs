@@ -6,11 +6,11 @@ test('salva o editor e o remove antes de limpar a lista do contexto', async () =
   const events = [];
   const boundary = createStudioContextBoundary({
     savePage: async () => events.push('salvar-página'),
-    closePageEditor: () => events.push('destruir-grapesjs'),
+    closePageEditor: () => events.push('fechar-editor'),
     clearPageList: () => events.push('limpar-páginas'),
   });
 
   await boundary.close();
 
-  assert.deepEqual(events, ['salvar-página', 'destruir-grapesjs', 'limpar-páginas']);
+  assert.deepEqual(events, ['salvar-página', 'fechar-editor', 'limpar-páginas']);
 });

@@ -13,16 +13,3 @@ test('o carrossel desliza sozinho, sem depender de javascript', () => {
 
 
 
-
-test('as setas do carrossel funcionam na página publicada', async () => {
-  const { buildPageExportHtml } = await import('../public/editor-shell.js');
-  const html = buildPageExportHtml({ title: 'Teste', css: '', html: '<div class="alva-carousel"></div>', js: '' });
-  assert.match(html, /data-carousel/, 'o script do carrossel acompanha a página');
-  assert.match(html, /scrollBy/);
-});
-
-test('página sem carrossel não carrega o script à toa', async () => {
-  const { buildPageExportHtml } = await import('../public/editor-shell.js');
-  const html = buildPageExportHtml({ title: 'Teste', css: '', html: '<p>oi</p>', js: '' });
-  assert.doesNotMatch(html, /scrollBy/);
-});

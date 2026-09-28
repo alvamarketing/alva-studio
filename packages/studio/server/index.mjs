@@ -409,8 +409,6 @@ export function createApp({
     '/material-symbols-outlined.LICENSE': ['public/material-symbols-outlined.LICENSE', 'text/plain'],
     '/owner.js': ['public/owner.js', 'text/javascript'],
     '/owner.css': ['public/owner.css', 'text/css'],
-    '/editor-shell.js': ['public/editor-shell.js', 'text/javascript'],
-    '/editor-shell.css': ['public/editor-shell.css', 'text/css'],
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],
     '/quiz-elements.js': ['public/quiz-elements.js', 'text/javascript'],
@@ -429,9 +427,6 @@ export function createApp({
     '/material-symbols.css': ['public/material-symbols.css', 'text/css'],
     '/material-symbols-outlined.woff2': ['public/material-symbols-outlined.woff2', 'font/woff2'],
     '/templates.js': ['public/templates.js', 'text/javascript'],
-    '/vendor/grapes.min.js': ['node_modules/grapesjs/dist/grapes.min.js', 'text/javascript'],
-    '/vendor/grapes.min.css': ['node_modules/grapesjs/dist/css/grapes.min.css', 'text/css'],
-    '/vendor/pt.js': ['node_modules/grapesjs/locale/pt.js', 'text/javascript'],
     '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
@@ -439,15 +434,10 @@ export function createApp({
     '/view-route.js': ['public/view-route.js', 'text/javascript'],
     '/confirm-dialog.js': ['public/confirm-dialog.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
-    '/vendor/studio-sdk.umd.js': ['node_modules/@grapesjs/studio-sdk/dist/index.umd.js', 'text/javascript'],
-    '/vendor/studio-sdk.css': ['node_modules/@grapesjs/studio-sdk/dist/style.css', 'text/css'],
     '/vsl-retention-ui.js': ['public/vsl-retention-ui.js', 'text/javascript'],
     '/vsl-upload.js': ['public/vsl-upload.js', 'text/javascript'],
     '/quiz-runtime.js': ['public/quiz-runtime.js', 'text/javascript'],
     '/quiz-mecanica.js': ['public/quiz-mecanica.js', 'text/javascript'],
-    '/editor-novo.html': ['public/editor-novo.html', 'text/html'],
-    '/editor-novo.css': ['public/editor-novo.css', 'text/css'],
-    '/studio-sdk-editor.js': ['public/studio-sdk-editor.js', 'text/javascript'],
     // O editor de landing (Puck). React e o build moram só aqui; a página publicada é HTML puro.
     '/editor.html': ['public/editor.html', 'text/html'],
     '/pagina-alva.js': ['public/pagina-alva.js', 'text/javascript'],
@@ -901,9 +891,7 @@ export function createApp({
         res.setHeader('Cache-Control', 'no-cache');
         const content = await readFile(join(root, file));
         return res.end(
-          path === '/vendor/pt.js'
-            ? '(()=>{const exports={};' + content.toString() + ';window.alvaLocale=exports.default;})();'
-            : path === '/tokens.css' ? blocoDeTokens(content.toString()) : content,
+          path === '/tokens.css' ? blocoDeTokens(content.toString()) : content,
         );
       }
       throw error('Não encontrado.', 404);

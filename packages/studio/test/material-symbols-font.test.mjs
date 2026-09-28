@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
-import { buildPageExportHtml } from '../public/editor-shell.js';
+import { documentoDaPagina, normalizarEstadoAlva } from '../public/pagina-alva.js';
 import { materialSymbolsFontCss, materialSymbolsFontUrl, quizElementCss } from '../public/quiz-elements.js';
 import { embedVideoCss, templateCss } from '../public/templates.js';
 import { createApp } from '../server/index.mjs';
@@ -34,7 +34,8 @@ test('fonte Material Symbols local tem MIME correto e CSS absoluto para exporta�
   ]);
   assert.match(index, /href="\/material-symbols\.css"/);
   assert.match(css, /url\('\/material-symbols-outlined\.woff2'\)/);
-  const exportHtml = buildPageExportHtml({ title: 'Página', css: templateCss, html: '<div class="alva-embed-video" data-alva-video-empty="true"><iframe src="about:blank"></iframe><p class="alva-embed-video-placeholder">Cole uma URL HTTPS para incorporar o vídeo.</p></div>', publicOrigin: 'https://studio.example.test' });
+  // A página publicada (esquema do Alva) leva a fonte pelo endereço absoluto do Studio.
+  const exportHtml = documentoDaPagina(normalizarEstadoAlva({ formato: 'alva/1', root: { title: 'Página' }, content: [{ type: 'section', children: [{ type: 'video', props: { url: '' } }] }] }), { publicOrigin: 'https://studio.example.test' });
   assert.match(exportHtml, /url\('https:\/\/studio\.example\.test\/material-symbols-outlined\.woff2'\)/);
   assert.ok(templateCss.includes(embedVideoCss), 'Landing deve receber o estilo responsivo do embed');
   assert.ok(quizElementCss.includes(embedVideoCss), 'Quiz deve reutilizar exatamente o mesmo estilo do embed');

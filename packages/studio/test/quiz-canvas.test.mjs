@@ -73,17 +73,6 @@ test('escopa CSS de telas sem quebrar media, :is ou keyframes', () => {
   assert.equal(scripts.length, 0, 'CSS não fecha a tag style no HTML publicado');
 });
 
-test('aceita getProjectData e getHtml reais do GrapesJS', async () => {
-  const { default: grapesjs } = await import('grapesjs');
-  const editor = grapesjs.init({ headless: true, storageManager: false });
-  try {
-    editor.DomComponents.addType('alva-field', { model: { defaults: { tagName: 'input', void: true } } });
-    editor.getWrapper().append({ tagName: 'section', components: [{ tagName: 'label', components: [{ type: 'textnode', content: 'Data' }, { type: 'alva-field', tagName: 'input', attributes: { name: 'data', type: 'date', required: true } }] }] });
-    const result = normalizeQuizCanvas({ version: 1, editorState: editor.getProjectData(), html: editor.getHtml(), css: editor.getCss() });
-    assert.deepEqual(result.fields.map(({ id, type, required }) => ({ id, type, required })), [{ id: 'data', type: 'date', required: true }]);
-  } finally { editor.destroy(); }
-});
-
 test('schema publicado usa campos derivados, inclusive remoção de campo do canvas', () => {
   const canvas = normalizeQuizCanvas({ version: 1, editorState: model, html, css: '' }).canvas;
   const form = normalizeFormInput({
