@@ -4,6 +4,7 @@
 // desenha é o servidor. React mora só aqui: a página publicada é HTML puro.
 import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import { Puck, createUsePuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
 import { criarConfig } from './config.jsx';
@@ -60,15 +61,24 @@ function IframeComFolhas({ children, document: doc }) {
 // configurações do editor antigo; o servidor já guardava e validava o endereço.
 function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
   const [aberto, setAberto] = useState(false);
+  const botao = useRef(null);
+  const [posicao, setPosicao] = useState(null);
+  // O painel é desenhado fora do topo do Puck (portal no body, posição fixa): dentro dele,
+  // o canvas ficava por cima e escondia o painel.
+  const alternar = () => {
+    const caixa = botao.current?.getBoundingClientRect();
+    if (caixa) setPosicao({ top: caixa.bottom + 6, right: Math.max(8, window.innerWidth - caixa.right) });
+    setAberto(!aberto);
+  };
   const [valor, setValor] = useState(pagina.webhook ?? '');
   const [estado, setEstado] = useState('');
   return (
     <div className="alva-menu">
-      <button type="button" className="alva-acao" aria-expanded={aberto} onClick={() => setAberto(!aberto)}>
+      <button type="button" ref={botao} className="alva-acao" aria-expanded={aberto} onClick={alternar}>
         <Inbox size={16} aria-hidden="true" /> Leads
       </button>
-      {aberto ? (
-        <form className="alva-menu-painel" onSubmit={async (evento) => {
+      {aberto && posicao ? createPortal(
+        <form className="alva-menu-painel" style={{ position: 'fixed', top: posicao.top, right: posicao.right, zIndex: 1000 }} onSubmit={async (evento) => {
           evento.preventDefault();
           setEstado('Salvando…');
           try { await aoSalvarWebhook(valor.trim()); setEstado('Destino salvo.'); } catch (erro) { setEstado(erro.message); }
@@ -80,7 +90,9 @@ function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
           </label>
           <button type="submit" className="alva-acao alva-acao-principal">Salvar destino</button>
           {estado ? <small role="status">{estado}</small> : null}
-        </form>
+          <button type="button" className="alva-acao" onClick={() => setAberto(false)}>Fechar</button>
+        </form>,
+        document.body,
       ) : null}
     </div>
   );
