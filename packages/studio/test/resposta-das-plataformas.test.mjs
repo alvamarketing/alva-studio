@@ -108,3 +108,17 @@ test('Meta: evento de site sem a página ou sem o navegador não é válido e n�
   assert.equal(destinoPara('meta').podeAtribuir({ ...completo, client: {} }), false, 'sem o navegador');
   assert.throws(() => destinoPara('meta').requisicao({ ...completo, client: {} }, META), /destination_page_url_required|destination_user_agent_required/);
 });
+
+test('TikTok: o _ttp do pixel vai em user.ttp', () => {
+  const corpo = destinoPara('tiktok').requisicao({ ...EVENTO, click_ids: { ttp: '2Kx8y3Zq9WmN7vB1cD4eF6gH0jL' } }, TIKTOK).corpo.data[0];
+  assert.equal(corpo.user.ttp, '2Kx8y3Zq9WmN7vB1cD4eF6gH0jL');
+});
+
+// PLAINTEXT_IP_ADDRESS está entre os identificadores aceitos, no exemplo oficial.
+// https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversions-api
+test('LinkedIn: o IP de quem converteu vai como identificador, e basta para atribuir', () => {
+  const comIp = { ...EVENTO, client: { ip: '189.68.172.6', user_agent: 'Mozilla/5.0 (iPhone)' } };
+  assert.equal(destinoPara('linkedin').podeAtribuir(comIp), true);
+  const ids = destinoPara('linkedin').requisicao(comIp, { conversion_urn: 'urn:lla:llaPartnerConversion:1', access_token: 't' }).corpo.user.userIds;
+  assert.deepEqual(ids, [{ idType: 'PLAINTEXT_IP_ADDRESS', idValue: '189.68.172.6' }]);
+});

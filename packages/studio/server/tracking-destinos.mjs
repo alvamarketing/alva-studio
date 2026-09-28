@@ -121,6 +121,7 @@ const tiktok = {
           email: evento.user?.email_sha256,
           phone: evento.user?.phone_e164_sha256,
           ttclid: evento.click_ids?.ttclid,
+          ttp: evento.click_ids?.ttp,
           ip: evento.client?.ip,
           user_agent: evento.client?.user_agent,
         }),
@@ -215,13 +216,16 @@ const google = {
 
 const linkedin = {
   chave: 'linkedin',
-  podeAtribuir: (evento) => Boolean(evento.user?.email_sha256 || evento.click_ids?.linkedin_tracking_uuid),
+  // Basta um: e-mail em hash, o identificador do clique ou o IP de quem converteu.
+  // https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversions-api
+  podeAtribuir: (evento) => Boolean(evento.user?.email_sha256 || evento.click_ids?.linkedin_tracking_uuid || texto(evento.client?.ip)),
   corpo(evento, credenciais) {
     const identificadores = [
       evento.user?.email_sha256 ? { idType: 'SHA256_EMAIL', idValue: evento.user.email_sha256 } : null,
       evento.click_ids?.linkedin_tracking_uuid
         ? { idType: 'LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID', idValue: evento.click_ids.linkedin_tracking_uuid }
         : null,
+      texto(evento.client?.ip) ? { idType: 'PLAINTEXT_IP_ADDRESS', idValue: texto(evento.client.ip) } : null,
     ].filter(Boolean);
     if (!linkedin.podeAtribuir(evento)) throw recusa('destination_identifier_required');
 

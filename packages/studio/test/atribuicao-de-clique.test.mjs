@@ -95,7 +95,8 @@ test('a lista de parâmetros de clique é a mesma no gateway publicado', async (
   assert.deepEqual(JSON.parse(lista), [...PARAMETROS_DA_URL]);
   assert.equal(JSON.parse(lista).includes('fbp'), false, 'fbp vem do cookie, não da URL');
   assert.equal(JSON.parse(lista).includes('fbc'), false, 'fbc vem do cookie do pixel, não da URL');
-  assert.ok([...PARAMETROS_DE_CLIQUE].filter((nome) => nome !== 'fbp' && nome !== 'fbc').every((nome) => JSON.parse(lista).includes(nome)));
+  assert.equal(JSON.parse(lista).includes('ttp'), false, 'ttp vem do cookie do pixel do TikTok, não da URL');
+  assert.ok([...PARAMETROS_DE_CLIQUE].filter((nome) => !['fbp', 'fbc', 'ttp'].includes(nome)).every((nome) => JSON.parse(lista).includes(nome)));
   // O fbp continua coberto nas duas cópias, só que pela mesma regra de cookie — literalmente
   // o mesmo texto de regex — em vez de duas expressões escritas à mão que podem se desencontrar.
   assert.ok(modulo.data.includes(REGEX_COOKIE_FBP.source), 'o módulo publicado precisa usar a mesma regra de cookie que o Node');

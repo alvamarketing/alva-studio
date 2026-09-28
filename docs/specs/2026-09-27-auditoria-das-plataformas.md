@@ -120,6 +120,7 @@ parâmetro `click-id`, e que o S2S não exige credencial (a conta sai do click i
 | Código base oficial dos pixels da Meta e do TikTok (M8, T4) | `d3617fe` |
 | Recarregar a página de obrigado não conta outro lead (critério 10) | `d9c03ef` |
 | `_fbc` e `_fbp` do pixel lidos no envio, `_fbc` prevalece (M6) | `8bb71c5` |
+| Cookie `_ttp` do TikTok em `user.ttp`, e IP no LinkedIn (`PLAINTEXT_IP_ADDRESS`) | ver commit abaixo |
 | Meta exige a página e o navegador em evento de site (M7) — ✔︎ lido: "event_source_url is required for website events", "client_user_agent is required for website events". O formulário aberto direto no Studio passa a levar o navegador da própria requisição | ver commit abaixo |
 
 ## O que ficou pendente
@@ -130,6 +131,4 @@ parâmetro `click-id`, e que o S2S não exige credencial (a conta sai do click i
   da feature de checkout, não do rastreamento.
 - **Códigos de erro do S2S da Taboola.** A página oficial (`/pixel/docs/s2s-error-codes`)
   responde "Page Not Found"; a entrega da Taboola é lida só pelo status HTTP.
-- **Cookie `_ttp` do TikTok** e **IP no LinkedIn** (`PLAINTEXT_IP_ADDRESS`): ambos
-  documentados como sinais de correspondência; o Studio ainda não os manda.
 - **Google e LinkedIn: token.** Decisões 2 e 3, acima.

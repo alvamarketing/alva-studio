@@ -7,13 +7,14 @@ import { PARAMETROS_UTM } from './conversion-consent-policy.mjs';
 // escrito `fbc` aqui, que a Meta nunca manda: ela manda `fbclid`, e `fbc` é o valor
 // derivado dele que a Conversions API espera. Pedir pelo nome errado fazia toda campanha
 // do Facebook chegar ao servidor sem identificador de clique.
-export const PARAMETROS_DE_CLIQUE = new Set(['fbclid', 'fbc', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'li_fat_id', 'tblci']);
+export const PARAMETROS_DE_CLIQUE = new Set(['fbclid', 'fbc', 'fbp', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'ttp', 'li_fat_id', 'tblci']);
 
 // O que o gateway lê da URL da página: o identificador do clique — menos o `fbp`, que é
 // cookie — e a UTM. Exportado porque o módulo publicado na Vercel recebe esta lista
 // gerada, e não digitada: foi uma segunda lista escrita à mão que deixou o `fbc` divergir.
-// `fbp` e `fbc` são cookies do pixel da Meta, não parâmetros da URL.
-export const PARAMETROS_DA_URL = Object.freeze([...PARAMETROS_DE_CLIQUE].filter((nome) => nome !== 'fbp' && nome !== 'fbc').concat(PARAMETROS_UTM));
+// `fbp`, `fbc` e `ttp` são cookies dos pixels, não parâmetros da URL.
+const COOKIES_DOS_PIXELS = new Set(['fbp', 'fbc', 'ttp']);
+export const PARAMETROS_DA_URL = Object.freeze([...PARAMETROS_DE_CLIQUE].filter((nome) => !COOKIES_DOS_PIXELS.has(nome)).concat(PARAMETROS_UTM));
 const PARAMETROS_ACEITOS = new Set([...PARAMETROS_DE_CLIQUE, ...PARAMETROS_UTM]);
 
 // `fbp` é diferente de todo o resto da lista acima: não é a Meta que manda esse valor na URL
@@ -30,15 +31,21 @@ export const FORMATO_FBP = /^fb\.\d\.\d+\.\d+$/;
 // apêndice da biblioteca de parâmetros da Meta.
 // https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/fbp-and-fbc
 const REGEX_COOKIE_FBC = /(?:^|;\s*)_fbc=([^;]*)/;
+const REGEX_COOKIE_TTP = /(?:^|;\s*)_ttp=([^;]*)/;
+const FORMATO_TTP = /^[A-Za-z0-9._-]{1,200}$/;
 const FORMATO_FBC = /^fb\.\d+\.\d+\.[^\s;,]{1,500}$/;
 
 // Os cookies que o pixel da Meta gravou, como chegam no envio. Com o pixel na página, o
 // `_fbc` dele é o `fbc` certo; montar à mão é só para quando não há pixel.
-export function cookiesDaMeta(cookieHeader) {
+export function cookiesDosPixels(cookieHeader) {
   if (typeof cookieHeader !== 'string' || !cookieHeader) return {};
   const fbp = extractFbp(cookieHeader);
   const fbc = cookieHeader.match(REGEX_COOKIE_FBC)?.[1];
-  return { ...(fbp ? { fbp } : {}), ...(fbc && FORMATO_FBC.test(fbc) ? { fbc } : {}) };
+  // O TikTok documenta o mesmo mecanismo para o `_ttp`, sem dizer o formato; aceita-se só
+  // texto sem espaço nem separador, com tamanho limitado.
+  // https://business-api.tiktok.com/portal/docs/parameters/v1.3
+  const ttp = cookieHeader.match(REGEX_COOKIE_TTP)?.[1];
+  return { ...(fbp ? { fbp } : {}), ...(fbc && FORMATO_FBC.test(fbc) ? { fbc } : {}), ...(ttp && FORMATO_TTP.test(ttp) ? { ttp } : {}) };
 }
 
 function extractFbp(cookieHeader) {

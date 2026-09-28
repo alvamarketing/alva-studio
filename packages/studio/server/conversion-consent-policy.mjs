@@ -15,7 +15,7 @@ const ATTRIBUTION = Object.freeze({
   // derivado do `fbclid`.
   meta: Object.freeze({ fbclid: 'fbc', fbc: 'fbc', fbp: 'fbp' }),
   google: Object.freeze({ gclid: 'gclid', gbraid: 'gbraid', wbraid: 'wbraid' }),
-  tiktok: Object.freeze({ ttclid: 'ttclid' }),
+  tiktok: Object.freeze({ ttclid: 'ttclid', ttp: 'ttp' }),
   linkedin: Object.freeze({ li_fat_id: 'linkedin_tracking_uuid' }),
   taboola: Object.freeze({ tblci: 'taboola_click_id' }),
 });
