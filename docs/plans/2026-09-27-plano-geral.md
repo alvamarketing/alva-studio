@@ -164,11 +164,11 @@ o **Puck AI fica de fora** (é pago, e a geração por IA chama a API direto).
 
 | # | O que |
 |---|---|
-| 4.1 | **Ligar as engines órfãs.** Ramificação condicional e cálculo sobre respostas existem, são puras e testadas — e nada do quiz que o Studio cria hoje as usa. O quiz atual avança em linha reta. *Aprovado pelo dono em 26/09.* |
-| 4.2 | **O quiz no Puck**: telas, ordem, campo obrigatório segurando o avanço. |
-| 4.3 | **Fechar a rota legada da tabela `forms`.** A API ainda aceita escrita nela; a interface só escreve em `pages`. |
+| 4.1 | **Ligar as engines órfãs.** Ramificação condicional e cálculo sobre respostas existem, são puras e testadas — e nada do quiz que o Studio cria hoje as usa. O quiz atual avança em linha reta. *Aprovado pelo dono em 26/09.* **Feito em 28/09 (ramificação):** a opção "ao escolher, ir para" vira regra da captura, conferida por `quiz-navigation` no servidor e seguida pelo runtime. O cálculo (pontuação/resultado) fica para a fase 2. |
+| 4.2 | **O quiz no Puck**: telas, ordem, campo obrigatório segurando o avanço. **Feito em 28/09:** quiz novo nasce em `alva/1` (`root.tipo = 'quiz'`), com etapa, pergunta de escolha, voltar e avançar ao tocar (`test/quiz-alva.test.mjs`). Quizzes antigos seguem no GrapesJS. |
+| 4.3 | **Fechar a rota legada da tabela `forms`.** A API ainda aceita escrita nela; a interface só escreve em `pages`. *Pendente de decisão: formulários antigos podem estar publicados recebendo respostas — conferir o banco de produção antes de fechar a escrita.* |
 | 4.4 | **Os ~13 tipos legados** — carrossel de depoimentos, gráfico, contagem regressiva, cronômetro, loader, CTA no meio do fluxo. Têm CSS, comportamento e inspetor prontos, mas nenhum bloco na paleta. *Decisão: resgatar ou aposentar.* O que não for decidido some na migração sem ninguém notar. |
-| 4.5 | **Os estados da escolha.** Hoje "cursor em cima" e "escolhido" são visualmente idênticos — a pessoa não enxerga o que marcou; e não existe estado desabilitado. |
+| 4.5 | **Os estados da escolha.** Hoje "cursor em cima" e "escolhido" são visualmente idênticos — a pessoa não enxerga o que marcou; e não existe estado desabilitado. **Feito em 28/09 no quiz novo** (`escolhaCss`): escolhido com fundo, borda e marca; cursor em cima só com mouse; desabilitado esmaecido. |
 
 ---
 
