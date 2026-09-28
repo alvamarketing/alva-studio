@@ -2076,3 +2076,27 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .publication-dns ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .publication-dns code { font-size: var(--text-sm); background: var(--alva-cloud); border-radius: var(--radius-xs); padding: 1px 5px; }
 .publication-dns a { color: var(--alva-blue); }
+
+/* Vieram de forms.css, a folha do editor de formulários antigo. Ela carregava depois
+   desta e ajustava o menu lateral e os ícones do painel inteiro; ficam no fim para
+   continuar vencendo as mesmas regras. */
+.nav-item {
+  width: 100%;
+  box-shadow: none;
+}
+.nav-item + .nav-item {
+  margin-top: 6px;
+}
+.nav-item:hover,
+.nav-item.nav-active {
+  transform: none;
+}
+.material-symbols-outlined {
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  font-variation-settings: 'FILL' 0, 'wght' 450, 'GRAD' 0, 'opsz' 24;
+}

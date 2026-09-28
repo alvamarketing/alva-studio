@@ -12,11 +12,10 @@ export function displayLeadAnswer(value) {
 }
 
 export function normalizeLeadRow({
-  id = '', formId = '', formName = '', answers = {}, submittedAt = '', webhookStatus = '',
-  sourceKind = 'form', sourceId = '', sourceVersionId = '', sourceName = '', sourcePath = '',
+  id = '', answers = {}, submittedAt = '', webhookStatus = '',
+  sourceId = '', sourceVersionId = '', sourceName = '', sourcePath = '',
   captureId = '', captureName = '', fields = [],
 } = {}) {
-  const kind = sourceKind === 'page' ? 'page' : 'form';
   const snapshotFields = Array.isArray(fields)
     ? fields
       .filter((field) => field && field.id !== undefined && field.id !== null)
@@ -25,14 +24,12 @@ export function normalizeLeadRow({
   const fieldTitles = new Map(snapshotFields.map((field) => [field.id, field.title]));
   const normalized = {
     id: String(id),
-    formId: String(formId),
-    formName: String(formName),
     submittedAt: String(submittedAt),
     deliveryLabel: deliveryLabels[webhookStatus] || 'Não enviado',
-    sourceKind: kind,
-    sourceId: String(sourceId || (kind === 'form' ? formId : '')),
+    sourceKind: 'page',
+    sourceId: String(sourceId),
     sourceVersionId: String(sourceVersionId),
-    sourceName: String(sourceName || formName),
+    sourceName: String(sourceName),
     sourcePath: String(sourcePath),
     captureId: String(captureId),
     captureName: String(captureName),
@@ -48,17 +45,10 @@ export function normalizeLeadRow({
 }
 
 export function leadsCsvUrl(projectId, source) {
-  if (!source) return '';
-  const query = typeof source === 'string'
-    ? new URLSearchParams({ formId: source })
-    : (() => {
-      if (!source || !source.sourceId) return null;
-      const params = { sourceKind: source.sourceKind || 'form', sourceId: String(source.sourceId) };
-      if (source.captureId) params.captureId = String(source.captureId);
-      return new URLSearchParams(params);
-    })();
-  if (!query) return '';
-  return `/api/projects/${encodeURIComponent(String(projectId))}/leads.csv?${query}`;
+  if (!source?.sourceId) return '';
+  const params = { sourceKind: 'page', sourceId: String(source.sourceId) };
+  if (source.captureId) params.captureId = String(source.captureId);
+  return `/api/projects/${encodeURIComponent(String(projectId))}/leads.csv?${new URLSearchParams(params)}`;
 }
 
 export function leadsListModel({ phase = 'ready', rows = [], error = '' } = {}) {

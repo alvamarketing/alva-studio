@@ -63,51 +63,6 @@ const regrasDeConteudo = `.alva-secao{padding:60px 7%;min-height:140px}.alva-tit
 
 export const elementosCss = paleta + regras + regraDoBotao + regrasDeConteudo;
 
-// O catálogo dá dono ao HTML dos elementos: cada entrada carrega o seletor que a alcança
-// em alguma folha do canvas onde ela é arrastável, o que permite ao teste provar que
-// nenhum elemento nasce sem regra — o defeito que originou este plano.
-// `icone` ainda NÃO é lido pela paleta: quem escolhe o ícone do card é blockIcons, em
-// editor-shell.js. Editar aqui não muda nada na tela.
-export const catalogo = [
-  { id: 'section', nome: 'Seção', grupo: 'Estrutura', icone: 'view_day', seletor: '.alva-secao', registro: 'pagina',
-    descricao: 'Uma faixa nova da página, para separar um assunto do outro.',
-    render: () => '<section class="alva-secao"><h2 class="alva-titulo">Uma nova seção</h2><p class="alva-texto">Conte sua história aqui.</p></section>' },
-  { id: 'heading', nome: 'Título', grupo: 'Conteúdo', icone: 'title', seletor: '.alva-titulo', registro: 'pagina',
-    descricao: 'Um título para anunciar o que vem a seguir.',
-    render: () => '<h2 class="alva-titulo">Seu próximo grande título</h2>' },
-  { id: 'text', nome: 'Texto', grupo: 'Conteúdo', icone: 'notes', seletor: '.alva-texto', registro: 'pagina',
-    descricao: 'Um parágrafo para explicar sua ideia.',
-    render: () => '<p class="alva-texto">Uma mensagem simples para apresentar sua solução.</p>' },
-  { id: 'button', nome: 'Botão', grupo: 'Conteúdo', icone: 'smart_button', seletor: '.cta', registro: 'pagina',
-    descricao: 'Um convite para a pessoa dar o próximo passo.',
-    render: () => '<a href="#contato" class="cta">Quero saber mais ↗</a>' },
-  { id: 'icon', nome: 'Ícone', grupo: 'Conteúdo', icone: 'star', seletor: '.material-symbols-outlined', registro: 'pagina',
-    descricao: 'Um símbolo para reforçar uma ideia rapidamente.',
-    render: () => '<span class="material-symbols-outlined" aria-hidden="true">star</span>' },
-  { id: 'input', nome: 'Campo de texto', grupo: 'Captação', icone: 'text_fields', seletor: '.answer', registro: 'pagina',
-    descricao: 'Uma pergunta com espaço para a pessoa escrever a resposta.',
-    render: () => '<label class="answer-wrap">Novo campo<input class="answer" name="novo_campo" type="text" placeholder="Digite aqui"></label>' },
-  { id: 'quiz-select', nome: 'Lista de opções', grupo: 'Captação', icone: 'list', seletor: '.answer', registro: 'quiz',
-    descricao: 'Uma pergunta com resposta escolhida numa lista.',
-    render: () => '<label class="answer-wrap">Nova pergunta<select class="answer" name="campo_lista"><option value="Opção 1">Opção 1</option><option value="Opção 2">Opção 2</option></select></label>' },
-  { id: 'quiz-range', nome: 'Escala', grupo: 'Captação', icone: 'linear_scale', seletor: '.scale', registro: 'quiz',
-    descricao: 'Uma nota de um a dez, movendo um controle.',
-    render: () => '<label class="answer-wrap">Como você avalia?<span class="scale"><span>1</span><input type="range" name="campo_escala" min="1" max="10" value="5" oninput="this.nextElementSibling.value=this.value"><output>5</output></span></label>' },
-  { id: 'quiz-file', nome: 'Arquivo', grupo: 'Captação', icone: 'upload_file', seletor: '.upload', registro: 'quiz',
-    descricao: 'Um espaço para a pessoa enviar um arquivo.',
-    render: () => '<label class="answer-wrap">Envie um arquivo<span class="upload"><span class="material-symbols-outlined" aria-hidden="true">upload_file</span><span>Escolher arquivo</span><input type="file" name="campo_arquivo" hidden></span></label>' },
-];
-
-export const elementoPorId = (id) => catalogo.find((elemento) => elemento.id === id);
-
-// A tupla que o BlockManager do GrapesJS espera: [id, rótulo, categoria, conteúdo].
-// Mora aqui, e não nos dois consumidores, porque era a MESMA função escrita duas vezes —
-// em templates.js (blocos de página) e em editor-shell.js (blocos de quiz).
-export const blocoDoCatalogo = (id) => {
-  const elemento = elementoPorId(id);
-  return [elemento.id, elemento.nome, elemento.grupo, elemento.render()];
-};
-
 // A pergunta de escolha do quiz (esquema do Alva). Fica fora de `elementosCss` porque só o
 // quiz a usa. Os três estados são distintos: parado, cursor em cima (borda) e escolhido
 // (borda cheia, fundo e marca) — antes, "em cima" e "escolhido" eram idênticos. As cores são

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import { documentoDaPagina, normalizarEstadoAlva } from '../public/pagina-alva.js';
-import { materialSymbolsFontCss, materialSymbolsFontUrl, quizElementCss } from '../public/quiz-elements.js';
+import { materialSymbolsFontCss, materialSymbolsFontUrl } from '../public/quiz-elements.js';
 import { embedVideoCss, templateCss } from '../public/templates.js';
 import { createApp } from '../server/index.mjs';
 
@@ -38,7 +38,6 @@ test('fonte Material Symbols local tem MIME correto e CSS absoluto para exporta√
   const exportHtml = documentoDaPagina(normalizarEstadoAlva({ formato: 'alva/1', root: { title: 'P√°gina' }, content: [{ type: 'section', children: [{ type: 'video', props: { url: '' } }] }] }), { publicOrigin: 'https://studio.example.test' });
   assert.match(exportHtml, /url\('https:\/\/studio\.example\.test\/material-symbols-outlined\.woff2'\)/);
   assert.ok(templateCss.includes(embedVideoCss), 'Landing deve receber o estilo responsivo do embed');
-  assert.ok(quizElementCss.includes(embedVideoCss), 'Quiz deve reutilizar exatamente o mesmo estilo do embed');
   assert.match(exportHtml, /\.alva-embed-video\{position:relative;aspect-ratio:16\/9/);
   assert.match(exportHtml, /alva-embed-video-placeholder/);
 });

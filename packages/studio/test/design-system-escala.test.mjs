@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 // Raio, elevação e foco inventados caso a caso são o que faz a tela parecer
 // montada por partes, mesmo quando cada parte isolada está bonita.
 
-const ARQUIVOS = ['styles.css', 'forms.css', 'owner.css'];
+const ARQUIVOS = ['styles.css', 'owner.css'];
 
 const lerTodos = async () => Object.fromEntries(await Promise.all(
   ARQUIVOS.map(async (nome) => [nome, await readFile(new URL(`../public/${nome}`, import.meta.url), 'utf8')]),

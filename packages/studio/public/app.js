@@ -36,10 +36,8 @@ let pages = [],
   projectOverviewRequest = 0,
   leadsRequest = 0,
   projectContentFilter = 'all',
-  leadsFormId = '',
   leadsSource = null,
   leadSources = [],
-  leadForms = [],
   leadsRows = [],
   leadsNextCursor = null,
   mobileMenuTrigger,
@@ -590,23 +588,22 @@ function renderLeadsControls(projectId) {
   const form = $('#project-leads-form');
   const knownSources = new Map();
   const addSource = (source) => {
-    const sourceKind = source?.sourceKind || 'form';
-    const sourceId = source?.sourceId || source?.formId || '';
+    const sourceKind = 'page';
+    const sourceId = source?.sourceId || '';
     if (!sourceId) return;
     const captureId = source?.captureId || '';
     const key = JSON.stringify({ sourceKind, sourceId, captureId });
     if (!knownSources.has(key)) knownSources.set(key, {
       sourceKind, sourceId, captureId,
-      sourceName: source?.sourceName || source?.formName || '',
+      sourceName: source?.sourceName || '',
       sourcePath: source?.sourcePath || '', captureName: source?.captureName || '',
     });
   };
   for (const source of leadSources) addSource(source);
-  for (const source of leadForms) addSource({ sourceKind: 'form', sourceId: source.id, sourceName: source.name });
   for (const row of leadsRows) addSource(row);
   const pageSourceCounts = new Map();
   for (const source of knownSources.values()) {
-    if (source.sourceKind === 'page' && !source.captureName) pageSourceCounts.set(source.sourceId, (pageSourceCounts.get(source.sourceId) || 0) + 1);
+    if (!source.captureName) pageSourceCounts.set(source.sourceId, (pageSourceCounts.get(source.sourceId) || 0) + 1);
   }
   const pageSourceIndexes = new Map();
   form.replaceChildren();
@@ -617,10 +614,10 @@ function renderLeadsControls(projectId) {
   for (const [key, source] of knownSources) {
     const option = document.createElement('option');
     option.value = key;
-    const kind = source.sourceKind === 'page' ? 'Landing page' : 'Quiz';
-    const name = source.sourceName || (source.sourceKind === 'page' ? 'Página sem nome' : 'Quiz sem nome');
+    const kind = 'Landing page';
+    const name = source.sourceName || 'Página sem nome';
     let capture = source.captureName || '';
-    if (!capture && source.sourceKind === 'page') {
+    if (!capture) {
       const index = (pageSourceIndexes.get(source.sourceId) || 0) + 1;
       pageSourceIndexes.set(source.sourceId, index);
       capture = pageSourceCounts.get(source.sourceId) > 1 ? `Formulário da página ${index}` : 'Formulário da página';
@@ -628,11 +625,10 @@ function renderLeadsControls(projectId) {
     option.textContent = [kind, name, source.sourcePath, capture].filter(Boolean).join(' · ');
     form.append(option);
   }
-  form.value = leadsSource ? JSON.stringify(leadsSource) : (leadsFormId ? JSON.stringify({ sourceKind: 'form', sourceId: leadsFormId, captureId: '' }) : '');
+  form.value = leadsSource ? JSON.stringify(leadsSource) : '';
   const exportLink = $('#project-leads-export');
-  const selectedSource = leadsSource || (leadsFormId ? { sourceKind: 'form', sourceId: leadsFormId } : null);
-  exportLink.href = leadsCsvUrl(projectId, selectedSource);
-  exportLink.hidden = !selectedSource?.sourceId;
+  exportLink.href = leadsCsvUrl(projectId, leadsSource);
+  exportLink.hidden = !leadsSource?.sourceId;
   $('#project-leads-next').hidden = !leadsNextCursor;
   controls.hidden = false;
 }
@@ -640,7 +636,7 @@ function renderLeadRows(projectId) {
   const list = clear($('#project-content-list'));
   renderLeadsControls(projectId);
   if (!leadsRows.length) {
-    list.append(projectEmpty('Nenhum lead encontrado.', leadsSource || leadsFormId ? 'Esta origem ainda não recebeu respostas.' : 'As respostas dos seus formulários e landing pages aparecerão aqui.'));
+    list.append(projectEmpty('Nenhum lead encontrado.', leadsSource ? 'Esta origem ainda não recebeu respostas.' : 'As respostas dos seus formulários e landing pages aparecerão aqui.'));
     return;
   }
   for (const row of leadsRows) list.append(createLeadRow(row));
@@ -652,12 +648,6 @@ function leadsResponseIsCurrent(request, state) {
     && state.currentProject?.id === current.currentProject?.id
     && state.currentCompany?.id === current.currentCompany?.id;
 }
-function legacyLeadSources(overview, rows) {
-  const sources = [];
-  for (const item of overview?.content || []) if (item.kind === 'form') sources.push({ sourceKind: 'form', sourceId: item.id, sourceName: item.name });
-  for (const row of rows) if (row.formId) sources.push({ sourceKind: 'form', sourceId: row.formId, sourceName: row.formName });
-  return sources;
-}
 async function loadProjectLeads({ append = false } = {}) {
   const state = dashboardState();
   if (!state.currentProject || !studioShell?.can?.('submission.read')) return;
@@ -668,24 +658,19 @@ async function loadProjectLeads({ append = false } = {}) {
     params.set('sourceKind', leadsSource.sourceKind);
     params.set('sourceId', leadsSource.sourceId);
     if (leadsSource.captureId) params.set('captureId', leadsSource.captureId);
-  } else if (leadsFormId) params.set('formId', leadsFormId);
+  }
   if (cursor) params.set('cursor', cursor);
   const list = clear($('#project-content-list'));
   if (append) for (const row of leadsRows) list.append(createLeadRow(row));
   else list.append(projectEmpty('Carregando leads…', 'Aguarde enquanto buscamos as respostas do projeto.'));
   $('#project-leads-controls').hidden = false;
   try {
-    const [result, overview] = await Promise.all([
-      api(`/projects/${state.currentProject.id}/leads?${params}`),
-      api(`/projects/${state.currentProject.id}/overview`).catch(() => null),
-    ]);
+    const result = await api(`/projects/${state.currentProject.id}/leads?${params}`);
     if (!leadsResponseIsCurrent(request, state)) return;
     const payload = result.projectSubmissions || result;
     const rows = (payload.items || []).map(normalizeLeadRow);
     leadsRows = append ? [...leadsRows, ...rows] : rows;
-    leadForms = (overview?.content || []).filter((item) => item.kind === 'form');
     if (Array.isArray(payload.sources) && payload.sources.length) leadSources = payload.sources;
-    else if (!leadSources.length) leadSources = legacyLeadSources(overview, rows);
     leadsNextCursor = payload.nextCursor || null;
     renderLeadRows(state.currentProject.id);
     const model = leadsListModel({ rows: leadsRows });
@@ -707,10 +692,10 @@ function createLeadRow(row) {
   item.className = 'project-lead-row';
   const header = document.createElement('header');
   const source = document.createElement('strong');
-  const sourceName = row.sourceName || row.formName || (row.sourceKind === 'page' ? 'Landing page' : 'Quiz');
+  const sourceName = row.sourceName || 'Landing page';
   source.textContent = row.sourcePath ? `${sourceName} · ${row.sourcePath}` : sourceName;
   const context = document.createElement('span');
-  context.textContent = row.captureName || (row.sourceKind === 'page' ? 'Formulário da página' : 'Quiz');
+  context.textContent = row.captureName || 'Formulário da página';
   const submittedAt = document.createElement('span');
   const parsedDate = row.submittedAt ? new Date(row.submittedAt) : null;
   submittedAt.textContent = parsedDate && !Number.isNaN(parsedDate.valueOf())
@@ -2105,7 +2090,6 @@ function selectProjectContentFilter(filter) {
   if (filter === 'conversions' && !studioShell?.can?.('analytics.read')) return;
   projectContentFilter = filter;
   if (projectContentFilter === 'leads') {
-    leadsFormId = '';
     leadsSource = null;
     leadSources = [];
     leadsRows = [];
@@ -2135,7 +2119,6 @@ $('#project-content-all').onclick = action(async () => {
 $('#project-leads-form').onchange = () => {
   const value = $('#project-leads-form').value;
   leadsSource = value ? JSON.parse(value) : null;
-  leadsFormId = leadsSource?.sourceKind === 'form' ? leadsSource.sourceId : '';
   leadsRows = [];
   leadsNextCursor = null;
   void loadProjectLeads();
