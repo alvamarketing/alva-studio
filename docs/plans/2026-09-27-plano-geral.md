@@ -156,7 +156,7 @@ o **Puck AI fica de fora** (é pago, e a geração por IA chama a API direto).
 | 3.3 | **A VSL como componente do Puck**, escolhendo entre as VSLs publicadas do projeto. |
 | 3.4 | **O servidor renderiza a partir do esquema.** O `rendered_html` deixa de vir pronto do navegador — hoje o servidor serve ao público um artefato montado no cliente. O caminho do GrapesJS fica intocado até o novo estar provado. |
 | 3.5 | **Verificação visual** contra o wireframe, em 1440×900 e 390×844, conferida por quem não construiu, com registro em `.estado/`. |
-| 3.6 | **A saída do GrapesJS**, só depois de 3.5: `editor-shell.js`, `editor-novo.html` e o Studio SDK, `packages/core` e `packages/cli` (o fork do GrapesJS), os doze testes que o instanciam, o `form()` duplicado dos modelos e a dependência `grapesjs`. |
+| 3.6 | **A saída do GrapesJS**, só depois de 3.5: `editor-shell.js`, `editor-novo.html` e o Studio SDK, `packages/core` e `packages/cli` (o fork do GrapesJS), os doze testes que o instanciam, o `form()` duplicado dos modelos e a dependência `grapesjs`. *Em 28/09: landing nova já nasce e abre só no Puck (`openPage` desvia `alva/1` para `/editor.html`); o GrapesJS segue vivo porque o quiz ainda é editado nele e landings antigas abrem por ele. A remoção inteira espera a 4.2.* |
 
 ---
 
