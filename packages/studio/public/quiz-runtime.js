@@ -18,6 +18,14 @@ export const quizRuntimeCss = `
   background: var(--alva-quiz-cor, #286eea);
   transition: width .25s ease;
 }
+[data-alva-quiz] section { position: relative; }
+[data-alva-quiz] .alva-quiz-voltar {
+  position: absolute; top: 12px; left: 16px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 4px; padding: 8px 4px;
+  border: 0; background: none; color: #667085; font: inherit; font-size: 14px; cursor: pointer;
+}
+[data-alva-quiz] .alva-quiz-voltar .material-symbols-outlined { font-size: 18px; }
+[data-alva-quiz] section:has(> .alva-quiz-voltar) { padding-top: max(64px, 1em); }
 [data-alva-quiz] [data-alva-quiz-erro] {
   margin: 10px 0 0; color: #ba3535; font-size: 14px;
 }
@@ -37,7 +45,12 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
   // Na prévia do Studio as respostas de teste não viram lead: o quiz vai até o fim sem
   // enviar nada.
   const previa = ${previa ? 'true' : 'false'};
-  const respostas = {};
+  // As respostas moram por etapa, e o envio junta só as do caminho percorrido: quem volta
+  // e escolhe outro rumo não leva junto a resposta de uma etapa que saiu do caminho — o
+  // servidor recusaria o lead por "resposta para uma etapa não visitada".
+  const respostasDa = new Map();
+  const historico = [];
+  const respostas = () => Object.assign({}, ...[...historico, atual].map((indice) => respostasDa.get(indice) || {}));
   const captura = document.querySelector('form[data-alva-capture-id]');
   // Uma tentativa conserva o mesmo identificador mesmo quando a rede falha depois de
   // receber a requisição; o gateway devolve a mesma captura sem duplicar a conversão.
@@ -84,8 +97,7 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
     }
     // Voltar e editar uma etapa substitui seu grupo inteiro; retries nunca acumulam
     // checkbox e um rádio desmarcado não deixa a resposta anterior escondida.
-    nomes.forEach((nome) => delete respostas[nome]);
-    Object.assign(respostas, valores);
+    respostasDa.set(atual, valores);
   };
 
   const avisar = (etapa, campo, mensagem = 'Responda para continuar.') => {
@@ -121,7 +133,7 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
       const resposta = await fetch(destino, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: respostas, ...(trackingEventId ? { trackingEventId } : {}) }),
+        body: JSON.stringify({ answers: respostas(), ...(trackingEventId ? { trackingEventId } : {}) }),
       });
       if (!resposta.ok) throw new Error('Resposta inválida do servidor.');
       // O lead foi gravado: os pixels do navegador disparam com o mesmo id que o servidor
@@ -149,8 +161,21 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
     // A etapa final só aparece depois da captura confirmada. Em falha, a pessoa fica na
     // etapa atual e pode tentar novamente sem perder as respostas preenchidas.
     if (proxima === etapas.length - 1 && !await enviar(etapa)) return;
+    historico.push(atual);
     mostrar(proxima);
   };
+
+  // Voltar: só onde há para onde voltar e antes da tela final (depois do envio, voltar
+  // levaria a pessoa a reenviar). Liga-se pela marca que a página do esquema do Alva põe.
+  if (corpo.dataset.alvaQuizVoltar === 'true') etapas.forEach((etapa, indice) => {
+    if (indice === 0 || indice === etapas.length - 1) return;
+    const voltar = document.createElement('button');
+    voltar.type = 'button';
+    voltar.className = 'alva-quiz-voltar';
+    voltar.setAttribute('data-alva-quiz-voltar', '');
+    voltar.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>Voltar';
+    etapa.prepend(voltar);
+  });
 
   // O quiz é montado no editor de páginas, com botões comuns. Por isso qualquer botão da
   // etapa avança; a marcação explícita continua valendo para quem quiser ser exato, e
@@ -168,6 +193,11 @@ export function quizRuntimeScript({ destino = '', previa = false } = {}) {
   };
 
   corpo.addEventListener('click', (evento) => {
+    if (evento.target.closest?.('button[data-alva-quiz-voltar]')) {
+      evento.preventDefault();
+      if (historico.length) mostrar(historico.pop());
+      return;
+    }
     const botao = avanca(evento.target);
     if (!botao) return;
     const etapa = botao.closest('section');

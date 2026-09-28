@@ -48,7 +48,7 @@ export function documentoDaPagina(estado, { publicOrigin = '', previa = false } 
   // fim). O script vai com o marcador de nonce que a publicação troca pelo da CSP — sem
   // ele, a página publicada bloquearia o próprio quiz.
   const corpo = quiz
-    ? `<body data-alva-quiz="true"><main class="alva-pagina"><form class="alva-quiz" data-alva-capture-id="${escapeHtml(limpo.root.captureId)}" action="#" method="post" novalidate>${renderTree(limpo.content)}</form></main>`
+    ? `<body data-alva-quiz="true" data-alva-quiz-voltar="true"><main class="alva-pagina"><form class="alva-quiz" data-alva-capture-id="${escapeHtml(limpo.root.captureId)}" action="#" method="post" novalidate>${renderTree(limpo.content)}</form></main>`
       + `<script nonce="__ALVA_RUNTIME_NONCE__">${quizRuntimeScript({ previa })}</script></body>`
     : `<body><main class="alva-pagina">${renderTree(limpo.content)}</main></body>`;
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'

@@ -72,7 +72,7 @@ test('a pergunta de escolha vira opções clicáveis, com o destino da ramifica�
 test('o documento do quiz marca o corpo, junta as etapas numa captura e leva o runtime com nonce', () => {
   const estado = quiz();
   const html = documentoDaPagina(estado);
-  assert.match(html, /<body data-alva-quiz="true">/);
+  assert.match(html, /<body data-alva-quiz="true" data-alva-quiz-voltar="true">/);
   assert.match(html, new RegExp(`<form class="alva-quiz" data-alva-capture-id="${estado.root.captureId}" action="#" method="post" novalidate>`));
   assert.equal((html.match(/<section class="alva-secao alva-etapa"/g) || []).length, 4);
   assert.match(html, /<script nonce="__ALVA_RUNTIME_NONCE__">/, 'a CSP da página publicada só roda script com o nonce');
@@ -145,6 +145,38 @@ test('escolher avança sozinho, a opção que ramifica pula a etapa e o fim envi
   assert.equal(envios[0][0], '/api/public/pages/p/v/captures/c');
   assert.deepEqual(JSON.parse(envios[0][1].body).answers, { tem_site: 'Já tenho', email: 'ana@exemplo.test', canais: ['Google'] });
   assert.equal(conversoes[0][0], 'lead');
+  dom.window.close();
+});
+
+test('voltar desfaz o passo, e o que ficou fora do caminho não vai no envio', async () => {
+  const envios = [];
+  const dom = await abrir(quiz(), { envios });
+  const { document } = dom.window;
+  assert.equal(document.querySelector('[data-alva-etapa="etapa-1"] [data-alva-quiz-voltar]'), null, 'a primeira etapa não tem voltar');
+  document.querySelector('input[value="Ainda não"]').click();
+  await esperar();
+  document.querySelector('input[value="Este mês"]').click();
+  document.querySelector('[data-alva-etapa="etapa-2"] a.cta').click();
+  await esperar();
+  assert.deepEqual(visivel(document), ['etapa-3']);
+  document.querySelector('[data-alva-etapa="etapa-3"] [data-alva-quiz-voltar]').click();
+  await esperar();
+  assert.deepEqual(visivel(document), ['etapa-2']);
+  document.querySelector('[data-alva-etapa="etapa-2"] [data-alva-quiz-voltar]').click();
+  await esperar();
+  assert.deepEqual(visivel(document), ['etapa-1']);
+  // Agora pelo atalho: a resposta da etapa 2 fica para trás.
+  document.querySelector('input[value="Já tenho"]').click();
+  await esperar();
+  document.querySelector('input[name="email"]').value = 'ana@exemplo.test';
+  document.querySelector('[data-alva-etapa="etapa-3"] a.cta').click();
+  await esperar();
+  assert.deepEqual(visivel(document), ['etapa-4']);
+  assert.equal(document.querySelector('[data-alva-etapa="etapa-4"] [data-alva-quiz-voltar]'), null, 'a tela final não volta');
+  const respostas = JSON.parse(envios[0][1].body).answers;
+  assert.deepEqual(respostas, { tem_site: 'Já tenho', email: 'ana@exemplo.test' });
+  const [captura] = capturasDoEstado(quiz()).forms;
+  assert.ok(validatePageCaptureAnswers(captura, { answers: respostas }), 'o servidor aceita o que o runtime mandou');
   dom.window.close();
 });
 
