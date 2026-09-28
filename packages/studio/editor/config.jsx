@@ -11,6 +11,7 @@ import { classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, esti
 import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
 import { secoesProntas } from '../public/secoes-prontas.js';
 import { campoDeCor, campoDeImagem, campoDeProporcao, estiloParaReact } from './campos.jsx';
+import { ICONE_DO_CAMPO } from './icones.jsx';
 
 const Miolo = ({ type, props }) => {
   let html;
@@ -19,7 +20,7 @@ const Miolo = ({ type, props }) => {
 };
 
 const simNao = [{ label: 'Sim', value: true }, { label: 'Não', value: false }];
-const escala = (rotulo) => ({ type: 'radio', label: rotulo, options: [{ label: 'P', value: 'p' }, { label: 'M', value: 'm' }, { label: 'G', value: 'g' }] });
+const escala = (rotulo) => ({ type: 'radio', label: rotulo, labelIcon: ICONE_DO_CAMPO.espaco, options: [{ label: 'P', value: 'p' }, { label: 'M', value: 'm' }, { label: 'G', value: 'g' }] });
 const BLOCOS_SOLTOS = ['heading', 'text', 'button', 'icon', 'image', 'video', 'vsl'];
 
 // Ajuste fino, recolhido: largura manual, movimento e margem em escala.
@@ -27,14 +28,14 @@ const avancado = {
   type: 'object',
   label: 'Avançado',
   objectFields: {
-    largura: { type: 'select', label: 'Largura', options: [
+    largura: { type: 'select', label: 'Largura', labelIcon: ICONE_DO_CAMPO.largura, options: [
       { label: 'Linha inteira', value: 'inteira' }, { label: '3/4', value: '3/4' }, { label: '2/3', value: '2/3' },
       { label: '1/2', value: '1/2' }, { label: '1/3', value: '1/3' }, { label: '1/4', value: '1/4' },
     ] },
-    alinhamento: { type: 'radio', label: 'Alinhamento', options: [{ label: 'Esquerda', value: 'esquerda' }, { label: 'Centro', value: 'centro' }, { label: 'Direita', value: 'direita' }] },
+    alinhamento: { type: 'radio', label: 'Alinhamento', labelIcon: ICONE_DO_CAMPO.alinhamento, options: [{ label: 'Esquerda', value: 'esquerda' }, { label: 'Centro', value: 'centro' }, { label: 'Direita', value: 'direita' }] },
     espacoAcima: escala('Espaço acima'),
     espacoAbaixo: escala('Espaço abaixo'),
-    movimento: { type: 'select', label: 'Movimento de entrada', options: [
+    movimento: { type: 'select', label: 'Movimento de entrada', labelIcon: ICONE_DO_CAMPO.movimento, options: [
       { label: 'Nenhum', value: '' }, { label: 'Subir suavemente', value: 'fade-up' }, { label: 'Deslizar da direita', value: 'slide-left' }, { label: 'Aproximar', value: 'zoom-in' },
     ] },
   },
@@ -53,13 +54,13 @@ const bloco = (type, label, fields, defaultProps) => ({
 
 // Seção: pronta ou vazia, é a mesma faixa com o conteúdo numa área central.
 const camposDaSecao = (enviarImagem) => ({
-  fundo: { type: 'select', label: 'Fundo pronto', options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
+  fundo: { type: 'select', label: 'Fundo pronto', labelIcon: ICONE_DO_CAMPO.fundo, options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
   corDeFundo: campoDeCor('Cor de fundo'),
   corDeFundo2: campoDeCor('Segunda cor (degradê)'),
   direcaoDoDegrade: { type: 'radio', label: 'Direção do degradê', options: [{ label: 'Vertical', value: 'vertical' }, { label: 'Horizontal', value: 'horizontal' }, { label: 'Diagonal', value: 'diagonal' }] },
   imagemDeFundo: campoDeImagem('Imagem de fundo', enviarImagem),
   corDoTexto: campoDeCor('Cor do texto'),
-  alinhamento: { type: 'radio', label: 'Alinhar conteúdo', options: [{ label: 'Esquerda', value: 'esquerda' }, { label: 'Centro', value: 'centro' }] },
+  alinhamento: { type: 'radio', label: 'Alinhar conteúdo', labelIcon: ICONE_DO_CAMPO.alinhamento, options: [{ label: 'Esquerda', value: 'esquerda' }, { label: 'Centro', value: 'centro' }] },
   respiro: escala('Espaço dentro da seção'),
   espacamento: escala('Espaço entre os blocos'),
   // Campo só funciona dentro de formulário, e seção só na página: dentro de outra seção
@@ -141,7 +142,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       text: bloco('text', 'Texto', { text: { type: 'textarea', label: 'Texto' } }, { text: 'Uma ou duas frases que explicam, em palavras simples, por que isso importa.' }),
       button: bloco('button', 'Botão', {
         text: { type: 'text', label: 'Texto' },
-        href: { type: 'text', label: 'Link (https://…, #seção, mailto:, tel:)' },
+        href: { type: 'text', label: 'Link (https://…, #seção, mailto:, tel:)', labelIcon: ICONE_DO_CAMPO.link },
         newTab: { type: 'radio', label: 'Abrir em nova aba', options: simNao },
         corDoBotao: campoDeCor('Cor do botão'),
         corDoBotao2: campoDeCor('Segunda cor (degradê)'),

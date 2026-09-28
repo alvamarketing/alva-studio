@@ -36,6 +36,9 @@ importers:
       jsdom:
         specifier: 27.4.0
         version: 27.4.0
+      lucide-react:
+        specifier: ^1.48.0
+        version: 1.48.0(react@19.3.0)
       react:
         specifier: '19'
         version: 19.3.0
@@ -820,6 +823,11 @@ packages:
   lru-cache@11.5.2:
     resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
     engines: {node: 20 || >=22}
+
+  lucide-react@1.48.0:
+    resolution: {integrity: sha512-R0CIKY/fXiC6y9xRBADgsK+VW2p/pcTJOMhLZf1T+uG+vJUvyUR02nGOgmIIC7MPkiNK4Ox8QDnbqF8rJYWPZQ==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   mdn-data@2.27.1:
     resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
@@ -1914,6 +1922,10 @@ snapshots:
   linkifyjs@4.3.3: {}
 
   lru-cache@11.5.2: {}
+
+  lucide-react@1.48.0(react@19.3.0):
+    dependencies:
+      react: 19.3.0
 
   mdn-data@2.27.1: {}
 

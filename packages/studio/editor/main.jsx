@@ -8,6 +8,7 @@ import { Puck, createUsePuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
 import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
+import { ArrowLeft, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
 import { elementosCss } from '../public/catalogo-elementos.js';
 import { runtimeCss, templateCss } from '../public/templates.js';
@@ -53,13 +54,19 @@ function Acoes({ pagina, aoSalvar, aviso }) {
   };
   return (
     <>
-      <button type="button" className="alva-acao" onClick={() => { location.href = '/#/paginas'; }}>Voltar</button>
-      <button type="button" className="alva-acao" disabled={ocupado} onClick={executar(() => aoSalvar(dados))}>Salvar</button>
+      <button type="button" className="alva-acao" onClick={() => { location.href = '/#/paginas'; }}>
+        <ArrowLeft size={16} aria-hidden="true" /> Voltar
+      </button>
+      <button type="button" className="alva-acao" disabled={ocupado} onClick={executar(() => aoSalvar(dados))}>
+        <Save size={16} aria-hidden="true" /> Salvar
+      </button>
       <button type="button" className="alva-acao alva-acao-principal" disabled={ocupado} onClick={executar(async () => {
         const salva = await aoSalvar(dados);
         await api(`/pages/${pagina.id}/publish`, 'POST', { revision: salva.revision });
         aviso('Enviada à Vercel. O andamento aparece em Publicação.');
-      })}>Publicar</button>
+      })}>
+        <Rocket size={16} aria-hidden="true" /> Publicar
+      </button>
     </>
   );
 }
@@ -108,6 +115,7 @@ function Editor() {
         overrides={{
           iframe: IframeComFolhas,
           headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aviso={aviso} />,
+          drawerItem: ({ name }) => <ItemDaBiblioteca name={name} rotulo={config.components[name]?.label} />,
         }}
       />
       {mensagem && <div className="alva-aviso" role="status">{mensagem}</div>}

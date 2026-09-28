@@ -11,7 +11,12 @@
   <style>
     html, body, #editor { height: 100%; margin: 0; }
     body { font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif; color: #101828; }
-    .alva-acao { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 1px solid #E7ECF3; border-radius: 12px; background: #ffffff; color: #101828; cursor: pointer; }
+    .alva-item-da-biblioteca { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #E7ECF3; border-radius: 12px; background: #ffffff; color: #101828; font-size: 14px; cursor: grab; }
+    .alva-item-da-biblioteca:hover { border-color: #286EEA; }
+    .alva-item-da-biblioteca svg:first-child { color: #286EEA; flex: none; }
+    .alva-item-da-biblioteca span { flex: 1; }
+    .alva-item-da-biblioteca .alva-alca { color: #667085; }
+    .alva-acao { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 1px solid #E7ECF3; border-radius: 12px; background: #ffffff; color: #101828; cursor: pointer; }
     .alva-acao:disabled { opacity: .6; cursor: progress; }
     .alva-acao-principal { background: #286EEA; border-color: #286EEA; color: #ffffff; }
     .alva-acao:focus-visible { outline: 2px solid #286EEA; outline-offset: 2px; }

@@ -1,6 +1,7 @@
 // Campos próprios do editor: imagem (endereço ou anexo do computador) e cor.
 import { useRef, useState } from 'react';
 import { FieldLabel } from '@puckeditor/core';
+import { ICONE_DO_CAMPO } from './icones.jsx';
 
 const estiloDoCampo = { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 14, padding: '8px 10px', border: '1px solid #E7ECF3', borderRadius: 8 };
 const estiloDoBotao = { font: 'inherit', fontSize: 13, fontWeight: 600, padding: '8px 12px', border: '1px solid #E7ECF3', borderRadius: 8, background: '#ffffff', cursor: 'pointer' };
@@ -29,7 +30,7 @@ function CampoDeImagem({ rotulo, valor, aoMudar, somenteLeitura, enviarImagem })
     }
   };
   return (
-    <FieldLabel label={rotulo} readOnly={somenteLeitura}>
+    <FieldLabel label={rotulo} icon={ICONE_DO_CAMPO.imagem} readOnly={somenteLeitura}>
       <div style={{ display: 'grid', gap: 8 }}>
         {valor ? <img src={valor} alt="" style={{ width: '100%', maxHeight: 140, objectFit: 'cover', borderRadius: 8, background: '#F7F9FC' }} /> : null}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -49,7 +50,7 @@ export function campoDeCor(rotulo) {
     type: 'custom',
     label: rotulo,
     render: ({ value, onChange, readOnly }) => (
-      <FieldLabel label={rotulo} readOnly={readOnly}>
+      <FieldLabel label={rotulo} icon={ICONE_DO_CAMPO.cor} readOnly={readOnly}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="color" aria-label={rotulo} value={/^#[0-9a-f]{6}$/i.test(value ?? '') ? value : '#ffffff'} disabled={readOnly} onChange={(evento) => onChange(evento.target.value)} style={{ width: 44, height: 36, padding: 0, border: '1px solid #E7ECF3', borderRadius: 8, background: '#ffffff' }} />
           <span style={{ fontSize: 13, color: '#667085', minWidth: 64 }}>{value || 'sem cor'}</span>
@@ -80,7 +81,7 @@ export function campoDeProporcao(rotulo) {
     type: 'custom',
     label: rotulo,
     render: ({ value, onChange, readOnly }) => (
-      <FieldLabel label={rotulo} readOnly={readOnly}>
+      <FieldLabel label={rotulo} icon={ICONE_DO_CAMPO.estrutura} readOnly={readOnly}>
         <div role="radiogroup" aria-label={rotulo} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
           {PROPORCOES.map((opcao) => {
             const escolhida = (value || '1/2+1/2') === opcao.valor;
