@@ -40,7 +40,8 @@ export function criarConfig({ vsls = [] } = {}) {
       label: 'Seção',
       fields: {
         fundo: { type: 'select', label: 'Fundo', options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
-        [SLOT]: { type: 'slot' },
+        // Campo só funciona dentro de formulário: solto, não captura nada.
+        [SLOT]: { type: 'slot', disallow: ['field'] },
       },
       defaultProps: { fundo: 'branco' },
       render: ({ fundo, [SLOT]: Itens }) => <section className={classeDaSecao({ fundo })}><Itens /></section>,
@@ -49,7 +50,8 @@ export function criarConfig({ vsls = [] } = {}) {
       label: 'Colunas',
       fields: {
         quantidade: { type: 'select', label: 'Quantas colunas', options: [{ label: 'Duas', value: 2 }, { label: 'Três', value: 3 }] },
-        [SLOT]: { type: 'slot' },
+        // Campo só funciona dentro de formulário: solto, não captura nada.
+        [SLOT]: { type: 'slot', disallow: ['field'] },
       },
       defaultProps: { quantidade: 2 },
       // O slot do Puck desenha um elemento próprio: é ele que vira a grade, para os blocos
