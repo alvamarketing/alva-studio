@@ -134,7 +134,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       },
       heading: bloco('heading', 'Título', {
         text: { type: 'textarea', label: 'Texto' },
-        level: { type: 'select', label: 'Tamanho', options: [{ label: 'Principal (H1)', value: 1 }, { label: 'Seção (H2)', value: 2 }, { label: 'Menor (H3)', value: 3 }] },
+        level: { type: 'radio', label: 'Nível do título', options: [{ label: 'H1', value: 1 }, { label: 'H2', value: 2 }, { label: 'H3', value: 3 }] },
       }, { text: 'Um título que diz o que a pessoa ganha', level: 2 }),
       text: bloco('text', 'Texto', { text: { type: 'textarea', label: 'Texto' } }, { text: 'Uma ou duas frases que explicam, em palavras simples, por que isso importa.' }),
       button: bloco('button', 'Botão', {

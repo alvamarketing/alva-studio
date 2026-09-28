@@ -1,7 +1,8 @@
 ---
 tipo: certificacao
-status: pendente
+status: aprovado-com-pendencias
 data: 2026-09-28
+atualizado: 2026-09-28 (reverificação pós commit e0d1165)
 ---
 
 # Verificação visual do editor de landing (Puck) — tarefa 3.5
@@ -129,3 +130,89 @@ quebram "o wireframe é contrato, não inspiração".
 - Os seis modelos de página (fase 2.4) dentro do editor novo.
 - Paridade de campos para os demais tipos de elemento (Imagem, Botão, Colunas,
   Formulário, VSL) além do título testado.
+
+---
+
+## Reverificação (commit e0d1165)
+
+Reconferido por um agente que não fez as correções, contra o mesmo
+`view-landing` do wireframe, na mesma página "Teste de blocos"
+(`502ae964-1e2d-4635-bea5-bfb1a4d0e3e9`), 1440×900 e 390×844. Antes de
+capturar, confirmei no container `alva-studio-studio-web-1` que o build servido
+já não tem "Instrument Sans" e já serve `/tokens.css` (build às 2026-09-28
+03:18 UTC, depois do commit).
+
+### Screenshots novos (sufixo `-v2`)
+
+Em `.estado/screenshots/editor-landing-2026-09-28/`:
+
+- `wireframe-desktop-v2.png` / `editor-desktop-v2.png` — 1440×900, estado inicial.
+- `editor-desktop-estrutura-v2.png` — 1440×900, aba "Estrutura" aberta.
+- `editor-desktop-elemento-selecionado-v2.png` — 1440×900, "Título" selecionado.
+- `editor-desktop-avancado-v2.png` — 1440×900, "Avançado" expandido.
+- `wireframe-mobile-v2.png` / `editor-mobile-v2.png` — 390×844.
+
+### Veredito da reverificação
+
+**Aprovado com pendências menores.** O achado que bloqueava (item 1) está
+corrigido. Dos três ajustes anteriores, dois foram resolvidos (topbar e
+tipografia) e um foi parcialmente resolvido (inspector — os campos ganharam
+rótulo, mas o agrupamento e a cor de texto do wireframe ainda não existem).
+Os dois itens "aceitável" continuam como estavam, sem mudança de avaliação.
+
+### O que foi corrigido
+
+1. **(era bloqueia) Painel "Estrutura" agora é a árvore do contrato.**
+   `editor-desktop-estrutura-v2.png`: eyebrow "PÁGINA", h2 "Estrutura", ajuda
+   abaixo do título, cada seção nomeada com o próprio conteúdo de negócio
+   (ex. "Título do teste", "Diga em uma frase o que a pes…"), contador de
+   itens à direita, ícone por tipo de elemento (H, câmera, VSL, imagem,
+   estrela, texto), drag handle, e o botão **"+ Elemento"** aparece dentro da
+   seção ativa (`editor-desktop-elemento-selecionado-v2.png`). Bate com o
+   contrato do wireframe (linha 53). Único texto ainda diferente: a ajuda diz
+   "Organize seções em uma única árvore." e o wireframe diz "Organize seções
+   **e elementos** em uma única árvore." — diferença cosmética, não
+   estrutural.
+
+2. **(era ajuste #3) Topbar agora segue a ordem e ênfase do wireframe.**
+   `editor-desktop-v2.png`: voltar voltou a ser ícone (seta), há um indicador
+   persistente "✓ Salvo" (verde, ao lado dos botões), Prévia e Publicar são
+   secundários, e **Salvar é o botão primário** (azul) — igual ao wireframe
+   (linha 52). Ainda sobram os ícones de undo/redo, que o wireframe não tem,
+   e o "Salvo" fica junto aos botões à direita em vez de ao lado do título à
+   esquerda como no wireframe; isso é cosmético, não muda hierarquia nem
+   função — não bloqueia.
+
+3. **(era ajuste #4) Tipografia agora usa o token do Studio.** Confirmado por
+   inspeção do documento carregado:
+   `getComputedStyle(document.body).fontFamily` retorna
+   `"Inter, ui-sans-serif, system-ui, sans-serif"`, a folha
+   `https://fonts.googleapis.com/css2?family=Inter...` é a única fonte
+   carregada, e `https://alva.orb.local/tokens.css` serve o mesmo bloco
+   `:root` de `packages/studio/public/styles.css` (`--alva-blue`,
+   `--alva-ink`, etc.). Resolvido.
+
+### O que ainda pede ajuste
+
+4. **(era ajuste #2, parcial) Inspector de conteúdo: campos com rótulo, mas
+   agrupamento e cor de texto ainda divergem.** `editor-desktop-avancado-v2.png`
+   mostra que os campos do "Avançado" agora têm rótulo e ícone: "Largura",
+   "Alinhamento", "Espaço acima", "Espaço abaixo", "Movimento de entrada" —
+   o achado de campos sem rótulo está resolvido. Falta ainda: (a) não há
+   título de seção "TIPOGRAFIA"/"ESPAÇAMENTO"/"MOVIMENTO" como no wireframe —
+   os campos aparecem soltos dentro de um único acordeão "Avançado"; (b) não
+   há campo de **cor do texto** em lugar nenhum do inspector (o wireframe tem
+   um swatch com `#101828` em "TIPOGRAFIA › Cor", linha 55); (c) "Nível do
+   título" continua sendo um select único ("Tamanho: Principal (H1)") em vez
+   do segmentado H1/H2/H3 do wireframe. Nenhum desses impede o uso do editor;
+   é fidelidade de detalhe, então mantenho como ajuste, não bloqueio.
+
+### Itens "aceitável" sem mudança
+
+5. Mobile ainda esconde as ações atrás de um menu e mantém a barra de abas
+   inferior (`editor-mobile-v2.png`) — mesma situação de antes, mesma
+   avaliação: aceitável, porque o wireframe não define um contrato mobile
+   real para esta tela (a topbar dele também estoura em 390 px, ver
+   `wireframe-mobile-v2.png`).
+6. Controles de dispositivo e zoom no canvas seguem como funcionalidade real
+   sem conflito com o wireframe estático.
