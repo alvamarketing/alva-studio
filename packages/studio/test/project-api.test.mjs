@@ -675,6 +675,34 @@ test('formulários SaaS validam o schema antes de criar, atualizar e publicar', 
   await database.close();
 });
 
+// Critério 10 também no formulário: o mesmo envio da mesma pessoa, repetido — F5 no
+// obrigado quando o formulário foi enviado sem JavaScript, ou a pessoa mandando de novo —,
+// é o mesmo lead. Achado da segunda revisão independente em 27/09.
+test('formulário publicado: o mesmo envio repetido pela mesma pessoa não vira outro lead', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  const created = await (await alice.request('/api/forms', 'POST', { name: 'Reenvio', route: '/reenvio' })).json();
+  const draft = await (await alice.request(`/api/forms/${created.id}`, 'PUT', { revision: created.revision, steps: [{ id: 'email', type: 'email', title: 'E-mail', required: true }] })).json();
+  assert.equal((await alice.request(`/api/forms/${created.id}/publish`, 'POST', { revision: draft.revision })).status, 201);
+  const enviar = (email, navegador = 'Mozilla/5.0 (iPhone)') => fetch(`${app.base}/api/public/forms/alva-a/projeto-a/reenvio/submissions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': navegador }, body: JSON.stringify({ answers: { email } }),
+  });
+  const contar = async () => (await database.query('SELECT count(*)::int AS n FROM form_submissions')).rows[0].n;
+  assert.equal((await enviar('lead@alva.test')).status, 200);
+  assert.equal((await enviar('lead@alva.test')).status, 200);
+  assert.equal(await contar(), 1, 'o reenvio criou outro lead');
+  await enviar('outro@alva.test');
+  assert.equal(await contar(), 2, 'outra resposta é outro envio');
+  await enviar('lead@alva.test', 'Mozilla/5.0 (Android)');
+  assert.equal(await contar(), 3, 'outro navegador é outra pessoa');
+  await database.close();
+});
+
 test('rotas públicas de formulário aceitam raiz, um caractere e múltiplos segmentos em GET e POST', async (t) => {
   const { connectionString } = await postgresFixture(t);
   const database = createDatabase({ connectionString });

@@ -1044,10 +1044,28 @@ export class ContentRepository {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
       const answers = validateFormAnswers(form.schema, input);
+      // O mesmo envio repetido pela mesma pessoa é o mesmo lead (ver a captura de página).
+      const visitante = chaveDoVisitante({ pageId: form.id, captureId: 'form', subjectId, cliente });
+      const reenvio = visitante
+        ? (await client.query(
+          `SELECT id, tracking_event_id, submitted_at FROM form_submissions
+           WHERE company_id = $1 AND project_id = $2 AND form_id = $3 AND visitor_key = $4
+             AND answers = $5::jsonb AND submitted_at > now() - make_interval(mins => $6)
+           ORDER BY submitted_at DESC LIMIT 1`,
+          [form.company_id, form.project_id, form.id, visitante, JSON.stringify(answers), JANELA_DE_REENVIO_MIN],
+        )).rows[0]
+        : null;
+      if (reenvio) {
+        return {
+          id: reenvio.id, eventId: reenvio.tracking_event_id, reenvio: true, webhookDelivery: null,
+          form: { id: form.id, companyId: form.company_id, projectId: form.project_id, name: form.name, slug: routeValue === '/' ? '' : routeValue.replace(/^\//, ''), companySlug: form.company_slug, projectSlug: form.project_slug },
+          schema: form.schema, answers, submittedAt: reenvio.submitted_at,
+        };
+      }
       const { rows } = await client.query(
-        `INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers)
-         VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id, tracking_event_id, submitted_at`,
-        [form.company_id, form.project_id, form.id, form.version_id, JSON.stringify(answers)],
+        `INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers, visitor_key)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING id, tracking_event_id, submitted_at`,
+        [form.company_id, form.project_id, form.id, form.version_id, JSON.stringify(answers), visitante],
       );
       const submissionId = rows[0].id;
       const eventId = rows[0].tracking_event_id;

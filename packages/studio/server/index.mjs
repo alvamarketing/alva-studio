@@ -733,7 +733,8 @@ export function createApp({
             route: publicFormRequest.route,
             input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDoEnvio(req, runtimeGateway), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length),
           });
-        await analytics?.recordLead({
+        // O reenvio devolve o lead original: não conta de novo, nem no analytics.
+        if (!saved.reenvio) await analytics?.recordLead({
           companyId: saved.form.companyId,
           projectId: saved.form.projectId,
           formId: saved.form.id,
@@ -749,7 +750,7 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
-        return res.end(renderCompletion(completion.title, completion.message, { nonce, conversao: conversaoParaOsPixels(saved.eventId) }));
+        return res.end(renderCompletion(completion.title, completion.message, { nonce, conversao: saved.reenvio ? null : conversaoParaOsPixels(saved.eventId) }));
       }
       if (content && submission) throw error('Formulário publicado não encontrado.', 404);
       if (req.method === 'POST' && submission) {
