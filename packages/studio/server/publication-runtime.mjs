@@ -140,6 +140,8 @@ if (window.alvaRuntime && window.alvaRuntime.publicationId === cfg.publicationId
   return;
 }
 let carregado = false;
+// O consentimento vale a cada momento, não só na carga: quem revoga não é mais medido.
+let permitido = false;
 const fila = [];
 const feitas = new Set();
 const disparar = (nome, id) => cfg.providers.forEach((item) => {
@@ -154,7 +156,7 @@ const conversao = (nome, id) => {
   const chave = nome + ':' + id;
   if (feitas.has(chave)) return;
   feitas.add(chave);
-  if (carregado) disparar(nome, id); else fila.push([nome, id]);
+  if (carregado && permitido) disparar(nome, id); else fila.push([nome, id]);
 };
 const endpoint = '/_alva/consent?publicationId=' + encodeURIComponent(cfg.publicationId);
 const anexar = (item, src) => {
@@ -200,8 +202,8 @@ const load = () => {
   carregado = true;
   document.documentElement.setAttribute('data-alva-runtime-loaded', 'true');
   cfg.providers.forEach(iniciar);
-  fila.splice(0).forEach(([nome, id]) => disparar(nome, id));
 };
+const esvaziar = () => { if (carregado && permitido) fila.splice(0).forEach(([nome, id]) => disparar(nome, id)); };
 const action = (label, actionName) => {
   const button = document.createElement('button');
   button.type = 'button';
@@ -227,7 +229,8 @@ const refresh = () => fetch(endpoint, { credentials: 'same-origin' })
   .then((result) => {
     document.querySelectorAll('.alva-runtime-consent').forEach((node) => node.remove());
     const state = result && result.state;
-    if (state === 'granted') load();
+    permitido = state === 'granted';
+    if (permitido) { load(); esvaziar(); }
     document.body.appendChild(banner(state));
   })
   .catch(() => document.body.appendChild(banner('pending')));

@@ -305,3 +305,16 @@ test('na mesma janela, sem consentimento, o banner volta na página nova', async
 test('o carregador não usa o que o Safari antigo não tem', () => {
   assert.doesNotMatch(fonte([{ provider: 'meta', id: '123' }]), /Object\.hasOwn/);
 });
+
+// Revogar é revogar: depois que a pessoa clica em "Revogar medição", nenhuma conversão
+// dispara na mesma janela — nem a da página de obrigado do formulário de várias etapas.
+test('depois de revogar, nada mais dispara', async () => {
+  const pagina = navegador({ estadoDoConsentimento: 'granted' });
+  await rodarCarregador(fonte([{ provider: 'meta', id: '123' }]), pagina);
+  pagina.estadoDoConsentimento = 'denied';
+  pagina.botoes.find((botao) => botao.textContent === 'Revogar medição').clicar();
+  for (let volta = 0; volta < 5; volta += 1) await new Promise((resolve) => setImmediate(resolve));
+  pagina.window.alvaRuntime.conversao('lead', ID);
+  assert.deepEqual(disparosDaMeta(pagina.window), [['track', 'PageView']]);
+});
+

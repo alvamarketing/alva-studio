@@ -13,7 +13,11 @@ test('pelo gateway, vale o visitante assinado', () => {
   assert.deepEqual(clienteDoEnvio(pedido, { client: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' } }), { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' });
 });
 
-test('direto no Studio, vale o navegador de quem fez a requisição', () => {
-  const pedido = { headers: { 'user-agent': 'Mozilla/5.0 (Android)' }, socket: { remoteAddress: '200.150.10.20' } };
-  assert.deepEqual(clienteDoEnvio(pedido, null), { ip: '200.150.10.20', userAgent: 'Mozilla/5.0 (Android)' });
+// O IP não: atrás de um proxy (Cloudflare, balanceador), o endereço do socket é o do proxy,
+// e a Meta pede "always provide the real IP address". Mandar o do proxy em todo lead seria
+// pior que não mandar — e o LinkedIn o usaria como identificador. Achado da segunda
+// revisão independente.
+test('direto no Studio, vale o navegador de quem fez a requisição, e não o IP do socket', () => {
+  const pedido = { headers: { 'user-agent': 'Mozilla/5.0 (Android)' }, socket: { remoteAddress: '104.16.0.1' } };
+  assert.deepEqual(clienteDoEnvio(pedido, null), { ip: null, userAgent: 'Mozilla/5.0 (Android)' });
 });

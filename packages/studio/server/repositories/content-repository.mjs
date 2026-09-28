@@ -24,8 +24,10 @@ const JANELA_DE_REENVIO_MIN = 30;
 // Quem enviou, sem identificar ninguém: o cookie de consentimento da pessoa ou, sem ele, o
 // IP e o navegador — em hash, amarrado à captura. Sem nenhum dos dois, não há como saber se
 // é a mesma pessoa, e cada envio conta.
-function chaveDoVisitante({ pageId, captureId, subjectId, cliente }) {
-  const pessoa = subjectId ? `s:${subjectId}` : cliente?.ip && cliente?.userAgent ? `c:${cliente.ip}|${cliente.userAgent}` : null;
+// `remetente` é quem fez a requisição, para uso só aqui: diferente do `cliente` que vai às
+// plataformas, ele pode ser o endereço do socket, porque vira hash e não sai do Studio.
+function chaveDoVisitante({ pageId, captureId, subjectId, remetente }) {
+  const pessoa = subjectId ? `s:${subjectId}` : remetente?.ip && remetente?.userAgent ? `c:${remetente.ip}|${remetente.userAgent}` : null;
   return pessoa ? createHash('sha256').update(`${pageId}:${captureId}:${pessoa}`).digest('hex') : null;
 }
 
@@ -953,25 +955,25 @@ export class ContentRepository {
     return this.publicFormRecord(await this.publishedFormForDomain(this.database, { host, route: path }), path);
   }
 
-  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input, origin, attribution, cliente, publicationId, subjectId }) {
+  async submitPublicFormForProject({ companySlug, projectSlug, route: routeValue, slug, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
     const path = publicRoute(routeValue ?? slug);
     return this.submitPublishedForm({
       resolve: (client) => this.publishedFormForProject(client, { companySlug, projectSlug, route: path }),
       route: path,
-      input, origin, attribution, cliente, publicationId, subjectId,
+      input, origin, attribution, cliente, remetente, publicationId, subjectId,
     });
   }
 
-  async submitPublicFormForDomain({ host, route: routeValue, slug, input, origin, attribution, cliente, publicationId, subjectId }) {
+  async submitPublicFormForDomain({ host, route: routeValue, slug, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
     const path = publicRoute(routeValue ?? slug);
     return this.submitPublishedForm({
       resolve: (client) => this.publishedFormForDomain(client, { host, route: path }),
       route: path,
-      input, origin, attribution, cliente, publicationId, subjectId,
+      input, origin, attribution, cliente, remetente, publicationId, subjectId,
     });
   }
 
-  async submitPublishedPageCapture({ companyId, projectId, pageId, pageVersionId, captureId, input, origin, attribution, cliente, publicationId, subjectId }) {
+  async submitPublishedPageCapture({ companyId, projectId, pageId, pageVersionId, captureId, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
     return withTransaction(this.database, async (client) => {
       const { rows } = await client.query(
         `SELECT page.id AS page_id, page.name AS page_name, version.id AS version_id,
@@ -988,7 +990,7 @@ export class ContentRepository {
       const retryEventId = requestedTrackingEventId(input);
       // Recarregar a página de obrigado faz o navegador reenviar o POST: mesmas respostas,
       // mesma pessoa. É o mesmo lead, e devolve-se o original em vez de contar outro.
-      const visitante = chaveDoVisitante({ pageId, captureId, subjectId, cliente });
+      const visitante = chaveDoVisitante({ pageId, captureId, subjectId, remetente: remetente ?? cliente });
       const reenvio = !retryEventId && visitante
         ? (await client.query(
           `SELECT id, tracking_event_id, submitted_at, answers FROM page_submissions
@@ -1040,12 +1042,12 @@ export class ContentRepository {
     });
   }
 
-  async submitPublishedForm({ resolve, route: routeValue, input, origin, attribution, cliente, publicationId, subjectId }) {
+  async submitPublishedForm({ resolve, route: routeValue, input, origin, attribution, cliente, remetente, publicationId, subjectId }) {
     return withTransaction(this.database, async (client) => {
       const form = await resolve(client);
       const answers = validateFormAnswers(form.schema, input);
       // O mesmo envio repetido pela mesma pessoa é o mesmo lead (ver a captura de página).
-      const visitante = chaveDoVisitante({ pageId: form.id, captureId: 'form', subjectId, cliente });
+      const visitante = chaveDoVisitante({ pageId: form.id, captureId: 'form', subjectId, remetente: remetente ?? cliente });
       const reenvio = visitante
         ? (await client.query(
           `SELECT id, tracking_event_id, submitted_at FROM form_submissions
