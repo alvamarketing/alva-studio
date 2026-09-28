@@ -1,7 +1,8 @@
 // Os modelos de funil do Studio: os funis da biblioteca da Jornada da Alva (aba Funis),
 // copiados como dados em 28/09/2026. Cada etapa tem um tipo (`k`), um nome, uma descrição
 // e uma posição; cada seta liga duas etapas. Quem importa um modelo recebe uma cópia —
-// editar o funil do projeto não muda o modelo.
+// editar o funil do projeto não muda o modelo. A Isca de baleia foi redesenhada pelo dono
+// em 28/09: página de download e, depois, a oferta (comprar ou agendar).
 export const modelosDeFunil = Object.freeze([
  {
   "id": "diagnostico-pago",
@@ -2119,89 +2120,110 @@ export const modelosDeFunil = Object.freeze([
    "Alto ticket",
    "Captação de leads"
   ],
-  "para": "Uma peça que só o dono do negócio consome: filtra sardinha e atrai baleia.",
+  "para": "Entregar um material de altíssimo valor em troca do contato e, logo depois do download, levar a pessoa a comprar o produto de entrada ou agendar uma conversa.",
   "quando": "",
   "metrica": "",
   "nos": [
    {
-    "id": "nA",
-    "k": "instagram",
-    "nome": "Montar a peça",
-    "texto": "montar a peca de altissimo valor que so o decisor quer (framework, planilha, checklist) — filtra sardinha, atrai baleia. A skill isca-baleia cria SO a peca; o funil e maior que a peca (os nos seguintes) — etapa de criacao, ainda sem indicador de funil",
+    "id": "iw1",
+    "k": "conteudo",
+    "nome": "Material de alto valor",
+    "texto": "• Planilha, framework ou checklist que resolve um problema real do decisor",
     "x": 0,
     "y": 0
    },
    {
-    "id": "nB",
+    "id": "iw2",
     "k": "meta",
     "nome": "Distribuir a isca",
-    "texto": "distribuir a peca pelo canal decidido na aresta de entrada (organica: mais volume, menos qualificacao / paga: menos volume, mais qualificacao) — sem skill dedicada de distribuicao no catalogo (gap: nao reusa isca-baleia de novo aqui, essa skill so cria a peca) — indicador: CPM->CTR (canal pago) ou alcance/engajamento (canal organico), regua secao 5",
+    "texto": "• Orgânico (post, perfil, grupos) ou anúncio pago levando à página de download",
     "x": 200,
     "y": 0
    },
    {
-    "id": "nC",
-    "k": "whatsapp",
-    "nome": "Capturar contato",
-    "texto": "capturar email ou WhatsApp do decisor atras da pagina de captura da peca — indicador: Lead (taxa de conversao), regua secao 5",
+    "id": "iw3",
+    "k": "captura",
+    "nome": "Página de download",
+    "texto": "• O material em troca de nome, e-mail e WhatsApp\n• Promessa clara do que a pessoa leva",
     "x": 400,
     "y": 0
    },
    {
-    "id": "nD",
-    "k": "crm",
-    "nome": "Qualificar: é decisor?",
-    "texto": "confirmar que quem capturou e decisor de fato e nao sardinha, com a mesma ANALISE de sinais publicos (Instagram, Ads Library, PageSpeed, funil) que a Alva ja faz — bloqueio ate prova de decisor real antes de encaminhar pro funil de fechamento — indicador: Lead -> Lead qualificado, com padrao mais alto que a media porque a peca ja pre-filtra (regua secao 5: referencia 20% a 50%)\n• GATE-DECISOR-CONFIRMADO\n• ANALISE Alva: filtra sardinha de baleia",
+    "id": "iw4",
+    "k": "upsellpg",
+    "nome": "Oferta pós-download",
+    "texto": "• Logo depois do download: o próximo passo natural\n• Comprar o produto de entrada ou agendar uma conversa",
     "x": 600,
     "y": 0
    },
    {
-    "id": "nE",
-    "k": "cliente",
-    "nome": "Encaminhar para o fechamento",
-    "texto": "encaminhar o lead ultraqualificado pro funil de fechamento certo — Sessao Estrategica (sessao-estrategica-diagnostico.yaml) quando veio de canal organico/social selling, ou Aplicacao Direta (aplicacao-direta.yaml) quando veio de canal pago ja consciente — nao duplica os nos de call/fechamento aqui, so encaminha\n• Sessao Estrategica ou Aplicacao Direta",
+    "id": "iw5",
+    "k": "checkout",
+    "nome": "Compra do produto",
+    "texto": "• Link do checkout da plataforma de pagamento",
     "x": 800,
-    "y": 0
+    "y": -90
    },
    {
-    "id": "nF",
-    "k": "perda",
-    "nome": "Escala para um humano",
-    "texto": "",
+    "id": "iw6",
+    "k": "agenda",
+    "nome": "Agendar reunião",
+    "texto": "• Link da agenda (Calendly, Cal.com, Google Agenda)",
     "x": 800,
-    "y": 130
+    "y": 30
+   },
+   {
+    "id": "iw7",
+    "k": "reuniao",
+    "nome": "Reunião de fechamento",
+    "texto": "",
+    "x": 1000,
+    "y": 30
+   },
+   {
+    "id": "iw8",
+    "k": "obrigado",
+    "nome": "Material entregue",
+    "texto": "• Confirma o envio do material e deixa a porta aberta para depois",
+    "x": 800,
+    "y": 150
    }
   ],
   "setas": [
    {
-    "de": "nA",
-    "para": "nB",
-    "rotulo": "organica: +volume -qualificacao"
-   },
-   {
-    "de": "nA",
-    "para": "nB",
-    "rotulo": "paga: -volume +qualificacao"
-   },
-   {
-    "de": "nB",
-    "para": "nC",
+    "de": "iw1",
+    "para": "iw2",
     "rotulo": ""
    },
    {
-    "de": "nC",
-    "para": "nD",
+    "de": "iw2",
+    "para": "iw3",
     "rotulo": ""
    },
    {
-    "de": "nD",
-    "para": "nE",
-    "rotulo": "decisor confirmado"
+    "de": "iw3",
+    "para": "iw4",
+    "rotulo": ""
    },
    {
-    "de": "nD",
-    "para": "nF",
-    "rotulo": "gate reprovado, contesta"
+    "de": "iw4",
+    "para": "iw5",
+    "rotulo": "comprar"
+   },
+   {
+    "de": "iw4",
+    "para": "iw6",
+    "rotulo": "agendar"
+   },
+   {
+    "de": "iw6",
+    "para": "iw7",
+    "rotulo": ""
+   },
+   {
+    "de": "iw4",
+    "para": "iw8",
+    "rotulo": "não, obrigado"
    }
   ]
  },

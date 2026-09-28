@@ -244,6 +244,12 @@ function Editor() {
               <h2>{funil.name}</h2>
               <p className="fn-ajuda">{nos.length} etapas · {etapasDePagina.length} viram página · {semPagina} ainda sem página.</p>
               <p className="fn-ajuda">Clique numa etapa para editar. "Criar páginas" monta as páginas que faltam, com os botões já levando à próxima etapa.</p>
+              <button type="button" className="fn-botao fn-perigo" onClick={executar(async () => {
+                if (!confirm(`Excluir o funil “${funil.name}”? Sai só o desenho: as páginas que ele criou continuam no projeto.`)) return;
+                await api(`/projects/${projetoId}/funnels/${funilId}`, 'DELETE');
+                setAlterado(false);
+                location.href = '/#/funis';
+              })}><Trash2 size={16} aria-hidden="true" /> Excluir funil</button>
             </>
           )}
         </aside>

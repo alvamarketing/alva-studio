@@ -45,14 +45,14 @@ function cartaoDoModelo(modelo) {
   </button>`;
 }
 
-function cartaoDoFunil(projectId, funil) {
+function cartaoDoFunil(projectId, funil, podeEscrever) {
   const paginas = funil.graph.nos.filter((no) => etapaViraPagina(no.k));
   const criadas = paginas.filter((no) => no.pageId).length;
-  return `<a class="funil-modelo funil-do-projeto" href="${enderecoDoFunil(projectId, funil.id)}" data-busca="${escapar(semAcento(funil.name))}">
+  return `<div class="funil-cartao-projeto funil-modelo-envelope" data-busca="${escapar(semAcento(funil.name))}"><a class="funil-modelo funil-do-projeto" href="${enderecoDoFunil(projectId, funil.id)}">
     <span class="funil-modelo-previa">${miniaturaDoFunil(funil.graph)}</span>
     <strong>${escapar(funil.name)}</strong>
     <small>${funil.graph.nos.length} etapas · ${criadas} de ${paginas.length} páginas criadas</small>
-  </a>`;
+  </a>${podeEscrever ? `<button type="button" class="funil-excluir" data-excluir="${escapar(funil.id)}" data-nome="${escapar(funil.name)}" aria-label="Excluir o funil ${escapar(funil.name)}" title="Excluir funil"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>` : ''}</div>`;
 }
 
 // Só entram na galeria os modelos com ao menos uma página do Studio: um funil feito só de
@@ -60,7 +60,7 @@ function cartaoDoFunil(projectId, funil) {
 // trabalhar aqui. Os outros continuam em funis-modelos.js para quando houver integração.
 export const modelosDaGaleria = modelosDeFunil.filter((modelo) => modelo.nos.some((no) => etapaViraPagina(no.k)));
 
-export async function renderFunis({ root, api, projectId, podeEscrever, onError = () => {} }) {
+export async function renderFunis({ root, api, projectId, podeEscrever, onError = () => {}, confirmar = async (nome) => confirm(`Excluir o funil “${nome}”?`) }) {
   const lista = root.querySelector('#funnels-list');
   const galeria = root.querySelector('#funnels-models');
   const filtros = root.querySelector('#funnels-filters');
@@ -75,7 +75,7 @@ export async function renderFunis({ root, api, projectId, podeEscrever, onError 
 
   const aplicar = () => {
     const termo = semAcento(busca.trim());
-    for (const cartao of root.querySelectorAll('.funil-modelo[data-busca]')) {
+    for (const cartao of root.querySelectorAll('.funil-modelo[data-busca], .funil-modelo-envelope[data-busca]')) {
       const tipoOk = !tipoAtivo || !cartao.dataset.tipo || cartao.dataset.tipo === tipoAtivo;
       const buscaOk = !termo || cartao.dataset.busca.includes(termo);
       cartao.hidden = !(tipoOk && buscaOk);
@@ -116,9 +116,19 @@ export async function renderFunis({ root, api, projectId, podeEscrever, onError 
   try {
     const funis = await api(`/projects/${projectId}/funnels`);
     lista.innerHTML = funis.length
-      ? funis.map((funil) => cartaoDoFunil(projectId, funil)).join('')
+      ? funis.map((funil) => cartaoDoFunil(projectId, funil, podeEscrever)).join('')
       : `<p class="empty-state">Nenhum funil ainda. ${podeEscrever ? 'Escolha um modelo abaixo ou comece em branco.' : ''}</p>`;
     lista.classList.toggle('funnels-models', funis.length > 0);
+    // Excluir tira só o desenho: as páginas que o funil criou são páginas do projeto e ficam.
+    lista.onclick = async (evento) => {
+      const botao = evento.target.closest('[data-excluir]');
+      if (!botao) return;
+      if (!(await confirmar(botao.dataset.nome))) return;
+      try {
+        await api(`/projects/${projectId}/funnels/${botao.dataset.excluir}`, 'DELETE');
+        await renderFunis({ root, api, projectId, podeEscrever, onError, confirmar });
+      } catch (erro) { onError(erro); }
+    };
   } catch (erro) {
     lista.innerHTML = '<p class="empty-state">Não foi possível carregar os funis.</p>';
     onError(erro);

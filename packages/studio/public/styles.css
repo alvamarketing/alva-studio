@@ -2135,3 +2135,8 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .funil-mini-fora { fill: var(--alva-white); stroke: var(--alva-soft); }
 .funil-mini-resultado { fill: var(--alva-positive-bg); stroke: var(--alva-positive); }
 .funil-do-projeto { color: var(--alva-ink); }
+.funil-cartao-projeto { position: relative; display: grid; }
+.funil-cartao-projeto[hidden] { display: none; }
+.funil-excluir { position: absolute; top: 20px; right: 20px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--alva-line); border-radius: var(--radius-sm); background: var(--alva-white); color: var(--alva-muted); cursor: pointer; }
+.funil-excluir:hover { color: var(--alva-danger); border-color: var(--alva-danger); }
+.funil-excluir .material-symbols-outlined { font-size: var(--icon-sm); }

@@ -81,6 +81,7 @@ function setActiveNavigation(view) {
     analytics: $('#nav-project-analytics'),
     tracking: $('#nav-project-tracking'),
     funnels: $('#nav-project-funnels'),
+    leads: $('#nav-project-leads'),
     publication: $('#nav-project-publication'),
     agents: $('#nav-project-agents'),
     settings: $('#app-settings'),
@@ -121,6 +122,8 @@ function syncSidebarContext(view) {
   if (publication) publication.hidden = !hasProject;
   const funnels = $('#nav-project-funnels');
   if (funnels) funnels.hidden = !hasProject;
+  const leads = $('#nav-project-leads');
+  if (leads) leads.hidden = !hasProject || !studioShell?.can?.('submission.read');
   if (agents) agents.hidden = !hasProject || !canManageProject;
 }
 function updateVslNavigation() {
@@ -1980,13 +1983,18 @@ async function abrirRastreamento() {
 }
 $('#nav-project-tracking').onclick = action(abrirRastreamento);
 $('#nav-project-funnels').onclick = action(abrirFunis);
+// Leads: a lista de quem se cadastrou no projeto, que antes ficava num filtro da Visão geral.
+$('#nav-project-leads').onclick = action(() => openProjectSection({ navigation: 'leads', filter: 'leads', capability: 'submission.read' }));
 
 // Aba Funis: a lista e a galeria de modelos; o desenho em si abre em /funil.html.
 async function abrirFunis() {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
   setDashboardView('funnels');
-  await renderFunis({ root: $('#funnels-view'), api, projectId, podeEscrever: Boolean(studioShell.can('page.write')), onError: (erro) => toast(erro.message) });
+  await renderFunis({
+    root: $('#funnels-view'), api, projectId, podeEscrever: Boolean(studioShell.can('page.write')), onError: (erro) => toast(erro.message),
+    confirmar: (nome) => confirmarAcao({ titulo: `Excluir o funil “${nome}”?`, descricao: 'Sai só o desenho: as páginas que ele criou continuam no projeto.', confirmar: 'Excluir funil', perigo: true }),
+  });
 }
 for (const seletor of ['#tracking-filter-event', '#tracking-filter-state']) $(seletor).onchange = () => {
   trackingVisiveis = TRACKING_PAGINA;
