@@ -59,7 +59,7 @@ const regraDoBotao = `.cta{display:inline-flex;align-items:center;gap:9px;paddin
 
 // Só espaçamento: cor, tamanho de fonte e família continuam vindo do modelo da página em
 // que o elemento cair, para ele herdar a paleta de onde for solto, não trazer a sua.
-const regrasDeConteudo = `.alva-secao{padding:60px 7%;min-height:140px}.alva-titulo{margin:0 0 16px}.alva-texto{margin:0 0 16px;max-width:70ch}@media(max-width:760px){.alva-secao{padding:40px 6%}}`;
+const regrasDeConteudo = `.alva-secao{padding:60px 7%;min-height:140px}.alva-titulo{margin:0 0 16px}.alva-texto{margin:0 0 16px;max-width:70ch}.alva-colunas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;align-items:start}.alva-imagem{display:block;max-width:100%;height:auto;border-radius:20px}@media(max-width:760px){.alva-secao{padding:40px 6%}.alva-colunas{grid-template-columns:1fr}}`;
 
 export const elementosCss = paleta + regras + regraDoBotao + regrasDeConteudo;
 

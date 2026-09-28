@@ -8,6 +8,7 @@ import { extractVslReferences } from '../publication-snapshot.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from '../vsl-reference.mjs';
 import { WebhookDeliveryRepository } from './webhook-repository.mjs';
 import { extractPageCaptureSchema, normalizePageCaptureIds, validatePageCaptureAnswers } from '../page-capture-schema.mjs';
+import { capturasDoEstado, documentoDaPagina, ehEstadoAlva, normalizarEstadoAlva } from '../../public/pagina-alva.js';
 
 function fail(message, statusCode) {
   const error = new Error(message);
@@ -53,6 +54,17 @@ function optionalTemplate(value) {
 function validRenderedHtml(value) {
   if (typeof value !== 'string') throw fail('HTML renderizado inválido.', 400);
   return value;
+}
+
+// O que se grava de uma página. No esquema do Alva, quem desenha o HTML publicado é o
+// servidor, a partir do estado — o HTML que o navegador mandar é ignorado. No formato
+// antigo (GrapesJS), o HTML continua vindo pronto do editor.
+function paginaParaSalvar(estado, renderedHtml, publicOrigin) {
+  if (ehEstadoAlva(estado)) {
+    const limpo = normalizarEstadoAlva(estado);
+    return { state: limpo, html: documentoDaPagina(limpo, { publicOrigin }) };
+  }
+  return { state: normalizePageCaptureIds(estado), html: validRenderedHtml(renderedHtml) };
 }
 
 function json(value, label) {
@@ -383,8 +395,7 @@ export class ContentRepository {
   async createPage({ companyId, projectId, actorId, name, route: routeValue, template, editorState = {}, renderedHtml = '', kind = 'page', client: suppliedClient = null }) {
     const pageName = requiredName(name, 'Nome da página');
     const pageRoute = route(routeValue);
-    const state = normalizePageCaptureIds(json(editorState, 'Estado do editor'));
-    const html = validRenderedHtml(renderedHtml);
+    const { state, html } = paginaParaSalvar(json(editorState, 'Estado do editor'), renderedHtml, this.publicOrigin);
     const pageTemplate = optionalTemplate(template);
     // Só dois tipos existem; recusar aqui evita uma página órfã, que não apareceria nem
     // na lista de páginas nem na de quizzes.
@@ -482,12 +493,17 @@ export class ContentRepository {
         await authorizedProject(client, { companyId, projectId, actorId, capability: 'page.write' });
         const current = await scopedPage(client, { companyId, projectId, pageId, lock: true });
         if (current.lock_version !== expected) throw fail('A página mudou em outra aba. Reabra antes de salvar.', 409);
+        const salvo = paginaParaSalvar(
+          patch.editorState === undefined ? current.editor_state : json(patch.editorState, 'Estado do editor'),
+          patch.renderedHtml === undefined ? current.rendered_html : patch.renderedHtml,
+          this.publicOrigin,
+        );
         const next = {
           name: patch.name === undefined ? current.name : requiredName(patch.name, 'Nome da página'),
           route: patch.route === undefined ? current.route : route(patch.route),
           template: patch.template === undefined ? current.template : optionalTemplate(patch.template),
-          editorState: normalizePageCaptureIds(patch.editorState === undefined ? current.editor_state : json(patch.editorState, 'Estado do editor')),
-          renderedHtml: patch.renderedHtml === undefined ? current.rendered_html : validRenderedHtml(patch.renderedHtml),
+          editorState: salvo.state,
+          renderedHtml: salvo.html,
         };
         const { rows } = await client.query(
           `UPDATE pages
@@ -1150,8 +1166,9 @@ export class ContentRepository {
         [companyId, projectId],
       );
       const pageWebhook = webhook(setting.rows[0]?.configuration?.pageWebhooks?.[pageId] || '');
-      const normalizedEditorState = normalizePageCaptureIds(page.editor_state);
-      const captureSchema = extractPageCaptureSchema(normalizedEditorState, { webhook: pageWebhook });
+      const alva = ehEstadoAlva(page.editor_state);
+      const normalizedEditorState = alva ? normalizarEstadoAlva(page.editor_state) : normalizePageCaptureIds(page.editor_state);
+      const captureSchema = alva ? capturasDoEstado(normalizedEditorState, { webhook: pageWebhook }) : extractPageCaptureSchema(normalizedEditorState, { webhook: pageWebhook });
       if (JSON.stringify(normalizedEditorState) !== JSON.stringify(page.editor_state)) {
         await client.query(
           `UPDATE pages SET editor_state = $4::jsonb, updated_at = now()

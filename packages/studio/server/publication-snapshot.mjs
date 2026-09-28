@@ -203,7 +203,8 @@ function vslReferences(value, output = []) {
   if (Array.isArray(value)) {
     for (const item of value) vslReferences(item, output);
   } else if (value && typeof value === 'object') {
-    if (value.type === 'vsl') output.push(canonicalVslReference(value));
+    // O nó do esquema do Alva guarda a referência em `props`.
+    if (value.type === 'vsl') output.push(canonicalVslReference(value.props && typeof value.props === 'object' ? { type: 'vsl', publicId: value.props.publicId } : value));
     else for (const item of Object.values(value)) vslReferences(item, output);
   }
   return output;

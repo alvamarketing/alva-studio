@@ -79,7 +79,9 @@ const ELEMENTOS = {
   vsl: {
     // O nó carrega a referência; quem resolve o endereço do player é a publicação, que já
     // faz isso hoje procurando nós de tipo `vsl` na árvore salva.
-    render: (node) => `<div class="alva-vsl" data-vsl-id="${escapeHtml(texto(node.props.vslId, 80))}"></div>`,
+    // `data-alva-vsl` é o marcador que a publicação troca pelo player; outro nome faria a
+    // VSL sumir da página publicada sem erro.
+    render: (node) => `<div class="alva-vsl" data-alva-vsl="${escapeHtml(texto(node.props.publicId, 80))}"><p class="alva-vsl-empty">VSL</p></div>`,
   },
   field: {
     render: (node) => {
@@ -92,8 +94,9 @@ const ELEMENTOS = {
     },
   },
   form: {
-    render: (node, desenharFilhos) => `<form class="alva-formulario">${desenharFilhos(node)}<button type="submit" class="cta">${escapeHtml(texto(node.props.submitLabel, 120) || 'Enviar')}</button></form>`,
-    vazio: '<form class="alva-formulario"><button type="submit" class="cta">Enviar</button></form>',
+    // `data-alva-capture-id` é como a publicação liga o formulário à captura; `.alva-form` é
+    // a folha de formulário que já existe.
+    render: (node, desenharFilhos) => `<form class="alva-form" data-alva-capture-id="${escapeHtml(texto(node.id, 80))}" action="#" method="post">${desenharFilhos(node)}<button type="submit" class="cta">${escapeHtml(texto(node.props.submitLabel, 120) || 'Enviar')}</button></form>`,
   },
 };
 
