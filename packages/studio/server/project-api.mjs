@@ -107,8 +107,6 @@ export function createProjectApi({
   body,
   secure = false,
   limit,
-  setupCheck = () => true,
-  setupCodeRequired = false,
   validateWebhook = async (value) => value,
   integrations,
   publication,
@@ -125,16 +123,12 @@ export function createProjectApi({
   mcpAudit,
 }) {
   return async function projectApi({ req, res, path, method, json }) {
-    if (method === 'GET' && path === '/api/session') {
-      const estado = await sessionService.state(req);
-      // A tela de primeiro acesso pede o código de instalação quando o servidor exige.
-      return json(estado.setupRequired ? { ...estado, setupCodeRequired } : estado);
-    }
+    if (method === 'GET' && path === '/api/session') return json(await sessionService.state(req));
     if (method === 'POST' && path === '/api/setup') {
       limit?.(req.socket.remoteAddress);
-      const input = await body(req);
-      setupCheck(req, input);
-      const context = await sessionService.setup(input);
+      // Como no n8n: o primeiro acesso cria a conta de dono, e só ele — com uma conta
+      // existente, sessionService.setup recusa (409) e a tela passa a pedir login.
+      const context = await sessionService.setup(await body(req));
       await sessionService.issue(res, context, secure);
       return json(await sessionService.stateFor(context), 201);
     }

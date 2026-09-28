@@ -11,8 +11,6 @@ services:
       HOST: 0.0.0.0
       PORT: 4178
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Defina PUBLIC_ORIGIN HTTPS no ambiente do Coolify}
-      # Código de instalação: libera criar a conta de dono pela tela no primeiro acesso.
-      SETUP_CODE: ${SETUP_CODE:-}
       WEBHOOK_WORKER_ENABLED: "false"
       CONVERSIONS_ENABLED: ${CONVERSIONS_ENABLED:-false}
       TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
