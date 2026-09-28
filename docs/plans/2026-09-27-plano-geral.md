@@ -172,6 +172,36 @@ o **Puck AI fica de fora** (é pago, e a geração por IA chama a API direto).
 
 ---
 
+## Fase 4b — Funis (pedido do dono em 28/09)
+
+Uma aba Funis por projeto: desenhar o caminho da pessoa num canvas (React Flow, no mesmo
+pacote do editor de landing) e criar as páginas de cada etapa a partir de modelos, já
+ligadas entre si. Os modelos são os 23 funis da biblioteca da Jornada da Alva (aba Funis).
+
+| # | O que |
+|---|---|
+| 4b.1 | **Feito em 28/09:** aba Funis (lista + galeria de modelos), canvas com paleta de etapas, painel da etapa e da seta, `funnels` (migração 027), API `/api/projects/:id/funnels`. |
+| 4b.2 | **Feito em 28/09:** "Criar páginas": cada etapa de página vira landing (ou quiz, na aplicação) com o botão levando à etapa seguinte; no upsell, o "não, obrigado" leva ao downsell. |
+| 4b.3 | **Feito em 28/09:** botão "Como configurar o funil" com as páginas oficiais de ajuda da Hotmart, Kiwify, Hubla e Asaas. |
+| 4b.4 | *Sem seção no wireframe:* a tela usa os tokens da Biblioteca visual; falta o dono aprovar o desenho ou incluir a seção no contrato. |
+
+---
+
+## Quem sabe um dia
+
+Fora do plano ativo, por decisão do dono. Não entra sem ele pedir.
+
+- **Checkout próprio** (28/09). Hoje a etapa de checkout do funil é um link para a
+  plataforma de pagamento. O caminho mais barato, se um dia for feito: o checkout
+  hospedado do Asaas na conta de cada cliente, com a volta para a página de upsell ou de
+  obrigado e a confirmação por webhook (docs.asaas.com, "Redirecionamento após o
+  pagamento"). Checkout próprio com cartão e upsell de um clique, ou substituir a Hotmart,
+  não compensa.
+- **Funil desenhado pelo Analytics** (28/09): o caminho real das visitas desenhado a
+  partir dos eventos, sem ninguém desenhar. Não é para agora.
+
+---
+
 ## Fase 5 — VSL
 
 Dois itens da VSL moram em outras fases: o marcador no esquema (2.3) e o

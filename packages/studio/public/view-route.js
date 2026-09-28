@@ -6,6 +6,7 @@ const ROUTES = {
   project: 'projeto',
   pages: 'paginas',
   forms: 'quizzes',
+  funnels: 'funis',
   vsl: 'vsl',
   analytics: 'analytics',
   tracking: 'rastreamento',
@@ -56,7 +57,7 @@ export function createViewRouter({ window: win = window, onNavigate = () => {} }
   };
 }
 
-const VIEWS_NEEDING_PROJECT = new Set(['project', 'pages', 'forms', 'vsl', 'analytics', 'tracking', 'agents', 'publication']);
+const VIEWS_NEEDING_PROJECT = new Set(['project', 'pages', 'forms', 'funnels', 'vsl', 'analytics', 'tracking', 'agents', 'publication']);
 
 export function viewToRestore(route, { hasProject = false } = {}) {
   const fallback = hasProject ? 'project' : 'home';

@@ -2049,3 +2049,22 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .vsl-upload-status[data-erro='true'] {
   color: var(--alva-negative);
 }
+
+/* Aba Funis: os funis do projeto e a galeria de modelos. */
+.funnels-view { display: grid; gap: 18px; }
+.funnels-list { display: grid; gap: 8px; }
+.funnels-subtitle { font-size: var(--text-xl); margin: 10px 0 0; }
+.funil-linha { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid var(--alva-line); border-radius: var(--radius-lg); background: var(--alva-white); color: var(--alva-ink); text-decoration: none; }
+.funil-linha:hover { border-color: var(--alva-blue-light); }
+.funil-linha .material-symbols-outlined { color: var(--alva-blue); }
+.funil-linha small { color: var(--alva-muted); font-size: var(--text-sm); }
+.funnels-models { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.funil-modelo { display: grid; gap: 6px; align-content: start; min-height: 150px; padding: 16px; border: 1px solid var(--alva-line); border-radius: var(--radius-lg); background: var(--alva-white); color: var(--alva-ink); text-align: left; cursor: pointer; font: inherit; }
+.funil-modelo:hover:not(:disabled) { border-color: var(--alva-blue); }
+.funil-modelo:disabled { opacity: .6; cursor: progress; }
+.funil-modelo strong { font-size: var(--text-lg); }
+.funil-modelo-tipo { color: var(--alva-blue); font-size: var(--text-2xs); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.funil-modelo-para { color: var(--alva-muted); font-size: var(--text-sm); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.funil-modelo small { color: var(--alva-soft); font-size: var(--text-xs); margin-top: auto; }
+.funil-em-branco { border-style: dashed; border-color: var(--alva-blue-light); }
+.funil-em-branco .material-symbols-outlined { color: var(--alva-blue); }

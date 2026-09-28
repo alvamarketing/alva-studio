@@ -182,6 +182,7 @@ export function createProjectApi({
   videos,
   videoHosting = null,
   images = null,
+  funnels = null,
     analytics,
   tracking,
   commercialOutbox,
@@ -543,6 +544,33 @@ export function createProjectApi({
       if (!images) throw fail('O envio de imagem não está disponível.', 409);
       const input = await body(req);
       return json(await images.salvar({ companyId: context.companyId, projectId, actorId: context.user.id, dados: input.dados }), 201);
+    }
+
+    // Aba Funis: o desenho do funil e as páginas que ele cria. Ler é de quem vê o projeto;
+    // desenhar e criar páginas, de quem escreve página.
+    const funisDoProjeto = path.match(/^\/api\/projects\/([^/]+)\/funnels(?:\/([^/]+)(?:\/(pages))?)?$/);
+    if (funisDoProjeto) {
+      const [, projectId, funnelId, acao] = funisDoProjeto;
+      if (!funnels) throw fail('Os funis não estão disponíveis.', 409);
+      const escrita = method !== 'GET';
+      await sessionService.authorize(context, escrita ? 'page.write' : null, projectId);
+      const escopo = { companyId: context.companyId, projectId };
+      if (!funnelId && method === 'GET') return json(await funnels.listar(escopo));
+      if (!funnelId && method === 'POST') {
+        const input = await body(req);
+        return json(await funnels.criar({ ...escopo, actorId: context.user.id, name: input.name, modelId: input.modelId }), 201);
+      }
+      if (funnelId && acao === 'pages' && method === 'POST') {
+        const input = await body(req);
+        return json(await funnels.criarPaginas({ ...escopo, actorId: context.user.id, funnelId, etapaIds: Array.isArray(input.etapaIds) ? input.etapaIds.map(String) : null }), 201);
+      }
+      if (funnelId && !acao && method === 'GET') return json(await funnels.buscar({ ...escopo, funnelId }));
+      if (funnelId && !acao && method === 'PUT') {
+        const input = await body(req);
+        return json(await funnels.salvar({ ...escopo, funnelId, revision: input.revision, name: input.name, graph: input.graph }));
+      }
+      if (funnelId && !acao && method === 'DELETE') return json(await funnels.remover({ ...escopo, funnelId }));
+      throw fail('Método não permitido.', 405);
     }
 
     const videoCollection = path.match(/^\/api\/projects\/([^/]+)\/videos$/);

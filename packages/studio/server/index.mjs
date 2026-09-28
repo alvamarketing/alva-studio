@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { blocoDeTokens } from './tokens-css.mjs';
+import { FunnelRepository } from './repositories/funnel-repository.mjs';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -379,6 +380,7 @@ export function createApp({
       videos,
       videoHosting,
       images,
+      funnels: database ? new FunnelRepository(database, { content }) : null,
       analytics,
       tracking,
       commercialOutbox,
@@ -449,6 +451,13 @@ export function createApp({
     // O editor de landing (Puck). React e o build moram só aqui; a página publicada é HTML puro.
     '/editor.html': ['public/editor.html', 'text/html'],
     '/pagina-alva.js': ['public/pagina-alva.js', 'text/javascript'],
+    '/funil.html': ['public/funil.html', 'text/html'],
+    '/build/funil.js': ['public/build/funil.js', 'text/javascript'],
+    '/build/funil.css': ['public/build/funil.css', 'text/css'],
+    '/funil.js': ['public/funil.js', 'text/javascript'],
+    '/funis-etapas.js': ['public/funis-etapas.js', 'text/javascript'],
+    '/funis-modelos.js': ['public/funis-modelos.js', 'text/javascript'],
+    '/funis-view.js': ['public/funis-view.js', 'text/javascript'],
     '/modelos-alva.js': ['public/modelos-alva.js', 'text/javascript'],
     '/page-schema.js': ['public/page-schema.js', 'text/javascript'],
     '/build/editor.js': ['public/build/editor.js', 'text/javascript'],

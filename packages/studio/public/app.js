@@ -13,6 +13,7 @@ import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
+import { renderFunis } from './funis-view.js';
 import { estadoDoModelo, modelosAlva } from './modelos-alva.js';
 import { conteudoDaLista, contagemDaLista, textosDaLista } from './quiz-mecanica.js';
 const $ = (s) => document.querySelector(s);
@@ -88,6 +89,7 @@ function setActiveNavigation(view) {
     forms: $('#nav-forms'),
     analytics: $('#nav-project-analytics'),
     tracking: $('#nav-project-tracking'),
+    funnels: $('#nav-project-funnels'),
     publication: $('#nav-project-publication'),
     agents: $('#nav-project-agents'),
     settings: $('#app-settings'),
@@ -99,13 +101,14 @@ function abrirView(view, options = {}) {
   if (view === 'forms') return void action(abrirFormularios)();
   if (view === 'analytics') return void action(abrirAnalytics)();
   if (view === 'tracking') return void action(abrirRastreamento)();
+  if (view === 'funnels') return void action(abrirFunis)();
   if (view === 'agents') return void action(abrirAgentes)();
   if (view === 'publication') return void action(abrirPublicacao)();
   return setDashboardView(view, options);
 }
 function sidebarContextFor(view, hasProject = false) {
   if (view === 'home') return 'studio';
-  return hasProject || ['project', 'pages', 'forms', 'vsl', 'analytics', 'tracking', 'agents', 'publication'].includes(view) ? 'project' : 'studio';
+  return hasProject || ['project', 'pages', 'forms', 'funnels', 'vsl', 'analytics', 'tracking', 'agents', 'publication'].includes(view) ? 'project' : 'studio';
 }
 function syncSidebarContext(view) {
   const sidebar = $('#studio-sidebar');
@@ -125,6 +128,8 @@ function syncSidebarContext(view) {
   if (analytics) analytics.hidden = !hasProject || !canReadAnalytics;
   if (tracking) tracking.hidden = !hasProject || !canReadAnalytics;
   if (publication) publication.hidden = !hasProject;
+  const funnels = $('#nav-project-funnels');
+  if (funnels) funnels.hidden = !hasProject;
   if (agents) agents.hidden = !hasProject || !canManageProject;
 }
 function updateVslNavigation() {
@@ -162,6 +167,7 @@ function setDashboardView(view, { settingsTab = 'account', fromHistory = false }
     vsl: '#vsl-view',
     analytics: '#analytics-view',
     tracking: '#tracking-view',
+    funnels: '#funnels-view',
     agents: '#agents-view',
     publication: '#publication-view',
   };
@@ -2278,6 +2284,15 @@ async function abrirRastreamento() {
   pintarRastreamento();
 }
 $('#nav-project-tracking').onclick = action(abrirRastreamento);
+$('#nav-project-funnels').onclick = action(abrirFunis);
+
+// Aba Funis: a lista e a galeria de modelos; o desenho em si abre em /funil.html.
+async function abrirFunis() {
+  const projectId = studioShell.state().currentProject?.id;
+  if (!projectId) throw new Error('Escolha ou crie um projeto antes de continuar.');
+  setDashboardView('funnels');
+  await renderFunis({ root: $('#funnels-view'), api, projectId, podeEscrever: Boolean(studioShell.can('page.write')), onError: (erro) => toast(erro.message) });
+}
 for (const seletor of ['#tracking-filter-event', '#tracking-filter-state']) $(seletor).onchange = () => {
   trackingVisiveis = TRACKING_PAGINA;
   pintarRastreamento();
