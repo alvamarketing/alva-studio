@@ -326,10 +326,13 @@ export class TrackingRepository {
   async publicProviders({ companyId, projectId, environment: rawEnvironment }) {
     const targetEnvironment = environment(rawEnvironment);
     const { rows } = await this.database.query(`SELECT provider, public_configuration FROM tracking_destinations WHERE company_id=$1 AND project_id=$2 AND environment=$3 ORDER BY provider`, [companyId, projectId, targetEnvironment]);
-    return rows.map((row) => {
+    // Só vira pixel de navegador o destino que tem ID público. Google Ads e LinkedIn entregam
+    // pelo servidor e a tela não pede o ID do pixel deles; sem este filtro, o manifesto
+    // recebia um pixel sem ID e recusava a publicação inteira.
+    return rows.flatMap((row) => {
       const config = row.public_configuration || {};
       const id = row.provider === 'meta' ? config.pixel_id : row.provider === 'tiktok' ? config.pixel_code : row.provider === 'google' ? config.measurement_id : row.provider === 'linkedin' ? config.partner_id : config.account_id;
-      return { provider: row.provider === 'google' ? 'ga4' : row.provider, id };
+      return typeof id === 'string' && id ? [{ provider: row.provider === 'google' ? 'ga4' : row.provider, id }] : [];
     });
   }
 
