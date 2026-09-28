@@ -96,3 +96,10 @@ test('nenhum bloco das configurações carrega largura própria no atributo styl
   const tela = html.slice(html.indexOf('id="settings-view"'), html.indexOf('id="project-view"'));
   assert.doesNotMatch(tela, /style="[^"]*max-width/, 'a medida é do grid da página');
 });
+
+test('a empresa é carregada em qualquer aba: a lateral não fica em "Carregando"', async () => {
+  const owner = await readFile(new URL('../public/owner.js', import.meta.url), 'utf8');
+  const trecho = owner.slice(owner.indexOf('function selectTab'), owner.indexOf('function applyIntegrationAccess'));
+  assert.doesNotMatch(trecho, /includes\(tab\)\) \{\s*placeCompanyContent[\s\S]*onCompanySettings\(\);\s*\}/, 'carregar a empresa não pode depender da aba');
+  assert.match(trecho, /onCompanySettings\(\);/);
+});
