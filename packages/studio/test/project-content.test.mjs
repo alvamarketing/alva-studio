@@ -357,7 +357,7 @@ test('capture Landing faz rollback de outbox/webhook e preserva eventId na entre
     const captureId = version.editorState.components[0].attributes['data-alva-capture-id'];
     const domain = 'atomic.alva.test';
     await database.query("INSERT INTO project_domains (company_id, project_id, domain, environment, verification_status, is_canonical) VALUES ($1,$2,$3,'production','verified',true)", [company.id, project.id, domain]);
-    const args = { companyId: company.id, projectId: project.id, pageId: page.id, pageVersionId: version.id, captureId, input: { answers: { email: 'lead@alva.test' } }, origin: `https://${domain}` };
+    const args = { companyId: company.id, projectId: project.id, pageId: page.id, pageVersionId: version.id, captureId, input: { answers: { email: 'lead@alva.test' } }, origin: `https://${domain}`, cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' } };
     content.commercialOutbox = { enqueue: async () => { throw new Error('outbox'); } };
     await assert.rejects(() => content.submitPublishedPageCapture(args), /outbox/);
     assert.equal((await database.query('SELECT count(*)::int AS n FROM page_submissions')).rows[0].n, 0);

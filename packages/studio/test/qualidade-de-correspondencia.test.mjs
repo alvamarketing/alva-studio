@@ -125,6 +125,7 @@ test('o registro que a tela recebe traz a nota, e nenhum dos dados que a produzi
       trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
       consentState: 'granted', answers: { email: 'pessoa@alva.test' },
       attribution: { fbclid: 'IwAR-x' },
+      cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
       contexto: { sourceUrl: 'https://cliente.test/oferta', contentId: 'page-1', contentName: 'Landing' },
     }));
     const [registro] = await outbox.status({ companyId: company.id, projectId: project.id });

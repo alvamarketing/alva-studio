@@ -103,3 +103,33 @@ parâmetro `click-id`, e que o S2S não exige credencial (a conta sai do click i
    com tela "Conectar com Google" e verificação do escopo `datamanager` pelo Google.
    Isso é conta do dono, não código.
 3. **LinkedIn.** O token vence em 60 dias. Proposta: a tela avisa antes de vencer.
+
+---
+
+## O que já foi consertado (27/09)
+
+| Achado | Commit |
+|---|---|
+| Telefone com código do país e hash por formato de plataforma (M4, T3, G3) | `e1ade5c` |
+| Consentimento do Google no formato da Data Manager API (G1) | `e1ade5c` |
+| Graph API v26.0, token como `access_token` (M1, M2) | `32bf58d` |
+| Resposta de cada plataforma lida pelo corpo, 40100 do TikTok volta a tentar (M9, T5) | `32bf58d` |
+| Ajuda do modo de teste sem a promessa falsa (M3) | `32bf58d` |
+| TikTok recebe `page.url`, `ip` e `user_agent` (T1, T2) | `9bd14ac` |
+| Taboola: script e evento do pixel, ID da conta e nome do evento do Realize (B1–B4) | `c806649` |
+| Código base oficial dos pixels da Meta e do TikTok (M8, T4) | `d3617fe` |
+| Recarregar a página de obrigado não conta outro lead (critério 10) | `d9c03ef` |
+| `_fbc` e `_fbp` do pixel lidos no envio, `_fbc` prevalece (M6) | `8bb71c5` |
+| Meta exige a página e o navegador em evento de site (M7) — ✔︎ lido: "event_source_url is required for website events", "client_user_agent is required for website events". O formulário aberto direto no Studio passa a levar o navegador da própria requisição | ver commit abaixo |
+
+## O que ficou pendente
+
+- **Compra pelo webhook de pagamento.** Chega sem o navegador de quem comprou, e a Meta
+  exige o navegador em evento de site. Hoje essas compras não vão para a Meta. O
+  conserto é o checkout guardar o navegador no início e reusá-lo na compra — é trabalho
+  da feature de checkout, não do rastreamento.
+- **Códigos de erro do S2S da Taboola.** A página oficial (`/pixel/docs/s2s-error-codes`)
+  responde "Page Not Found"; a entrega da Taboola é lida só pelo status HTTP.
+- **Cookie `_ttp` do TikTok** e **IP no LinkedIn** (`PLAINTEXT_IP_ADDRESS`): ambos
+  documentados como sinais de correspondência; o Studio ainda não os manda.
+- **Google e LinkedIn: token.** Decisões 2 e 3, acima.

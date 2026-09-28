@@ -243,6 +243,7 @@ export function motivoDaFalha(codigo, nome = 'este destino') {
   if (texto === 'transport_error') return 'Não foi possível falar com a plataforma. O envio tenta de novo sozinho.';
   if (texto === 'destination_not_configured') return `Sem credencial de ${nome} neste ambiente. Configure-a em Destinos, nesta tela.`;
   if (texto === 'destination_event_name_missing') return `Falta o nome deste evento na configuração de ${nome}. Preencha em Destinos, nesta tela.`;
+  if (texto === 'destination_user_agent_required') return 'O evento chegou sem o navegador de quem converteu, que esta plataforma exige.';
   if (texto === 'destination_page_url_required') return 'O evento chegou sem o endereço da página, que esta plataforma exige.';
   if (texto === 'destination_identifier_required') return 'Esta plataforma não tinha como atribuir o evento.';
   return 'O envio falhou.';
@@ -396,8 +397,8 @@ export const CAMPOS_DE_DESTINO = Object.freeze({
   taboola: [
     { name: 'account_id', label: 'ID da conta', help: 'Só números. No Realize, em Tracking, no alto à esquerda.', required: true, public: true },
     { name: 'lead_event_name', label: 'Nome do evento de lead', help: 'O "Event Name" da conversão de lead no Realize, exatamente como está lá — não o nome da conversão.', required: true },
-    { name: 'initiate_checkout_event_name', label: 'Nome do evento de início de checkout', help: 'Opcional. Sem ele, o início de checkout não vai para a Taboola.', required: false },
-    { name: 'purchase_event_name', label: 'Nome do evento de compra', help: 'Opcional. Sem ele, a compra não vai para a Taboola.', required: false },
+    { name: 'initiate_checkout_event_name', label: 'Nome do evento de início de checkout', help: 'Sem ele, o início de checkout não vai para a Taboola.', required: false },
+    { name: 'purchase_event_name', label: 'Nome do evento de compra', help: 'Sem ele, a compra não vai para a Taboola.', required: false },
   ],
 });
 

@@ -191,11 +191,15 @@ test('matriz comercial local percorre dois tenants sem egress e preserva a últi
         await assert.rejects(() => content.submitPublicFormForProject({ companySlug: 'certificacao-b', projectSlug: 'projeto-a', route: '/quiz', origin: records.originB, input: { answers: {} } }), /não encontrado/);
         records.submission = await content.submitPublicFormForProject({
           companySlug: 'certificacao-a', projectSlug: 'projeto-a', route: '/quiz', origin: records.originA, publicationId: records.preview.id,
-          subjectId: 'local-certification-subject-0001', attribution: { fbclid: 'fb-local-cert-a' }, input: { answers: { nome: 'Nome local A', email: 'lead-a@local-cert.test', telefone: '+55 11 99999-0001' } },
+          subjectId: 'local-certification-subject-0001', attribution: { fbclid: 'fb-local-cert-a' },
+          cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
+          input: { answers: { nome: 'Nome local A', email: 'lead-a@local-cert.test', telefone: '+55 11 99999-0001' } },
         });
         records.submissionB = await content.submitPublicFormForProject({
           companySlug: 'certificacao-b', projectSlug: 'projeto-b', route: '/quiz', origin: records.originB, publicationId: records.previewB.id,
-          subjectId: 'local-certification-subject-0002', attribution: { fbclid: 'fb-local-cert-b' }, input: { answers: { nome: 'Nome local B', email: 'lead-b@local-cert.test', telefone: '+55 11 99999-0002' } },
+          subjectId: 'local-certification-subject-0002', attribution: { fbclid: 'fb-local-cert-b' },
+          cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
+          input: { answers: { nome: 'Nome local B', email: 'lead-b@local-cert.test', telefone: '+55 11 99999-0002' } },
         });
         assert.equal(records.submission.form.projectId, records.projectA.id);
         assert.equal(records.submissionB.form.projectId, records.projectB.id);

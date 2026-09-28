@@ -8,6 +8,7 @@ import { contextoDoVisitante } from '../server/repositories/conversions-outbox-r
 test('o endereço e o navegador chegam ao corpo que vai para a Meta', () => {
   const evento = {
     event_name: 'lead', event_time: 1700000000, tracking_event_id: 'e1',
+    source_url: 'https://lp.exemplo.test/oferta',
     client: { ip: '203.0.113.7', user_agent: 'Mozilla/5.0 (iPhone)' },
   };
   const corpo = destinoPara('meta').requisicao(evento, { pixel_id: '1', access_token: 't' }).corpo;
@@ -15,10 +16,15 @@ test('o endereço e o navegador chegam ao corpo que vai para a Meta', () => {
   assert.equal(corpo.data[0].user_data.client_user_agent, 'Mozilla/5.0 (iPhone)');
 });
 
+// O navegador agora é exigido pela Meta (event_source_url e client_user_agent são
+// obrigatórios em evento de site), então só o IP fica de fora aqui: é ele que continua
+// sem entrar como campo vazio quando falta.
 test('sem esses dados, o corpo não ganha campo vazio', () => {
-  const corpo = destinoPara('meta').requisicao({ event_name: 'lead', event_time: 1, tracking_event_id: 'e1' }, { pixel_id: '1', access_token: 't' }).corpo;
+  const corpo = destinoPara('meta').requisicao({
+    event_name: 'lead', event_time: 1, tracking_event_id: 'e1',
+    source_url: 'https://lp.exemplo.test/oferta', client: { user_agent: 'Mozilla/5.0 (iPhone)' },
+  }, { pixel_id: '1', access_token: 't' }).corpo;
   assert.equal('client_ip_address' in corpo.data[0].user_data, false);
-  assert.equal('client_user_agent' in corpo.data[0].user_data, false);
 });
 
 // O endereço precisa ser endereço. Um cabeçalho forjado ou um valor de proxy mal formado
@@ -71,6 +77,7 @@ test('a confirmação da entrega apaga o endereço e o navegador da linha', asyn
       companyId: company.id, projectId: project.id, environment: 'preview',
       trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
       cliente: { ip: '203.0.113.7', userAgent: 'Mozilla/5.0 (iPhone)' },
+      contexto: { sourceUrl: 'https://lp.exemplo.test/oferta' },
     }));
     const antes = (await database.query('SELECT payload FROM conversions_outbox')).rows[0].payload;
     assert.equal(antes.client.ip, '203.0.113.7', 'a caminho, o endereço está na linha');

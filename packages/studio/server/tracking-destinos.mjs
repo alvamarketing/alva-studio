@@ -36,14 +36,21 @@ function modoDeTeste(credenciais = {}) {
   return codigo ? { test_event_code: codigo } : {};
 }
 
+// Evento de site precisa do endereço da página — a Meta exige `event_source_url`, o TikTok
+// exige `page.url`. `ip` e `user_agent` vão sem hash.
+// https://business-api.tiktok.com/portal/docs/parameters/v1.3
+const TEM_PAGINA = (evento) => Boolean(texto(evento.source_url));
+
 // A versão da Graph API em vigor. A v20.0 ficou no ar até 24/09/2026; cada versão dura
 // cerca de dois anos. https://developers.facebook.com/docs/graph-api/changelog
 const VERSAO_DA_GRAPH_API = 'v26.0';
 
 const meta = {
   chave: 'meta',
-  // A Meta faz a própria correspondência: aceita o evento mesmo sem clique nem contato.
-  podeAtribuir: () => true,
+  // A Meta faz a própria correspondência: aceita o evento mesmo sem clique nem contato. Mas
+  // evento de site exige a página e o navegador de quem converteu.
+  // https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/server-event
+  podeAtribuir: (evento) => TEM_PAGINA(evento) && Boolean(texto(evento.client?.user_agent)),
   corpo(evento) {
     return {
       data: [{
@@ -72,6 +79,8 @@ const meta = {
     const pixel = texto(credenciais.pixel_id);
     const token = texto(credenciais.access_token);
     if (!pixel || !token) throw recusa('destination_not_configured');
+    if (!TEM_PAGINA(evento)) throw recusa('destination_page_url_required');
+    if (!texto(evento.client?.user_agent)) throw recusa('destination_user_agent_required');
     // O token vai como `access_token` na URL, que é como a documentação da Conversions API
     // descreve o envio; ela não fala em cabeçalho Bearer.
     // https://developers.facebook.com/docs/marketing-api/conversions-api/using-the-api
@@ -94,9 +103,6 @@ const meta = {
   },
 };
 
-// `page.url` é obrigatório em evento web; `ip` e `user_agent` vão sem hash.
-// https://business-api.tiktok.com/portal/docs/parameters/v1.3
-const TEM_PAGINA = (evento) => Boolean(texto(evento.source_url));
 
 const tiktok = {
   chave: 'tiktok',

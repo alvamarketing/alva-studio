@@ -12,8 +12,8 @@ import assert from 'node:assert/strict';
 import { DESTINOS, destinoPara } from '../server/tracking-destinos.mjs';
 
 const HASH = 'a'.repeat(64);
-// Todo lead que passa pela publicação traz a página onde aconteceu.
-const base = { event_name: 'lead', event_time: 1_700_000_000, tracking_event_id: 'e1', consent_state: 'pending', source_url: 'https://lp.exemplo.test/oferta', user: {}, params: {} };
+// Todo lead que passa pela publicação traz a página e o navegador de quem converteu.
+const base = { event_name: 'lead', event_time: 1_700_000_000, tracking_event_id: 'e1', consent_state: 'pending', source_url: 'https://lp.exemplo.test/oferta', client: { user_agent: 'Mozilla/5.0 (iPhone)' }, user: {}, params: {} };
 const CREDENCIAIS = {
   meta: { pixel_id: '1', access_token: 't' },
   tiktok: { pixel_code: 'PX', access_token: 't' },

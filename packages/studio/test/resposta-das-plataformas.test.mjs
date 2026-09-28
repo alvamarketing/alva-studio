@@ -11,7 +11,7 @@ import { entregarEvento } from '../server/tracking-entrega.mjs';
 import { destinoPara } from '../server/tracking-destinos.mjs';
 import { CAMPOS_DE_DESTINO, motivoDaFalha } from '../public/studio-dashboard.js';
 
-const EVENTO = { event_name: 'lead', event_time: 1_764_200_000, tracking_event_id: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', source_url: 'https://lp.exemplo.test/oferta', user: {}, click_ids: {}, params: {} };
+const EVENTO = { event_name: 'lead', event_time: 1_764_200_000, tracking_event_id: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', source_url: 'https://lp.exemplo.test/oferta', client: { user_agent: 'Mozilla/5.0 (iPhone)' }, user: {}, click_ids: {}, params: {} };
 const META = { pixel_id: '123456', access_token: 'token-da-meta' };
 const TIKTOK = { pixel_code: 'PXTIKTOK', access_token: 'token-do-tiktok' };
 const responde = (status, corpo) => async () => new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } });
@@ -95,4 +95,16 @@ test('TikTok: sem o endereço da página, o evento web não é válido e não va
   const semPagina = { ...EVENTO, source_url: undefined };
   assert.equal(destinoPara('tiktok').podeAtribuir(semPagina), false);
   assert.throws(() => destinoPara('tiktok').requisicao(semPagina, TIKTOK), /destination_page_url_required/);
+});
+
+// "The event_source_url is required for website events" e "The client_user_agent is
+// required for website events shared using the Conversions API".
+// https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/server-event
+// https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/customer-information-parameters
+test('Meta: evento de site sem a página ou sem o navegador não é válido e não vai', () => {
+  const completo = { ...EVENTO, client: { user_agent: 'Mozilla/5.0 (iPhone)' } };
+  assert.equal(destinoPara('meta').podeAtribuir(completo), true);
+  assert.equal(destinoPara('meta').podeAtribuir({ ...completo, source_url: undefined }), false, 'sem a página');
+  assert.equal(destinoPara('meta').podeAtribuir({ ...completo, client: {} }), false, 'sem o navegador');
+  assert.throws(() => destinoPara('meta').requisicao({ ...completo, client: {} }, META), /destination_page_url_required|destination_user_agent_required/);
 });

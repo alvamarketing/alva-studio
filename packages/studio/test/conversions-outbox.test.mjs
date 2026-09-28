@@ -37,7 +37,11 @@ test('outbox comercial deriva propriedade preview, hasheia contato e deduplica r
     const vault = new SecretVault({ masterKey: 'task-6-master-key' });
     await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' }, taboola: { account_id: '1234567', lead_event_name: 'lead_formulario' } });
     const outbox = new ConversionsOutboxRepository(database, { vault });
-    const event = { companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' }, attribution: { gclid: 'google-click', tblci: 'tb-clique', unknown: 'blocked' } };
+    const event = {
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted', answers: { email: ' Pessoa@Example.Test ', telefone: '+55 (11) 99999-9999', name: 'Nunca enviar' }, attribution: { gclid: 'google-click', tblci: 'tb-clique', unknown: 'blocked' },
+      cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
+      contexto: { sourceUrl: 'https://lp.exemplo.test/oferta' },
+    };
     await database.transaction((client) => outbox.enqueue(client, event));
     await database.transaction((client) => outbox.enqueue(client, event));
     const vsl = { ...event, trackingEventId: 'a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'vsl_progress', answers: {}, params: { content_id: 'vsl-123', value: 75 } };
@@ -189,6 +193,7 @@ test('o identificador de clique sai da fila e chega ao corpo que vai para a plat
       trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead', consentState: 'granted',
       answers: {},
       attribution: { fbclid: 'IwAR-clique-do-facebook', ttclid: 'tt-clique', tblci: 'tb-clique' },
+      cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
       // A página onde o lead aconteceu: o TikTok não aceita evento web sem ela.
       contexto: { sourceUrl: 'https://lp.exemplo.test/oferta' },
     }));
@@ -228,6 +233,7 @@ test('o evento carrega onde aconteceu, e a Meta recebe isso como event_source_ur
     await database.transaction((client) => outbox.enqueue(client, {
       companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
       trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
+      cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
       contexto: { sourceUrl: 'https://cliente.test/imobiliarias', contentId: 'page-1', contentName: 'Landing Imobiliárias' },
     }));
     const { rows } = await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1', [ids.company.id]);
@@ -250,16 +256,27 @@ test('endereço inválido ou com query string não entra no evento', async (t) =
   try {
     const ids = await seed(database);
     const vault = new SecretVault({ masterKey: 'task-6-master-key' });
-    await prepararDestinos(database, vault, ids, { meta: { pixel_id: '123', access_token: 'token' } });
+    // O Google entra porque não depende da página (atribui pelo gclid): é nele que se lê o
+    // que a fila fez com o endereço. A Meta exige a página, então só recebe o evento válido.
+    await prepararDestinos(database, vault, ids, {
+      meta: { pixel_id: '123', access_token: 'token' },
+      google: { operating_account_id: '1234567890', conversion_action_id: '987', oauth_access_token: 'token' },
+    });
     const outbox = new ConversionsOutboxRepository(database, { vault });
     const enfileirar = (contexto, trackingEventId) => database.transaction((client) => outbox.enqueue(client, {
       companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
-      trackingEventId, eventName: 'lead', contexto,
+      trackingEventId, eventName: 'lead', contexto, attribution: { gclid: 'google-click' },
+      cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
     }));
     await enfileirar({ sourceUrl: 'https://cliente.test/oferta?fbclid=segredo&email=pessoa@x.test' }, 'a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
     await enfileirar({ sourceUrl: 'javascript:alert(1)' }, 'b1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
     await enfileirar({ sourceUrl: 'http://cliente.test/sem-tls' }, 'c1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29');
     const { rows } = await database.query('SELECT tracking_event_id, payload FROM conversions_outbox WHERE company_id = $1 ORDER BY tracking_event_id', [ids.company.id]);
+    const { rows: destinos } = await database.query('SELECT tracking_event_id, destination FROM conversions_outbox WHERE company_id = $1', [ids.company.id]);
+    const para = (prefixo) => destinos.filter((linha) => linha.tracking_event_id.startsWith(prefixo)).map((linha) => linha.destination).sort();
+    assert.deepEqual(para('a1'), ['google', 'meta']);
+    assert.deepEqual(para('b1'), ['google'], 'sem página válida, a Meta não recebe o evento');
+    assert.deepEqual(para('c1'), ['google'], 'sem página válida, a Meta não recebe o evento');
     const url = (prefixo) => rows.find((linha) => linha.tracking_event_id.startsWith(prefixo)).payload.source_url;
     assert.equal(url('a1'), 'https://cliente.test/oferta', 'a query string é descartada, o caminho fica');
     assert.equal(url('b1'), undefined, 'esquema que não é http(s) não entra');
@@ -285,6 +302,8 @@ test('a UTM vai para os parâmetros do evento, e dali para a plataforma', async 
       companyId: ids.company.id, projectId: ids.project.id, environment: 'preview',
       trackingEventId: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', eventName: 'lead',
       attribution: { fbclid: 'IwAR-x', utm_source: 'facebook', utm_medium: 'cpc', utm_campaign: 'lançamento set', utm_content: 'x'.repeat(600) },
+      cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
+      contexto: { sourceUrl: 'https://lp.exemplo.test/oferta' },
     }));
     const { rows } = await database.query('SELECT payload FROM conversions_outbox WHERE company_id = $1', [ids.company.id]);
     const payload = rows[0].payload;
@@ -316,7 +335,10 @@ test('a fila não endereça ao destino que não consegue atribuir o evento', asy
     });
     const outbox = new ConversionsOutboxRepository(database, { vault });
     const enfileirar = (trackingEventId, extra) => database.transaction((client) => outbox.enqueue(client, {
-      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId, eventName: 'lead', ...extra,
+      companyId: ids.company.id, projectId: ids.project.id, environment: 'preview', trackingEventId, eventName: 'lead',
+      cliente: { ip: '189.68.172.6', userAgent: 'Mozilla/5.0 (iPhone)' },
+      contexto: { sourceUrl: 'https://lp.exemplo.test/oferta' },
+      ...extra,
     }));
     const destinos = async (trackingEventId) => (await database.query(
       'SELECT destination FROM conversions_outbox WHERE tracking_event_id = $1 ORDER BY destination', [trackingEventId],

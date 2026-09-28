@@ -6,6 +6,8 @@ const evento = {
   event_name: 'lead',
   event_time: 1_764_200_000,
   tracking_event_id: 'd1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29',
+  source_url: 'https://lp.exemplo.test/oferta',
+  client: { user_agent: 'Mozilla/5.0 (iPhone)' },
   user: { email_sha256: 'a'.repeat(64) },
   click_ids: {},
   params: {},

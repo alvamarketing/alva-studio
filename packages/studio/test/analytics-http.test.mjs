@@ -245,6 +245,11 @@ test('evento de VSL pelo coletor próprio entra no outbox comercial, um por dest
   const seed = await seedCompany(database, { email: 'outbox@alva.test', companyName: 'Outbox', slug: 'outbox-co' });
   const project = await seedProjectFor(database, seed.company, seed.user, { name: 'Projeto', slug: 'projeto-outbox' });
   await createWebsite(database, { companyId: seed.company.id, projectId: project.id }, 'trk-outbox');
+  // O coletor só sabe onde a conversão aconteceu pela origem CORS da chamada: é o domínio
+  // publicado, batendo com o que o navegador manda em `Origin`, que vira `event_source_url`
+  // na Meta. Sem o domínio verificado aqui, a chamada é tratada como mesma origem e a
+  // página some do evento — a Meta exige `event_source_url` e recusaria o evento.
+  await seedPublishedDomain(database, { companyId: seed.company.id, projectId: project.id }, 'vsl-outbox.exemplo.test');
   // O outbox só enfileira para projeto provisionado e com destino salvo — é a trava que
   // impede mandar evento de quem não configurou para onde ele vai.
   const { SecretVault } = await import('../server/repositories/publication-repository.mjs');
@@ -264,7 +269,7 @@ test('evento de VSL pelo coletor próprio entra no outbox comercial, um por dest
 
   const resposta = await fetch(`${app.base}/api/public/collect`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (iPhone)', Origin: 'https://vsl-outbox.exemplo.test' },
     body: JSON.stringify({
       trackerPublicId: 'trk-outbox',
       event_name: 'vsl_start',
