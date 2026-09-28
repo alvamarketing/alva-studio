@@ -19,7 +19,13 @@ const folha = (type, fields, defaultProps) => ({
   render: ({ puck: _puck, editMode: _editMode, id: _id, ...props }) => <Html type={type} props={props} />,
 });
 
-export const config = {
+// As VSLs publicadas do projeto viram uma lista para escolher: digitar um identificador era
+// convite ao erro, e VSL não publicada impede a página de publicar.
+export function criarConfig({ vsls = [] } = {}) {
+  const opcoesDeVsl = vsls.length
+    ? [{ label: 'Escolha uma VSL', value: '' }, ...vsls.map((vsl) => ({ label: vsl.name, value: vsl.publicId }))]
+    : [{ label: 'Nenhuma VSL publicada neste projeto', value: '' }];
+  return {
   categories: {
     estrutura: { title: 'Estrutura', components: ['section', 'columns'] },
     conteudo: { title: 'Conteúdo', components: ['heading', 'text', 'button', 'icon', 'image', 'vsl'] },
@@ -69,7 +75,7 @@ export const config = {
     },
     vsl: {
       label: 'VSL do Studio',
-      ...folha('vsl', { publicId: { type: 'text', label: 'Identificador da VSL publicada' } }, { publicId: '' }),
+      ...folha('vsl', { publicId: { type: 'select', label: 'VSL publicada', options: opcoesDeVsl } }, { publicId: '' }),
     },
     form: {
       label: 'Formulário',
@@ -102,3 +108,4 @@ export const config = {
     },
   },
 };
+}

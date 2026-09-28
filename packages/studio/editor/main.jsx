@@ -6,7 +6,8 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Puck, createUsePuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
-import { config } from './config.jsx';
+import { criarConfig } from './config.jsx';
+import { dicionario, larguras } from './dicionario.js';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
 import { elementosCss } from '../public/catalogo-elementos.js';
 import { runtimeCss, templateCss } from '../public/templates.js';
@@ -65,11 +66,18 @@ function Acoes({ pagina, aoSalvar, aviso }) {
 
 function Editor() {
   const [pagina, setPagina] = useState(null);
+  const [config, setConfig] = useState(null);
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
   useEffect(() => {
     if (!paginaId) { setErro('Abra o editor a partir da lista de páginas.'); return; }
-    api(`/pages/${encodeURIComponent(paginaId)}`).then(setPagina).catch((falha) => setErro(falha.message));
+    (async () => {
+      const aberta = await api(`/pages/${encodeURIComponent(paginaId)}`);
+      // Sem VSL no ambiente (ou sem permissão), o bloco só diz que não há o que escolher.
+      const videos = await api(`/projects/${aberta.projectId}/videos`).catch(() => []);
+      setConfig(criarConfig({ vsls: (Array.isArray(videos) ? videos : []).filter((video) => video.publishedVersionId) }));
+      setPagina(aberta);
+    })().catch((falha) => setErro(falha.message));
   }, []);
   const aviso = (texto) => { setMensagem(texto); setTimeout(() => setMensagem(''), 4000); };
   const aoSalvar = async (dados) => {
@@ -79,13 +87,15 @@ function Editor() {
     return salva;
   };
   if (erro) return <p className="alva-erro">{erro}</p>;
-  if (!pagina) return <p className="alva-carregando">Abrindo a página…</p>;
+  if (!pagina || !config) return <p className="alva-carregando">Abrindo a página…</p>;
   return (
     <>
       <Puck
         config={config}
         data={alvaParaPuck(pagina.editorState)}
         headerTitle={pagina.name}
+        dictionary={dicionario}
+        viewports={larguras}
         onPublish={aoSalvar}
         overrides={{
           iframe: IframeComFolhas,
