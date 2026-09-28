@@ -18,9 +18,7 @@ const expectedTables = [
   'projects',
   'pages',
   'page_versions',
-  'forms',
-  'form_versions',
-  'form_submissions',
+  'page_submissions',
   'project_domains',
   'project_integrations',
   'company_secrets',
@@ -87,6 +85,7 @@ async function page(database, seed, path = '/') {
   );
 }
 
+// Só existe até a 027: a 028 tirou o formulário antigo do banco.
 async function form(database, seed, path = '/form') {
   const formRoute = await route(database, seed, path, 'form');
   return row(
@@ -109,6 +108,7 @@ test('migrador cria as tabelas SaaS e pode ser executado duas vezes', async (t) 
     );
     const tableNames = new Set(rows.map(({ table_name: tableName }) => tableName));
     for (const tableName of expectedTables) assert.ok(tableNames.has(tableName), `faltou a tabela ${tableName}`);
+    for (const tableName of ['forms', 'form_versions', 'form_submissions']) assert.ok(!tableNames.has(tableName), `a tabela ${tableName} devia ter saído`);
   } finally {
     await database.close();
   }
@@ -235,14 +235,12 @@ test('upgrade de 001 populada preserva rotas publicadas e imutabilidade dos snap
   }
 });
 
-test('JSONB preserva estado do editor e schema do formulário', async (t) => {
+test('JSONB preserva estado do editor', async (t) => {
   const database = await migratedDatabase(t);
   try {
     const seed = await seedProject(database, { email: 'json@alva.test', companyName: 'JSON', slug: 'json' });
     const savedPage = await page(database, seed);
-    const savedForm = await form(database, seed);
     assert.equal(savedPage.editor_state.heading, 'Olá');
-    assert.deepEqual(savedForm.draft_schema.fields, ['email']);
   } finally {
     await database.close();
   }
@@ -254,37 +252,29 @@ test('versões e respostas não cruzam empresa, projeto ou conteúdo', async (t)
     const first = await seedProject(database, { email: 'primeiro@alva.test', companyName: 'Primeiro', slug: 'primeiro' });
     const second = await seedProject(database, { email: 'segundo@alva.test', companyName: 'Segundo', slug: 'segundo' });
     const firstPage = await page(database, first);
-    const firstForm = await form(database, first);
-    const secondForm = await form(database, second);
+    const secondPage = await page(database, second);
     const firstVersion = await row(
       database,
-      "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema) VALUES ($1, $2, $3, 1, '{}'::jsonb) RETURNING id",
-      [first.company.id, first.project.id, firstForm.id],
+      "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '') RETURNING id",
+      [first.company.id, first.project.id, firstPage.id],
     );
     const secondVersion = await row(
       database,
-      "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema) VALUES ($1, $2, $3, 1, '{}'::jsonb) RETURNING id",
-      [second.company.id, second.project.id, secondForm.id],
+      "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '') RETURNING id",
+      [second.company.id, second.project.id, secondPage.id],
     );
 
     await assert.rejects(
       () => database.query(
-        "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '')",
+        "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 2, '{}'::jsonb, '')",
         [first.company.id, second.project.id, firstPage.id],
       ),
       violates,
     );
     await assert.rejects(
       () => database.query(
-        "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema) VALUES ($1, $2, $3, 2, '{}'::jsonb)",
-        [first.company.id, second.project.id, firstForm.id],
-      ),
-      violates,
-    );
-    await assert.rejects(
-      () => database.query(
-        "INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers) VALUES ($1, $2, $3, $4, '{}'::jsonb)",
-        [first.company.id, first.project.id, firstForm.id, secondVersion.id],
+        "INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers) VALUES ($1, $2, $3, $4, gen_random_uuid(), '{}'::jsonb)",
+        [first.company.id, first.project.id, firstPage.id, secondVersion.id],
       ),
       violates,
     );
@@ -300,8 +290,6 @@ test('versão publicada pertence ao próprio conteúdo e snapshots são imutáve
     const seed = await seedProject(database, { email: 'versoes@alva.test', companyName: 'Versões', slug: 'versoes' });
     const firstPage = await page(database, seed, '/primeira');
     const secondPage = await page(database, seed, '/segunda');
-    const firstForm = await form(database, seed, '/form-primeiro');
-    const secondForm = await form(database, seed, '/form-segundo');
     const firstPageVersion = await row(
       database,
       "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '') RETURNING id",
@@ -312,35 +300,20 @@ test('versão publicada pertence ao próprio conteúdo e snapshots são imutáve
       "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '') RETURNING id",
       [seed.company.id, seed.project.id, secondPage.id],
     );
-    const firstFormVersion = await row(
-      database,
-      "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema) VALUES ($1, $2, $3, 1, '{}'::jsonb) RETURNING id",
-      [seed.company.id, seed.project.id, firstForm.id],
-    );
-    const secondFormVersion = await row(
-      database,
-      "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema) VALUES ($1, $2, $3, 1, '{}'::jsonb) RETURNING id",
-      [seed.company.id, seed.project.id, secondForm.id],
-    );
 
     await database.query('UPDATE pages SET published_version_id = $1 WHERE id = $2', [firstPageVersion.id, firstPage.id]);
-    await database.query('UPDATE forms SET published_version_id = $1 WHERE id = $2', [firstFormVersion.id, firstForm.id]);
     await assert.rejects(
       () => database.query('UPDATE pages SET published_version_id = $1 WHERE id = $2', [secondPageVersion.id, firstPage.id]),
       violates,
     );
-    await assert.rejects(
-      () => database.query('UPDATE forms SET published_version_id = $1 WHERE id = $2', [secondFormVersion.id, firstForm.id]),
-      violates,
-    );
     await assert.rejects(() => database.query("UPDATE page_versions SET rendered_html = '<h1>novo</h1>' WHERE id = $1", [firstPageVersion.id]), /imutáveis/i);
-    await assert.rejects(() => database.query('DELETE FROM form_versions WHERE id = $1', [firstFormVersion.id]), /imutáveis/i);
+    await assert.rejects(() => database.query('DELETE FROM page_versions WHERE id = $1', [firstPageVersion.id]), /imutáveis/i);
   } finally {
     await database.close();
   }
 });
 
-test('sessão exige membership ativa e rotas são compartilhadas entre páginas e formulários', async (t) => {
+test('sessão exige membership ativa e a rota de uma página não troca de tipo', async (t) => {
   const database = await migratedDatabase(t);
   try {
     const seed = await seedProject(database, { email: 'sessao@alva.test', companyName: 'Sessão', slug: 'sessao' });
@@ -373,6 +346,53 @@ test('sessão exige membership ativa e rotas são compartilhadas entre páginas 
     );
     const savedPage = await page(database, seed, '/oferta');
     await assert.rejects(() => route(database, seed, '/oferta', 'form'), violates);
+    const savedRoute = await row(database, 'SELECT route_id FROM pages WHERE id = $1', [savedPage.id]);
+    await assert.rejects(
+      () => database.query("UPDATE project_routes SET content_type = 'form' WHERE id = $1", [savedRoute.route_id]),
+      /tipo.*rota.*vinculada/i,
+    );
+  } finally {
+    await database.close();
+  }
+});
+
+test('a 028 tira o formulário antigo de um banco que tinha formulário, resposta e entrega', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const { createDatabase, migrate } = await import('../server/db/postgres.mjs');
+  const database = createDatabase({ connectionString });
+  const temporaryMigrations = await mkdtemp(join(tmpdir(), 'alva-migrations-028-'));
+  t.after(() => rm(temporaryMigrations, { recursive: true, force: true }));
+  try {
+    const { readdir } = await import('node:fs/promises');
+    const todas = (await readdir(sourceMigrations)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
+    for (const name of todas.filter((name) => name < '028_')) await writeFile(join(temporaryMigrations, name), await readFile(join(sourceMigrations, name)));
+    await migrate(database, { migrationsPath: temporaryMigrations });
+
+    const seed = await seedProject(database, { email: 'forms-028@alva.test', companyName: 'Forms 028', slug: 'forms-028' });
+    const savedForm = await form(database, seed, '/quiz-antigo');
+    const formVersion = await row(database, "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema, published_path) VALUES ($1, $2, $3, 1, '{}'::jsonb, '/quiz-antigo') RETURNING id", [seed.company.id, seed.project.id, savedForm.id]);
+    const submission = await row(database, "INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers) VALUES ($1, $2, $3, $4, '{}'::jsonb) RETURNING id", [seed.company.id, seed.project.id, savedForm.id, formVersion.id]);
+    const formDelivery = await row(database, "INSERT INTO webhook_deliveries (company_id, project_id, form_id, submission_id, url, event) VALUES ($1, $2, $3, $4, 'https://hook.test', '{}'::jsonb) RETURNING id", [seed.company.id, seed.project.id, savedForm.id, submission.id]);
+    await database.query("INSERT INTO webhook_delivery_attempts (delivery_id, company_id, project_id, attempt_number, outcome) VALUES ($1, $2, $3, 1, 'failed')", [formDelivery.id, seed.company.id, seed.project.id]);
+    const savedPage = await page(database, seed, '/landing');
+    const pageVersion = await row(database, "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '') RETURNING id", [seed.company.id, seed.project.id, savedPage.id]);
+    const pageSubmission = await row(database, "INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers) VALUES ($1, $2, $3, $4, gen_random_uuid(), '{}'::jsonb) RETURNING id", [seed.company.id, seed.project.id, savedPage.id, pageVersion.id]);
+    const pageDelivery = await row(database, "INSERT INTO webhook_deliveries (company_id, project_id, source_kind, page_id, page_submission_id, url, event) VALUES ($1, $2, 'page', $3, $4, 'https://hook.test', '{}'::jsonb) RETURNING id", [seed.company.id, seed.project.id, savedPage.id, pageSubmission.id]);
+
+    await writeFile(join(temporaryMigrations, '028_remove_forms.sql'), await readFile(join(sourceMigrations, '028_remove_forms.sql')));
+    await migrate(database, { migrationsPath: temporaryMigrations });
+
+    const tables = new Set((await database.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")).rows.map((item) => item.table_name));
+    for (const tableName of ['forms', 'form_versions', 'form_submissions']) assert.ok(!tables.has(tableName), `a tabela ${tableName} devia ter saído`);
+    const columns = new Set((await database.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'webhook_deliveries'")).rows.map((item) => item.column_name));
+    assert.ok(!columns.has('form_id') && !columns.has('submission_id'));
+    assert.deepEqual((await database.query('SELECT id FROM webhook_deliveries')).rows.map((item) => item.id), [pageDelivery.id], 'a entrega da página fica; a do formulário sai');
+    assert.equal((await row(database, 'SELECT count(*)::int AS count FROM webhook_delivery_attempts')).count, 0);
+    // A rota do formulário saiu e o caminho volta a servir uma página.
+    assert.equal((await row(database, "SELECT count(*)::int AS count FROM project_routes WHERE content_type = 'form'")).count, 0);
+    await page(database, seed, '/quiz-antigo');
+    await assert.rejects(() => route(database, seed, '/outro-quiz', 'form'), violates);
+    await assert.rejects(() => database.query("INSERT INTO webhook_deliveries (company_id, project_id, url, event) VALUES ($1, $2, 'https://hook.test', '{}'::jsonb)", [seed.company.id, seed.project.id]), (error) => error?.code === '23502');
     const savedRoute = await row(database, 'SELECT route_id FROM pages WHERE id = $1', [savedPage.id]);
     await assert.rejects(
       () => database.query("UPDATE project_routes SET content_type = 'form' WHERE id = $1", [savedRoute.route_id]),

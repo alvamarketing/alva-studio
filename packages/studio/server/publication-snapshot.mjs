@@ -1,9 +1,6 @@
 import { createHash } from 'node:crypto';
 import { normalizeRoute } from './domain/access.mjs';
-import { normalizeFormInput } from './form-store.mjs';
-import { renderDynamicForm } from './dynamic-form.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from './vsl-reference.mjs';
-import { formContentSecurityPolicy } from './content-security-policy.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -25,12 +22,8 @@ function escapeAttribute(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 }
 
-function withoutFrameAncestors(policy) {
-  return policy.split('; ').filter((directive) => !directive.startsWith('frame-ancestors')).join('; ');
-}
-
 // A página estática ainda não emite CSP (fica para a fase 2, via cabeçalho em vercel.json);
-// aqui só entra o script do tracker, no mesmo padrão do formulário.
+// aqui só entra o script do tracker.
 function injectPageTracker(html, { nonce, trackerPublicId, trackerHostUrl }) {
   if (!trackerPublicId) return html;
   const host = trackerHostUrl ? new URL(trackerHostUrl).origin : '';
@@ -39,26 +32,12 @@ function injectPageTracker(html, { nonce, trackerPublicId, trackerHostUrl }) {
   return html.includes('</body>') ? html.replace('</body>', `${script}</body>`) : `${html}${script}`;
 }
 
-function injectPublicationCsp(html, policy) {
-  return html.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}">`);
-}
-
 async function resolveAnalyticsTrackerPublicId(database, companyId, projectId, environment = 'production') {
   const { rows } = await database.query(
     `SELECT tracker_public_id FROM analytics_websites WHERE company_id = $1 AND project_id = $2 AND environment = $3 LIMIT 1`,
     [companyId, projectId, environment],
   );
   return rows[0]?.tracker_public_id || null;
-}
-
-function publicFormAction(publicOrigin, companySlug, projectSlug, path) {
-  const origin = new URL(publicOrigin);
-  const segments = path === '/' ? [] : path.slice(1).split('/');
-  const route = segments.map((segment) => encodeURIComponent(segment)).join('/');
-  origin.pathname = `/api/public/forms/${encodeURIComponent(companySlug)}/${encodeURIComponent(projectSlug)}${route ? `/${route}` : ''}/submissions`;
-  origin.search = '';
-  origin.hash = '';
-  return origin.toString();
 }
 
 const CAPTURE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -226,50 +205,26 @@ function validateOrigin(value) {
 }
 
 function recordForRow(row, publicOrigin, vslEmbedUrls = new Map(), { nonce, trackerPublicId } = {}) {
-  if (!row || !['page', 'form'].includes(row.kind)) throw fail('Conteúdo publicado inválido.', 409);
+  if (!row || row.kind !== 'page') throw fail('Conteúdo publicado inválido.', 409);
   let path;
   try { path = normalizeRoute(row.path); } catch { throw fail('A publicação contém uma rota inválida.', 409); }
   if (!row.company_id || !row.project_id || !row.content_id || !row.version_id) throw fail('A publicação contém uma versão inválida.', 409);
-  if (row.kind === 'page') {
-    if (typeof row.rendered_html !== 'string' || !row.rendered_html.trim()) throw fail('A publicação contém uma página vazia.', 409);
-    const captureIds = captureIdsForPage(row.capture_schema);
-    const pageHtml = rewritePageCaptureActions(renderPublishedVslReferences(row.rendered_html, { vslEmbedUrls }), {
-      publicOrigin, companySlug: row.company_slug, projectSlug: row.project_slug, path, captureIds,
-    });
-    return {
-      path,
-      type: 'page',
-      contentId: row.content_id,
-      versionId: row.version_id,
-      versionNumber: row.version_number,
-      captureIds,
-      file: pathFile(path),
-      data: injectPageTracker(pageHtml, { nonce, trackerPublicId, trackerHostUrl: publicOrigin }),
-    };
-  }
-  if (!row.company_slug || !row.project_slug) throw fail('A publicação não encontrou o projeto público.', 409);
-  let schema;
-  try { schema = normalizeFormInput(row.schema); } catch { throw fail('A publicação contém um formulário inválido.', 409); }
-  const form = { ...schema, id: row.content_id, name: row.name || 'Formulário' };
-  const actionUrl = publicFormAction(publicOrigin, row.company_slug, row.project_slug, path);
-  const html = renderDynamicForm(form, actionUrl, { vslEmbedUrls, nonce, trackerPublicId });
-  const policy = withoutFrameAncestors(formContentSecurityPolicy({
-    nonce,
-    studioOrigin: publicOrigin,
-    actionOrigin: new URL(actionUrl).origin,
-    frameOrigins: vslEmbedUrls.size ? [publicOrigin] : [],
-  }));
+  if (typeof row.rendered_html !== 'string' || !row.rendered_html.trim()) throw fail('A publicação contém uma página vazia.', 409);
+  const captureIds = captureIdsForPage(row.capture_schema);
+  const pageHtml = rewritePageCaptureActions(renderPublishedVslReferences(row.rendered_html, { vslEmbedUrls }), {
+    publicOrigin, companySlug: row.company_slug, projectSlug: row.project_slug, path, captureIds,
+  });
   return {
     path,
-    type: 'form',
+    type: 'page',
     contentId: row.content_id,
     versionId: row.version_id,
     versionNumber: row.version_number,
+    captureIds,
     file: pathFile(path),
-    data: injectPublicationCsp(html, policy),
+    data: injectPageTracker(pageHtml, { nonce, trackerPublicId, trackerHostUrl: publicOrigin }),
   };
 }
-
 export async function buildPublishableSnapshot({ database, companyId, projectId, environment = 'production', publicOrigin = process.env.PUBLIC_ORIGIN }) {
   if (!database || typeof database.query !== 'function') throw new Error('Banco inválido para snapshot.');
   if (!companyId || !projectId) throw fail('Empresa e projeto são obrigatórios.', 400);
@@ -278,28 +233,16 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     `SELECT 'page' AS kind, page.company_id, page.project_id, company.slug AS company_slug,
             project.slug AS project_slug, page.id AS content_id, version.id AS version_id,
             version.version_number, version.published_path AS path, version.rendered_html,
-            version.editor_state, version.capture_schema,
-            NULL::jsonb AS schema, page.name
+            version.editor_state, version.capture_schema, page.name
        FROM pages page
        JOIN companies company ON company.id = page.company_id
        JOIN projects project ON project.id = page.project_id AND project.company_id = page.company_id
        JOIN page_versions version ON version.id = page.published_version_id
-      WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL
-     UNION ALL
-     SELECT 'form' AS kind, form.company_id, form.project_id, company.slug AS company_slug,
-            project.slug AS project_slug, form.id AS content_id, version.id AS version_id,
-            version.version_number, version.published_path AS path, NULL::text AS rendered_html,
-            NULL::jsonb AS editor_state, NULL::jsonb AS capture_schema,
-            version.schema, form.name
-       FROM forms form
-       JOIN companies company ON company.id = form.company_id
-       JOIN projects project ON project.id = form.project_id AND project.company_id = form.company_id
-       JOIN form_versions version ON version.id = form.published_version_id
-      WHERE form.company_id = $1 AND form.project_id = $2 AND form.deleted_at IS NULL`,
+      WHERE page.company_id = $1 AND page.project_id = $2 AND page.deleted_at IS NULL`,
     [companyId, projectId],
   );
   if (!rows.length) throw fail('Não há nenhuma rota publicada para este projeto.', 409);
-  const references = rows.flatMap((row) => vslReferences(row.editor_state).concat(vslReferences(row.schema)));
+  const references = rows.flatMap((row) => vslReferences(row.editor_state));
   let resolvedVsl;
   try {
     resolvedVsl = await resolvePublishedVslReferences({ database, companyId, projectId, publicOrigin: origin, references });
@@ -311,14 +254,16 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
   }
   const vslEmbedUrls = new Map([...resolvedVsl].map(([publicId, value]) => [publicId, value.embedUrl]));
   if (!['preview', 'production'].includes(environment)) throw fail('Ambiente de publicação inválido.', 400);
+  // `schema: null` era o esquema do formulário antigo. Fica no cálculo para o hash de uma
+  // publicação que já está no ar não mudar sem que o conteúdo dela tenha mudado.
   const contentRows = rows
-    .map((row) => ({ kind: row.kind, company_slug: row.company_slug, project_slug: row.project_slug, path: row.path, content_id: row.content_id, version_id: row.version_id, version_number: row.version_number, name: row.name, rendered_html: row.rendered_html, schema: row.schema, capture_schema: row.capture_schema, editor_state: row.editor_state }))
+    .map((row) => ({ kind: row.kind, company_slug: row.company_slug, project_slug: row.project_slug, path: row.path, content_id: row.content_id, version_id: row.version_id, version_number: row.version_number, name: row.name, rendered_html: row.rendered_html, schema: null, capture_schema: row.capture_schema, editor_state: row.editor_state }))
     .sort((left, right) => left.version_id.localeCompare(right.version_id));
   const contentHash = createHash('sha256').update(JSON.stringify(canonical({ rows: contentRows }))).digest('hex');
   const trackerPublicId = await resolveAnalyticsTrackerPublicId(database, companyId, projectId, environment);
   const fingerprint = createHash('sha256').update(JSON.stringify(canonical({
     rows: rows
-      .map((row) => ({ path: row.path, rendered_html: row.rendered_html, schema: row.schema, capture_schema: row.capture_schema, editor_state: row.editor_state, version_id: row.version_id }))
+      .map((row) => ({ path: row.path, rendered_html: row.rendered_html, schema: null, capture_schema: row.capture_schema, editor_state: row.editor_state, version_id: row.version_id }))
       .sort((left, right) => left.version_id.localeCompare(right.version_id)),
     vslEmbedUrls: [...vslEmbedUrls],
     trackerPublicId,
@@ -335,7 +280,7 @@ export async function buildPublishableSnapshot({ database, companyId, projectId,
     if (seen.has(key)) throw fail('A publicação contém uma rota duplicada.', 409);
     seen.add(key);
   }
-  const manifest = records.map(({ path, type, contentId, versionId, versionNumber, file, captureIds }) => ({ path, type, contentId, versionId, versionNumber, file, ...(type === 'page' ? { captureIds } : {}) }));
+  const manifest = records.map(({ path, type, contentId, versionId, versionNumber, file, captureIds }) => ({ path, type, contentId, versionId, versionNumber, file, captureIds }));
   const files = records.map(({ file, data }) => ({ file, data }));
   const hash = createHash('sha256').update(JSON.stringify(canonical({ manifest, files }))).digest('hex');
   return { manifest, files, hash, contentHash };

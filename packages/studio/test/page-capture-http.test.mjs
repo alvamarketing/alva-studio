@@ -49,8 +49,6 @@ test('HTTP de captura publicada usa versão congelada, gateway assinado e namesp
     { tagName: 'label', components: [{ type: 'textnode', content: 'Interesses' }, { type: 'alva-field', attributes: { name: 'interesses', type: 'checkbox', value: 'b' } }] },
   ] }] };
   const page = await content.createPage({ companyId: company.id, projectId: project.id, actorId: user.id, name: 'Landing', route: '/landing', editorState: stateA, renderedHtml: '<form></form>' });
-  const quiz = await content.createForm({ companyId: company.id, projectId: project.id, actorId: user.id, name: 'Quiz legado', route: '/quiz', draftSchema: { headerElements: [], steps: [{ id: 'email', type: 'email', title: 'E-mail', required: true }], completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' }, webhook: '' } });
-  await content.publishForm({ companyId: company.id, projectId: project.id, actorId: user.id, formId: quiz.id });
   const versionA = await content.publishPage({ companyId: company.id, projectId: project.id, actorId: user.id, pageId: page.id, lockVersion: page.lockVersion });
   const captureId = versionA.editorState.components[0].attributes['data-alva-capture-id'];
   const changed = await content.updatePage({ companyId: company.id, projectId: project.id, actorId: user.id, pageId: page.id, lockVersion: page.lockVersion, editorState: { ...versionA.editorState, components: [{ ...versionA.editorState.components[0], components: [...versionA.editorState.components[0].components, { tagName: 'label', components: [{ type: 'textnode', content: 'Nome' }, { type: 'alva-field', attributes: { name: 'nome', type: 'text', required: '' } }] }] }] } });
@@ -84,8 +82,9 @@ test('HTTP de captura publicada usa versão congelada, gateway assinado e namesp
   assert.equal(submission.page_version_id, versionA.id);
   assert.deepEqual(submission.answers, { email: 'lead@example.test', interesses: ['a', 'b'] });
 
+  // O envio do formulário antigo não tem mais rota pública.
   const legacyQuiz = await http(base, '/api/public/forms/acme/landing/quiz/submissions', { method: 'POST', body: Buffer.from('{"answers":{"email":"quiz@example.test"}}'), headers: { Host: 'studio.example.test', Origin: 'https://studio.example.test', 'Content-Type': 'application/json' } });
-  assert.equal(legacyQuiz.status, 200, legacyQuiz.text);
+  assert.notEqual(legacyQuiz.status, 200, legacyQuiz.text);
 
   const wrongOrigin = await http(base, path, { method: 'POST', body, headers: { ...headers, Origin: 'https://evil.example.test', ...signed('POST', path, body, 'nonce-capture-origin-1') } });
   assert.equal(wrongOrigin.status, 403);

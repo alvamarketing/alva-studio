@@ -128,7 +128,7 @@ test('overview mantém a prévia READY separada da última produção', async ()
 });
 
 test('produção adiciona Function ao payload da Vercel sem alterar snapshot e registra o manifesto pelo host retornado', async () => {
-  const snapshot = { hash: 'a'.repeat(64), contentHash: 'c'.repeat(64), manifest: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'], versionNumber: 1, file: 'index.html' }], files: [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }] };
+  const snapshot = { hash: 'a'.repeat(64), contentHash: 'c'.repeat(64), manifest: [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'version-a', captureIds: ['11111111-1111-4111-8111-111111111111'], versionNumber: 1, file: 'index.html' }], files: [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/pages/acme/lp/captures/11111111-1111-4111-8111-111111111111/submissions"></form></body></html>' }] };
   const calls = []; let savedManifest;
   const service = new PublicationService({
     snapshotBuilder: { build: async () => snapshot },
@@ -146,9 +146,9 @@ test('produção adiciona Function ao payload da Vercel sem alterar snapshot e r
     audit: { record: async () => {} },
   });
   await service.production({ companyId: 'company', projectId: 'project', requestedBy: 'user', previewRunId: 'preview-1', confirmed: true, expectedRevision: 3 });
-  assert.deepEqual(snapshot.files, [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/forms/acme/lp/submissions"></form></body></html>' }]);
+  assert.deepEqual(snapshot.files, [{ file: 'index.html', data: '<html><body><form action="https://studio.example.test/api/public/pages/acme/lp/captures/11111111-1111-4111-8111-111111111111/submissions"></form></body></html>' }]);
   assert.ok(calls[0].files.some((file) => file.file === 'api/_alva/[...path].js'));
-  assert.match(calls[0].files.find((file) => file.file === 'index.html').data, /action="\/api\/public\/forms\/acme\/lp\/submissions"/);
+  assert.match(calls[0].files.find((file) => file.file === 'index.html').data, /action="\/api\/public\/pages\/captures\/11111111-1111-4111-8111-111111111111\/submissions"/);
   assert.equal(calls[0].runtimeEnv.PUBLICATION_RUNTIME_HMAC_SECRET, undefined);
   assert.equal(savedManifest.manifest.publicationId, 'run-production');
   assert.equal(savedManifest.manifest.origin, 'https://lp.example.test');

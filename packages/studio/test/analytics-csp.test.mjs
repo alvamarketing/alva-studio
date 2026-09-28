@@ -6,7 +6,7 @@ function basePolicy(overrides = {}) {
   return formContentSecurityPolicy({
     nonce: createNonce(),
     studioOrigin: 'https://studio.example.test',
-    actionOrigin: 'https://studio.example.test/api/public/forms/x/submissions',
+    actionOrigin: 'https://studio.example.test/api/public/pages/x/submissions',
     ...overrides,
   });
 }
@@ -42,13 +42,13 @@ test('modo reportOnly muda apenas o nome do cabeçalho, não a política', () =>
   const enforced = formContentSecurityPolicy({
     nonce,
     studioOrigin: 'https://studio.example.test',
-    actionOrigin: 'https://studio.example.test/api/public/forms/x/submissions',
+    actionOrigin: 'https://studio.example.test/api/public/pages/x/submissions',
     reportOnly: false,
   });
   const reportOnly = formContentSecurityPolicy({
     nonce,
     studioOrigin: 'https://studio.example.test',
-    actionOrigin: 'https://studio.example.test/api/public/forms/x/submissions',
+    actionOrigin: 'https://studio.example.test/api/public/pages/x/submissions',
     reportOnly: true,
   });
   assert.equal(enforced, reportOnly);

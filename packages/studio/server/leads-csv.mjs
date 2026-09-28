@@ -12,13 +12,12 @@ function cell(value) {
   return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
-export function renderLeadsCsv({ formName, fields, submissions }) {
+export function renderLeadsCsv({ fields, submissions }) {
   const columns = [
     { kind: 'metadata', key: 'submittedAt', title: 'Recebida em' },
     { kind: 'metadata', key: 'sourceName', title: 'Formulário' },
+    { kind: 'metadata', key: 'captureName', title: 'Captura' },
   ];
-  if (submissions.some((submission) => submission.sourceKind === 'page'))
-    columns.push({ kind: 'metadata', key: 'captureName', title: 'Captura' });
   const fieldsBySubmission = new Map();
   const addColumn = (field, submission) => {
     if (!field?.id) return;
@@ -52,7 +51,7 @@ export function renderLeadsCsv({ formName, fields, submissions }) {
   for (const submission of submissions) {
     rows.push(columns.map((column) => {
       if (column.kind === 'metadata' && column.key === 'submittedAt') return cell(submission.submittedAt);
-      if (column.kind === 'metadata' && column.key === 'sourceName') return cell(submission.formName ?? submission.sourceName ?? formName);
+      if (column.kind === 'metadata' && column.key === 'sourceName') return cell(submission.sourceName ?? '');
       if (column.kind === 'metadata' && column.key === 'captureName') return cell(submission.captureName ?? '');
       return cell(fieldsBySubmission.get(submission)?.get(column.id) === column.key ? submission.answers?.[column.id] : '');
     }).join(','));

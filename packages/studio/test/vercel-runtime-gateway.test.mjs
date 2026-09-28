@@ -22,14 +22,14 @@ test('gateway da Vercel preserva corpo e cookie, assina o request e não recebe 
   });
   const result = await gateway({
     method: 'POST',
-    path: '/api/public/forms/acme/lp/captura/submissions',
+    path: '/api/public/pages/captures/11111111-1111-4111-8111-111111111111/submissions',
     headers: { cookie: 'alva_runtime_consent=subject-1234567890; other=1', origin: 'https://lp.example.test', 'content-type': 'application/json' },
     body: Buffer.from('{"answers":{"email":"pessoa@example.test"}}'),
   });
   assert.equal(JSON.stringify(artefato.runtimeEnv).includes('root-secret-only-at-studio'), false);
   assert.equal(result.status, 201);
   assert.equal(Buffer.from(result.body).toString(), 'ok');
-  assert.equal(requests[0].url, 'https://studio.example.test/api/public/forms/acme/lp/captura/submissions');
+  assert.equal(requests[0].url, 'https://studio.example.test/api/public/pages/captures/11111111-1111-4111-8111-111111111111/submissions');
   assert.equal(Buffer.from(requests[0].init.body).toString(), '{"answers":{"email":"pessoa@example.test"}}');
   assert.equal(requests[0].init.headers.cookie, 'alva_runtime_consent=subject-1234567890; other=1');
   assert.equal(requests[0].init.headers['x-alva-public-host'], 'lp.example.test');
@@ -39,7 +39,7 @@ test('gateway da Vercel preserva corpo e cookie, assina o request e não recebe 
   assert.deepEqual(result.headers['set-cookie'], ['alva_runtime_consent=subject-1234567890; HttpOnly; Path=/']);
 });
 
-test('artefatos da Function roteiam runtime e formulários por uma única fronteira e não alteram o snapshot', () => {
+test('artefatos da Function roteiam runtime e capturas por uma única fronteira e não alteram o snapshot', () => {
   const snapshotFiles = [{ file: 'index.html', data: '<html><head></head><body><form action="https://studio.example.test/api/public/pages/acme/campanha/captures/11111111-1111-4111-8111-111111111111/submissions"></form>Olá</body></html>' }, { file: 'contato/index.html', data: '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'; connect-src \'self\'; form-action https://studio.example.test"><body>Contato</body>' }];
   const artifacts = runtimeGatewayArtifacts(snapshotFiles, {
     publicationId: scope.publicationId,
@@ -53,7 +53,7 @@ test('artefatos da Function roteiam runtime e formulários por uma única fronte
   const names = artifacts.files.map((file) => file.file).sort();
   assert.deepEqual(names, ['api/_alva/[...path].js', 'api/_alva/gateway.cjs', 'contato/index.html', 'index.html', 'vercel.json']);
   const config = JSON.parse(artifacts.files.find((file) => file.file === 'vercel.json').data);
-  assert.deepEqual(config.rewrites.map((rewrite) => rewrite.destination), ['/api/_alva/runtime/:path*', '/api/_alva/forms/:path*', '/api/_alva/pages/:path*']);
+  assert.deepEqual(config.rewrites.map((rewrite) => rewrite.destination), ['/api/_alva/runtime/:path*', '/api/_alva/pages/:path*']);
   const source = artifacts.files.find((file) => file.file === 'api/_alva/gateway.cjs').data;
   assert.match(source, /PUBLICATION_RUNTIME_DERIVED_KEY/);
   assert.match(source, /ALVA_RUNTIME_GATEWAY_ORIGIN/);
@@ -104,10 +104,15 @@ test('gateway recusa rota, host ou escopo inválido antes de qualquer request in
   const { gateway } = await publicado({ fetchImpl });
   const rota = await gateway({ method: 'POST', path: '/api/_alva/private/users' });
   assert.deepEqual([rota.status, rota.text], [404, 'Rota não encontrada.']);
-  const host = await gateway({ method: 'POST', path: '/api/public/forms/x/submissions', headers: { host: 'evil.test\nheader: nope' } });
+  // O envio do formulário antigo não tem mais rota no gateway.
+  for (const antigo of ['/api/public/forms/x/submissions', '/api/_alva/forms/x/submissions']) {
+    const resposta = await gateway({ method: 'POST', path: antigo });
+    assert.deepEqual([resposta.status, resposta.text], [404, 'Rota não encontrada.'], antigo);
+  }
+  const host = await gateway({ method: 'POST', path: '/api/public/pages/x/submissions', headers: { host: 'evil.test\nheader: nope' } });
   assert.deepEqual([host.status, host.text], [400, 'Host inválido.']);
   const { gateway: foraDoEscopo } = await publicado({ fetchImpl, env: { ALVA_RUNTIME_ENVIRONMENT: 'development' } });
-  const escopo = await foraDoEscopo({ method: 'POST', path: '/api/public/forms/x/submissions' });
+  const escopo = await foraDoEscopo({ method: 'POST', path: '/api/public/pages/x/submissions' });
   assert.deepEqual([escopo.status, escopo.text], [500, 'Runtime indisponível.']);
   assert.equal(calls, 0);
 });

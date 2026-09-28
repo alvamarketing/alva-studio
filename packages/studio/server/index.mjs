@@ -8,8 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Store } from './store.mjs';
 import { Publisher } from './publisher.mjs';
 import { Auth } from './auth.mjs';
-import { FormStore } from './form-store.mjs';
-import { renderDynamicForm, renderCompletion } from './dynamic-form.mjs';
+import { renderCompletion } from './pagina-de-obrigado.mjs';
 import { SessionService } from './session-service.mjs';
 import { createProjectApi } from './project-api.mjs';
 import { CompanyRepository } from './repositories/company-repository.mjs';
@@ -25,8 +24,7 @@ import { WebhookDeliveryRepository } from './repositories/webhook-repository.mjs
 import { startWebhookWorker } from './webhook-worker.mjs';
 import { normalizeRoute } from './domain/access.mjs';
 import { createDatabase, migrate } from './db/postgres.mjs';
-import { PublicationSnapshotBuilder, extractVslReferences } from './publication-snapshot.mjs';
-import { resolvePublishedVslReferencesForRender } from './vsl-reference.mjs';
+import { PublicationSnapshotBuilder } from './publication-snapshot.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
@@ -75,51 +73,6 @@ function decodedSegment(value) {
   return decoded;
 }
 
-function encodedRoute(route) {
-  return route === '/' ? '' : route.slice(1).split('/').map(encodeURIComponent).join('/');
-}
-
-function parsePublicFormRequest(path, method, domainScope) {
-  let encoded;
-  if (method === 'GET') {
-    if (path === '/f') encoded = '';
-    else if (path.startsWith('/f/')) encoded = path.slice(3);
-    else return null;
-    if (encoded.endsWith('/')) encoded = encoded.slice(0, -1);
-  } else if (method === 'POST' || method === 'OPTIONS') {
-    const prefix = '/api/public/forms';
-    const suffix = '/submissions';
-    if ((path !== prefix && !path.startsWith(`${prefix}/`)) || !path.endsWith(suffix)) return null;
-    encoded = path.slice(prefix.length, -suffix.length);
-    if (encoded.startsWith('/')) encoded = encoded.slice(1);
-    if (encoded.endsWith('/')) encoded = encoded.slice(0, -1);
-  } else return null;
-
-  try {
-    const segments = encoded === '' ? [] : encoded.split('/').map(decodedSegment);
-    let companySlug;
-    let projectSlug;
-    let routeSegments = segments;
-    if (!domainScope) {
-      if (segments.length < 2 || !segments.slice(0, 2).every((segment) => /^[a-z0-9-]{1,80}$/.test(segment))) return null;
-      [companySlug, projectSlug] = segments;
-      routeSegments = segments.slice(2);
-    }
-    const route = normalizeRoute(routeSegments.length ? `/${routeSegments.join('/')}` : '/');
-    const routePath = encodedRoute(route);
-    const namespace = domainScope
-      ? ''
-      : `/${encodeURIComponent(companySlug)}/${encodeURIComponent(projectSlug)}`;
-    return {
-      companySlug,
-      projectSlug,
-      route,
-      action: `/api/public/forms${namespace}${routePath ? `/${routePath}` : ''}/submissions`,
-    };
-  } catch {
-    return null;
-  }
-}
 export function parsePageCaptureRequest(path, method, domainScope) {
   if (!['POST', 'OPTIONS'].includes(method)) return null;
   const prefix = '/api/public/pages';
@@ -154,8 +107,8 @@ async function runtimeNamespaceMatches(database, manifest, companySlug, projectS
 // requisição — que, para uma captura, é o endereço da função da Vercel, igual para todo
 // visitante. Sem assinatura, nada é enviado: nada é melhor que dado falso.
 // Quem enviou. Pelo gateway, o visitante assinado — o IP e o navegador que chegam ao
-// Studio ali são os da função da Vercel. Sem gateway (o formulário aberto direto no
-// Studio), quem faz a requisição é o próprio navegador da pessoa, e o navegador dela vale.
+// Studio ali são os da função da Vercel. Sem gateway, quem faz a requisição é o próprio
+// navegador da pessoa, e o navegador dela vale.
 // O IP não: atrás de um proxy, o endereço do socket é o do proxy, e a Meta pede o IP real.
 // Quem fez a requisição, para reconhecer o mesmo envio repetido. Não sai do Studio: vira
 // hash na chave de reenvio. Por isso, sem gateway, o endereço do socket serve aqui.
@@ -235,15 +188,6 @@ async function trackerPublicIdForVideo(database, videoPublicId) {
   return rows[0]?.tracker_public_id || null;
 }
 
-async function trackerPublicIdForProject(database, companyId, projectId) {
-  const { rows } = await database.query(
-    `SELECT tracker_public_id FROM analytics_websites
-      WHERE company_id = $1 AND project_id = $2 AND environment = 'production' LIMIT 1`,
-    [companyId, projectId],
-  );
-  return rows[0]?.tracker_public_id || null;
-}
-
 // Mesmo padrão de startWebhookWorker: laço independente do ciclo de requisição,
 // unref() para não segurar o processo vivo, e parado explicitamente no close do servidor.
 function startAnalyticsRetentionWorker({ analytics, intervalMs = 24 * 60 * 60 * 1000 }) {
@@ -287,7 +231,6 @@ export function createApp({
   const auth = new Auth(dataDir, authOptions);
   const getPublisher = async () => injectedPublisher || new Publisher(await auth.credentials());
   const store = new Store(dataDir);
-  const formStore = new FormStore(dataDir);
   let content = null;
   const videos = database ? new VideoRepository(database) : null;
   // Hospedagem do vídeo na conta Cloudflare de quem opera o Studio. Fica desligada até
@@ -414,13 +357,11 @@ export function createApp({
     '/quiz-elements.js': ['public/quiz-elements.js', 'text/javascript'],
     '/catalogo-elementos.js': ['public/catalogo-elementos.js', 'text/javascript'],
     '/quiz-navigation.js': ['public/quiz-navigation.js', 'text/javascript'],
-    '/quiz-calculations.js': ['public/quiz-calculations.js', 'text/javascript'],
     '/editor-workspace.js': ['public/editor-workspace.js', 'text/javascript'],
     '/studio-shell.js': ['public/studio-shell.js', 'text/javascript'],
     '/studio-context-boundary.js': ['public/studio-context-boundary.js', 'text/javascript'],
     '/context-list.js': ['public/context-list.js', 'text/javascript'],
     '/studio-dashboard.js': ['public/studio-dashboard.js', 'text/javascript'],
-    '/forms.css': ['public/forms.css', 'text/css'],
     '/save-cycle.js': ['public/save-cycle.js', 'text/javascript'],
     '/styles.css': ['public/styles.css', 'text/css'],
     '/tokens.css': ['public/styles.css', 'text/css'],
@@ -485,25 +426,17 @@ export function createApp({
       const effectiveHost = gatewayHost || req.headers.host;
       const studioHost = publicOrigin && effectiveHost === new URL(publicOrigin).host;
       const domainScope = Boolean(publicOrigin && !studioHost);
-      const publicFormRequest = content ? parsePublicFormRequest(path, req.method, domainScope) : null;
       const pageCaptureRequest = content ? parsePageCaptureRequest(path, req.method, domainScope) : null;
-      const legacyPublicSubmission = !content && req.method === 'POST' && /^\/api\/public\/forms\/[^/]+\/submit$/.test(path);
-      const publicSubmission = legacyPublicSubmission || Boolean((publicFormRequest || pageCaptureRequest) && req.method === 'POST');
-      const publicDomainRead = Boolean(publicFormRequest && domainScope && req.method === 'GET');
-      const publicDomainRequest = Boolean((publicFormRequest || pageCaptureRequest) && domainScope);
-      const publicProjectSubmission = Boolean((publicFormRequest || pageCaptureRequest) && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
+      const publicSubmission = Boolean(pageCaptureRequest && req.method === 'POST');
+      const publicDomainRequest = Boolean(pageCaptureRequest && domainScope);
+      const publicProjectSubmission = Boolean(pageCaptureRequest && !domainScope && (req.method === 'POST' || req.method === 'OPTIONS'));
       const publicCollect = path === '/api/public/collect' && (req.method === 'POST' || req.method === 'OPTIONS');
       const publicBillingWebhook = Boolean(billingRepository && path === '/api/billing/webhook/asaas');
       const publicMcp = Boolean(mcp && path === '/mcp');
       const publicRuntimeConsent = runtimeConsentGateway && path === '/_alva/consent' && ['GET', 'POST'].includes(req.method);
       const publicRuntimeLoader = runtimeConsents && path === '/_alva/runtime.js' && req.method === 'GET';
-      // O formulário também abre direto no domínio do Studio (o link `/f/...` entregue ao
-      // dono), e esse envio nunca passa pelo gateway. Por isso só se exige a assinatura de
-      // quem diz vir pelo gateway; o envio direto segue sem atribuição verificada, como
-      // sempre seguiu com os pixels desligados. Recusá-lo quebraria o link do dono.
-      const formularioPeloGateway = Boolean(publicFormRequest && ['POST', 'OPTIONS'].includes(req.method) && req.headers['x-alva-runtime-gateway'] !== undefined);
       const runtimeGatewayProtected = Boolean(
-        (runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader || formularioPeloGateway))
+        (runtimeConsents && (publicRuntimeConsent || publicRuntimeLoader))
         || (runtimeManifests && pageCaptureRequest && ['POST', 'OPTIONS'].includes(req.method)),
       );
       const runtimeGateway = runtimeGatewayProtected
@@ -513,11 +446,11 @@ export function createApp({
         throw error('Endereço não permitido.', 403);
       const origin = req.headers.origin;
       const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
-      if ((publicMcp && origin && origin !== expectedOrigin) || (!publicMcp && !publicBillingWebhook && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))))
+      if ((publicMcp && origin && origin !== expectedOrigin) || (!publicMcp && !publicBillingWebhook && !publicSubmission && !publicProjectSubmission && !publicCollect && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && ((origin && origin !== expectedOrigin) || (mutation && origin !== expectedOrigin))))
         throw error('Origem não permitida.', 403);
       // Navegação de nível superior (clique em link de outro site) não é um ataque cross-site: libera fora de /api/.
       const topLevelNavigation = req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document' && !path.startsWith('/api/');
-      if (!publicMcp && !publicSubmission && !publicDomainRead && !publicProjectSubmission && !publicCollect && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
+      if (!publicMcp && !publicSubmission && !publicProjectSubmission && !publicCollect && !publicVsl && !publicRuntimeConsent && !publicRuntimeLoader && !publicFontAsset && !topLevelNavigation && req.headers['sec-fetch-site'] === 'cross-site') throw error('Origem não permitida.', 403);
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Referrer-Policy', 'no-referrer');
       const secure = Boolean(publicOrigin);
@@ -571,7 +504,7 @@ export function createApp({
       if (content && publicProjectSubmission) {
         const requestOrigin = req.headers.origin;
         const allowedOrigins = requestOrigin && requestOrigin !== expectedOrigin
-          ? await content.publicationOrigins({ companySlug: (publicFormRequest || pageCaptureRequest).companySlug, projectSlug: (publicFormRequest || pageCaptureRequest).projectSlug })
+          ? await content.publicationOrigins({ companySlug: pageCaptureRequest.companySlug, projectSlug: pageCaptureRequest.projectSlug })
           : [];
         const cors = publicSubmissionCors({ method: req.method, origin: requestOrigin, expectedOrigin, allowedOrigins });
         if (!cors.allowed) throw error('Origem não autorizada para este projeto.', 403);
@@ -693,39 +626,6 @@ export function createApp({
         auth.issue(res, secure);
         return json({ setupRequired: false, authenticated: true, owner }, path === '/api/setup' ? 201 : 200);
       }
-      if (req.method === 'GET' && content && publicFormRequest) {
-        const form = domainScope
-          ? await content.publicFormForDomain({ host: req.headers.host, route: publicFormRequest.route })
-          : await content.publicFormForProject({
-            companySlug: publicFormRequest.companySlug,
-            projectSlug: publicFormRequest.projectSlug,
-            route: publicFormRequest.route,
-          });
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        const resolved = runtimeFlags.mediaPipeline
-          ? await resolvePublishedVslReferencesForRender({
-            database, companyId: form.companyId, projectId: form.projectId, publicOrigin: publicOrigin || expectedOrigin,
-            references: extractVslReferences(form),
-          })
-          : new Map();
-        const vslEmbedUrls = new Map([...resolved].map(([publicId, value]) => [publicId, value.embedUrl]));
-        const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
-        const trackerPublicId = analytics ? await trackerPublicIdForProject(database, form.companyId, form.projectId) : null;
-        return res.end(renderDynamicForm(form, publicFormRequest.action, { vslEmbedUrls, nonce, trackerPublicId }));
-      }
-      const localForm = !content && path.match(/^\/f\/([a-z0-9-]+)$/);
-      if (req.method === 'GET' && localForm) {
-        const form = await formStore.getBySlug(localForm[1]);
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        const action = `/api/public/forms/${form.id}/submit`;
-        const nonce = publicHtmlNonce(`${expectedOrigin}${action}`);
-        return res.end(renderDynamicForm(form, action, { nonce }));
-      }
-      const submission = path.match(/^\/api\/public\/forms\/([^/]+)\/submit$/);
       if (req.method === 'POST' && content && pageCaptureRequest) {
         if (!runtimeGateway) throw error('Captura publicada não encontrada.', 404);
         const manifest = runtimeGateway.manifest;
@@ -739,46 +639,6 @@ export function createApp({
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${path}`);
         return res.end(renderCompletion('Obrigado!', 'Recebemos suas respostas.', { nonce, conversao: capturado?.reenvio ? null : conversaoParaOsPixels(capturado?.eventId) }));
-      }
-      if (req.method === 'POST' && content && publicFormRequest) {
-        if (commercialOutbox && !origin) throw error('Origem publicada obrigatória para conversões.', 403);
-        const input = await publicAnswers(req);
-        const saved = domainScope
-          ? await content.submitPublicFormForDomain({ host: effectiveHost, route: publicFormRequest.route, input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDoEnvio(req, runtimeGateway), remetente: remetenteDoEnvio(req, runtimeGateway), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length) })
-          : await content.submitPublicFormForProject({
-            companySlug: publicFormRequest.companySlug,
-            projectSlug: publicFormRequest.projectSlug,
-            route: publicFormRequest.route,
-            input, origin, attribution: runtimeAttribution(req.headers.cookie, runtimeGateway, runtimeHmacSecret), cliente: clienteDoEnvio(req, runtimeGateway), remetente: remetenteDoEnvio(req, runtimeGateway), publicationId: runtimeGateway?.publicationId, subjectId: req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('alva_runtime_consent='))?.slice('alva_runtime_consent='.length),
-          });
-        // O reenvio devolve o lead original: não conta de novo, nem no analytics.
-        if (!saved.reenvio) await analytics?.recordLead({
-          companyId: saved.form.companyId,
-          projectId: saved.form.projectId,
-          formId: saved.form.id,
-          trackingEventId: saved.eventId,
-          urlPath: publicFormRequest.route,
-        });
-        const form = { ...saved.schema, id: saved.form.id, name: saved.form.name, slug: saved.form.slug };
-        // A entrega do webhook é enfileirada por submitPublishedForm (mesma transação da
-        // submissão) e processada de forma assíncrona pelo webhookWorker — a resposta ao
-        // visitante nunca espera uma tentativa de rede de saída.
-        if (saved.webhookDelivery) res.setHeader('X-Webhook-Delivery', saved.webhookDelivery.status);
-        const completion = form.completion || { title: 'Obrigado!', message: 'Recebemos suas respostas.' };
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${publicFormRequest.action}`);
-        return res.end(renderCompletion(completion.title, completion.message, { nonce, conversao: saved.reenvio ? null : conversaoParaOsPixels(saved.eventId) }));
-      }
-      if (content && submission) throw error('Formulário publicado não encontrado.', 404);
-      if (req.method === 'POST' && submission) {
-        const form = await formStore.get(submission[1]);
-        const saved = await formStore.submit(form.id, await publicAnswers(req));
-        if (form.webhook) res.setHeader('X-Webhook-Delivery', 'pending');
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        const nonce = publicHtmlNonce(`${expectedOrigin}/api/public/forms/${submission[1]}/submit`);
-        return res.end(renderCompletion(form.completion.title, form.completion.message, { nonce }));
       }
       if (path.startsWith('/api/') && !(await auth.state(req)).authenticated)
         throw error('Entre na sua conta para continuar.', 401);
@@ -802,25 +662,6 @@ export function createApp({
       }
       if (req.method === 'GET' && path === '/api/config')
         return json({ vercelConnected: (await getPublisher()).connected });
-      if (path === '/api/forms') {
-        if (req.method === 'GET') return json(await formStore.list());
-        if (req.method === 'POST') return json(await formStore.create(await body(req)), 201);
-      }
-      const formMatch = path.match(/^\/api\/forms\/([^/]+)(?:\/(duplicate|submissions))?$/);
-      if (formMatch) {
-        const [, id, action] = formMatch;
-        if (req.method === 'GET' && !action) return json(await formStore.get(id));
-        if (req.method === 'PUT' && !action) return json(await formStore.update(id, await body(req)));
-        if (req.method === 'DELETE' && !action) {
-          await body(req);
-          return json(await formStore.remove(id));
-        }
-        if (req.method === 'POST' && action === 'duplicate') {
-          await body(req);
-          return json(await formStore.duplicate(id), 201);
-        }
-        if (req.method === 'GET' && action === 'submissions') return json(await formStore.submissions(id));
-      }
       if (path === '/api/pages') {
         if (req.method === 'GET') return json(await store.list());
         if (req.method === 'POST') return json(await store.create(await body(req)), 201);

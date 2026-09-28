@@ -131,13 +131,9 @@ export class ProjectRepository {
             WHERE page.company_id = $1 AND page.project_id = $2
               AND page.deleted_at IS NULL AND page.kind = 'quiz'
               AND page.published_version_id IS NOT NULL) AS "publishedForms",
-           ((SELECT count(*)::int FROM form_submissions submission
-             JOIN forms form ON form.id = submission.form_id
-             WHERE submission.company_id = $1 AND submission.project_id = $2 AND form.deleted_at IS NULL)
-            +
-            (SELECT count(*)::int FROM page_submissions submission
-             JOIN pages page ON page.id = submission.page_id
-             WHERE submission.company_id = $1 AND submission.project_id = $2 AND page.deleted_at IS NULL)) AS submissions,
+           (SELECT count(*)::int FROM page_submissions submission
+            JOIN pages page ON page.id = submission.page_id
+            WHERE submission.company_id = $1 AND submission.project_id = $2 AND page.deleted_at IS NULL) AS submissions,
            (SELECT count(*)::int FROM videos video
             WHERE video.company_id = $1 AND video.project_id = $2 AND video.deleted_at IS NULL) AS videos,
            (SELECT count(*)::int FROM videos video

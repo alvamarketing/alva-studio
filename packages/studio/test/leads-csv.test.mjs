@@ -4,7 +4,6 @@ import { renderLeadsCsv } from '../server/leads-csv.mjs';
 
 test('renderLeadsCsv mantém cabeçalhos estáveis e protege células perigosas', () => {
   const csv = renderLeadsCsv({
-    formName: 'Diagnóstico',
     fields: [
       { id: 'nome', title: 'Nome' },
       { id: 'comentario', title: 'Comentário' },
@@ -12,7 +11,8 @@ test('renderLeadsCsv mantém cabeçalhos estáveis e protege células perigosas'
     ],
     submissions: [{
       submittedAt: '2026-09-05T12:00:00.000Z',
-      formName: 'Diagnóstico',
+      sourceName: 'Diagnóstico',
+      captureName: 'Contato',
       answers: {
         nome: '=IMPORTXML(A1)',
         comentario: 'linha 1\n"linha 2"',
@@ -23,15 +23,15 @@ test('renderLeadsCsv mantém cabeçalhos estáveis e protege células perigosas'
   });
 
   assert.equal(csv,
-    '\uFEFFRecebida em,Formulário,Nome,Comentário,Interesses,antigo\r\n'
-    + "2026-09-05T12:00:00.000Z,Diagnóstico,'=IMPORTXML(A1),\"linha 1\n\"\"linha 2\"\"\",Sites; +Tráfego,'@histórico\r\n");
+    '\uFEFFRecebida em,Formulário,Captura,Nome,Comentário,Interesses,antigo\r\n'
+    + "2026-09-05T12:00:00.000Z,Diagnóstico,Contato,'=IMPORTXML(A1),\"linha 1\n\"\"linha 2\"\"\",Sites; +Tráfego,'@histórico\r\n");
 });
 
 test('renderLeadsCsv não atribui o rótulo atual a campo histórico renomeado', () => {
   const csv = renderLeadsCsv({
     submissions: [
-      { sourceVersionId: 'versao-a', formName: 'Contato', submittedAt: '2026-09-01T00:00:00.000Z', fields: [{ id: 'email', title: 'E-mail pessoal' }], answers: { email: 'ana@exemplo.test' } },
-      { sourceVersionId: 'versao-b', formName: 'Contato', submittedAt: '2026-09-02T00:00:00.000Z', fields: [{ id: 'email', title: 'E-mail corporativo' }], answers: { email: 'ana@empresa.test' } },
+      { sourceVersionId: 'versao-a', sourceName: 'Contato', submittedAt: '2026-09-01T00:00:00.000Z', fields: [{ id: 'email', title: 'E-mail pessoal' }], answers: { email: 'ana@exemplo.test' } },
+      { sourceVersionId: 'versao-b', sourceName: 'Contato', submittedAt: '2026-09-02T00:00:00.000Z', fields: [{ id: 'email', title: 'E-mail corporativo' }], answers: { email: 'ana@empresa.test' } },
     ],
   });
   assert.match(csv, /E-mail pessoal,E-mail corporativo/);

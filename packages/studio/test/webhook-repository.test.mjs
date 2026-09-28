@@ -5,7 +5,7 @@ import { createDatabase, migrate } from '../server/db/postgres.mjs';
 import { WebhookDeliveryRepository } from '../server/repositories/webhook-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 
-async function seedFormSubmission(database) {
+async function seedPageSubmission(database) {
   const suffix = randomUUID();
   const user = (await database.query(
     "INSERT INTO users (email, password_hash, display_name) VALUES ($1, 'x', 'Dona') RETURNING id",
@@ -24,22 +24,22 @@ async function seedFormSubmission(database) {
     [company.id, `Projeto ${suffix}`, `projeto-${suffix}`, user.id],
   )).rows[0];
   const route = (await database.query(
-    "INSERT INTO project_routes (company_id, project_id, path, content_type) VALUES ($1, $2, $3, 'form') RETURNING id",
-    [company.id, project.id, `/formulario-${suffix}`],
+    "INSERT INTO project_routes (company_id, project_id, path, content_type) VALUES ($1, $2, $3, 'page') RETURNING id",
+    [company.id, project.id, `/pagina-${suffix}`],
   )).rows[0];
-  const form = (await database.query(
-    'INSERT INTO forms (company_id, project_id, route_id, name, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-    [company.id, project.id, route.id, `Formulário ${suffix}`, user.id],
+  const page = (await database.query(
+    'INSERT INTO pages (company_id, project_id, route_id, name, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [company.id, project.id, route.id, `Página ${suffix}`, user.id],
   )).rows[0];
   const version = (await database.query(
-    "INSERT INTO form_versions (company_id, project_id, form_id, version_number, schema) VALUES ($1, $2, $3, 1, '{}'::jsonb) RETURNING id",
-    [company.id, project.id, form.id],
+    "INSERT INTO page_versions (company_id, project_id, page_id, version_number, editor_state, rendered_html) VALUES ($1, $2, $3, 1, '{}'::jsonb, '') RETURNING id",
+    [company.id, project.id, page.id],
   )).rows[0];
   const submission = (await database.query(
-    "INSERT INTO form_submissions (company_id, project_id, form_id, form_version_id, answers) VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id",
-    [company.id, project.id, form.id, version.id, JSON.stringify({ email: 'lead@alva.test' })],
+    "INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers) VALUES ($1, $2, $3, $4, gen_random_uuid(), $5::jsonb) RETURNING id",
+    [company.id, project.id, page.id, version.id, JSON.stringify({ email: 'lead@alva.test' })],
   )).rows[0];
-  return { companyId: company.id, projectId: project.id, formId: form.id, submissionId: submission.id };
+  return { companyId: company.id, projectId: project.id, pageId: page.id, pageSubmissionId: submission.id };
 }
 
 test('fila de entrega de webhook: enfileira com idempotência, reivindica com exclusividade e nunca reabre uma entrega confirmada', async (t) => {
@@ -48,10 +48,10 @@ test('fila de entrega de webhook: enfileira com idempotência, reivindica com ex
   t.after(() => database.close());
   await migrate(database);
   const repository = new WebhookDeliveryRepository(database);
-  const seed = await seedFormSubmission(database);
+  const seed = await seedPageSubmission(database);
   const enqueueInput = {
-    companyId: seed.companyId, projectId: seed.projectId, formId: seed.formId, submissionId: seed.submissionId,
-    url: 'https://hooks.example.test/lead', event: { eventId: randomUUID(), event: 'form.submitted' },
+    companyId: seed.companyId, projectId: seed.projectId, pageId: seed.pageId, pageSubmissionId: seed.pageSubmissionId,
+    url: 'https://hooks.example.test/lead', event: { eventId: randomUUID(), event: 'page.submitted' },
   };
 
   const first = await repository.enqueue(database, enqueueInput);
@@ -97,8 +97,8 @@ test('fila de entrega de webhook: enfileira com idempotência, reivindica com ex
   const finalRow = await database.query('SELECT status FROM webhook_deliveries WHERE id = $1', [first.id]);
   assert.equal(finalRow.rows[0].status, 'delivered');
 
-  const deadEnqueue = await seedFormSubmission(database);
-  const deadInput = { companyId: deadEnqueue.companyId, projectId: deadEnqueue.projectId, formId: deadEnqueue.formId, submissionId: deadEnqueue.submissionId, url: 'https://hooks.example.test/lead', event: { eventId: randomUUID() } };
+  const deadEnqueue = await seedPageSubmission(database);
+  const deadInput = { companyId: deadEnqueue.companyId, projectId: deadEnqueue.projectId, pageId: deadEnqueue.pageId, pageSubmissionId: deadEnqueue.pageSubmissionId, url: 'https://hooks.example.test/lead', event: { eventId: randomUUID() } };
   await repository.enqueue(database, deadInput);
   const deadClaim = await repository.claimNextDue({ leaseMs: 60_000 });
   const dead = await repository.markDead({ id: deadClaim.delivery.id, claimToken: deadClaim.token, attemptCount: 6, lastError: 'excedeu tentativas' });

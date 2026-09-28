@@ -7,8 +7,6 @@ function deliveryRecord(row) {
     companyId: row.company_id,
     projectId: row.project_id,
     sourceKind: row.source_kind,
-    formId: row.form_id,
-    submissionId: row.submission_id,
     pageId: row.page_id,
     pageSubmissionId: row.page_submission_id,
     url: row.url,
@@ -27,19 +25,18 @@ export class WebhookDeliveryRepository {
 
   // client permite participar da mesma transação que gravou a submissão, para que a entrega
   // nunca fique "órfã" (submissão persistida sem fila, ou vice-versa).
-  async enqueue(client, { companyId, projectId, formId, submissionId, pageId, pageSubmissionId, url, event }) {
-    const page = Boolean(pageSubmissionId);
+  async enqueue(client, { companyId, projectId, pageId, pageSubmissionId, url, event }) {
     const { rows } = await client.query(
-      `INSERT INTO webhook_deliveries (company_id, project_id, source_kind, form_id, submission_id, page_id, page_submission_id, url, event)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+      `INSERT INTO webhook_deliveries (company_id, project_id, source_kind, page_id, page_submission_id, url, event)
+       VALUES ($1, $2, 'page', $3, $4, $5, $6::jsonb)
        ON CONFLICT DO NOTHING
        RETURNING *`,
-      [companyId, projectId, page ? 'page' : 'form', formId || null, submissionId || null, pageId || null, pageSubmissionId || null, url, JSON.stringify(event)],
+      [companyId, projectId, pageId, pageSubmissionId, url, JSON.stringify(event)],
     );
     if (rows[0]) return deliveryRecord(rows[0]);
     const existing = await client.query(
-      `SELECT * FROM webhook_deliveries WHERE company_id = $1 AND project_id = $2 AND ${page ? 'page_submission_id' : 'submission_id'} = $3`,
-      [companyId, projectId, page ? pageSubmissionId : submissionId],
+      'SELECT * FROM webhook_deliveries WHERE company_id = $1 AND project_id = $2 AND page_submission_id = $3',
+      [companyId, projectId, pageSubmissionId],
     );
     return existing.rows[0] ? deliveryRecord(existing.rows[0]) : null;
   }

@@ -49,7 +49,7 @@ function providerConfig(provider) {
 function runtimeContents(contents = []) {
   if (!Array.isArray(contents)) throw fail('Conteúdo do manifesto inválido.');
   return contents.map((content) => {
-    if (!content || typeof content !== 'object' || Array.isArray(content) || typeof content.path !== 'string' || !content.path.startsWith('/') || !['page', 'form'].includes(content.type) || typeof content.contentId !== 'string' || !content.contentId || typeof content.versionId !== 'string' || !content.versionId)
+    if (!content || typeof content !== 'object' || Array.isArray(content) || typeof content.path !== 'string' || !content.path.startsWith('/') || content.type !== 'page' || typeof content.contentId !== 'string' || !content.contentId || typeof content.versionId !== 'string' || !content.versionId)
       throw fail('Conteúdo do manifesto inválido.');
     const captureIds = content.captureIds === undefined ? [] : content.captureIds;
     if (!Array.isArray(captureIds) || captureIds.some((captureId) => typeof captureId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(captureId)) || new Set(captureIds).size !== captureIds.length)

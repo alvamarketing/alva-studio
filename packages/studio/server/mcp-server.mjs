@@ -116,18 +116,16 @@ export class McpServer {
     }
     if (name === 'alva_list_pages') {
       exact(args, []); scope(actor, 'read');
-      return (await this.content.listPages(scopeBase)).map(recordForAgent);
+      return (await this.content.listPages(scopeBase)).filter((page) => page.kind !== 'quiz').map(recordForAgent);
     }
     if (name === 'alva_list_quizzes') {
       exact(args, []); scope(actor, 'read');
-      return (await this.content.listForms(scopeBase)).map(recordForAgent);
+      return (await this.content.listPages(scopeBase)).filter((page) => page.kind === 'quiz').map(recordForAgent);
     }
     if (name === 'alva_get_content') {
       const input = exact(args, ['kind', 'id'], ['kind', 'id']); scope(actor, 'read');
       if (!['page', 'quiz'].includes(input.kind) || typeof input.id !== 'string' || !UUID.test(input.id)) throw fail('Conteúdo MCP inválido.');
-      return input.kind === 'page'
-        ? this.content.getPage({ ...scopeBase, pageId: input.id })
-        : this.content.getForm({ ...scopeBase, formId: input.id });
+      return this.quizOuPagina(scopeBase, input.kind, input.id);
     }
     if (!['alva_create_page_draft', 'alva_create_quiz_draft'].includes(name)) throw fail('Ferramenta MCP não permitida.', 404);
     scope(actor, 'drafts');
@@ -141,15 +139,21 @@ export class McpServer {
       if (operation.existing) return { resourceId: operation.resource_id, created: null };
       const created = type === 'page'
         ? await this.content.createPage({ ...scopeBase, name: input.name, route: input.route, editorState: {}, renderedHtml: '', client })
-        : await this.content.createForm({ ...scopeBase, name: input.name, route: input.route, draftSchema: {}, client });
+        : await this.content.createPage({ ...scopeBase, name: input.name, route: input.route, editorState: {}, renderedHtml: '', kind: 'quiz', client });
       await this.keys.completeOperation({ id: operation.id, resourceType: type, resourceId: created.id, client });
       return { resourceId: created.id, created };
     });
     if (outcome.created) return outcome.created;
     if (!outcome.resourceId) throw fail('A operação idempotente não foi concluída. Tente novamente com uma nova chave de idempotência.', 409);
-    return type === 'page'
-      ? this.content.getPage({ ...scopeBase, pageId: outcome.resourceId })
-      : this.content.getForm({ ...scopeBase, formId: outcome.resourceId });
+    return this.quizOuPagina(scopeBase, type, outcome.resourceId);
+  }
+
+  // Um quiz é uma página marcada. Pedir um quiz pelo id de uma landing (ou o contrário)
+  // responde como conteúdo inexistente, igual a um id que não existe.
+  async quizOuPagina(scopeBase, kind, id) {
+    const record = await this.content.getPage({ ...scopeBase, pageId: id });
+    if ((record.kind === 'quiz') !== (kind === 'quiz')) throw fail(kind === 'quiz' ? 'Quiz não encontrado.' : 'Página não encontrada.', 404);
+    return record;
   }
 
   async handle({ method, headers, raw }) {

@@ -10,12 +10,12 @@ function database(rows, videoRows = [], analyticsRows = []) {
   };
 }
 
-test('snapshot inclui todas as páginas e formulários publicados em ordem estável', async () => {
+test('snapshot inclui todas as páginas publicadas em ordem estável', async () => {
   const rows = [
     {
-      kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-      content_id: 'form-1', version_id: 'form-version-1', version_number: 2, path: '/captura',
-      schema: { steps: [{ id: 'email', elements: [{ id: 'email', type: 'email', title: 'E-mail', required: true }] }] },
+      kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+      content_id: 'page-2', version_id: 'page-version-2', version_number: 2, path: '/captura',
+      rendered_html: '<h1>Captura</h1>',
     },
     {
       kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
@@ -26,7 +26,8 @@ test('snapshot inclui todas as páginas e formulários publicados em ordem está
   const snapshot = await buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' });
   assert.deepEqual(snapshot.manifest.map((item) => item.path), ['/', '/captura']);
   assert.deepEqual(snapshot.files.map((item) => item.file), ['index.html', 'captura/index.html']);
-  assert.match(snapshot.files[1].data, /https:\/\/studio\.alva\.test\/api\/public\/forms\/alva\/campanha\/captura\/submissions/);
+  assert.equal(snapshot.files[1].data, '<h1>Captura</h1>');
+  assert.ok(snapshot.manifest.every((item) => item.type === 'page'));
   assert.equal(snapshot.files[0].data, '<h1>Alva</h1>');
   assert.match(snapshot.hash, /^[a-f0-9]{64}$/);
   const repeat = await buildPublishableSnapshot({ database: database([...rows].reverse()), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' });
@@ -35,8 +36,9 @@ test('snapshot inclui todas as páginas e formulários publicados em ordem está
 });
 
 test('conteúdo imutável mantém contentHash entre prévia e produção, embora o deployHash varie', async () => {
-  const rows = [{ kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'form-1', version_id: 'version-1', version_number: 1, path: '/contato', schema: { steps: [{ id: 'email', elements: [{ id: 'email', type: 'email', title: 'E-mail', required: true }] }] } }];
-  const input = { database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' };
+  const rows = [{ kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'page-1', version_id: 'version-1', version_number: 1, path: '/contato', rendered_html: '<h1>Contato</h1>', schema: { steps: [{ id: 'email', elements: [{ id: 'email', type: 'email', title: 'E-mail', required: true }] }] } }];
+  // O tracker leva o nonce do snapshot, que é o que muda entre os ambientes.
+  const input = { database: database(rows, [], [{ tracker_public_id: 'tracker-abc123' }]), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' };
   const [preview, production] = await Promise.all([buildPublishableSnapshot({ ...input, environment: 'preview' }), buildPublishableSnapshot({ ...input, environment: 'production' })]);
   assert.notEqual(preview.hash, production.hash);
   assert.equal(preview.contentHash, production.contentHash);
@@ -44,11 +46,11 @@ test('conteúdo imutável mantém contentHash entre prévia e produção, embora
 });
 
 test('contentHash muda com cada campo editorial publicado e não com a ordem das rows', async () => {
-  const base = { kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'form-1', version_id: 'version-1', version_number: 1, name: 'Contato', path: '/contato', editor_state: { title: 'A' }, capture_schema: { forms: [] }, schema: { steps: [{ id: 'email', elements: [{ id: 'email', type: 'email', title: 'E-mail' }] }] } };
+  const base = { kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'page-1', version_id: 'version-1', version_number: 1, name: 'Contato', path: '/contato', rendered_html: '<main>A</main>', editor_state: { title: 'A' }, capture_schema: { forms: [] } };
   const build = async (rows) => (await buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' })).contentHash;
   const original = await build([base]);
-  for (const patch of [{ name: 'Novo nome' }, { path: '/nova-rota' }, { schema: { steps: [{ id: 'nome', elements: [{ id: 'nome', type: 'text', title: 'Nome' }] }] } }, { capture_schema: { forms: [{ captureId: '11111111-1111-4111-8111-111111111111' }] } }, { editor_state: { title: 'B' } }, { company_slug: 'outra' }]) assert.notEqual(await build([{ ...base, ...patch }]), original);
-  assert.equal(await build([base, { ...base, content_id: 'form-2', version_id: 'version-2', path: '/dois' }]), await build([{ ...base, content_id: 'form-2', version_id: 'version-2', path: '/dois' }, base]));
+  for (const patch of [{ name: 'Novo nome' }, { path: '/nova-rota' }, { rendered_html: '<main>B</main>' }, { editor_state: { title: 'B' } }, { company_slug: 'outra' }]) assert.notEqual(await build([{ ...base, ...patch }]), original);
+  assert.equal(await build([base, { ...base, content_id: 'page-2', version_id: 'version-2', path: '/dois' }]), await build([{ ...base, content_id: 'page-2', version_id: 'version-2', path: '/dois' }, base]));
 });
 
 test('snapshot reescreve cada captura pelo UUID canônico e registra seus IDs', async () => {
@@ -113,7 +115,7 @@ test('snapshot rejeita vazio, rota duplicada e registros de outra empresa', asyn
   );
   const duplicate = [
     { kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'p1', version_id: 'v1', version_number: 1, path: '/Oferta', rendered_html: '<h1>1</h1>' },
-    { kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'f1', version_id: 'v2', version_number: 1, path: '/oferta', schema: { steps: [{ id: 'step', elements: [{ id: 'email', type: 'email', title: 'E-mail' }] }] } },
+    { kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha', content_id: 'p2', version_id: 'v2', version_number: 1, path: '/oferta', rendered_html: '<h1>2</h1>' },
   ];
   await assert.rejects(
     () => buildPublishableSnapshot({ database: database(duplicate), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
@@ -144,9 +146,10 @@ test('snapshot extrai a referência canônica do componente GrapesJS e aceita so
 
 test('snapshot mantém publicação estrita quando uma VSL referenciada não está publicada', async () => {
   const rows = [{
-    kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-    content_id: 'form-vsl-missing', version_id: 'form-version-vsl-missing', version_number: 1, path: '/captura',
-    schema: { steps: [{ id: 'vsl-screen', elements: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl-missing', title: 'Oferta' }] }] },
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-missing', version_id: 'page-version-vsl-missing', version_number: 1, path: '/captura',
+    rendered_html: '<div data-alva-vsl="public-vsl-missing"></div>',
+    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-missing' }] },
   }];
   await assert.rejects(
     () => buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
@@ -224,7 +227,7 @@ test('snapshot injeta no HTML da página somente o embed absoluto da versão pub
   assert.doesNotMatch(html, /draft\.example|sourceUrl|version_id|page-version-vsl-html/i);
 });
 
-test('snapshot deduplica VSL repetida entre página e formulário', async () => {
+test('snapshot deduplica VSL repetida entre duas páginas', async () => {
   const rows = [
     {
       kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
@@ -233,9 +236,10 @@ test('snapshot deduplica VSL repetida entre página e formulário', async () => 
       editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-duplicate' }] },
     },
     {
-      kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-      content_id: 'form-vsl-dup', version_id: 'form-version-vsl-dup', version_number: 1, path: '/formulario',
-      schema: { steps: [{ id: 'step', elements: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl-duplicate' }] }] },
+      kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+      content_id: 'page-vsl-dup-2', version_id: 'page-version-vsl-dup-2', version_number: 1, path: '/quiz',
+      rendered_html: '<div data-alva-vsl="public-vsl-duplicate"></div>',
+      editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-duplicate' }] },
     },
   ];
   let videoQueries = 0;
@@ -250,9 +254,10 @@ test('snapshot deduplica VSL repetida entre página e formulário', async () => 
 
 test('snapshot bloqueia VSL sem versão publicada com conflito acionável antes de gerar arquivos', async () => {
   const rows = [{
-    kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-    content_id: 'form-vsl-draft', version_id: 'form-version-vsl-draft', version_number: 1, path: '/captura',
-    schema: { steps: [{ id: 'step', elements: [{ id: 'vsl', type: 'vsl', publicId: 'public-vsl-draft' }] }] },
+    kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+    content_id: 'page-vsl-draft', version_id: 'page-version-vsl-draft', version_number: 1, path: '/captura',
+    rendered_html: '<div data-alva-vsl="public-vsl-draft"></div>',
+    editor_state: { components: [{ type: 'vsl', publicId: 'public-vsl-draft' }] },
   }];
   await assert.rejects(
     () => buildPublishableSnapshot({ database: database(rows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test' }),
@@ -260,87 +265,61 @@ test('snapshot bloqueia VSL sem versão publicada com conflito acionável antes 
   );
 });
 
-const formRows = [{
-  kind: 'form', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
-  content_id: 'form-1', version_id: 'form-version-1', version_number: 1, path: '/captura',
-  schema: { steps: [{ id: 'step', elements: [{ id: 'email', type: 'email', title: 'E-mail', required: true }] }] },
+const quizRows = [{
+  kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
+  content_id: 'quiz-1', version_id: 'quiz-version-1', version_number: 1, path: '/captura',
+  rendered_html: '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"></head><body><h1>Quiz</h1></body></html>',
 }];
-
-test('formulário publicado traz meta CSP e script do tracker com o mesmo nonce quando o projeto tem website de analytics', async () => {
-  const analyticsRows = [{ tracker_public_id: 'tracker-abc123' }];
-  const snapshot = await buildPublishableSnapshot({
-    database: database(formRows, [], analyticsRows),
-    companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
-  });
-  const html = snapshot.files[0].data;
-  const metaMatch = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/);
-  assert.ok(metaMatch, 'deve conter a meta de CSP');
-  const metaNonce = metaMatch[1].match(/nonce-([a-f0-9]+)/);
-  assert.ok(metaNonce, 'a política deve conter um nonce');
-  const trackerMatch = html.match(/<script src="https:\/\/studio\.alva\.test\/tracker\.js" data-alva-tracker="tracker-abc123" data-host-url="https:\/\/studio\.alva\.test" nonce="([a-f0-9]+)"><\/script>/);
-  assert.ok(trackerMatch, 'deve conter o script do tracker com nonce');
-  assert.equal(trackerMatch[1], metaNonce[1]);
-});
-
-test('a meta CSP do snapshot não contém frame-ancestors', async () => {
-  const snapshot = await buildPublishableSnapshot({
-    database: database(formRows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
-  });
-  const html = snapshot.files[0].data;
-  const metaMatch = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/);
-  assert.ok(metaMatch);
-  assert.doesNotMatch(metaMatch[1], /frame-ancestors/);
-});
 
 test('projeto sem website de analytics publica sem tracker e sem quebrar', async () => {
   const snapshot = await buildPublishableSnapshot({
-    database: database(formRows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+    database: database(quizRows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
   });
   const html = snapshot.files[0].data;
   assert.doesNotMatch(html, /tracker\.js/);
-  assert.match(html, /<meta http-equiv="Content-Security-Policy"/);
+  assert.match(html, /<h1>Quiz<\/h1>/);
 });
 
 test('dois builds do mesmo conteúdo, com website de analytics, produzem o mesmo hash', async () => {
   const analyticsRows = [{ tracker_public_id: 'tracker-abc123' }];
   const first = await buildPublishableSnapshot({
-    database: database(formRows, [], analyticsRows),
+    database: database(quizRows, [], analyticsRows),
     companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
   });
   const second = await buildPublishableSnapshot({
-    database: database(formRows, [], analyticsRows),
+    database: database(quizRows, [], analyticsRows),
     companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
   });
   assert.equal(second.hash, first.hash);
   assert.deepEqual(second.files, first.files);
 });
 
-const pageAndFormRows = [
+const pageAndQuizRows = [
   {
     kind: 'page', company_id: 'company-a', project_id: 'project-a', company_slug: 'alva', project_slug: 'campanha',
     content_id: 'page-1', version_id: 'page-version-1', version_number: 1, path: '/',
     rendered_html: '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"></head><body><h1>Alva</h1></body></html>',
   },
-  ...formRows,
+  ...quizRows,
 ];
 
 test('página publicada recebe o script do tracker quando o projeto tem website de analytics', async () => {
   const analyticsRows = [{ tracker_public_id: 'tracker-abc123' }];
   const snapshot = await buildPublishableSnapshot({
-    database: database(pageAndFormRows, [], analyticsRows),
+    database: database(pageAndQuizRows, [], analyticsRows),
     companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
   });
   const page = snapshot.files.find((file) => file.file === 'index.html');
   const trackerMatch = page.data.match(/<script src="https:\/\/studio\.alva\.test\/tracker\.js" data-alva-tracker="tracker-abc123" data-host-url="https:\/\/studio\.alva\.test" nonce="([a-f0-9]+)"><\/script><\/body>/);
   assert.ok(trackerMatch, 'a página deve trazer o script do tracker antes de </body>');
-  const form = snapshot.files.find((file) => file.file !== 'index.html');
-  const formTrackerMatch = form.data.match(/<script src="https:\/\/studio\.alva\.test\/tracker\.js" data-alva-tracker="tracker-abc123" data-host-url="https:\/\/studio\.alva\.test" nonce="([a-f0-9]+)"><\/script>/);
-  assert.equal(trackerMatch[1], formTrackerMatch[1], 'página e formulário devem compartilhar o mesmo nonce do snapshot');
+  const quiz = snapshot.files.find((file) => file.file !== 'index.html');
+  const quizTrackerMatch = quiz.data.match(/<script src="https:\/\/studio\.alva\.test\/tracker\.js" data-alva-tracker="tracker-abc123" data-host-url="https:\/\/studio\.alva\.test" nonce="([a-f0-9]+)"><\/script>/);
+  assert.equal(trackerMatch[1], quizTrackerMatch[1], 'as duas páginas devem compartilhar o mesmo nonce do snapshot');
 });
 
 test('página publicada sem website de analytics não recebe tracker e não quebra', async () => {
   const snapshot = await buildPublishableSnapshot({
-    database: database(pageAndFormRows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
+    database: database(pageAndQuizRows), companyId: 'company-a', projectId: 'project-a', publicOrigin: 'https://studio.alva.test',
   });
   const page = snapshot.files.find((file) => file.file === 'index.html');
   assert.doesNotMatch(page.data, /tracker\.js/);

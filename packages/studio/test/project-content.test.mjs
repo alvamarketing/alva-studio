@@ -64,16 +64,8 @@ function trackingBindingScope({ companyId, projectId, environment }) {
   return `tracking-binding:${companyId}:${projectId}:${environment}:conversions`;
 }
 
-function formSchema(id, title) {
-  return {
-    headerElements: [],
-    steps: [{ id, type: 'short_text', title, required: true }],
-    completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' },
-    webhook: '',
-  };
-}
 
-test('rotas de páginas e formulários são únicas sem distinguir caixa e aceitam a raiz uma única vez', async (t) => {
+test('rotas de páginas e quizzes são únicas sem distinguir caixa e aceitam a raiz uma única vez', async (t) => {
   await withHarness(t, async ({ database, companies, projects, content }) => {
     const owner = await createUser(database, { email: 'owner@rotas.test', name: 'Owner' });
     const { company, project } = await projectFor(companies, projects, owner, 'rotas');
@@ -90,24 +82,28 @@ test('rotas de páginas e formulários são únicas sem distinguir caixa e aceit
     assert.equal(root.route, '/');
 
     await assert.rejects(
-      () => content.createForm({
+      () => content.createPage({
         companyId: company.id,
         projectId: project.id,
         actorId: owner.id,
         name: 'Raiz',
         route: '/',
-        draftSchema: formSchema('raiz', 'Raiz'),
+        kind: 'quiz',
+        editorState: {},
+        renderedHtml: '',
       }),
       assertStatus(409),
     );
 
-    await content.createForm({
+    await content.createPage({
       companyId: company.id,
       projectId: project.id,
       actorId: owner.id,
       name: 'Contato',
       route: '/Contato',
-      draftSchema: formSchema('email', 'E-mail'),
+      kind: 'quiz',
+      editorState: {},
+      renderedHtml: '',
     });
     await assert.rejects(
       () => content.createPage({
@@ -192,65 +188,6 @@ test('duas alterações com a mesma revisão deixam uma salva e outra em conflit
     assert.equal(fulfilled[0].value.lockVersion, 1);
     assert.equal(rejected.length, 1);
     assert.equal(rejected[0].reason.statusCode, 409);
-  });
-});
-
-test('rascunho de formulário não altera a versão pública publicada', async (t) => {
-  await withHarness(t, async ({ database, companies, projects, content }) => {
-    const owner = await createUser(database, { email: 'owner@versao.test', name: 'Owner' });
-    const { company, project } = await projectFor(companies, projects, owner, 'versao');
-    const form = await content.createForm({
-      companyId: company.id,
-      projectId: project.id,
-      actorId: owner.id,
-      name: 'Diagnóstico',
-      route: '/diagnostico',
-      draftSchema: formSchema('nome', 'Nome'),
-    });
-    const firstVersion = await content.publishForm({
-      companyId: company.id,
-      projectId: project.id,
-      actorId: owner.id,
-      formId: form.id,
-    });
-    assert.equal(firstVersion.versionNumber, 1);
-
-    const updated = await content.updateForm({
-      companyId: company.id,
-      projectId: project.id,
-      actorId: owner.id,
-      formId: form.id,
-      lockVersion: form.lockVersion,
-      route: '/novo-diagnostico',
-      draftSchema: formSchema('empresa', 'Empresa'),
-    });
-    assert.equal(updated.lockVersion, 1);
-
-    const publicForm = await content.getPublicContent({
-      companyId: company.id,
-      projectId: project.id,
-      route: '/diagnostico',
-    });
-    assert.equal(publicForm.type, 'form');
-    assert.equal(publicForm.schema.steps[0].id, 'nome');
-    assert.equal(publicForm.schema.steps[0].title, 'Nome');
-    await assert.rejects(
-      () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/novo-diagnostico' }),
-      assertStatus(404),
-    );
-
-    await content.publishForm({ companyId: company.id, projectId: project.id, actorId: owner.id, formId: form.id });
-    const republished = await content.getPublicContent({
-      companyId: company.id,
-      projectId: project.id,
-      route: '/novo-diagnostico',
-    });
-    assert.equal(republished.schema.steps[0].id, 'empresa');
-    assert.equal(republished.schema.steps[0].title, 'Empresa');
-    await assert.rejects(
-      () => content.getPublicContent({ companyId: company.id, projectId: project.id, route: '/diagnostico' }),
-      assertStatus(404),
-    );
   });
 });
 

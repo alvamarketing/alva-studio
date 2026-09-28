@@ -23,10 +23,12 @@ test('manifesto de runtime é público, estável e só aceita produção para co
 });
 
 test('manifesto de runtime expõe somente o mapa imutável do snapshot', () => {
-  const contents = [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'page-version-a', captureIds: ['11111111-1111-4111-8111-111111111111'] }, { path: '/contato', type: 'form', contentId: 'form-1', versionId: 'form-version-a', captureIds: [] }];
+  const contents = [{ path: '/', type: 'page', contentId: 'page-1', versionId: 'page-version-a', captureIds: ['11111111-1111-4111-8111-111111111111'] }, { path: '/contato', type: 'page', contentId: 'page-2', versionId: 'page-version-b', captureIds: [] }];
   const manifest = buildRuntimeManifest({ publicationId: 'pub-contents', snapshotHash: 'a'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', contents });
   assert.deepEqual(manifest.contents, contents);
   assert.throws(() => buildRuntimeManifest({ publicationId: 'pub-contents', snapshotHash: 'a'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', contents: [{ ...contents[0], captureIds: ['not-a-uuid'] }] }), /conteúdo do manifesto/i);
+  // O formulário antigo saiu: o manifesto só conhece página.
+  assert.throws(() => buildRuntimeManifest({ publicationId: 'pub-contents', snapshotHash: 'a'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production', contents: [{ ...contents[1], type: 'form' }] }), /conteúdo do manifesto/i);
 });
 
 test('assinatura exige timestamp/nonce, rejeita replay e não expõe segredo', async () => {

@@ -15,7 +15,7 @@ const manifest = { company_id: 'company', project_id: 'project', publication_id:
 
 function request(overrides = {}) {
   const body = Buffer.from('{"answers":{"email":"pessoa@example.test"}}');
-  const envelope = { method: 'POST', path: '/api/public/forms/acme/lp/submissions', publicationId: manifest.publication_id, environment: manifest.environment, timestamp: 1_700_000_000, nonce: 'nonce-123456789012', body };
+  const envelope = { method: 'POST', path: '/api/public/pages/acme/lp/submissions', publicationId: manifest.publication_id, environment: manifest.environment, timestamp: 1_700_000_000, nonce: 'nonce-123456789012', body };
   const key = derivePublicationRuntimeKey('root-secret-only-at-studio', { publicationId: manifest.publication_id, snapshotHash: manifest.snapshot_hash, environment: manifest.environment });
   return { body, headers: { 'x-alva-runtime-gateway': '1', 'x-alva-public-host': 'lp.example.test', 'x-alva-publication-id': envelope.publicationId, 'x-alva-runtime-environment': envelope.environment, 'x-alva-runtime-timestamp': String(envelope.timestamp), 'x-alva-runtime-nonce': envelope.nonce, 'x-alva-runtime-signature': signRuntimeRequest(envelope, key) }, ...overrides };
 }
@@ -26,15 +26,15 @@ test('Studio aceita apenas a Function assinada, valida manifesto/host/escopo e g
     async currentForOrigin({ publicationId, origin }) { return publicationId === manifest.publication_id && origin === manifest.origin ? manifest : null; },
     async claimNonce({ publicationId, nonce, expiresAt }) { claims.push({ publicationId, nonce, expiresAt }); return claims.length === 1; },
   };
-  const accepted = await verifyRuntimeGatewayEnvelope({ repository, rootSecret: 'root-secret-only-at-studio', method: 'POST', path: '/api/public/forms/acme/lp/submissions', now: 1_700_000_001, ...request() });
+  const accepted = await verifyRuntimeGatewayEnvelope({ repository, rootSecret: 'root-secret-only-at-studio', method: 'POST', path: '/api/public/pages/acme/lp/submissions', now: 1_700_000_001, ...request() });
   assert.equal(accepted.manifest.publicationId, manifest.publication_id);
   assert.equal(claims[0].publicationId, manifest.publication_id);
-  await assert.rejects(() => verifyRuntimeGatewayEnvelope({ repository, rootSecret: 'root-secret-only-at-studio', method: 'POST', path: '/api/public/forms/acme/lp/submissions', now: 1_700_000_001, ...request() }), /replay|assinatura/i);
+  await assert.rejects(() => verifyRuntimeGatewayEnvelope({ repository, rootSecret: 'root-secret-only-at-studio', method: 'POST', path: '/api/public/pages/acme/lp/submissions', now: 1_700_000_001, ...request() }), /replay|assinatura/i);
 });
 
 test('Studio rejeita acesso direto, host, publicação, ambiente e assinatura falsos', async () => {
   const repository = { async currentForOrigin({ publicationId, origin }) { return publicationId === manifest.publication_id && origin === manifest.origin ? manifest : null; }, async claimNonce() { return true; } };
-  const base = { repository, rootSecret: 'root-secret-only-at-studio', method: 'POST', path: '/api/public/forms/acme/lp/submissions', now: 1_700_000_001 };
+  const base = { repository, rootSecret: 'root-secret-only-at-studio', method: 'POST', path: '/api/public/pages/acme/lp/submissions', now: 1_700_000_001 };
   await assert.rejects(() => verifyRuntimeGatewayEnvelope({ ...base, ...request({ headers: {} }) }), /gateway/i);
   await assert.rejects(() => verifyRuntimeGatewayEnvelope({ ...base, ...request({ headers: { ...request().headers, 'x-alva-public-host': 'other.example.test' } }) }), /host|manifesto/i);
   await assert.rejects(() => verifyRuntimeGatewayEnvelope({ ...base, ...request({ headers: { ...request().headers, 'x-alva-publication-id': 'run-2' } }) }), /manifesto|publicação/i);
@@ -65,8 +65,6 @@ test('HTTP público bloqueia acesso direto e aceita somente loader/consent pela 
   await database.query("INSERT INTO company_memberships (company_id, user_id, role, joined_at) VALUES ($1,$2,'owner',now())", [company.id, user.id]);
   await database.query("INSERT INTO project_domains (company_id, project_id, environment, domain, is_canonical, verification_status) VALUES ($1,$2,'production','lp.example.test',true,'verified')", [company.id, project.id]);
   const content = new ContentRepository(database, { publicOrigin: 'https://studio.example.test' });
-  const form = await content.createForm({ companyId: company.id, projectId: project.id, actorId: user.id, name: 'Contato', route: '/contato', draftSchema: { headerElements: [], steps: [{ id: 'email', type: 'email', title: 'E-mail', required: true }], completion: { title: 'Obrigado!', message: 'Recebemos suas respostas.' }, webhook: '' } });
-  await content.publishForm({ companyId: company.id, projectId: project.id, actorId: user.id, formId: form.id });
   const manifestInput = buildRuntimeManifest({ publicationId: 'run-http', snapshotHash: 'b'.repeat(64), origin: 'https://lp.example.test', domain: 'lp.example.test', environment: 'production' });
   await new PublicationRuntimeRepository(database).saveManifest({ companyId: company.id, projectId: project.id, manifest: manifestInput });
   const app = createApp({ database, publicOrigin: 'https://studio.example.test', runtimeFlags: { pixels: true, conversions: false }, runtimeHmacSecret: 'root-secret-only-at-studio' });
@@ -93,9 +91,4 @@ test('HTTP público bloqueia acesso direto e aceita somente loader/consent pela 
   const granted = await http(base, '/_alva/consent?publicationId=run-http', { method: 'POST', body: grantedBody, headers: { Host: 'studio.example.test', Cookie: cookie, 'Content-Type': 'application/json', ...signed('POST', '/_alva/consent', grantedBody, 'nonce-grant-1234567') } });
   assert.equal(granted.status, 200, granted.text);
   assert.deepEqual(JSON.parse(granted.text), { state: 'granted' });
-  const formBody = Buffer.from('{"answers":{"email":"lead@example.test"}}');
-  const submitted = await http(base, '/api/public/forms/contato/submissions', { method: 'POST', body: formBody, headers: { Host: 'studio.example.test', Cookie: cookie, Origin: 'https://lp.example.test', 'Content-Type': 'application/json', ...signed('POST', '/api/public/forms/contato/submissions', formBody, 'nonce-form-123456789') } });
-  assert.equal(submitted.status, 200, submitted.text);
-  assert.match(submitted.text, /Obrigado!/);
-  assert.equal((await database.query('SELECT count(*)::int AS count FROM form_submissions')).rows[0].count, 1);
 });
