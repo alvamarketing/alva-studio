@@ -6,6 +6,10 @@
 # Uso, na VPS: docker compose --project-name alva-studio -f runtime/compose.yaml -f runtime/compose.vps.yaml up -d --build
 services:
   studio-web:
+    # O Studio só é alcançado pelo Traefik (a porta fica em 127.0.0.1): o X-Forwarded-For
+    # que chega foi completado por ele. Ver server/ip-do-visitante.mjs.
+    environment:
+      TRUST_PROXY: "true"
     labels:
       traefik.enable: "true"
       traefik.http.routers.alva-studio.rule: Host(`studio.alvamarketing.com.br`)

@@ -250,3 +250,18 @@ test('Sec-Fetch-Site: cross-site não bloqueia o coletor público, só rotas aut
   assert.notEqual(collect.status, 403);
   assert.doesNotMatch(collect.body, /Origem não permitida/);
 });
+
+test('/tracker.js roda como script comum: a página o inclui sem type="module"', async (t) => {
+  const { base } = await setup(t);
+  const fonte = await (await fetch(base + '/tracker.js')).text();
+  const { Script, createContext } = await import('node:vm');
+  const enviados = [];
+  const contexto = createContext({
+    URLSearchParams, URL, JSON,
+    location: { pathname: '/oferta', search: '' },
+    navigator: { sendBeacon: (url) => { enviados.push(url); return true; } },
+    document: { currentScript: { dataset: { alvaTracker: 'trk_1', hostUrl: 'https://studio.example.test' } }, addEventListener() {}, referrer: '' },
+  });
+  new Script(fonte).runInContext(contexto);
+  assert.deepEqual(enviados, ['https://studio.example.test/api/public/collect']);
+});

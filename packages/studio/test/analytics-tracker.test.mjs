@@ -181,3 +181,10 @@ test('integração: eventos reais da VSL (mapVslEventToTrackerEvent + alva:track
   assert.deepEqual(progress.event.event_data, { publicId: 'pub123', versionNumber: 2, value: 50 });
   assert.equal(JSON.stringify([start, progress, cta]).includes('http'), false, 'nenhuma URL de mídia deve vazar até o coletor');
 });
+
+test('na página publicada, o tracker envia para o Studio que o serviu (data-host-url)', () => {
+  const calls = [];
+  const doc = { currentScript: { dataset: { alvaTracker: 'trk_1', hostUrl: 'https://studio.example.test' } }, addEventListener() {} };
+  bootTracker({ doc, location: fakeLocation('/', ''), navigator: { sendBeacon: (url) => { calls.push(url); return true; } } });
+  assert.deepEqual(calls, ['https://studio.example.test/api/public/collect']);
+});

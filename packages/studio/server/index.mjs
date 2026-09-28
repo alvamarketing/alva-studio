@@ -1,3 +1,4 @@
+import { ipDoVisitante } from './ip-do-visitante.mjs';
 import { createServer } from 'node:http';
 import { blocoDeTokens } from './tokens-css.mjs';
 import { FunnelRepository } from './repositories/funnel-repository.mjs';
@@ -529,10 +530,10 @@ export function createApp({
           return res.end();
         }
         // Gate barato por IP antes de ler/parsear qualquer corpo: descarta abuso sem tocar no banco.
-        if (!collectLimiter.allow({ ip: req.socket.remoteAddress })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
+        if (!collectLimiter.allow({ ip: ipDoVisitante(req) })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
         // O escopo (empresa/projeto) vem sempre de resolveWebsite(), nunca do corpo enviado pelo navegador.
         const { trackerPublicId, event } = parseCollectPayload(await collectBody(req), req.headers['content-type']);
-        if (!collectLimiter.allow({ ip: req.socket.remoteAddress, trackerPublicId })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
+        if (!collectLimiter.allow({ ip: ipDoVisitante(req), trackerPublicId })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
         const website = await analytics.resolveWebsite({ trackerPublicId });
         const allowedOrigins = website && origin && origin !== expectedOrigin
           ? await content.publicationOrigins({ companySlug: website.companySlug, projectSlug: website.projectSlug })
@@ -547,7 +548,7 @@ export function createApp({
         }
         const visitorHash = analytics.visitorHash({
           websiteId: website.websiteId,
-          address: req.socket.remoteAddress,
+          address: ipDoVisitante(req),
           userAgent: req.headers['user-agent'],
         });
         const registrado = await analytics.ingest({
@@ -587,7 +588,7 @@ export function createApp({
             // isso chegava às plataformas sem atribuição nenhuma.
             attribution: registrado.aquisicao || {},
             contexto: { sourceUrl: cors.corsOrigin ? `${cors.corsOrigin}${event.url_path || ''}` : undefined },
-            cliente: { ip: req.socket.remoteAddress, userAgent: req.headers['user-agent'] },
+            cliente: { ip: ipDoVisitante(req), userAgent: req.headers['user-agent'] },
             params: {
               ...(dados.publicId ? { content_id: dados.publicId } : {}),
               ...(Number.isInteger(dados.value) ? { value: dados.value } : {}),
@@ -614,7 +615,7 @@ export function createApp({
       }
       if (req.method === 'GET' && path === '/api/session') return json(await auth.state(req));
       if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {
-        auth.limit(req.socket.remoteAddress);
+        auth.limit(ipDoVisitante(req));
         if (
           path === '/api/setup' &&
           (publicOrigin || !localHost || !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress))
@@ -647,7 +648,7 @@ export function createApp({
         return json({ ok: true });
       }
       if (req.method === 'PUT' && path === '/api/account') {
-        auth.limit(req.socket.remoteAddress);
+        auth.limit(ipDoVisitante(req));
         const owner = await auth.account(await body(req));
         auth.issue(res, secure);
         return json({ setupRequired: false, authenticated: true, owner });
@@ -729,7 +730,10 @@ export function createApp({
         res.setHeader('Content-Type', type.startsWith('font/') ? type : type + '; charset=utf-8');
         if (publicFontAsset) res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 'no-cache');
-        const content = await readFile(join(root, file));
+        let content = await readFile(join(root, file));
+        // O tracker é módulo (os testes o importam), mas a página o inclui como script comum,
+        // e `export` ali derruba o arquivo inteiro. Entregue sem os `export`, num escopo próprio.
+        if (path === '/tracker.js') content = `(() => {\n${String(content).replace(/^export /gm, '')}\n})();\n`;
         return res.end(
           path === '/tokens.css' ? blocoDeTokens(content.toString()) : content,
         );

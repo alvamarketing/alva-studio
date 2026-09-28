@@ -69,7 +69,11 @@ export function createTracker({
 export function bootTracker({ doc = typeof document !== 'undefined' ? document : undefined, ...trackerOptions } = {}) {
   const trackerPublicId = doc?.currentScript?.dataset?.alvaTracker;
   if (!trackerPublicId) return null;
-  const tracker = createTracker({ trackerPublicId, document: doc, ...trackerOptions });
+  // Numa página publicada (domínio do cliente, na Vercel) o coletor não existe: ele mora no
+  // Studio que serviu este script, e é para lá que os eventos vão.
+  const host = doc?.currentScript?.dataset?.hostUrl;
+  const endpoint = /^https?:\/\/[^/\s]+$/.test(String(host || '')) ? `${host}/api/public/collect` : undefined;
+  const tracker = createTracker({ trackerPublicId, document: doc, ...(endpoint ? { endpoint } : {}), ...trackerOptions });
   tracker.pageview();
   // O player de VSL (public/vsl-player.js) não conhece o tracker: ele só despacha
   // CustomEvent('alva:track', {detail:{name,data}}), que borbulha até aqui. Isso mantém o

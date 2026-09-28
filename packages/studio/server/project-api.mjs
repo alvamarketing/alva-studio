@@ -1,3 +1,4 @@
+import { ipDoVisitante } from './ip-do-visitante.mjs';
 import { normalizeProjectSlug, normalizeRoute } from './domain/access.mjs';
 import { renderLeadsCsv } from './leads-csv.mjs';
 import { publicRuntimeCapabilities } from './runtime-flags.mjs';
@@ -127,7 +128,7 @@ export function createProjectApi({
     // qualquer tela, não só depois que a Visão geral carrega.
     if (method === 'GET' && path === '/api/session') return json({ ...(await sessionService.state(req)), runtime: { media: runtimeFlags?.mediaPipeline === true } });
     if (method === 'POST' && path === '/api/setup') {
-      limit?.(req.socket.remoteAddress);
+      limit?.(ipDoVisitante(req));
       // Como no n8n: o primeiro acesso cria a conta de dono, e só ele — com uma conta
       // existente, sessionService.setup recusa (409) e a tela passa a pedir login.
       const context = await sessionService.setup(await body(req));
@@ -135,7 +136,7 @@ export function createProjectApi({
       return json(await sessionService.stateFor(context), 201);
     }
     if (method === 'POST' && path === '/api/login') {
-      limit?.(req.socket.remoteAddress);
+      limit?.(ipDoVisitante(req));
       const context = await sessionService.login(await body(req));
       await sessionService.issue(res, context, secure);
       return json(await sessionService.stateFor(context));
