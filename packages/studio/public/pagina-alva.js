@@ -1,7 +1,7 @@
 // A página no esquema do Alva: o estado que o editor salva, o documento que vai ao ar e os
 // formulários que a publicação valida. Roda no servidor (salvar e publicar) e no editor
 // (pré-visualização) — um desenhador só, para o que se vê editando ser o que vai ao ar.
-import { extrairCapturas, nomeDaEscolha, normalizeNode, renderTree, escapeHtml } from './page-schema.js';
+import { AVISO_DE_PRIVACIDADE, extrairCapturas, nomeDaEscolha, normalizeNode, renderTree, escapeHtml } from './page-schema.js';
 import { elementosCss, escolhaCss } from './catalogo-elementos.js';
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeQuizNavigation } from './quiz-navigation.js';
@@ -183,6 +183,7 @@ export function estadoDoQuiz(nome = '') {
         no('field', { label: 'E-mail', name: 'email', fieldType: 'email', placeholder: 'voce@exemplo.com', required: true }),
         no('field', { label: 'WhatsApp', name: 'whatsapp', fieldType: 'tel', placeholder: '(11) 91234-5678', required: false }),
         no('button', { text: 'Ver recomendação', href: '#' }),
+        no('text', { text: AVISO_DE_PRIVACIDADE }),
       ]),
       etapa([
         no('heading', { text: 'Pronto! Recebemos suas respostas.', level: 2 }),

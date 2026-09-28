@@ -13,6 +13,17 @@
 // Como o servidor passou a desenhar, escapar deixou de ser detalhe de renderização e
 // virou fronteira: nada que uma pessoa digita pode virar marcação.
 
+// O aviso de privacidade que acompanha todo formulário que capta lead: diz para que os
+// dados servem e aponta a política. Vazio de propósito ("") some; ausente, vale o padrão.
+// É verdade o que ele diz: o contato vai, protegido (hash), às plataformas de anúncio.
+export const AVISO_DE_PRIVACIDADE = 'Ao enviar, você concorda com o uso dos seus dados para entrarmos em contato e para medir, de forma protegida, os resultados dos nossos anúncios.';
+export function avisoDePrivacidade(props = {}) {
+  const aviso = props.aviso === undefined ? AVISO_DE_PRIVACIDADE : texto(props.aviso, 400).trim();
+  if (!aviso) return '';
+  const politica = /^https:\/\/[^\s"'<>]{1,1000}$/i.test(String(props.politica ?? '')) ? props.politica : '';
+  return `<p class="alva-aviso-privacidade">${escapeHtml(aviso)}${politica ? ` <a href="${escapeHtml(politica)}" target="_blank" rel="noopener noreferrer">Política de privacidade</a>` : ''}</p>`;
+}
+
 export const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
 // Uma árvore vinda de fora não pode travar quem a desenha.
@@ -213,7 +224,7 @@ const ELEMENTOS = {
   form: {
     // `data-alva-capture-id` é como a publicação liga o formulário à captura; `.alva-form` é
     // a folha de formulário que já existe.
-    render: (node, desenharFilhos) => `<form class="alva-form" data-alva-capture-id="${escapeHtml(texto(node.id, 80))}" action="#" method="post">${desenharFilhos(node)}<button type="submit" class="cta">${escapeHtml(texto(node.props.submitLabel, 120) || 'Enviar')}</button></form>`,
+    render: (node, desenharFilhos) => `<form class="alva-form" data-alva-capture-id="${escapeHtml(texto(node.id, 80))}" action="#" method="post">${desenharFilhos(node)}<button type="submit" class="cta">${escapeHtml(texto(node.props.submitLabel, 120) || 'Enviar')}</button>${avisoDePrivacidade(node.props)}</form>`,
   },
 };
 

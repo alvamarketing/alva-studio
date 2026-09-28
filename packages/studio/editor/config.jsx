@@ -7,7 +7,7 @@
 //
 // As escolhas de interface seguem docs/specs/2026-09-27-ux-do-editor.md: seções prontas
 // primeiro, colunas por desenho, espaçamento em escala, ajuste fino recolhido.
-import { classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
+import { AVISO_DE_PRIVACIDADE, avisoDePrivacidade, classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
 import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
 import { secoesProntas } from '../public/secoes-prontas.js';
 import { campoDeCor, campoDeDestino, campoDeIcone, campoDeImagem, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
@@ -214,8 +214,14 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       form: {
         label: 'Formulário',
         inline: true,
-        fields: { submitLabel: { type: 'text', label: 'Texto do botão' }, [SLOT]: { type: 'slot', allow: ['field'] }, avancado },
-        defaultProps: { submitLabel: 'Enviar', avancado: {} },
+        fields: {
+          submitLabel: { type: 'text', label: 'Texto do botão' },
+          aviso: { type: 'textarea', label: 'Aviso de privacidade (abaixo do botão)' },
+          politica: { type: 'text', label: 'Link da política de privacidade (https://…)' },
+          [SLOT]: { type: 'slot', allow: ['field'] },
+          avancado,
+        },
+        defaultProps: { submitLabel: 'Enviar', aviso: AVISO_DE_PRIVACIDADE, politica: '', avancado: {} },
         // A captura precisa de um UUID estável, que o Puck não dá: nasce aqui, uma vez.
         resolveData: ({ props }) => (props.captureId ? { props } : { props: { ...props, captureId: globalThis.crypto.randomUUID() } }),
         render: ({ puck, submitLabel, [SLOT]: Itens, ...props }) => (
@@ -223,6 +229,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
             <form className="alva-form" onSubmit={(evento) => evento.preventDefault()}>
               <Itens />
               <button type="submit" className="cta">{submitLabel || 'Enviar'}</button>
+              <span style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: avisoDePrivacidade(props) }} />
             </form>
           </div>
         ),
