@@ -523,11 +523,8 @@
   color: var(--alva-muted);
   font-weight: 600;
 }
-#settings-view #panel-account,
-#settings-view #panel-company,
-#settings-view #panel-team,
-#settings-view #panel-billing {
-  max-width: 1080px;
+#settings-view #panel-integrations {
+  max-width: none;
 }
 #settings-view #panel-account > form,
 #settings-view .owner-publication-settings,
@@ -1048,6 +1045,7 @@
 #settings-view {
   display: grid;
   align-content: start;
+  grid-template-columns: minmax(0, 1080px);
   gap: 16px;
 }
 #settings-view > .owner-header,

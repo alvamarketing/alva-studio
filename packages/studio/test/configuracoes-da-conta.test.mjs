@@ -83,3 +83,10 @@ test('a nota de licenças vem depois do que a pessoa foi fazer ali', async () =>
   const regra = css.slice(css.indexOf("#settings-view > [data-settings-area='account']"));
   assert.match(regra.slice(0, regra.indexOf('}')), /order: 2/);
 });
+
+test('os blocos das configurações têm todos a mesma largura', async () => {
+  const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
+  const regra = css.slice(css.indexOf('#settings-view {\n  display: grid'));
+  assert.match(regra.slice(0, regra.indexOf('}')), /grid-template-columns: minmax\(0, \d+px\)/);
+  assert.doesNotMatch(css, /#settings-view #panel-account,\n#settings-view #panel-company/, 'largura por painel volta a divergir');
+});
