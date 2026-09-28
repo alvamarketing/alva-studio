@@ -1,24 +1,82 @@
 // Os componentes do Puck, um por tipo do esquema do Alva.
 //
-// Um catálogo só: a pré-visualização dos elementos simples é o HTML do mesmo `renderNode`
-// que o servidor usa para publicar. Os contêineres (seção, colunas, formulário) desenham a
-// mesma casca com um slot dentro, que é como o Puck deixa arrastar para dentro deles.
-import { classeDaSecao, classeDasColunas, estiloDaSecao, renderNode } from '../public/page-schema.js';
-import { campoDeCor, campoDeImagem, estiloParaReact } from './campos.jsx';
-import { SLOT } from '../public/puck-conversao.js';
+// Um catálogo só: o miolo de cada bloco é o HTML do mesmo `renderConteudo` que o servidor
+// usa para publicar, e a caixa de layout em volta usa as mesmas classes. Os blocos são
+// `inline` (sem o invólucro do Puck), para a caixa deles ser o item do layout — é isso que
+// faz largura, Linha e colunas funcionarem no editor como na página publicada.
+//
+// As escolhas de interface seguem docs/specs/2026-09-27-ux-do-editor.md: seções prontas
+// primeiro, colunas por desenho, espaçamento em escala, ajuste fino recolhido.
+import { classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
+import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
+import { secoesProntas } from '../public/secoes-prontas.js';
+import { campoDeCor, campoDeImagem, campoDeProporcao, estiloParaReact } from './campos.jsx';
 
-const Html = ({ type, props }) => {
+const Miolo = ({ type, props }) => {
   let html;
-  try { html = renderNode({ type, props }); } catch (erro) { html = `<p style="color:#b42318">${erro.message}</p>`; }
+  try { html = renderConteudo({ type, props }); } catch (erro) { html = `<p style="color:#b42318">${erro.message}</p>`; }
   return <div style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
 const simNao = [{ label: 'Sim', value: true }, { label: 'Não', value: false }];
-const folha = (type, fields, defaultProps) => ({
-  fields,
-  defaultProps,
-  render: ({ puck: _puck, editMode: _editMode, id: _id, ...props }) => <Html type={type} props={props} />,
+const escala = (rotulo) => ({ type: 'radio', label: rotulo, options: [{ label: 'P', value: 'p' }, { label: 'M', value: 'm' }, { label: 'G', value: 'g' }] });
+const BLOCOS_SOLTOS = ['heading', 'text', 'button', 'icon', 'image', 'video', 'vsl'];
+
+// Ajuste fino, recolhido: largura manual, movimento e margem em escala.
+const avancado = {
+  type: 'object',
+  label: 'Avançado',
+  objectFields: {
+    largura: { type: 'select', label: 'Largura', options: [
+      { label: 'Linha inteira', value: 'inteira' }, { label: '3/4', value: '3/4' }, { label: '2/3', value: '2/3' },
+      { label: '1/2', value: '1/2' }, { label: '1/3', value: '1/3' }, { label: '1/4', value: '1/4' },
+    ] },
+    alinhamento: { type: 'radio', label: 'Alinhamento', options: [{ label: 'Esquerda', value: 'esquerda' }, { label: 'Centro', value: 'centro' }, { label: 'Direita', value: 'direita' }] },
+    espacoAcima: escala('Espaço acima'),
+    espacoAbaixo: escala('Espaço abaixo'),
+    movimento: { type: 'select', label: 'Movimento de entrada', options: [
+      { label: 'Nenhum', value: '' }, { label: 'Subir suavemente', value: 'fade-up' }, { label: 'Deslizar da direita', value: 'slide-left' }, { label: 'Aproximar', value: 'zoom-in' },
+    ] },
+  },
+};
+
+// Um bloco solto: a caixa de layout é o elemento que o Puck arrasta.
+const bloco = (type, label, fields, defaultProps) => ({
+  label,
+  inline: true,
+  fields: { ...fields, avancado },
+  defaultProps: { ...defaultProps, avancado: {} },
+  render: ({ puck, id: _id, ...props }) => (
+    <div ref={puck.dragRef} className={classesDoBloco(props)}><Miolo type={type} props={props} /></div>
+  ),
 });
+
+// Seção: pronta ou vazia, é a mesma faixa com o conteúdo numa área central.
+const camposDaSecao = (enviarImagem) => ({
+  fundo: { type: 'select', label: 'Fundo pronto', options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
+  corDeFundo: campoDeCor('Cor de fundo'),
+  corDeFundo2: campoDeCor('Segunda cor (degradê)'),
+  direcaoDoDegrade: { type: 'radio', label: 'Direção do degradê', options: [{ label: 'Vertical', value: 'vertical' }, { label: 'Horizontal', value: 'horizontal' }, { label: 'Diagonal', value: 'diagonal' }] },
+  imagemDeFundo: campoDeImagem('Imagem de fundo', enviarImagem),
+  corDoTexto: campoDeCor('Cor do texto'),
+  alinhamento: { type: 'radio', label: 'Alinhar conteúdo', options: [{ label: 'Esquerda', value: 'esquerda' }, { label: 'Centro', value: 'centro' }] },
+  respiro: escala('Espaço dentro da seção'),
+  espacamento: escala('Espaço entre os blocos'),
+  // Campo só funciona dentro de formulário, e seção só na página: dentro de outra seção
+  // ela vira uma faixa espremida.
+  [SLOT]: { type: 'slot', disallow: ['field', 'section', ...secoesProntas.map((pronta) => pronta.id)] },
+});
+const renderDaSecao = ({ puck, id: _id, [SLOT]: Itens, ...props }) => (
+  <section ref={puck.dragRef} className={classeDaSecao(props)} style={estiloParaReact(estiloDaSecao(props))}>
+    <Itens className={classeDoConteudo(props)} collisionAxis="dynamic" />
+  </section>
+);
+const secao = (label, enviarImagem, defaultProps) => ({ label, inline: true, fields: camposDaSecao(enviarImagem), defaultProps, render: renderDaSecao });
+
+const semIds = (itens) => itens.map(({ type, props: { id: _id, ...props } }) => ({
+  type,
+  props: props[SLOT] ? { ...props, [SLOT]: semIds(props[SLOT]) } : props,
+}));
 
 // As VSLs publicadas do projeto viram uma lista para escolher: digitar um identificador era
 // convite ao erro, e VSL não publicada impede a página de publicar.
@@ -26,108 +84,105 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
   const opcoesDeVsl = vsls.length
     ? [{ label: 'Escolha uma VSL', value: '' }, ...vsls.map((vsl) => ({ label: vsl.name, value: vsl.publicId }))]
     : [{ label: 'Nenhuma VSL publicada neste projeto', value: '' }];
+  const prontas = Object.fromEntries(secoesProntas.map((pronta) => [pronta.id, secao(pronta.nome, enviarImagem, {
+    fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'esquerda',
+    ...pronta.props,
+    // Os filhos entram já montados. Sem id: o Puck só gera id novo para quem chega sem, e
+    // um id fixo aqui faria duas inserções da mesma seção dividirem os mesmos ids.
+    [SLOT]: semIds(alvaParaPuck({ content: pronta.conteudo() }).root.props[SLOT]),
+  })]));
   return {
-  categories: {
-    estrutura: { title: 'Estrutura', components: ['section', 'columns'] },
-    conteudo: { title: 'Conteúdo', components: ['heading', 'text', 'button', 'icon', 'image', 'video', 'vsl'] },
-    captacao: { title: 'Captação', components: ['form', 'field'] },
-  },
-  root: {
-    fields: { title: { type: 'text', label: 'Título da página (aba do navegador)' } },
-    defaultProps: { title: '' },
-  },
-  components: {
-    section: {
-      label: 'Seção',
-      fields: {
-        fundo: { type: 'select', label: 'Fundo pronto', options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
-        corDeFundo: campoDeCor('Cor de fundo'),
-        imagemDeFundo: campoDeImagem('Imagem de fundo', enviarImagem),
-        corDoTexto: campoDeCor('Cor do texto'),
-        // Campo só funciona dentro de formulário: solto, não captura nada.
-        [SLOT]: { type: 'slot', disallow: ['field'] },
-      },
-      defaultProps: { fundo: 'branco', corDeFundo: '', imagemDeFundo: '', corDoTexto: '' },
-      render: ({ fundo, corDeFundo, imagemDeFundo, corDoTexto, [SLOT]: Itens }) => (
-        <section className={classeDaSecao({ fundo })} style={estiloParaReact(estiloDaSecao({ corDeFundo, imagemDeFundo, corDoTexto }))}><Itens /></section>
-      ),
+    categories: {
+      prontas: { title: 'Seções prontas', components: secoesProntas.map((pronta) => pronta.id), defaultExpanded: true },
+      estrutura: { title: 'Estrutura', components: ['section', 'row', 'columns'] },
+      conteudo: { title: 'Conteúdo', components: BLOCOS_SOLTOS },
+      captacao: { title: 'Captação', components: ['form', 'field'] },
     },
-    columns: {
-      label: 'Colunas',
+    // A página recebe só seções: bloco solto na raiz ficava sem espaçamento e sem layout.
+    root: {
       fields: {
-        quantidade: { type: 'select', label: 'Quantas colunas', options: [{ label: 'Duas', value: 2 }, { label: 'Três', value: 3 }] },
-        // Campo só funciona dentro de formulário: solto, não captura nada.
-        [SLOT]: { type: 'slot', disallow: ['field'] },
+        title: { type: 'text', label: 'Título da página (aba do navegador)' },
+        [SLOT]: { type: 'slot', allow: ['section', ...secoesProntas.map((pronta) => pronta.id)] },
       },
-      defaultProps: { quantidade: 2 },
-      // O slot do Puck desenha um elemento próprio: é ele que vira a grade, para os blocos
-      // serem filhos diretos dela, como na página publicada.
-      render: ({ quantidade, [SLOT]: Itens }) => <Itens as="div" className={classeDasColunas({ quantidade })} collisionAxis="x" />,
+      defaultProps: { title: '', [SLOT]: [] },
+      render: ({ [SLOT]: Itens }) => <Itens as="main" className="alva-pagina" minEmptyHeight={400} />,
     },
-    heading: {
-      label: 'Título',
-      ...folha('heading', {
+    components: {
+      ...prontas,
+      section: secao('Seção vazia', enviarImagem, { fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' }),
+      row: {
+        label: 'Linha (lado a lado)',
+        inline: true,
+        fields: { [SLOT]: { type: 'slot', allow: BLOCOS_SOLTOS }, avancado },
+        defaultProps: { avancado: {} },
+        // Soltar o segundo bloco já divide 50/50; o terceiro, em três. O slot desenha a
+        // linha, com os lugares de soltar lado a lado.
+        render: ({ puck, [SLOT]: Itens, ...props }) => (
+          <div ref={puck.dragRef} className={classesDoBloco(props)}>
+            <Itens className="alva-linha" collisionAxis="x" minEmptyHeight={72} />
+          </div>
+        ),
+      },
+      columns: {
+        label: 'Colunas',
+        inline: true,
+        fields: { estrutura: campoDeProporcao('Estrutura'), [SLOT]: { type: 'slot', disallow: ['field'] }, avancado },
+        defaultProps: { estrutura: '1/2+1/2', avancado: {} },
+        render: ({ puck, estrutura, [SLOT]: Itens, ...props }) => (
+          <div ref={puck.dragRef} className={classesDoBloco(props)}>
+            <Itens as="div" className={classeDasColunas({ estrutura })} collisionAxis="dynamic" />
+          </div>
+        ),
+      },
+      heading: bloco('heading', 'Título', {
         text: { type: 'textarea', label: 'Texto' },
         level: { type: 'select', label: 'Tamanho', options: [{ label: 'Principal (H1)', value: 1 }, { label: 'Seção (H2)', value: 2 }, { label: 'Menor (H3)', value: 3 }] },
-      }, { text: 'Seu próximo grande título', level: 2 }),
-    },
-    text: {
-      label: 'Texto',
-      ...folha('text', { text: { type: 'textarea', label: 'Texto' } }, { text: 'Uma mensagem simples para apresentar sua solução.' }),
-    },
-    button: {
-      label: 'Botão',
-      ...folha('button', {
+      }, { text: 'Um título que diz o que a pessoa ganha', level: 2 }),
+      text: bloco('text', 'Texto', { text: { type: 'textarea', label: 'Texto' } }, { text: 'Uma ou duas frases que explicam, em palavras simples, por que isso importa.' }),
+      button: bloco('button', 'Botão', {
         text: { type: 'text', label: 'Texto' },
         href: { type: 'text', label: 'Link (https://…, #seção, mailto:, tel:)' },
         newTab: { type: 'radio', label: 'Abrir em nova aba', options: simNao },
-      }, { text: 'Quero saber mais', href: '#contato', newTab: false }),
-    },
-    icon: {
-      label: 'Ícone',
-      ...folha('icon', { name: { type: 'text', label: 'Nome do ícone (Material Symbols)' } }, { name: 'star' }),
-    },
-    image: {
-      label: 'Imagem',
-      ...folha('image', { src: campoDeImagem('Imagem', enviarImagem), alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
-    },
-    video: {
-      label: 'Vídeo (YouTube ou Vimeo)',
-      ...folha('video', { url: { type: 'text', label: 'Link do vídeo no YouTube ou no Vimeo' }, title: { type: 'text', label: 'Título do vídeo (para leitores de tela)' } }, { url: '', title: '' }),
-    },
-    vsl: {
-      label: 'VSL do Studio',
-      ...folha('vsl', { publicId: { type: 'select', label: 'VSL publicada', options: opcoesDeVsl } }, { publicId: '' }),
-    },
-    form: {
-      label: 'Formulário',
-      fields: {
-        submitLabel: { type: 'text', label: 'Texto do botão' },
-        [SLOT]: { type: 'slot', allow: ['field'] },
+        corDoBotao: campoDeCor('Cor do botão'),
+        corDoBotao2: campoDeCor('Segunda cor (degradê)'),
+        direcaoDoDegrade: { type: 'radio', label: 'Direção do degradê', options: [{ label: 'Vertical', value: 'vertical' }, { label: 'Horizontal', value: 'horizontal' }, { label: 'Diagonal', value: 'diagonal' }] },
+        corDoTextoDoBotao: campoDeCor('Cor do texto do botão'),
+      }, { text: 'Quero saber mais', href: '#contato', newTab: false, corDoBotao: '', corDoBotao2: '', corDoTextoDoBotao: '' }),
+      icon: bloco('icon', 'Ícone', { name: { type: 'text', label: 'Nome do ícone (Material Symbols)' } }, { name: 'star' }),
+      image: bloco('image', 'Imagem', { src: campoDeImagem('Imagem', enviarImagem), alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
+      video: bloco('video', 'Vídeo (YouTube ou Vimeo)', { url: { type: 'text', label: 'Link do vídeo no YouTube ou no Vimeo' }, title: { type: 'text', label: 'Título do vídeo (para leitores de tela)' } }, { url: '', title: '' }),
+      vsl: bloco('vsl', 'VSL do Studio', { publicId: { type: 'select', label: 'VSL publicada', options: opcoesDeVsl } }, { publicId: '' }),
+      form: {
+        label: 'Formulário',
+        inline: true,
+        fields: { submitLabel: { type: 'text', label: 'Texto do botão' }, [SLOT]: { type: 'slot', allow: ['field'] }, avancado },
+        defaultProps: { submitLabel: 'Enviar', avancado: {} },
+        // A captura precisa de um UUID estável, que o Puck não dá: nasce aqui, uma vez.
+        resolveData: ({ props }) => (props.captureId ? { props } : { props: { ...props, captureId: globalThis.crypto.randomUUID() } }),
+        render: ({ puck, submitLabel, [SLOT]: Itens, ...props }) => (
+          <div ref={puck.dragRef} className={classesDoBloco(props)}>
+            <form className="alva-form" onSubmit={(evento) => evento.preventDefault()}>
+              <Itens />
+              <button type="submit" className="cta">{submitLabel || 'Enviar'}</button>
+            </form>
+          </div>
+        ),
       },
-      defaultProps: { submitLabel: 'Enviar' },
-      // A captura precisa de um UUID estável, que o Puck não dá: nasce aqui, uma vez.
-      resolveData: ({ props }) => (props.captureId ? { props } : { props: { ...props, captureId: globalThis.crypto.randomUUID() } }),
-      render: ({ submitLabel, [SLOT]: Itens }) => (
-        <form className="alva-form" onSubmit={(evento) => evento.preventDefault()}>
-          <Itens />
-          <button type="submit" className="cta">{submitLabel || 'Enviar'}</button>
-        </form>
-      ),
+      field: {
+        label: 'Campo',
+        fields: {
+          label: { type: 'text', label: 'Pergunta' },
+          name: { type: 'text', label: 'Nome do campo (vai para o lead)' },
+          fieldType: { type: 'select', label: 'Tipo de resposta', options: [
+            { label: 'Texto', value: 'text' }, { label: 'E-mail', value: 'email' }, { label: 'Telefone', value: 'tel' },
+            { label: 'Número', value: 'number' }, { label: 'Texto longo', value: 'long_text' },
+          ] },
+          placeholder: { type: 'text', label: 'Exemplo dentro do campo' },
+          required: { type: 'radio', label: 'Obrigatório', options: simNao },
+        },
+        defaultProps: { label: 'Seu e-mail', name: 'email', fieldType: 'email', placeholder: 'voce@exemplo.com', required: true },
+        render: ({ puck: _puck, id: _id, ...props }) => <Miolo type="field" props={props} />,
+      },
     },
-    field: {
-      label: 'Campo',
-      ...folha('field', {
-        label: { type: 'text', label: 'Pergunta' },
-        name: { type: 'text', label: 'Nome do campo (vai para o lead)' },
-        fieldType: { type: 'select', label: 'Tipo de resposta', options: [
-          { label: 'Texto', value: 'text' }, { label: 'E-mail', value: 'email' }, { label: 'Telefone', value: 'tel' },
-          { label: 'Número', value: 'number' }, { label: 'Texto longo', value: 'long_text' },
-        ] },
-        placeholder: { type: 'text', label: 'Exemplo dentro do campo' },
-        required: { type: 'radio', label: 'Obrigatório', options: simNao },
-      }, { label: 'Seu e-mail', name: 'email', fieldType: 'email', placeholder: 'voce@exemplo.com', required: true }),
-    },
-  },
-};
+  };
 }

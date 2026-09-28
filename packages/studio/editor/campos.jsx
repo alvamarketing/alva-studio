@@ -67,3 +67,36 @@ export function estiloParaReact(estilo) {
     return [propriedade.trim().replace(/-([a-z])/g, (_, letra) => letra.toUpperCase()), resto.join(':').trim()];
   }));
 }
+
+// As colunas escolhidas por desenho: cada botão mostra a proporção, em vez de pedir número.
+const PROPORCOES = [
+  { valor: '1/2+1/2', rotulo: 'Duas iguais', partes: [1, 1] },
+  { valor: '1/3+2/3', rotulo: 'Estreita e larga', partes: [1, 2] },
+  { valor: '2/3+1/3', rotulo: 'Larga e estreita', partes: [2, 1] },
+  { valor: '1/3x3', rotulo: 'Três iguais', partes: [1, 1, 1] },
+];
+export function campoDeProporcao(rotulo) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => (
+      <FieldLabel label={rotulo} readOnly={readOnly}>
+        <div role="radiogroup" aria-label={rotulo} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          {PROPORCOES.map((opcao) => {
+            const escolhida = (value || '1/2+1/2') === opcao.valor;
+            return (
+              <button key={opcao.valor} type="button" role="radio" aria-checked={escolhida} aria-label={opcao.rotulo} title={opcao.rotulo} disabled={readOnly}
+                onClick={() => onChange(opcao.valor)}
+                style={{ ...estiloDoBotao, display: 'grid', gap: 6, padding: 8, borderColor: escolhida ? '#286EEA' : '#E7ECF3', background: escolhida ? '#EAF2FF' : '#ffffff' }}>
+                <span style={{ display: 'flex', gap: 4, height: 18 }}>
+                  {opcao.partes.map((parte, indice) => <span key={indice} style={{ flex: parte, borderRadius: 4, background: escolhida ? '#286EEA' : '#CDD6E3' }} />)}
+                </span>
+                <span style={{ fontSize: 12 }}>{opcao.rotulo}</span>
+              </button>
+            );
+          })}
+        </div>
+      </FieldLabel>
+    ),
+  };
+}

@@ -104,3 +104,30 @@ test('o campo carrega o que a captura precisa saber', () => {
 test('campo com tipo que a captura não aceita é recusado na origem', () => {
   assert.throws(() => normalizeNode({ type: 'field', props: { label: 'X', name: 'x', fieldType: 'password' } }), /tipo de resposta/i);
 });
+
+// Regras de UX de 27/09 (docs/specs/2026-09-27-ux-do-editor.md).
+test('Linha: os blocos dentro dela dividem o espaço em partes iguais', () => {
+  const html = renderNode({ type: 'row', props: {}, children: [
+    { type: 'icon', props: { name: 'star' } }, { type: 'icon', props: { name: 'bolt' } },
+  ] });
+  assert.match(html, /^<div class="alva-bloco"><div class="alva-linha"><div class="alva-bloco">.*<\/div><div class="alva-bloco">.*<\/div><\/div><\/div>$/);
+});
+
+test('Colunas por desenho: 2 iguais, 1/3+2/3, 2/3+1/3 e 3 iguais', () => {
+  const classe = (estrutura) => renderConteudo({ type: 'columns', props: { estrutura }, children: [] }).match(/class="([^"]+)"/)[1];
+  assert.equal(classe('1/2+1/2'), 'alva-colunas');
+  assert.equal(classe('1/3+2/3'), 'alva-colunas alva-colunas-1-3-2-3');
+  assert.equal(classe('2/3+1/3'), 'alva-colunas alva-colunas-2-3-1-3');
+  assert.equal(classe('1/3x3'), 'alva-colunas alva-colunas-3');
+  assert.equal(renderConteudo({ type: 'columns', props: { quantidade: 3 }, children: [] }).match(/class="([^"]+)"/)[1], 'alva-colunas alva-colunas-3', 'páginas salvas antes seguem valendo');
+});
+
+test('Seção: respiro, espaço entre blocos e alinhamento em escala', () => {
+  const html = renderNode({ type: 'section', props: { respiro: 'g', espacamento: 'p', alinhamento: 'centro' }, children: [] });
+  assert.equal(html, '<section class="alva-secao alva-respiro-g"><div class="alva-conteudo alva-espaco-p alva-conteudo-centro"></div></section>');
+});
+
+test('Avançado: largura, movimento e margem do bloco moram em "avancado"', () => {
+  assert.equal(renderNode({ type: 'text', props: { text: 'x', avancado: { largura: '1/3', movimento: 'zoom-in', espacoAcima: 'g', espacoAbaixo: 'p' } } }),
+    '<div class="alva-bloco alva-l-1-3 alva-m-topo-g alva-m-base-p" data-alva-motion="zoom-in"><p class="alva-texto">x</p></div>');
+});

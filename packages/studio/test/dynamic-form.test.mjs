@@ -278,8 +278,8 @@ test('sem nonce/trackerPublicId, o HTML do formulário é preservado byte a byte
   // CSS morto embutido no formulário, nenhum seletor dele usado aqui.
   // E de novo no mesmo dia, pelas variações do esquema: fundo de seção (suave, escuro) e
   // três colunas. Mesmo motivo: CSS morto embutido no formulário.
-  assert.equal(html.length, 30630);
-  assert.equal(createHash('sha256').update(html).digest('hex'), '417981da3eb06f30f60c23b3e022dca85cf031aac3ac185033f971988e06ae85');
+  assert.equal(html.length, 31676);
+  assert.equal(createHash('sha256').update(html).digest('hex'), 'c4134028eba57e9ab9721800dc6b0e850e6b1b5c388841f7aa982be827339613');
 });
 
 test('sem nonce, renderCompletion é preservado byte a byte', () => {

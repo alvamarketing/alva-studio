@@ -46,7 +46,8 @@ function nomeDeCampo(valor) {
 // As classes dos contêineres, numa função só: o servidor desenha com elas e o editor (Puck)
 // também — duas listas divergiriam.
 const FUNDOS = { branco: '', suave: ' alva-secao-suave', escuro: ' alva-secao-escura' };
-export const classeDaSecao = (props = {}) => `alva-secao${FUNDOS[props.fundo] ?? ''}`;
+export const classeDaSecao = (props = {}) => `alva-secao${FUNDOS[props.fundo] ?? ''}${['p', 'g'].includes(props.respiro) ? ` alva-respiro-${props.respiro}` : ''}`;
+export const classeDoConteudo = (props = {}) => `alva-conteudo${['p', 'g'].includes(props.espacamento) ? ` alva-espaco-${props.espacamento}` : ''}${props.alinhamento === 'centro' ? ' alva-conteudo-centro' : ''}`;
 
 // O layout de cada bloco, como no Elementor: ocupa a linha inteira por padrão, e a pessoa
 // escolhe a largura e o alinhamento. Movimento de entrada é opcional.
@@ -54,8 +55,17 @@ const COR = /^#[0-9a-f]{6}$/i;
 const LARGURAS = Object.freeze({ inteira: '', '3/4': ' alva-l-3-4', '2/3': ' alva-l-2-3', '1/2': ' alva-l-1-2', '1/3': ' alva-l-1-3', '1/4': ' alva-l-1-4' });
 const ALINHAMENTOS = Object.freeze({ esquerda: '', centro: ' alva-a-centro', direita: ' alva-a-direita' });
 export const MOVIMENTOS = Object.freeze(['fade-up', 'slide-left', 'zoom-in']);
-export const classesDoBloco = (props = {}) => `alva-bloco${LARGURAS[props.largura] ?? ''}${ALINHAMENTOS[props.alinhamento] ?? ''}`;
-export const movimentoDoBloco = (props = {}) => (MOVIMENTOS.includes(props.movimento) ? props.movimento : '');
+const ESCALA = Object.freeze({ p: 'p', m: 'm', g: 'g' });
+// O que é ajuste fino (largura, movimento, margem) mora em `avancado`, que o editor mostra
+// recolhido; páginas salvas antes, com essas props soltas, continuam valendo.
+const ajustes = (props = {}) => ({ ...props, ...(props.avancado && typeof props.avancado === 'object' ? props.avancado : {}) });
+export const classesDoBloco = (bruto = {}) => {
+  const props = ajustes(bruto);
+  const topo = ESCALA[props.espacoAcima] ? ` alva-m-topo-${props.espacoAcima}` : '';
+  const base = ESCALA[props.espacoAbaixo] ? ` alva-m-base-${props.espacoAbaixo}` : '';
+  return `alva-bloco${LARGURAS[props.largura] ?? ''}${ALINHAMENTOS[props.alinhamento] ?? ''}${topo}${base}`;
+};
+export const movimentoDoBloco = (bruto = {}) => { const props = ajustes(bruto); return MOVIMENTOS.includes(props.movimento) ? props.movimento : ''; };
 const atributoDeMovimento = (props) => (movimentoDoBloco(props) ? ` data-alva-motion="${movimentoDoBloco(props)}"` : '');
 
 // Degradê: duas cores e uma direção.
@@ -100,14 +110,21 @@ export function enderecoDoVideo(bruto) {
   const vimeo = host === 'vimeo.com' ? url.pathname.match(/^\/(\d{1,12})$/)?.[1] : null;
   return vimeo ? `https://player.vimeo.com/video/${vimeo}` : null;
 }
-export const classeDasColunas = (props = {}) => `alva-colunas${Number(props.quantidade) === 3 ? ' alva-colunas-3' : ''}`;
+// Colunas escolhidas por desenho. `quantidade` é das páginas salvas antes.
+const ESTRUTURAS = Object.freeze({ '1/2+1/2': '', '1/3+2/3': ' alva-colunas-1-3-2-3', '2/3+1/3': ' alva-colunas-2-3-1-3', '1/3x3': ' alva-colunas-3' });
+export const classeDasColunas = (props = {}) => `alva-colunas${ESTRUTURAS[props.estrutura] ?? (Number(props.quantidade) === 3 ? ' alva-colunas-3' : '')}`;
 
 const ELEMENTOS = {
   section: {
     render: (node, desenharFilhos) => {
       const estilo = estiloDaSecao(node.props);
-      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeMovimento(node.props)}><div class="alva-conteudo">${desenharFilhos(node)}</div></section>`;
+      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeMovimento(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
     },
+  },
+  // A Linha: os blocos dentro dela dividem o espaço em partes iguais — soltar o segundo já
+  // dá 50/50, o terceiro, três terços.
+  row: {
+    render: (node, desenharFilhos) => `<div class="alva-linha">${desenharFilhos(node)}</div>`,
   },
   columns: {
     render: (node, desenharFilhos) => `<div class="${classeDasColunas(node.props)}">${desenharFilhos(node)}</div>`,

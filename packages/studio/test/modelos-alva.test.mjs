@@ -20,3 +20,14 @@ test('seção com fundo e três colunas saem com as classes que têm regra na fo
     assert.match(elementosCss, new RegExp(`\\.${classe}\\{`));
   }
 });
+
+test('toda seção pronta desenha, e a de contato já captura', async () => {
+  const { secoesProntas } = await import('../public/secoes-prontas.js');
+  for (const secao of secoesProntas) {
+    const estado = normalizarEstadoAlva({ formato: 'alva/1', content: [{ type: 'section', props: secao.props, children: secao.conteudo() }] });
+    assert.match(documentoDaPagina(estado), /<section class="alva-secao/, secao.nome);
+  }
+  const contato = secoesProntas.find((secao) => secao.id === 'secao-contato');
+  const estado = normalizarEstadoAlva({ formato: 'alva/1', content: [{ type: 'section', props: contato.props, children: contato.conteudo() }] });
+  assert.deepEqual(capturasDoEstado(estado).forms[0].fields.map((campo) => campo.id), ['nome', 'email', 'whatsapp']);
+});

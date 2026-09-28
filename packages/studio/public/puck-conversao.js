@@ -9,7 +9,10 @@
 // estável — é por ele que a resposta publicada diz de qual formulário veio.
 
 export const SLOT = 'itens';
-export const CONTEINERES = new Set(['section', 'columns', 'form']);
+import { TIPOS_DE_SECAO_PRONTA } from './secoes-prontas.js';
+
+export const CONTEINERES = new Set(['section', 'row', 'columns', 'form', ...TIPOS_DE_SECAO_PRONTA]);
+const UUID_NO_FIM = /([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 export function alvaParaPuck(estado) {
   const converter = (node) => {
@@ -20,19 +23,26 @@ export function alvaParaPuck(estado) {
     if (CONTEINERES.has(node.type)) props[SLOT] = (node.children ?? []).map(converter);
     return { type: node.type, props };
   };
+  // As seções moram num slot da raiz: é como o editor restringe a página a receber só
+  // seções — bloco solto na raiz ficava sem espaçamento e sem layout.
   return {
-    root: { props: { title: estado?.root?.title ?? '' } },
-    content: (estado?.content ?? []).map(converter),
+    root: { props: { title: estado?.root?.title ?? '', [SLOT]: (estado?.content ?? []).map(converter) } },
+    content: [],
   };
 }
 
 export function puckParaAlva(dados) {
   const converter = (item) => {
     const { id, captureId, [SLOT]: filhos, ...props } = item.props ?? {};
-    const identificador = item.type === 'form' ? captureId : id;
+    // O formulário que entrou dentro de uma seção pronta não passou pelo resolveData e
+    // chega sem captureId: o UUID do fim do id que o Puck deu serve, e é estável entre
+    // salvamentos — sem isso, cada salvamento trocaria a captura.
+    const identificador = item.type === 'form' ? captureId || String(id ?? '').match(UUID_NO_FIM)?.[1] : id;
+    // Seção pronta é uma seção: o tipo dela só existe na biblioteca do editor.
+    const tipo = TIPOS_DE_SECAO_PRONTA.has(item.type) ? 'section' : item.type;
     return {
       ...(identificador ? { id: identificador } : {}),
-      type: item.type,
+      type: tipo,
       props,
       children: CONTEINERES.has(item.type) ? (filhos ?? []).map(converter) : [],
     };
@@ -40,6 +50,6 @@ export function puckParaAlva(dados) {
   return {
     formato: 'alva/1',
     root: { title: dados?.root?.props?.title ?? '' },
-    content: (dados?.content ?? []).map(converter),
+    content: [...(dados?.root?.props?.[SLOT] ?? []), ...(dados?.content ?? [])].map(converter),
   };
 }

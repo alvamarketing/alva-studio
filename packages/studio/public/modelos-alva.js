@@ -12,7 +12,9 @@ const botao = (text, href = '#contato') => no('button', { text, href, newTab: fa
 const icone = (name) => no('icon', { name });
 const campo = (label, name, fieldType, placeholder, required = true) => no('field', { label, name, fieldType, placeholder, required });
 const formulario = (submitLabel, campos) => no('form', { submitLabel }, campos);
-const secao = (fundo, filhos) => no('section', { fundo }, filhos);
+// Nascem centralizadas: numa seção de uma coluna, é o que fica organizado sem esforço
+// (regra 2 de docs/specs/2026-09-27-ux-do-editor.md).
+const secao = (fundo, filhos) => no('section', { fundo, alinhamento: 'centro' }, filhos);
 const colunas = (quantidade, filhos) => no('columns', { quantidade }, filhos);
 const cartao = (nomeDoIcone, cabecalho, corpo) => no('section', { fundo: 'branco' }, [icone(nomeDoIcone), titulo(cabecalho, 3), texto(corpo)]);
 
