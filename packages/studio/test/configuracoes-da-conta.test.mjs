@@ -90,3 +90,9 @@ test('os blocos das configurações têm todos a mesma largura', async () => {
   assert.match(regra.slice(0, regra.indexOf('}')), /grid-template-columns: minmax\(0, \d+px\)/);
   assert.doesNotMatch(css, /#settings-view #panel-account,\n#settings-view #panel-company/, 'largura por painel volta a divergir');
 });
+
+test('nenhum bloco das configurações carrega largura própria no atributo style', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const tela = html.slice(html.indexOf('id="settings-view"'), html.indexOf('id="project-view"'));
+  assert.doesNotMatch(tela, /style="[^"]*max-width/, 'a medida é do grid da página');
+});
