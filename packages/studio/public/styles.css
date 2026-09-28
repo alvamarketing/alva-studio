@@ -2117,7 +2117,7 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 /* Aba Funis: filtros e miniatura do desenho em cada cartão. */
 .funnels-filters { display: grid; gap: 12px; }
 .funnels-busca { display: flex; align-items: center; gap: 8px; max-width: 420px; padding: 0 12px; border: 1px solid var(--alva-line); border-radius: var(--radius-md); background: var(--alva-white); color: var(--alva-muted); }
-.funnels-busca input { flex: 1; border: 0; background: transparent; padding: 10px 0; font: inherit; font-size: var(--text-md); color: var(--alva-ink); outline: none; }
+.funnels-busca input { flex: 1; border: 0; background: transparent; padding: 10px 0; font: inherit; font-size: var(--text-md); color: var(--alva-ink); }
 .funnels-busca:focus-within { border-color: var(--alva-blue); }
 .funnels-tipos { display: flex; flex-wrap: wrap; gap: 6px; }
 .funnels-tipo { font: inherit; font-size: var(--text-sm); padding: 6px 12px; border: 1px solid var(--alva-line); border-radius: var(--radius-pill); background: var(--alva-white); color: var(--alva-muted); cursor: pointer; }
