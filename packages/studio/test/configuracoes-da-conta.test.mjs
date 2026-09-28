@@ -62,3 +62,18 @@ test('todo ícone das abas tem desenho: o nome cru não aparece no lugar dele', 
   for (const [, rotulo, icone] of [...ABAS_DA_CONTA, ...ABAS_DO_PROJETO])
     assert.match(icones, new RegExp(`"${icone}"`), `falta o ícone ${icone} (aba ${rotulo})`);
 });
+
+test('cada aba tem o seu título: o cabeçalho não diz "Empresa e equipe" na aba de Integrações', async () => {
+  const { tituloDaAba } = await import('../public/owner.js');
+  assert.equal(tituloDaAba('account'), 'Sua conta');
+  assert.equal(tituloDaAba('company'), 'Empresa');
+  assert.equal(tituloDaAba('team'), 'Equipe e acessos');
+  assert.equal(tituloDaAba('integrations'), 'Integrações');
+  assert.equal(tituloDaAba('billing'), 'Plano e cobrança');
+});
+
+test('o bloco da empresa repintado continua obedecendo a aba aberta', async () => {
+  const owner = await readFile(new URL('../public/owner.js', import.meta.url), 'utf8');
+  assert.match(owner, /new MutationObserver\(\(\) => \{[^}]*\}\)\.observe\(\$\('#settings-company-content'\)/);
+  assert.match(owner, /mostrarSecoesDaAba\(settingsContainer, abaAtual\)/, 'a repintura reaplica a aba');
+});

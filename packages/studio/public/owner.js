@@ -26,6 +26,9 @@ export function settingsAccess({ canManageIntegration = false, requestedTab = 'a
   return { integration, tab };
 }
 
+const TITULOS = { account: 'Sua conta', company: 'Empresa', team: 'Equipe e acessos', integrations: 'Integrações', billing: 'Plano e cobrança' };
+export const tituloDaAba = (aba) => TITULOS[aba] ?? TITULOS.account;
+
 // Dentro do bloco da empresa, cada seção sabe a que aba pertence. Antes o bloco inteiro era
 // movido de painel em painel, e as três abas mostravam a mesma coisa.
 export function mostrarSecoesDaAba(conteudo, aba) {
@@ -150,6 +153,9 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   if (companyName && companySummaryName && typeof MutationObserver !== 'undefined') {
     new MutationObserver(syncCompanyDetails).observe(companySummaryName, { childList: true, characterData: true, subtree: true });
   }
+  // O bloco da empresa é repintado por app.js depois que a aba já foi escolhida; as seções
+  // novas nascem visíveis e precisam obedecer a aba aberta.
+  let abaAtual = 'account';
   const syncTeamInvitationState = () => {
     const team = $('#settings-company-content')?.querySelector('.company-overview-section:has(.member-list)');
     if (!team || team.querySelector('.member-invite-note')) return;
@@ -159,7 +165,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     team.querySelector('h2')?.after(note);
   };
   if (typeof MutationObserver !== 'undefined') {
-    new MutationObserver(syncTeamInvitationState).observe($('#settings-company-content'), { childList: true, subtree: true });
+    new MutationObserver(() => { syncTeamInvitationState(); mostrarSecoesDaAba(settingsContainer, abaAtual); }).observe($('#settings-company-content'), { childList: true, subtree: true });
   }
   const gate = $('#access-gate');
   const accessForm = $('#access-form');
@@ -344,9 +350,12 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   function selectTab(requestedTab) {
     const faixaDeAbas = settingsContainer.querySelector?.('.settings-tabs') || document.querySelector('.settings-tabs') || settingsContainer;
     const tab = selectSettingsTab({ container: settingsContainer, tabList: faixaDeAbas, requestedTab, canManageIntegration: canManageIntegration() });
+    abaAtual = tab;
     updateSettingsSidebar(tab);
     // Vale para tudo que está na página de configurações, inclusive o que é estático.
     mostrarSecoesDaAba(settingsContainer, tab);
+    const titulo = settingsContainer.querySelector?.('.owner-header h2') || $('#owner-settings-title');
+    if (titulo) titulo.innerHTML = `${tituloDaAba(tab)}<span class="accent">.</span>`;
     if (['company', 'team', 'billing'].includes(tab)) {
       placeCompanyContent(tab);
       syncCompanyDetails();
