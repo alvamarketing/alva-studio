@@ -75,7 +75,15 @@ function Editor() {
       const aberta = await api(`/pages/${encodeURIComponent(paginaId)}`);
       // Sem VSL no ambiente (ou sem permissão), o bloco só diz que não há o que escolher.
       const videos = await api(`/projects/${aberta.projectId}/videos`).catch(() => []);
-      setConfig(criarConfig({ vsls: (Array.isArray(videos) ? videos : []).filter((video) => video.publishedVersionId) }));
+      // Anexar do computador: lê o arquivo e envia ao Studio, que devolve o endereço público.
+      const enviarImagem = (arquivo) => new Promise((resolver, rejeitar) => {
+        if (arquivo.size > 5 * 1024 * 1024) { rejeitar(new Error('A imagem passa de 5 MB. Reduza e tente de novo.')); return; }
+        const leitor = new FileReader();
+        leitor.onload = () => api(`/projects/${aberta.projectId}/images`, 'POST', { dados: leitor.result }).then((imagem) => resolver(imagem.url), rejeitar);
+        leitor.onerror = () => rejeitar(new Error('Não foi possível ler o arquivo.'));
+        leitor.readAsDataURL(arquivo);
+      });
+      setConfig(criarConfig({ vsls: (Array.isArray(videos) ? videos : []).filter((video) => video.publishedVersionId), enviarImagem }));
       setPagina(aberta);
     })().catch((falha) => setErro(falha.message));
   }, []);

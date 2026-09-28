@@ -1394,3 +1394,34 @@ test('validação de escala rejeita valores não finitos', () => {
   assert.throws(() => validateFormAnswers(schema, { answers: { avaliacao: 'NaN' } }), /escala/);
   assert.deepEqual(validateFormAnswers(schema, { answers: { avaliacao: '3' } }), { avaliacao: '3' });
 });
+
+// Anexar imagem do computador no editor de landing: vai ao banco, volta num endereço
+// público do Studio, e só aceita imagem de verdade.
+test('imagem anexada no editor: enviada, servida pública e só de quem escreve no projeto', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const records = await seed(database);
+  const app = await start(t, database);
+  const alice = client(app.base);
+  await alice.request('/api/login', 'POST', { email: 'alice@alva.test', password: records.password });
+  // O menor PNG válido: 1×1 transparente.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  const enviada = await alice.request(`/api/projects/${records.projectA.id}/images`, 'POST', { dados: `data:image/png;base64,${png.toString('base64')}` });
+  assert.equal(enviada.status, 201, await enviada.clone().text());
+  const { url, tipo } = await enviada.json();
+  assert.equal(tipo, 'image/png');
+  const caminho = new URL(url, app.base).pathname;
+  assert.match(caminho, /^\/i\/[0-9a-f-]{36}$/);
+  // Pública: a página publicada, em outro domínio, carrega sem sessão.
+  const servida = await fetch(app.base + caminho);
+  assert.equal(servida.status, 200);
+  assert.equal(servida.headers.get('content-type'), 'image/png');
+  assert.deepEqual(Buffer.from(await servida.arrayBuffer()), png);
+
+  const svg = await alice.request(`/api/projects/${records.projectA.id}/images`, 'POST', { dados: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').toString('base64') });
+  assert.equal(svg.status, 400, 'SVG pode carregar script e não é aceito');
+  const deOutroProjeto = await alice.request(`/api/projects/${records.projectB.id}/images`, 'POST', { dados: png.toString('base64') });
+  assert.ok([403, 404].includes(deOutroProjeto.status), `projeto de outra empresa: ${deOutroProjeto.status}`);
+  await database.close();
+});

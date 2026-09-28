@@ -181,6 +181,7 @@ export function createProjectApi({
   publication,
   videos,
   videoHosting = null,
+  images = null,
     analytics,
   tracking,
   commercialOutbox,
@@ -532,6 +533,16 @@ export function createProjectApi({
           : await content.createForm({ ...formInput(input), companyId: context.companyId, projectId, actorId: context.user.id });
         return json(record, 201);
       }
+    }
+
+    // Anexar imagem do computador, no editor de landing: quem escreve página pode anexar.
+    const imagensDoProjeto = path.match(/^\/api\/projects\/([^/]+)\/images$/);
+    if (imagensDoProjeto && method === 'POST') {
+      const [, projectId] = imagensDoProjeto;
+      await sessionService.authorize(context, 'page.write', projectId);
+      if (!images) throw fail('O envio de imagem não está disponível.', 409);
+      const input = await body(req);
+      return json(await images.salvar({ companyId: context.companyId, projectId, actorId: context.user.id, dados: input.dados }), 201);
     }
 
     const videoCollection = path.match(/^\/api\/projects\/([^/]+)\/videos$/);

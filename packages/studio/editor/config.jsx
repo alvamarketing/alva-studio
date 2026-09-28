@@ -3,7 +3,8 @@
 // Um catálogo só: a pré-visualização dos elementos simples é o HTML do mesmo `renderNode`
 // que o servidor usa para publicar. Os contêineres (seção, colunas, formulário) desenham a
 // mesma casca com um slot dentro, que é como o Puck deixa arrastar para dentro deles.
-import { classeDaSecao, classeDasColunas, renderNode } from '../public/page-schema.js';
+import { classeDaSecao, classeDasColunas, estiloDaSecao, renderNode } from '../public/page-schema.js';
+import { campoDeCor, campoDeImagem, estiloParaReact } from './campos.jsx';
 import { SLOT } from '../public/puck-conversao.js';
 
 const Html = ({ type, props }) => {
@@ -21,14 +22,14 @@ const folha = (type, fields, defaultProps) => ({
 
 // As VSLs publicadas do projeto viram uma lista para escolher: digitar um identificador era
 // convite ao erro, e VSL não publicada impede a página de publicar.
-export function criarConfig({ vsls = [] } = {}) {
+export function criarConfig({ vsls = [], enviarImagem = async () => { throw new Error('Envio de imagem indisponível.'); } } = {}) {
   const opcoesDeVsl = vsls.length
     ? [{ label: 'Escolha uma VSL', value: '' }, ...vsls.map((vsl) => ({ label: vsl.name, value: vsl.publicId }))]
     : [{ label: 'Nenhuma VSL publicada neste projeto', value: '' }];
   return {
   categories: {
     estrutura: { title: 'Estrutura', components: ['section', 'columns'] },
-    conteudo: { title: 'Conteúdo', components: ['heading', 'text', 'button', 'icon', 'image', 'vsl'] },
+    conteudo: { title: 'Conteúdo', components: ['heading', 'text', 'button', 'icon', 'image', 'video', 'vsl'] },
     captacao: { title: 'Captação', components: ['form', 'field'] },
   },
   root: {
@@ -39,12 +40,17 @@ export function criarConfig({ vsls = [] } = {}) {
     section: {
       label: 'Seção',
       fields: {
-        fundo: { type: 'select', label: 'Fundo', options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
+        fundo: { type: 'select', label: 'Fundo pronto', options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
+        corDeFundo: campoDeCor('Cor de fundo'),
+        imagemDeFundo: campoDeImagem('Imagem de fundo', enviarImagem),
+        corDoTexto: campoDeCor('Cor do texto'),
         // Campo só funciona dentro de formulário: solto, não captura nada.
         [SLOT]: { type: 'slot', disallow: ['field'] },
       },
-      defaultProps: { fundo: 'branco' },
-      render: ({ fundo, [SLOT]: Itens }) => <section className={classeDaSecao({ fundo })}><Itens /></section>,
+      defaultProps: { fundo: 'branco', corDeFundo: '', imagemDeFundo: '', corDoTexto: '' },
+      render: ({ fundo, corDeFundo, imagemDeFundo, corDoTexto, [SLOT]: Itens }) => (
+        <section className={classeDaSecao({ fundo })} style={estiloParaReact(estiloDaSecao({ corDeFundo, imagemDeFundo, corDoTexto }))}><Itens /></section>
+      ),
     },
     columns: {
       label: 'Colunas',
@@ -83,7 +89,11 @@ export function criarConfig({ vsls = [] } = {}) {
     },
     image: {
       label: 'Imagem',
-      ...folha('image', { src: { type: 'text', label: 'Endereço da imagem (https://…)' }, alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
+      ...folha('image', { src: campoDeImagem('Imagem', enviarImagem), alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
+    },
+    video: {
+      label: 'Vídeo (YouTube ou Vimeo)',
+      ...folha('video', { url: { type: 'text', label: 'Link do vídeo no YouTube ou no Vimeo' }, title: { type: 'text', label: 'Título do vídeo (para leitores de tela)' } }, { url: '', title: '' }),
     },
     vsl: {
       label: 'VSL do Studio',

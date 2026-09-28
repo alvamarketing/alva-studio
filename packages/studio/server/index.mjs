@@ -46,6 +46,7 @@ import { acceptBillingWebhook } from './billing-webhook.mjs';
 import { BillingPolicy } from './billing-policy.mjs';
 import { McpKeyRepository } from './repositories/mcp-repository.mjs';
 import { createMcpServer } from './mcp-server.mjs';
+import { ImageRepository } from './repositories/image-repository.mjs';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const error = (message, status) => Object.assign(new Error(message), { status });
 const EVENTOS_DE_CONVERSAO = new Set(['vsl_start', 'vsl_progress', 'vsl_complete', 'vsl_cta_click']);
@@ -314,6 +315,7 @@ export function createApp({
     : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
   const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
+  const images = database ? new ImageRepository(database, { publicOrigin }) : null;
   const commercialOutbox = runtimeFlags.conversions && database && process.env.TRACKING_MASTER_KEY
     ? new ConversionsOutboxRepository(database) : null;
   // Capturas publicadas precisam do manifesto e do envelope assinado mesmo sem pixels.
@@ -375,6 +377,7 @@ export function createApp({
       content,
       videos,
       videoHosting,
+      images,
       analytics,
       tracking,
       commercialOutbox,
@@ -864,6 +867,21 @@ export function createApp({
           const publisher = await getPublisher();
           return json(await publisher.domain(await store.get(id)));
         }
+      }
+      // A imagem anexada no editor, servida para a página publicada (que mora em outro
+      // domínio). Endereço por UUID, imutável, sem nada que rode no domínio do Studio.
+      const imagemPublica = req.method === 'GET' && path.match(/^\/i\/([0-9a-f-]{36})$/i);
+      if (imagemPublica && images) {
+        const imagem = await images.buscar(imagemPublica[1]);
+        if (!imagem) throw error('Imagem não encontrada.', 404);
+        res.writeHead(200, {
+          'Content-Type': imagem.content_type,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': "default-src 'none'",
+          'Cross-Origin-Resource-Policy': 'cross-origin',
+        });
+        return res.end(imagem.bytes);
       }
       if (req.method === 'GET' && files[path]) {
         const [file, type] = files[path];

@@ -47,11 +47,41 @@ function nomeDeCampo(valor) {
 // também — duas listas divergiriam.
 const FUNDOS = { branco: '', suave: ' alva-secao-suave', escuro: ' alva-secao-escura' };
 export const classeDaSecao = (props = {}) => `alva-secao${FUNDOS[props.fundo] ?? ''}`;
+
+// O fundo livre da seção vira CSS dentro de um atributo: só entra cor no formato #rrggbb e
+// imagem de endereço https sem aspas, parênteses ou espaço — qualquer um deles fecharia o
+// url() e abriria CSS de quem digitou.
+const COR = /^#[0-9a-f]{6}$/i;
+const IMAGEM_DE_FUNDO = /^(?:https:\/\/|\/i\/)[^\s"'()\\<>]{1,1000}$/i;
+export function estiloDaSecao(props = {}) {
+  const partes = [];
+  if (COR.test(props.corDeFundo ?? '')) partes.push(`background-color:${props.corDeFundo}`);
+  if (COR.test(props.corDoTexto ?? '')) partes.push(`color:${props.corDoTexto}`);
+  if (IMAGEM_DE_FUNDO.test(props.imagemDeFundo ?? '')) partes.push(`background-image:url("${props.imagemDeFundo}")`, 'background-size:cover', 'background-position:center');
+  return partes.join(';');
+}
+
+// O link que a pessoa cola vira o endereço do player. Só YouTube (pelo domínio sem cookie
+// de rastreamento) e Vimeo; o resto não é embutido.
+export function enderecoDoVideo(bruto) {
+  let url;
+  try { url = new URL(String(bruto ?? '').trim()); } catch { return null; }
+  const host = url.hostname.replace(/^www\./, '').replace(/^m\./, '');
+  let youtube = null;
+  if (host === 'youtu.be') youtube = url.pathname.slice(1);
+  else if (host === 'youtube.com') youtube = url.searchParams.get('v') || url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1];
+  if (youtube && /^[A-Za-z0-9_-]{11}$/.test(youtube)) return `https://www.youtube-nocookie.com/embed/${youtube}`;
+  const vimeo = host === 'vimeo.com' ? url.pathname.match(/^\/(\d{1,12})$/)?.[1] : null;
+  return vimeo ? `https://player.vimeo.com/video/${vimeo}` : null;
+}
 export const classeDasColunas = (props = {}) => `alva-colunas${Number(props.quantidade) === 3 ? ' alva-colunas-3' : ''}`;
 
 const ELEMENTOS = {
   section: {
-    render: (node, desenharFilhos) => `<section class="${classeDaSecao(node.props)}">${desenharFilhos(node)}</section>`,
+    render: (node, desenharFilhos) => {
+      const estilo = estiloDaSecao(node.props);
+      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}>${desenharFilhos(node)}</section>`;
+    },
   },
   columns: {
     render: (node, desenharFilhos) => `<div class="${classeDasColunas(node.props)}">${desenharFilhos(node)}</div>`,
@@ -78,6 +108,13 @@ const ELEMENTOS = {
     render: (node) => {
       const src = escapeHtml(endereco(node.props.src));
       return `<img class="alva-imagem" src="${src}" alt="${escapeHtml(texto(node.props.alt, 300))}">`;
+    },
+  },
+  video: {
+    render: (node) => {
+      const src = enderecoDoVideo(node.props.url);
+      if (!src) return '<div class="alva-embed-video" data-alva-video-empty="true"><div class="alva-embed-video-placeholder">Cole o link do YouTube ou do Vimeo.</div></div>';
+      return `<div class="alva-embed-video"><iframe src="${escapeHtml(src)}" title="${escapeHtml(texto(node.props.title, 200) || 'Vídeo')}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>`;
     },
   },
   vsl: {
