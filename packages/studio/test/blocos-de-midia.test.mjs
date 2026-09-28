@@ -24,6 +24,9 @@ test('vídeo do YouTube e do Vimeo vira o player embutido', () => {
   assert.equal(enderecoDoVideo('https://exemplo.test/video.mp4'), null);
   const html = renderNode({ type: 'video', props: { url: 'https://youtu.be/dQw4w9WgXcQ' }, children: [] });
   assert.match(html, /<div class="alva-embed-video"><iframe src="https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ"/);
+  // O YouTube recusa o player sem a origem de quem incorpora (erro 153), e o Studio serve
+  // tudo com no-referrer: o iframe precisa pedir a sua própria política.
+  assert.match(html, /referrerpolicy="strict-origin-when-cross-origin"/);
 });
 
 test('vídeo sem link válido mostra o aviso para colar o link, em vez de quebrar', () => {

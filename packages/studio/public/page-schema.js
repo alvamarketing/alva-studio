@@ -158,7 +158,7 @@ const ELEMENTOS = {
     render: (node) => {
       const src = enderecoDoVideo(node.props.url);
       if (!src) return '<div class="alva-embed-video" data-alva-video-empty="true"><div class="alva-embed-video-placeholder">Cole o link do YouTube ou do Vimeo.</div></div>';
-      return `<div class="alva-embed-video"><iframe src="${escapeHtml(src)}" title="${escapeHtml(texto(node.props.title, 200) || 'Vídeo')}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>`;
+      return `<div class="alva-embed-video"><iframe src="${escapeHtml(src)}" title="${escapeHtml(texto(node.props.title, 200) || 'Vídeo')}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>`;
     },
   },
   vsl: {

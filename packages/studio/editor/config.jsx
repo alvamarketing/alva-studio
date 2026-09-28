@@ -10,7 +10,8 @@
 import { classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
 import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
 import { secoesProntas } from '../public/secoes-prontas.js';
-import { campoDeCor, campoDeImagem, campoDeProporcao, estiloParaReact } from './campos.jsx';
+import { campoDeCor, campoDeIcone, campoDeImagem, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
+import { SlidersHorizontal } from 'lucide-react';
 import { ICONE_DO_CAMPO } from './icones.jsx';
 
 const Miolo = ({ type, props }) => {
@@ -24,10 +25,7 @@ const escala = (rotulo) => ({ type: 'radio', label: rotulo, labelIcon: ICONE_DO_
 const BLOCOS_SOLTOS = ['heading', 'text', 'button', 'icon', 'image', 'video', 'vsl'];
 
 // Ajuste fino, recolhido: largura manual, movimento e margem em escala.
-const avancado = {
-  type: 'object',
-  label: 'Avançado',
-  objectFields: {
+const avancado = campoRecolhido('Avançado', {
     largura: { type: 'select', label: 'Largura', labelIcon: ICONE_DO_CAMPO.largura, options: [
       { label: 'Linha inteira', value: 'inteira' }, { label: '3/4', value: '3/4' }, { label: '2/3', value: '2/3' },
       { label: '1/2', value: '1/2' }, { label: '1/3', value: '1/3' }, { label: '1/4', value: '1/4' },
@@ -38,8 +36,7 @@ const avancado = {
     movimento: { type: 'select', label: 'Movimento de entrada', labelIcon: ICONE_DO_CAMPO.movimento, options: [
       { label: 'Nenhum', value: '' }, { label: 'Subir suavemente', value: 'fade-up' }, { label: 'Deslizar da direita', value: 'slide-left' }, { label: 'Aproximar', value: 'zoom-in' },
     ] },
-  },
-};
+}, SlidersHorizontal);
 
 // Um bloco solto: a caixa de layout é o elemento que o Puck arrasta.
 const bloco = (type, label, fields, defaultProps) => ({
@@ -149,7 +146,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
         direcaoDoDegrade: { type: 'radio', label: 'Direção do degradê', options: [{ label: 'Vertical', value: 'vertical' }, { label: 'Horizontal', value: 'horizontal' }, { label: 'Diagonal', value: 'diagonal' }] },
         corDoTextoDoBotao: campoDeCor('Cor do texto do botão'),
       }, { text: 'Quero saber mais', href: '#contato', newTab: false, corDoBotao: '', corDoBotao2: '', corDoTextoDoBotao: '' }),
-      icon: bloco('icon', 'Ícone', { name: { type: 'text', label: 'Nome do ícone (Material Symbols)' } }, { name: 'star' }),
+      icon: bloco('icon', 'Ícone', { name: campoDeIcone('Ícone') }, { name: 'star' }),
       image: bloco('image', 'Imagem', { src: campoDeImagem('Imagem', enviarImagem), alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
       video: bloco('video', 'Vídeo (YouTube ou Vimeo)', { url: { type: 'text', label: 'Link do vídeo no YouTube ou no Vimeo' }, title: { type: 'text', label: 'Título do vídeo (para leitores de tela)' } }, { url: '', title: '' }),
       vsl: bloco('vsl', 'VSL do Studio', { publicId: { type: 'select', label: 'VSL publicada', options: opcoesDeVsl } }, { publicId: '' }),

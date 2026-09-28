@@ -1,6 +1,6 @@
 // Campos próprios do editor: imagem (endereço ou anexo do computador) e cor.
 import { useRef, useState } from 'react';
-import { FieldLabel } from '@puckeditor/core';
+import { AutoField, FieldLabel } from '@puckeditor/core';
 import { ICONE_DO_CAMPO } from './icones.jsx';
 
 const estiloDoCampo = { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 14, padding: '8px 10px', border: '1px solid #E7ECF3', borderRadius: 8 };
@@ -100,4 +100,71 @@ export function campoDeProporcao(rotulo) {
       </FieldLabel>
     ),
   };
+}
+
+// Um grupo de campos que abre e fecha: o ajuste fino fica recolhido até a pessoa pedir
+// (revelação progressiva, regra 12 de docs/specs/2026-09-27-ux-do-editor.md).
+export function campoRecolhido(rotulo, subcampos, Icone) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => (
+      <details className="alva-recolhido">
+        <summary>{Icone ? <Icone size={16} aria-hidden="true" /> : null}{rotulo}</summary>
+        <div style={{ display: 'grid', gap: 12, paddingTop: 12 }}>
+          {Object.entries(subcampos).map(([nome, campo]) => (
+            <AutoField key={nome} field={campo} readOnly={readOnly} value={value?.[nome]} onChange={(novo) => onChange({ ...(value ?? {}), [nome]: novo })} />
+          ))}
+        </div>
+      </details>
+    ),
+  };
+}
+
+// Os ícones mais usados em landing, da mesma fonte (Material Symbols) que a página
+// publicada carrega. A busca filtra pelo nome em inglês e pela palavra em português.
+const ICONES = [
+  ['star', 'estrela'], ['favorite', 'coração'], ['bolt', 'raio'], ['check_circle', 'confirmado'], ['verified', 'verificado'],
+  ['schedule', 'relógio'], ['calendar_month', 'calendário'], ['event', 'evento'], ['location_on', 'local'], ['call', 'telefone'],
+  ['mail', 'e-mail'], ['chat', 'conversa'], ['forum', 'fórum'], ['support_agent', 'atendimento'], ['person', 'pessoa'],
+  ['groups', 'equipe'], ['handshake', 'parceria'], ['thumb_up', 'curtir'], ['sentiment_satisfied', 'satisfeito'], ['emoji_events', 'troféu'],
+  ['workspace_premium', 'prêmio'], ['rocket_launch', 'foguete'], ['trending_up', 'crescimento'], ['insights', 'análise'], ['bar_chart', 'gráfico'],
+  ['payments', 'pagamento'], ['savings', 'economia'], ['shopping_cart', 'carrinho'], ['sell', 'preço'], ['local_offer', 'oferta'],
+  ['lock', 'cadeado'], ['shield', 'proteção'], ['security', 'segurança'], ['bolt', 'rápido'], ['speed', 'velocidade'],
+  ['lightbulb', 'ideia'], ['school', 'curso'], ['menu_book', 'livro'], ['play_circle', 'vídeo'], ['headphones', 'áudio'],
+  ['public', 'mundo'], ['home', 'casa'], ['apartment', 'prédio'], ['store', 'loja'], ['restaurant', 'restaurante'],
+  ['fitness_center', 'academia'], ['spa', 'bem-estar'], ['medical_services', 'saúde'], ['pets', 'pet'], ['directions_car', 'carro'],
+  ['build', 'ferramenta'], ['settings', 'configuração'], ['design_services', 'design'], ['code', 'código'], ['cloud', 'nuvem'],
+  ['format_quote', 'citação'], ['edit_note', 'anotação'], ['task_alt', 'tarefa'], ['arrow_forward', 'seta'], ['whatsapp', 'whatsapp'],
+].filter(([nome], indice, lista) => lista.findIndex(([outro]) => outro === nome) === indice);
+
+export function campoDeIcone(rotulo) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => <SeletorDeIcone rotulo={rotulo} valor={value} aoMudar={onChange} somenteLeitura={readOnly} />,
+  };
+}
+
+function SeletorDeIcone({ rotulo, valor, aoMudar, somenteLeitura }) {
+  const [busca, setBusca] = useState('');
+  const termo = busca.trim().toLowerCase();
+  const visiveis = ICONES.filter(([nome, palavra]) => !termo || nome.includes(termo) || palavra.includes(termo));
+  return (
+    <FieldLabel label={rotulo} readOnly={somenteLeitura}>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <input type="search" style={estiloDoCampo} placeholder="Buscar ícone (ex.: coração, prêmio)" value={busca} onChange={(evento) => setBusca(evento.target.value)} />
+        <div role="radiogroup" aria-label={rotulo} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(40px, 1fr))', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+          {visiveis.map(([nome, palavra]) => (
+            <button key={nome} type="button" role="radio" aria-checked={valor === nome} aria-label={palavra} title={palavra} disabled={somenteLeitura} onClick={() => aoMudar(nome)}
+              style={{ ...estiloDoBotao, padding: 6, minWidth: 0, display: 'grid', placeItems: 'center', borderColor: valor === nome ? '#286EEA' : '#E7ECF3', background: valor === nome ? '#EAF2FF' : '#ffffff' }}>
+              <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>{nome}</span>
+            </button>
+          ))}
+          {!visiveis.length ? <small style={{ gridColumn: '1 / -1', color: '#667085' }}>Nenhum ícone com esse nome. Digite o nome abaixo.</small> : null}
+        </div>
+        <input type="text" style={estiloDoCampo} placeholder="ou o nome exato no Material Symbols" value={valor ?? ''} disabled={somenteLeitura} onChange={(evento) => aoMudar(evento.target.value.trim())} />
+      </div>
+    </FieldLabel>
+  );
 }

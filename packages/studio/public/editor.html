@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/material-symbols.css">
   <link rel="stylesheet" href="/build/editor.css">
   <style>
     html, body, #editor { height: 100%; margin: 0; }
@@ -16,6 +17,11 @@
     .alva-item-da-biblioteca svg:first-child { color: #286EEA; flex: none; }
     .alva-item-da-biblioteca span { flex: 1; }
     .alva-item-da-biblioteca .alva-alca { color: #667085; }
+    .alva-recolhido { border: 1px solid #E7ECF3; border-radius: 12px; padding: 10px 12px; }
+    .alva-recolhido > summary { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; list-style: none; }
+    .alva-recolhido > summary::-webkit-details-marker { display: none; }
+    .alva-recolhido > summary::after { content: '+'; margin-left: auto; color: #667085; }
+    .alva-recolhido[open] > summary::after { content: '–'; }
     .alva-acao { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 1px solid #E7ECF3; border-radius: 12px; background: #ffffff; color: #101828; cursor: pointer; }
     .alva-acao:disabled { opacity: .6; cursor: progress; }
     .alva-acao-principal { background: #286EEA; border-color: #286EEA; color: #ffffff; }
