@@ -51,3 +51,8 @@ test('a tela de publicação aponta para onde a configuração foi parar', async
   const publicacao = html.slice(html.indexOf('id="publication-view"'), html.indexOf('id="project-settings-view"'));
   assert.doesNotMatch(publicacao, /Configurações · Preferências/, 'some o texto que mandava para uma aba inexistente');
 });
+
+test('o item Configurações da navegação abre a tela', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /\$\('#nav-project-settings'\)\.onclick/);
+});

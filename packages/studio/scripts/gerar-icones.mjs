@@ -12,6 +12,7 @@ const MAPA = {
   home: 'House', menu: 'Menu', left_panel_close: 'PanelLeftClose', left_panel_open: 'PanelLeftOpen', computer: 'Monitor', settings: 'Settings',
   folder_special: 'FolderOpen', add: 'Plus', history: 'History', web: 'AppWindow', dynamic_form: 'ListChecks', check_circle: 'CircleCheck',
   key: 'Key', arrow_forward: 'ArrowRight', edit: 'Pencil', content_copy: 'Copy', delete: 'Trash2', tune: 'SlidersHorizontal',
+  person: 'User', link: 'Link', movie: 'Clapperboard', arrow_back: 'ArrowLeft',
   corporate_fare: 'Building2', group: 'Users', credit_card: 'CreditCard', cloud: 'Cloud', language: 'Globe', light_mode: 'Sun', dark_mode: 'Moon', search: 'Search', inbox: 'Inbox',
 };
 

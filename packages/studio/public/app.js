@@ -2046,6 +2046,7 @@ async function abrirAgentes() {
 }
 $('#nav-project-publication').onclick = action(abrirPublicacao);
 $('#nav-project-agents').onclick = action(abrirAgentes);
+$('#nav-project-settings').onclick = action(() => abrirConfiguracoesDoProjeto());
 $('#publication-preview').onclick = action(async () => {
   const projectId = studioShell.state().currentProject?.id;
   if (!projectId) throw new Error('Escolha um projeto antes de criar a prévia.');

@@ -55,3 +55,10 @@ test('o token da Vercel mora na aba Integrações, não escondido atrás de um b
   assert.match(owner, /panel-integrations/);
   assert.doesNotMatch(owner, /id="account-publication"[^-]/, 'o botão-porta "Conectar a Vercel" deixa de existir');
 });
+
+test('todo ícone das abas tem desenho: o nome cru não aparece no lugar dele', async () => {
+  const { ABAS_DO_PROJETO } = await import('../public/projeto-configuracoes.js');
+  const icones = await readFile(new URL('../public/icones.js', import.meta.url), 'utf8');
+  for (const [, rotulo, icone] of [...ABAS_DA_CONTA, ...ABAS_DO_PROJETO])
+    assert.match(icones, new RegExp(`"${icone}"`), `falta o ícone ${icone} (aba ${rotulo})`);
+});
