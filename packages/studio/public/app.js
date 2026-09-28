@@ -2083,6 +2083,12 @@ function formularioDeDestino(destino) {
   const form = document.createElement('form');
   form.className = 'provider-form';
 
+  if (destino.aviso) {
+    const aviso = document.createElement('p');
+    aviso.className = 'help';
+    aviso.textContent = destino.aviso;
+    form.append(aviso);
+  }
   if (destino.semCredencial) {
     const aviso = document.createElement('p');
     aviso.className = 'help';

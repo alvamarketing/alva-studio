@@ -161,3 +161,18 @@ test('o formulário usa apenas tokens que já existem', () => {
     assert.ok(regra.includes(token), `esperava ${token} em ${regra}`);
   }
 });
+
+// O token do Google colado à mão expira e não se renova; o do LinkedIn vale 60 dias.
+test('Google avisa que o token colado não se renova', () => {
+  const google = destinosDeConversaoModel([], []).find((linha) => linha.provider === 'google');
+  assert.match(google.aviso, /expira/);
+});
+
+test('LinkedIn avisa quando o token está perto de vencer, e quando venceu', () => {
+  const agora = new Date('2026-09-27T12:00:00Z');
+  const salvo = (dias) => destinosDeConversaoModel([{ provider: 'linkedin', configured: true, publicConfiguration: {}, updatedAt: new Date(agora - dias * 864e5).toISOString() }], [], true, agora).find((linha) => linha.provider === 'linkedin');
+  assert.equal(salvo(10).stateLabel, 'Configurado');
+  assert.equal(salvo(55).stateLabel, 'Token vence em 5 dias');
+  assert.equal(salvo(55).state, 'teste');
+  assert.equal(salvo(61).stateLabel, 'Token vencido');
+});

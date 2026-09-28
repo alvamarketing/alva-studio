@@ -147,5 +147,12 @@ Menores, registrados:
 - Itens que já estavam na fila antes destes commits não têm os hashes novos nem, às vezes,
   página e navegador; falham com motivo na tela. Não há produção rodando com fila cheia.
 - **Consentimento negado:** IP e navegador seguem para as plataformas mesmo quando a pessoa
-  recusa a medição (e-mail e telefone não). O dono autorizou mandar IP e navegador; resta
-  confirmar se isso vale também para quem recusou.
+  recusa a medição (e-mail e telefone não). Decisão do dono em 27/09: mandar sempre.
+
+## Decisões tomadas em 27/09
+
+1. Telefone sem código do país é tratado como brasileiro (+55).
+2. IP e navegador vão sempre pelo servidor, inclusive com consentimento negado (dono).
+3. Google Ads: a tela avisa que o token colado expira e não se renova; a conexão direta
+   com o Google (app no Google Cloud) fica para depois.
+4. LinkedIn: a tela avisa nos últimos 10 dias dos 60 de validade do token, e quando vence.

@@ -391,7 +391,7 @@ export const CAMPOS_DE_DESTINO = Object.freeze({
   ],
   linkedin: [
     { name: 'conversion_urn', label: 'URN da conversão', help: 'No formato urn:lla:llaPartnerConversion:123.', required: true },
-    { name: 'access_token', label: 'Token de acesso', help: 'Gerado na Conversions API.', required: true, secret: true },
+    { name: 'access_token', label: 'Token de acesso', help: 'Gerado na Conversions API. Vale 60 dias: a tela avisa quando estiver perto de vencer.', required: true, secret: true },
     { name: 'linkedin_version', label: 'Versão da API', help: 'Seis dígitos, como 202608. Em branco usa a padrão.', required: false },
   ],
   taboola: [
@@ -437,7 +437,20 @@ export function nomeDoDestino(chave) {
 
 const CAMPO_PUBLICO = Object.freeze({ meta: 'pixel_id', tiktok: 'pixel_code', google: 'measurement_id', linkedin: 'partner_id', taboola: 'account_id' });
 
-export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = true) {
+// O token do LinkedIn vale 60 dias; avisa-se nos últimos 10.
+// https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow
+const VALIDADE_DO_TOKEN_LINKEDIN_DIAS = 60;
+function vencimentoDoLinkedin(salvo, agora) {
+  if (!salvo?.updatedAt) return null;
+  const restante = Math.ceil(VALIDADE_DO_TOKEN_LINKEDIN_DIAS - (agora - new Date(salvo.updatedAt)) / 864e5);
+  if (restante <= 0) return 'Token vencido';
+  return restante <= 10 ? `Token vence em ${restante} ${restante === 1 ? 'dia' : 'dias'}` : null;
+}
+const AVISO_DO_DESTINO = Object.freeze({
+  google: 'O token colado aqui expira em pouco tempo e não se renova sozinho: a entrega ao Google para quando ele vencer. A conexão direta com o Google está em construção.',
+});
+
+export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = true, agora = new Date()) {
   const salvos = new Map((Array.isArray(destinos) ? destinos : []).map((linha) => [linha?.provider, linha]));
   // Credencial salva e evento entregue são estados diferentes, e a distância entre os dois
   // é justamente o que faz alguém desconfiar da configuração.
@@ -446,14 +459,16 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
     const salvo = salvos.get(provider);
     const configured = salvo?.configured === true;
     const testCode = configured ? salvo?.publicConfiguration?.test_event_code ?? '' : '';
-    const state = configured ? (testCode ? 'teste' : entregando.has(provider) ? 'ok' : 'idle') : 'off';
+    const vencimento = configured && provider === 'linkedin' ? vencimentoDoLinkedin(salvo, agora) : null;
+    const state = configured ? (testCode || vencimento ? 'teste' : entregando.has(provider) ? 'ok' : 'idle') : 'off';
     return {
       provider,
       name,
       description,
       configured,
       state,
-      stateLabel: !configured ? 'Não configurado' : testCode ? 'Modo de teste' : entregando.has(provider) ? 'Enviando' : 'Configurado',
+      stateLabel: !configured ? 'Não configurado' : vencimento ?? (testCode ? 'Modo de teste' : entregando.has(provider) ? 'Enviando' : 'Configurado'),
+      aviso: AVISO_DO_DESTINO[provider] ?? '',
       testCode,
       publicValue: salvo?.publicConfiguration?.[CAMPO_PUBLICO[provider]] ?? '',
       updatedAt: salvo?.updatedAt ?? null,
