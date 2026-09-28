@@ -25,6 +25,7 @@ STUDIO_POSTGRES_PASSWORD=$studio_password
 STUDIO_DATABASE_URL=postgresql://studio:$studio_password@studio-postgres:5432/studio
 PUBLIC_ORIGIN=https://studio-restore.local.test
 TRACKING_MASTER_KEY=$(random_hex)
+VERCEL_MASTER_KEY=$(random_hex)
 PUBLICATION_RUNTIME_HMAC_SECRET=$(random_hex)
 PIXELS_ENABLED=false
 TRACKING_PROVISION_ENABLED=false
