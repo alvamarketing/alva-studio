@@ -56,7 +56,9 @@ function extendRuntimeCsp(html, providers, runtimeOrigin, nonce) {
   const scriptHosts = [...new Set([runtimeOrigin, ...configs.flatMap((item) => item.scriptHosts)])].join(' ');
   const connectHosts = [...new Set([runtimeOrigin, ...configs.flatMap((item) => item.connectHosts)])].join(' ');
   const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}' ${scriptHosts}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; media-src https:; frame-src https:; connect-src 'self' ${connectHosts}; form-action 'self'; base-uri 'none'`;
-  const withNonce = html.replaceAll('__ALVA_RUNTIME_NONCE__', nonce);
+  // O runtime do quiz antigo e o carrossel vão num <script> em linha sem atributos, montado
+  // pela própria publicação; sem o nonce, a CSP abaixo os bloquearia na página publicada.
+  const withNonce = html.replace(/<script>/gi, '<script nonce="__ALVA_RUNTIME_NONCE__">').replaceAll('__ALVA_RUNTIME_NONCE__', nonce);
   if (!/<meta\s+http-equiv=["']Content-Security-Policy["']/i.test(withNonce)) {
     const meta = `<meta http-equiv="Content-Security-Policy" content="${csp}">`;
     return withNonce.includes('<head>') ? withNonce.replace('<head>', `<head>${meta}`) : `${meta}${withNonce}`;
