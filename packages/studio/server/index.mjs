@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
 import { blocoDeTokens } from './tokens-css.mjs';
 import { FunnelRepository } from './repositories/funnel-repository.mjs';
-import { conferirCriacaoDeConta, exigeCodigoDeInstalacao } from './codigo-de-instalacao.mjs';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -340,18 +339,6 @@ export function createApp({
       billing,
       mcpKeys: new McpKeyRepository(database),
       mcpAudit: new AuditRepository(database),
-      // Primeiro acesso: em produção, com o código de instalação; na máquina, pelo próprio computador.
-      setupCheck: (req, input) => {
-        const expected = `127.0.0.1:${req.socket.localPort}`;
-        const localHost = req.headers.host === expected || req.headers.host === `localhost:${req.socket.localPort}`;
-        return conferirCriacaoDeConta({
-          publicOrigin,
-          codigoEsperado: process.env.SETUP_CODE,
-          codigoInformado: input?.setupCode,
-          acessoLocal: localHost && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress),
-        });
-      },
-      setupCodeRequired: exigeCodigoDeInstalacao({ publicOrigin }),
     })
     : null;
   const publishing = new Set();
@@ -399,6 +386,7 @@ export function createApp({
     '/funis-etapas.js': ['public/funis-etapas.js', 'text/javascript'],
     '/funis-modelos.js': ['public/funis-modelos.js', 'text/javascript'],
     '/funis-view.js': ['public/funis-view.js', 'text/javascript'],
+    '/icones.js': ['public/icones.js', 'text/javascript'],
     '/modelos-alva.js': ['public/modelos-alva.js', 'text/javascript'],
     '/page-schema.js': ['public/page-schema.js', 'text/javascript'],
     '/build/editor.js': ['public/build/editor.js', 'text/javascript'],

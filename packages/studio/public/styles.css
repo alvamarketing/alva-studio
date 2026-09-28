@@ -2107,3 +2107,9 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
   white-space: nowrap;
   font-variation-settings: 'FILL' 0, 'wght' 450, 'GRAD' 0, 'opsz' 24;
 }
+
+/* Ícones da interface: SVG do Lucide dentro do elemento que antes levava a fonte. */
+.material-symbols-outlined[data-icone] { display: inline-flex; align-items: center; justify-content: center; }
+/* :where() deixa a regra genérica fraca: os tamanhos próprios dos botões e cartões vencem. */
+:where(.material-symbols-outlined) > svg { width: 1em; height: 1em; display: block; flex: none; }
+.project-structure-icon > svg, .project-content-icon > svg, .project-icon > svg, .activity-icon > svg { width: var(--icon-md); height: var(--icon-md); }

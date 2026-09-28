@@ -10,6 +10,9 @@ import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { renderFunis } from './funis-view.js';
+import { observarIcones } from './icones.js';
+// Ícones da interface: todos do Lucide (ver scripts/gerar-icones.mjs).
+observarIcones(document.body);
 import { estadoDoModelo, modelosAlva } from './modelos-alva.js';
 import { conteudoDaLista, contagemDaLista, textosDaLista } from './quiz-mecanica.js';
 const $ = (s) => document.querySelector(s);

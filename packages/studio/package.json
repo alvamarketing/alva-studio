@@ -11,7 +11,8 @@
     "start:legacy": "node --env-file-if-exists=.env server/index.mjs --legacy",
     "bootstrap:owner": "node --env-file-if-exists=.env server/bootstrap-owner.mjs",
     "test": "node --test test/*.test.mjs",
-    "build:editor": "esbuild editor=editor/main.jsx funil=editor/funil.jsx --bundle --minify --format=esm --jsx=automatic --loader:.js=jsx --define:process.env.NODE_ENV='\"production\"' --outdir=public/build"
+    "build:editor": "esbuild editor=editor/main.jsx funil=editor/funil.jsx --bundle --minify --format=esm --jsx=automatic --loader:.js=jsx --define:process.env.NODE_ENV='\"production\"' --outdir=public/build",
+    "build:icones": "node scripts/gerar-icones.mjs"
   },
   "dependencies": {
     "hls.js": "^1.5.17",
@@ -24,6 +25,7 @@
     "@xyflow/react": "^12",
     "esbuild": "0.25",
     "jsdom": "27.4.0",
+    "lucide": "^1.48.0",
     "lucide-react": "^1.48.0",
     "react": "19",
     "react-dom": "19"

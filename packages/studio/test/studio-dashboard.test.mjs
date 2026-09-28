@@ -120,7 +120,7 @@ test('overview trata zero visitas como dado real, mantém VSL publicada coerente
 
   assert.deepEqual(model.metrics[0], { label: 'VISITANTES', value: '0', detail: 'Nos últimos 7 dias' });
   assert.deepEqual(model.metrics[2], { label: 'CONVERSÃO', value: '—', detail: 'Sem visitas para calcular' });
-  assert.deepEqual(model.metrics[3], { label: 'ATIVOS PUBLICADOS', value: '2', detail: '1 página · 0 formulários · 1 VSL' });
+  assert.deepEqual(model.metrics[3], { label: 'ATIVOS PUBLICADOS', value: '2', detail: '1 página · 0 quizzes · 1 VSL' });
   assert.equal(model.structureComplete, 3);
   assert.equal(model.structureTotal, 4);
 });
@@ -315,7 +315,7 @@ test('visão do projeto traduz dados reais para as quatro métricas e a estrutur
     { label: 'VISITANTES', value: '—', detail: 'Dados indisponíveis' },
     { label: 'LEADS', value: '7', detail: 'Respostas recebidas' },
     { label: 'CONVERSÃO', value: '—', detail: 'Aguardando visitas' },
-    { label: 'ATIVOS PUBLICADOS', value: '1', detail: '1 página · 0 formulários' },
+    { label: 'ATIVOS PUBLICADOS', value: '1', detail: '1 página · 0 quizzes' },
   ]);
   assert.equal(model.content[0].status, 'Publicado');
   assert.equal(model.content[1].status, 'Rascunho');

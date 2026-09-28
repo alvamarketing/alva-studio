@@ -148,7 +148,7 @@ export function projectOverviewModel(overview, { phase = 'ready', error = '' } =
   const analyticsConfigured = overview.runtime?.analytics === true && overview.integrations?.analytics === 'configured';
   const publishedDetail = [
     `${publishedPages} ${publishedPages === 1 ? 'página' : 'páginas'}`,
-    `${publishedForms} ${publishedForms === 1 ? 'formulário' : 'formulários'}`,
+    `${publishedForms} ${publishedForms === 1 ? 'quiz' : 'quizzes'}`,
   ];
   if (mediaEnabled && (overview.runtime?.media === true || Number(counts.videos || 0) > 0 || Number(counts.publishedVideos || 0) > 0)) {
     publishedDetail.push(`${publishedVideos} ${publishedVideos === 1 ? 'VSL' : 'VSLs'}`);
