@@ -119,7 +119,7 @@ export const escolhaCss = `
 .alva-bloco:has(>.alva-escolha){width:100%;align-self:stretch}
 .alva-conteudo-centro .alva-escolha-pergunta{text-align:center}
 .alva-etapa .alva-conteudo>.answer-wrap,.alva-etapa .alva-conteudo>*:has(>.answer-wrap){flex:0 0 100%}
-.alva-etapa .answer-wrap{display:grid;gap:6px;width:100%;max-width:520px;margin:0 auto;text-align:left}
+.alva-etapa .answer-wrap{display:grid;gap:6px;width:100%;box-sizing:border-box;padding-inline:max(0px,calc((100% - 520px) / 2));text-align:left}
 .alva-escolha-pergunta{display:block;width:100%;margin:0 0 16px;padding:0;font-size:22px;font-weight:700;line-height:1.25;color:inherit}
 .alva-opcoes{display:grid;gap:10px}
 .alva-escolha-grade .alva-opcoes{grid-template-columns:repeat(2,minmax(0,1fr))}
