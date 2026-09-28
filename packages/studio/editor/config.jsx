@@ -16,7 +16,7 @@ import { ICONE_DO_CAMPO } from './icones.jsx';
 
 const Miolo = ({ type, props }) => {
   let html;
-  try { html = renderConteudo({ type, props }); } catch (erro) { html = `<p style="color:#b42318">${erro.message}</p>`; }
+  try { html = renderConteudo({ type, props }); } catch (erro) { html = `<p style="color:var(--alva-danger)">${erro.message}</p>`; }
   return <div style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
@@ -92,7 +92,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
   return {
     categories: {
       prontas: { title: 'Seções prontas', components: secoesProntas.map((pronta) => pronta.id), defaultExpanded: true },
-      estrutura: { title: 'Estrutura', components: ['section', 'row', 'columns'] },
+      estrutura: { title: 'Layout', components: ['section', 'row', 'columns'] },
       conteudo: { title: 'Conteúdo', components: BLOCOS_SOLTOS },
       captacao: { title: 'Captação', components: ['form', 'field'] },
     },
@@ -124,7 +124,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       columns: {
         label: 'Colunas',
         inline: true,
-        fields: { estrutura: campoDeProporcao('Estrutura'), [SLOT]: { type: 'slot', disallow: ['field'] }, avancado },
+        fields: { estrutura: campoDeProporcao('Proporção das colunas'), [SLOT]: { type: 'slot', disallow: ['field'] }, avancado },
         defaultProps: { estrutura: '1/2+1/2', avancado: {} },
         render: ({ puck, estrutura, [SLOT]: Itens, ...props }) => (
           <div ref={puck.dragRef} className={classesDoBloco(props)}>

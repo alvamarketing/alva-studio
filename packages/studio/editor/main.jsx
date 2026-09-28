@@ -8,7 +8,8 @@ import { Puck, createUsePuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
 import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
-import { ArrowLeft, Eye, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
+import { ArrowLeft, CircleCheck, CircleDot, Eye, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
+import { Estrutura } from './estrutura.jsx';
 import { documentoDaPagina, normalizarEstadoAlva } from '../public/pagina-alva.js';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
 import { elementosCss } from '../public/catalogo-elementos.js';
@@ -46,22 +47,27 @@ function IframeComFolhas({ children, document: doc }) {
   return <>{children}</>;
 }
 
-function Acoes({ pagina, aoSalvar, aviso, pendente }) {
+function Acoes({ pagina, aoSalvar, aviso, pendente, alterada }) {
   const dados = usePuck((estado) => estado.appState.data);
   const [ocupado, setOcupado] = useState(false);
   const executar = (tarefa) => async () => {
     setOcupado(true);
     try { await tarefa(); } catch (erro) { aviso(erro.message); } finally { setOcupado(false); }
   };
+  // Ordem e pesos do topo do contrato (seção "Estrutura" do wireframe): voltar, estado do
+  // salvamento, Prévia e Publicar secundários, Salvar como ação principal.
   return (
     <>
-      <button type="button" className="alva-acao" onClick={() => {
+      <button type="button" className="alva-acao alva-acao-icone" aria-label="Voltar para as páginas" title="Voltar" onClick={() => {
         if (pendente.current && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
         pendente.current = false;
         location.href = '/#/paginas';
       }}>
-        <ArrowLeft size={16} aria-hidden="true" /> Voltar
+        <ArrowLeft size={18} aria-hidden="true" />
       </button>
+      <span className={`alva-salvo${alterada ? ' alva-salvo-pendente' : ''}`} role="status">
+        {alterada ? <><CircleDot size={16} aria-hidden="true" /> Alterações não salvas</> : <><CircleCheck size={16} aria-hidden="true" /> Salvo</>}
+      </span>
       <button type="button" className="alva-acao" onClick={() => {
         // A prévia é o mesmo documento que o servidor publica, montado aqui com o que está na
         // tela — inclusive o que ainda não foi salvo.
@@ -72,15 +78,15 @@ function Acoes({ pagina, aoSalvar, aviso, pendente }) {
       }}>
         <Eye size={16} aria-hidden="true" /> Prévia
       </button>
-      <button type="button" className="alva-acao" disabled={ocupado} onClick={executar(() => aoSalvar(dados))}>
-        <Save size={16} aria-hidden="true" /> Salvar
-      </button>
-      <button type="button" className="alva-acao alva-acao-principal" disabled={ocupado} onClick={executar(async () => {
+      <button type="button" className="alva-acao" disabled={ocupado} onClick={executar(async () => {
         const salva = await aoSalvar(dados);
         await api(`/pages/${pagina.id}/publish`, 'POST', { revision: salva.revision });
         aviso('Enviada à Vercel. O andamento aparece em Publicação.');
       })}>
         <Rocket size={16} aria-hidden="true" /> Publicar
+      </button>
+      <button type="button" className="alva-acao alva-acao-principal" disabled={ocupado} onClick={executar(() => aoSalvar(dados))}>
+        <Save size={16} aria-hidden="true" /> Salvar
       </button>
     </>
   );
@@ -94,6 +100,7 @@ function Editor() {
   // O que está salvo, para saber se há alteração a perder ao sair.
   const salvo = useRef('');
   const pendente = useRef(false);
+  const [alterada, setAlterada] = useState(false);
   useEffect(() => {
     const aoSair = (evento) => { if (pendente.current) evento.preventDefault(); };
     addEventListener('beforeunload', aoSair);
@@ -123,6 +130,7 @@ function Editor() {
     const salva = await api(`/pages/${pagina.id}`, 'PUT', { revision: pagina.revision, editorState: puckParaAlva(dados) });
     salvo.current = JSON.stringify(puckParaAlva(dados));
     pendente.current = false;
+    setAlterada(false);
     setPagina(salva);
     aviso('Página salva.');
     return salva;
@@ -138,10 +146,11 @@ function Editor() {
         dictionary={dicionario}
         viewports={larguras}
         onPublish={aoSalvar}
-        onChange={(dados) => { pendente.current = JSON.stringify(puckParaAlva(dados)) !== salvo.current; }}
+        onChange={(dados) => { pendente.current = JSON.stringify(puckParaAlva(dados)) !== salvo.current; setAlterada(pendente.current); }}
         overrides={{
           iframe: IframeComFolhas,
-          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aviso={aviso} pendente={pendente} />,
+          outline: () => <Estrutura />,
+          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aviso={aviso} pendente={pendente} alterada={alterada} />,
           drawerItem: ({ name }) => <ItemDaBiblioteca name={name} rotulo={config.components[name]?.label} />,
         }}
       />

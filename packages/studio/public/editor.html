@@ -6,29 +6,55 @@
   <title>Editor de landing · Alva Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/tokens.css">
   <link rel="stylesheet" href="/material-symbols.css">
   <link rel="stylesheet" href="/build/editor.css">
   <style>
+    /* Só tokens de /tokens.css (o :root de styles.css): nenhuma cor, raio ou fonte nova aqui. */
     html, body, #editor { height: 100%; margin: 0; }
-    body { font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif; color: #101828; }
-    .alva-item-da-biblioteca { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #E7ECF3; border-radius: 12px; background: #ffffff; color: #101828; font-size: 14px; cursor: grab; }
-    .alva-item-da-biblioteca:hover { border-color: #286EEA; }
-    .alva-item-da-biblioteca svg:first-child { color: #286EEA; flex: none; }
+    body { font-family: var(--font-sans); color: var(--alva-ink); }
+    .alva-item-da-biblioteca { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--alva-line); border-radius: var(--radius-lg); background: var(--alva-white); color: var(--alva-ink); font-size: var(--text-lg); cursor: grab; }
+    .alva-item-da-biblioteca:hover { border-color: var(--alva-blue); }
+    .alva-item-da-biblioteca svg:first-child { color: var(--alva-blue); flex: none; }
     .alva-item-da-biblioteca span { flex: 1; }
-    .alva-item-da-biblioteca .alva-alca { color: #667085; }
-    .alva-recolhido { border: 1px solid #E7ECF3; border-radius: 12px; padding: 10px 12px; }
-    .alva-recolhido > summary { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; list-style: none; }
+    .alva-item-da-biblioteca .alva-alca { color: var(--alva-muted); }
+    .alva-recolhido { border: 1px solid var(--alva-line); border-radius: var(--radius-lg); padding: 10px 12px; }
+    .alva-recolhido > summary { display: flex; align-items: center; gap: 8px; font-size: var(--text-lg); font-weight: 600; cursor: pointer; list-style: none; }
     .alva-recolhido > summary::-webkit-details-marker { display: none; }
-    .alva-recolhido > summary::after { content: '+'; margin-left: auto; color: #667085; }
+    .alva-recolhido > summary::after { content: '+'; margin-left: auto; color: var(--alva-muted); }
     .alva-recolhido[open] > summary::after { content: '–'; }
-    .alva-acao { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 1px solid #E7ECF3; border-radius: 12px; background: #ffffff; color: #101828; cursor: pointer; }
+    .alva-acao { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--text-md); font-weight: 650; padding: 10px 14px; border: 1px solid var(--alva-line); border-radius: var(--radius-md); background: var(--alva-white); color: var(--alva-ink); cursor: pointer; }
+    .alva-acao-icone { padding: 8px; order: -2; }
     .alva-acao:disabled { opacity: .6; cursor: progress; }
-    .alva-acao-principal { background: #286EEA; border-color: #286EEA; color: #ffffff; }
-    .alva-acao:focus-visible { outline: 2px solid #286EEA; outline-offset: 2px; }
-    .alva-carregando, .alva-erro { padding: 32px; font-size: 15px; }
-    .alva-erro { color: #b42318; }
-    .alva-aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 12px 18px; border-radius: 12px; background: #101828; color: #ffffff; font-size: 14px; z-index: 10; }
+    .alva-acao-principal { background: var(--alva-blue); border-color: var(--alva-blue); color: var(--alva-on-blue); }
+    .alva-acao:focus-visible, .alva-arvore-linha:focus-visible, .alva-botao-tracejado:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
+    .alva-salvo { display: inline-flex; align-items: center; gap: 5px; color: var(--alva-muted); font-size: var(--text-sm); margin-right: 6px; }
+    .alva-salvo svg { color: var(--alva-success); }
+    .alva-salvo-pendente svg { color: var(--alva-warning); }
+    .alva-carregando, .alva-erro { padding: 32px; font-size: var(--text-lg); }
+    .alva-erro { color: var(--alva-danger); }
+    .alva-aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 12px 18px; border-radius: var(--radius-lg); background: var(--alva-ink); color: var(--alva-white); font-size: var(--text-lg); z-index: 10; }
+    .alva-estrutura { padding: 21px 14px; }
+    .alva-estrutura h2 { font-size: var(--text-2xl); margin: 7px 0; }
+    .alva-eyebrow { color: var(--alva-blue); font-size: var(--text-2xs); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .alva-ajuda { color: var(--alva-muted); font-size: var(--text-sm); line-height: 1.5; margin: 0 0 20px; }
+    .alva-arvore { display: grid; gap: 5px; }
+    .alva-arvore-grupo { display: grid; gap: 5px; }
+    .alva-arvore-linha { min-height: 38px; display: grid; grid-template-columns: 18px 22px 1fr auto; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--alva-ink); font-size: var(--text-sm); cursor: pointer; }
+    .alva-arvore-linha:hover { background: var(--alva-cloud); }
+    .alva-arvore-pai { font-weight: 700; margin-top: 7px; }
+    .alva-arvore-ativa { background: var(--alva-highlight); border-color: var(--alva-blue-light); color: var(--alva-blue); }
+    .alva-arvore-arrastando { opacity: .5; }
+    .alva-arvore-alca { color: var(--alva-soft); cursor: grab; }
+    .alva-arvore-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .alva-arvore-linha small { color: var(--alva-soft); font-size: var(--text-2xs); }
+    .alva-arvore-mais { position: relative; }
+    .alva-botao-tracejado { margin: 5px 7px 10px; width: calc(100% - 14px); font: inherit; font-size: var(--text-md); font-weight: 650; padding: 10px 14px; border: 1px dashed var(--alva-blue-light); border-radius: var(--radius-md); background: var(--alva-white); color: var(--alva-blue); cursor: pointer; }
+    .alva-arvore-menu { display: grid; gap: 2px; margin: 0 7px 10px; padding: 6px; background: var(--alva-white); border: 1px solid var(--alva-line); border-radius: var(--radius-md); }
+    .alva-arvore-menu button { display: flex; align-items: center; gap: 8px; border: 0; background: var(--alva-white); border-radius: var(--radius-sm); padding: 9px; font: inherit; font-size: var(--text-sm); text-align: left; color: var(--alva-ink); cursor: pointer; }
+    .alva-arvore-menu button:hover { background: var(--alva-highlight); color: var(--alva-blue); }
+    .alva-arvore-menu svg { color: var(--alva-blue); }
   </style>
 </head>
 <body>

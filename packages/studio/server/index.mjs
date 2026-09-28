@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { blocoDeTokens } from './tokens-css.mjs';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -422,6 +423,7 @@ export function createApp({
     '/forms.css': ['public/forms.css', 'text/css'],
     '/save-cycle.js': ['public/save-cycle.js', 'text/javascript'],
     '/styles.css': ['public/styles.css', 'text/css'],
+    '/tokens.css': ['public/styles.css', 'text/css'],
     '/material-symbols.css': ['public/material-symbols.css', 'text/css'],
     '/material-symbols-outlined.woff2': ['public/material-symbols-outlined.woff2', 'font/woff2'],
     '/templates.js': ['public/templates.js', 'text/javascript'],
@@ -892,7 +894,7 @@ export function createApp({
         return res.end(
           path === '/vendor/pt.js'
             ? '(()=>{const exports={};' + content.toString() + ';window.alvaLocale=exports.default;})();'
-            : content,
+            : path === '/tokens.css' ? blocoDeTokens(content.toString()) : content,
         );
       }
       throw error('Não encontrado.', 404);
