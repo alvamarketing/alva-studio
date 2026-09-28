@@ -1,5 +1,8 @@
 import { modeloDaCurva } from './vsl-retention-ui.js';
 import { normalizarOpcoesDaVsl } from './vsl-opcoes.js';
+import { cartaoDaVsl, configDaPrevia, midiaMudou } from './vsl-previa.js';
+import { cssDoPlayer } from './vsl-player-css.js';
+import { mountVslPlayer } from './vsl-player.js';
 import { estadoDoEnvio, mensagemDoEnvio, enviarArquivo } from './vsl-upload.js';
 
 export function vslStatusLabel(video = {}) {
@@ -47,18 +50,6 @@ export function vslUiAccessPolicy({ can = () => false, hasVideo = false } = {}) 
 
 function field(form, name) { return form.elements.namedItem(name); }
 
-let hlsPromessa = null;
-function carregarHls() {
-  if (globalThis.Hls) return Promise.resolve(globalThis.Hls);
-  hlsPromessa ||= new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = '/vendor/hls.min.js';
-    script.onload = () => (globalThis.Hls?.isSupported?.() ? resolve(globalThis.Hls) : reject(new Error('HLS indisponível')));
-    script.onerror = () => { hlsPromessa = null; reject(new Error('Não foi possível carregar o player.')); };
-    document.head.append(script);
-  });
-  return hlsPromessa;
-}
 
 export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const resolveShell = typeof getShell === 'function' ? getShell : () => shell;
@@ -68,57 +59,41 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const list = () => document.querySelector('#vsl-list');
   const form = () => document.querySelector('#vsl-form');
   const status = () => document.querySelector('#vsl-status');
+  // A prévia é o player de verdade, com a configuração que está no formulário: mudou a cor,
+  // o texto do CTA ou o aviso de som, a prévia mostra na hora. O que ela mostra é o que a
+  // pessoa que visitar a página vai ver — por isso o mesmo módulo do player publicado.
+  let playerDaPrevia = null;
+  let configAtual = null;
   const updatePreview = () => {
     const target = form();
-    const title = document.querySelector('#vsl-preview-title');
-    const meta = document.querySelector('#vsl-preview-meta');
-    const playback = document.querySelector('#vsl-preview-playback');
-    const cta = document.querySelector('#vsl-preview-cta');
-    const poster = document.querySelector('#vsl-preview-poster');
-    const screen = document.querySelector('.vsl-preview-screen');
-    if (!target || !title || !meta || !playback || !cta || !poster || !screen) return;
-    title.textContent = field(target, 'name').value.trim() || 'Sua VSL';
-    const aspectRatio = field(target, 'aspectRatio').value || '16:9';
-    meta.textContent = `${field(target, 'sourceType').value.toUpperCase()} · ${aspectRatio}`;
-    screen.style.aspectRatio = aspectRatio.replace(':', ' / ');
-    const videoDaPrevia = document.querySelector('#vsl-preview-video');
-    if (videoDaPrevia) videoDaPrevia.style.aspectRatio = aspectRatio.replace(':', ' / ');
-    const color = field(target, 'accentColor').value.trim();
-    if (/^#[0-9a-f]{6}$/i.test(color)) screen.style.setProperty('--vsl-preview-accent', color);
-    playback.textContent = `${field(target, 'autoplayMuted').checked ? 'Sem som' : 'Som ativado'} · ${field(target, 'resumeEnabled').checked ? 'Retomada ativada' : 'Retomada desativada'}`;
-    const ctaText = field(target, 'ctaText').value.trim() || 'a configurar';
-    const ctaSeconds = field(target, 'ctaSeconds').value;
-    cta.textContent = `CTA: ${ctaText} · ${ctaSeconds === '' ? 'tempo a configurar' : `após ${ctaSeconds}s`}`;
-    const url = field(target, 'posterUrl').value.trim();
-    poster.hidden = !url;
-    if (url) poster.src = url;
-    tocarNaPrevia(field(target, 'sourceUrl').value.trim(), field(target, 'sourceType').value, url);
+    const caixa = document.querySelector('#vsl-preview-player');
+    if (!target || !caixa) return;
+    const config = configDaPrevia(collect());
+    const proporcao = String(config.aspectRatio).replace(':', ' / ');
+    caixa.style.aspectRatio = proporcao;
+    document.querySelector('#vsl-preview-css').textContent = cssDoPlayer(config.accentColor);
+    if (!config.sourceUrl) {
+      playerDaPrevia?.destroy?.();
+      playerDaPrevia = null;
+      configAtual = null;
+      caixa.replaceChildren(Object.assign(document.createElement('p'), {
+        className: 'vsl-preview-vazia',
+        textContent: 'Envie um vídeo ou cole o endereço para ver a prévia.',
+      }));
+      return;
+    }
+    // Trocar só a cor ou o texto não pode recomeçar o vídeo do zero: nesse caso o player é
+    // remontado no mesmo ponto em que estava.
+    const segundo = playerDaPrevia?.video?.currentTime ?? 0;
+    const recarrega = midiaMudou(configAtual, config);
+    playerDaPrevia?.destroy?.();
+    try {
+      playerDaPrevia = mountVslPlayer(caixa, config);
+      if (!recarrega && segundo > 0) playerDaPrevia.video.addEventListener('loadedmetadata', () => { playerDaPrevia.video.currentTime = segundo; }, { once: true });
+    } catch { caixa.textContent = 'Não foi possível montar a prévia.'; }
+    configAtual = config;
   };
-  // A prévia toca o vídeo de verdade: HLS (Cloudflare Stream) pelo hls.js que o Studio já
-  // serve; MP4 direto. Era só um resumo com a capa, e parecia um vídeo quebrado.
-  let hlsDaPrevia = null;
-  const tocarNaPrevia = (endereco, tipo, capa) => {
-    const video = document.querySelector('#vsl-preview-video');
-    if (!video) return;
-    if (capa) video.poster = capa; else video.removeAttribute('poster');
-    if (video.dataset.src === endereco) return;
-    video.dataset.src = endereco;
-    hlsDaPrevia?.destroy?.();
-    hlsDaPrevia = null;
-    video.hidden = !endereco;
-    // Com o vídeo de verdade na tela, o cartão-resumo sai: dois quadros pareciam dois vídeos.
-    const resumo = document.querySelector('.vsl-preview-screen');
-    if (resumo) resumo.hidden = Boolean(endereco);
-    if (!endereco) { video.removeAttribute('src'); video.load(); return; }
-    const ehHls = tipo === 'hls' || /\.m3u8(?:$|[?#])/i.test(endereco);
-    if (!ehHls || video.canPlayType('application/vnd.apple.mpegurl')) { video.src = endereco; return; }
-    carregarHls().then((Hls) => {
-      if (video.dataset.src !== endereco) return;
-      hlsDaPrevia = new Hls();
-      hlsDaPrevia.loadSource(endereco);
-      hlsDaPrevia.attachMedia(video);
-    }).catch(() => toast('Este navegador não conseguiu tocar a prévia do vídeo.'));
-  };
+
   // A curva só existe para VSL já salva: antes disso não há público nem eventos.
   const pintarRetencao = async (video) => {
     const secao = document.querySelector('#vsl-retention');
@@ -258,15 +233,16 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const render = (videos = []) => {
     const target = list();
     if (!target) return;
-    target.replaceChildren();
-    if (!videos.length) { target.textContent = 'Ainda não há VSLs neste projeto.'; return; }
-    for (const video of vslListModel(videos)) {
-      const row = document.createElement('article'); row.className = 'vsl-list-row';
-      const heading = document.createElement('strong'); heading.textContent = video.name;
-      const meta = document.createElement('span'); meta.textContent = `${video.sourceType.toUpperCase()} · ${video.status}`;
-      const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = currentShell()?.can?.('video.write') ? 'Editar' : 'Visualizar'; edit.onclick = () => editById(video.id);
-      row.append(heading, meta, edit); target.append(row);
+    const podeEditar = Boolean(currentShell()?.can?.('video.write'));
+    if (!videos.length) {
+      target.innerHTML = '<div class="empty"><div class="empty-icon"><span class="material-symbols-outlined" aria-hidden="true">movie</span></div><h2>Nenhuma VSL ainda</h2><p>Crie a primeira para hospedar seu vídeo de vendas e acompanhar quem assiste.</p></div>';
+      return;
     }
+    target.innerHTML = vslListModel(videos).map((video) => cartaoDaVsl(video, { podeEditar })).join('');
+    target.onclick = (evento) => {
+      const botao = evento.target.closest('[data-vsl]');
+      if (botao) editById(botao.dataset.vsl);
+    };
   };
   const load = async () => {
     const projectId = currentShell()?.state?.().currentProject?.id;

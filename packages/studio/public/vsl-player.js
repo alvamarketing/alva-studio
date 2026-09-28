@@ -41,13 +41,15 @@ export function toggleCaptionTrack(track, enabled) {
 export function createVslPlayerController({
   publicId = '', versionNumber, versionId, duration = 0, ctaSeconds = null, resumeEnabled = true,
   milestones = DEFAULT_MILESTONES, storage = globalThis.localStorage, onEvent = () => {}, travarAvanco = false,
+  // A prévia do Studio mostra o CTA desde o início: lá se está configurando o botão.
+  mostrarCtaSempre = false,
 } = {}) {
   const publicVersion = versionNumber ?? versionId ?? '';
   const key = resumeStorageKey(publicId, publicVersion);
   const fired = new Set();
   const state = {
     duration: Number(duration) > 0 ? Number(duration) : 0, currentTime: 0, progress: 0,
-    playing: false, muted: true, ctaVisible: false, completed: false, error: '', assistido: 0,
+    playing: false, muted: true, ctaVisible: mostrarCtaSempre, completed: false, error: '', assistido: 0,
   };
   const mark = (type, extra = {}) => onEvent({ type, publicId, versionNumber: publicVersion, ...extra });
   const save = () => {
@@ -78,7 +80,7 @@ export function createVslPlayerController({
       state.currentTime = state.duration ? Math.min(time, state.duration) : time;
       state.assistido = Math.max(state.assistido, state.currentTime);
       state.progress = state.duration ? Math.min(100, Math.max(0, (state.currentTime / state.duration) * 100)) : 0;
-      state.ctaVisible = ctaSeconds !== null && Number.isFinite(Number(ctaSeconds)) && state.currentTime >= Number(ctaSeconds);
+      state.ctaVisible = mostrarCtaSempre || (ctaSeconds !== null && Number.isFinite(Number(ctaSeconds)) && state.currentTime >= Number(ctaSeconds));
       updateMilestones();
       save();
       return this.state();

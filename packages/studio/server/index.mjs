@@ -368,6 +368,8 @@ export function createApp({
     '/templates.js': ['public/templates.js', 'text/javascript'],
     '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
     '/vsl-opcoes.js': ['public/vsl-opcoes.js', 'text/javascript'],
+    '/vsl-player-css.js': ['public/vsl-player-css.js', 'text/javascript'],
+    '/vsl-previa.js': ['public/vsl-previa.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],

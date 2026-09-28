@@ -15,13 +15,12 @@ test('configuração de VSL apresenta quatro etapas, avançado e prévia respons
   assert.match(html, /<details><summary>Opções avançadas<\/summary>/);
   assert.match(html, /id="vsl-preview"/);
   assert.match(css, /\.vsl-editor-layout\s*\{[\s\S]*grid-template-columns/);
-  assert.match(css, /\.vsl-preview-screen[\s\S]*min-height/);
+  assert.match(css, /\.vsl-preview-player\s*\{[\s\S]*aspect-ratio/);
   assert.match(css, /@media\s*\(min-width:\s*621px\) and \(max-width:\s*900px\)[\s\S]*\.vsl-editor-layout\s*\{\s*grid-template-columns:\s*1fr/);
   assert.match(ui, /updatePreview/);
-  assert.match(ui, /screen\.style\.aspectRatio/);
-  assert.match(ui, /vsl-preview-accent/);
-  assert.match(ui, /vsl-preview-playback/);
-  assert.match(ui, /após \$\{ctaSeconds\}s/);
+  assert.match(ui, /mountVslPlayer/, 'a prévia é o player de verdade, não um resumo em texto');
+  assert.match(ui, /caixa\.style\.aspectRatio/);
+  assert.match(ui, /cssDoPlayer/);
 });
 
 test('modelo da tela de VSL traduz rascunho, publicada e alterações pendentes', () => {
@@ -68,9 +67,12 @@ test('abrir VSL resolve o shell depois do bootstrap', async () => {
 
 test('tela de VSL não expõe URL da mídia nem JSON na lista visual', async () => {
   const source = await (await import('node:fs/promises')).readFile(new URL('../public/vsl-ui.js', import.meta.url), 'utf8');
-  assert.match(source, /vsl-list-row/);
-  assert.match(source, /Publicado|Publicada/);
+  assert.match(source, /cartaoDaVsl/);
   assert.doesNotMatch(source, /JSON\.stringify\(video\)/);
+  const { cartaoDaVsl } = await import('../public/vsl-previa.js');
+  const cartao = cartaoDaVsl({ id: 'v1', name: 'VSL', status: 'Publicada', sourceType: 'hls', sourceUrl: 'https://media.test/segredo.m3u8' }, { podeEditar: true });
+  assert.match(cartao, /Publicada/);
+  assert.doesNotMatch(cartao, /segredo\.m3u8/, 'o endereço da mídia não vai para a lista');
 });
 
 test('publicação da VSL depende de deployment.publish separadamente do CRUD', () => {
