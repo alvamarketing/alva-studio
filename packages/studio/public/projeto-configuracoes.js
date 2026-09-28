@@ -16,11 +16,7 @@ const ASSUNTOS = { dominio: 'publicacao', vercel: 'publicacao', publicacao: 'pub
 export const abaDoAssunto = (assunto) => ASSUNTOS[String(assunto ?? '')] ?? 'geral';
 
 // A explicação da aba só existe onde os cartões não a trazem: repetida, vira ruído.
-const AJUDA = {
-  geral: '',
-  publicacao: 'O acesso à Vercel é da conta e fica em Configurações · Integrações.',
-  rastreamento: '',
-};
+const AJUDA = { geral: '', publicacao: '', rastreamento: '' };
 
 function painel(doc, chave) {
   const secao = doc.createElement('section');

@@ -560,8 +560,12 @@
   min-height: 42px;
 }
 #settings-view .owner-session {
-  margin-top: 18px;
-  padding: 20px 0 0;
+  margin-top: 16px;
+  padding: 22px 26px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-lg);
+  background: var(--alva-white);
+  box-shadow: var(--shadow-soft);
 }
 #settings-view .vercel-intro {
   padding: 21px 0;
@@ -943,6 +947,7 @@
   display: grid;
   gap: 16px;
   align-items: start;
+  max-width: 920px;
 }
 .project-settings-panel > .helper {
   margin: 0;
@@ -1036,4 +1041,25 @@
   .project-settings-panel .publication-actions { justify-content: stretch; }
   .project-settings-panel .owner-form-actions > *,
   .project-settings-panel .publication-actions > * { flex: 1 1 auto; }
+}
+
+/* Configurações da conta: os blocos da aba são cartões separados, na ordem em que
+   interessam. A nota de licenças é referência, não a primeira coisa a ler. */
+#settings-view {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+#settings-view > .owner-header,
+#settings-view > .settings-tabs {
+  margin-bottom: 0;
+}
+#settings-view > [data-settings-area='account'] {
+  order: 2;
+  padding: 22px 26px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+#settings-view > #owner-dialog {
+  order: 1;
 }

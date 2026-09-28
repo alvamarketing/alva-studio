@@ -77,3 +77,9 @@ test('o bloco da empresa repintado continua obedecendo a aba aberta', async () =
   assert.match(owner, /new MutationObserver\(\(\) => \{[^}]*\}\)\.observe\(\$\('#settings-company-content'\)/);
   assert.match(owner, /mostrarSecoesDaAba\(settingsContainer, abaAtual\)/, 'a repintura reaplica a aba');
 });
+
+test('a nota de licenças vem depois do que a pessoa foi fazer ali', async () => {
+  const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
+  const regra = css.slice(css.indexOf("#settings-view > [data-settings-area='account']"));
+  assert.match(regra.slice(0, regra.indexOf('}')), /order: 2/);
+});

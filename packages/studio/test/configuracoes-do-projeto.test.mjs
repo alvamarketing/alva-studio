@@ -108,3 +108,9 @@ test('o cartão das configurações não inventa cor, raio ou sombra', async () 
   assert.doesNotMatch(bloco, /#[0-9a-fA-F]{3,8}\b/, 'só token, nenhuma cor escrita à mão');
   assert.doesNotMatch(bloco, /border-radius: *\d/, 'raio vem de var(--radius-*)');
 });
+
+test('o cartão de configuração tem medida de leitura, não a largura da tela', async () => {
+  const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
+  const painel = css.slice(css.indexOf('.project-settings-panel {'));
+  assert.match(painel.slice(0, painel.indexOf('}')), /max-width/);
+});
