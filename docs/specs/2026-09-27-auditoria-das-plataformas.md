@@ -132,3 +132,20 @@ parâmetro `click-id`, e que o S2S não exige credencial (a conta sai do click i
 - **Códigos de erro do S2S da Taboola.** A página oficial (`/pixel/docs/s2s-error-codes`)
   responde "Page Not Found"; a entrega da Taboola é lida só pelo status HTTP.
 - **Google e LinkedIn: token.** Decisões 2 e 3, acima.
+
+## Segunda revisão independente (27/09)
+
+Consertado: publicar quebrava com Google Ads ou LinkedIn configurado (`f654a17`);
+o formulário publicado não tinha a proteção contra reenvio (`433ba7e`); IP de proxy
+no envio direto, e conversão disparando depois de revogar a medição (`648c8bb`).
+
+Menores, registrados:
+- Taboola salva antes de a tela pedir o ID da conta e os nomes de evento continua
+  "configurada"; os leads dela falham com o motivo na tela, mas nada pede para completar.
+- Dois envios idênticos no mesmo instante (clique duplo sem JavaScript) passam juntos pela
+  checagem de reenvio. Não há trava.
+- Itens que já estavam na fila antes destes commits não têm os hashes novos nem, às vezes,
+  página e navegador; falham com motivo na tela. Não há produção rodando com fila cheia.
+- **Consentimento negado:** IP e navegador seguem para as plataformas mesmo quando a pessoa
+  recusa a medição (e-mail e telefone não). O dono autorizou mandar IP e navegador; resta
+  confirmar se isso vale também para quem recusou.
