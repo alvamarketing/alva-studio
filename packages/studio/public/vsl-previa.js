@@ -28,8 +28,10 @@ export function configDaPrevia(valores = {}) {
     // O CTA aparece desde o primeiro quadro: esperar o tempo configurado para vê-lo na
     // prévia seria esconder justamente o que se está configurando.
     mostrarCtaSempre: true,
-    // A retomada não escreve no navegador de quem edita: a prévia não é uma visita.
+    // A retomada não escreve no navegador de quem edita, e nada do que se faz aqui conta
+    // como visita: a prévia não é uma visita.
     storage: null,
+    medir: false,
   };
 }
 

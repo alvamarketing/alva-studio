@@ -173,7 +173,7 @@ export function mountVslPlayer(container, config = {}) {
     travarAvanco: opcoes.travarAvanco,
     onEvent: (event) => {
       config.onEvent?.(event);
-      const mapped = mapVslEventToTrackerEvent(event);
+      const mapped = config.medir === false ? null : mapVslEventToTrackerEvent(event);
       if (mapped) container.dispatchEvent(new CustomEvent('alva:track', { bubbles: true, detail: mapped }));
       const mensagem = mensagemDaVsl(event);
       if (mensagem) avisarPagina(mensagem);

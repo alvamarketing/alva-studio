@@ -87,3 +87,7 @@ test('capa com endereço estranho não vira atributo solto no cartão', () => {
   const html = cartaoDaVsl({ ...vsl, posterUrl: 'javascript:alert(1)' }, { podeEditar: true });
   assert.doesNotMatch(html, /javascript:/);
 });
+
+test('a prévia não emite evento de medição: quem configura não é visitante', () => {
+  assert.equal(configDaPrevia(valores).medir, false);
+});

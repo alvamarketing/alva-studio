@@ -36,7 +36,7 @@ import { createRuntimeLoader } from './publication-runtime.mjs';
 import { resolveConsentState } from './conversion-consent-policy.mjs';
 import { runtimeManifest, cookiesDosPixels, verifiedRuntimeAttribution, verifyRuntimeGatewayEnvelope } from './runtime-gateway-security.mjs';
 import { customDomainOriginAllowed, publicSubmissionCors } from './publication-cors.mjs';
-import { renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
+import { medirEstaVisita, renderVslPage, vslContentSecurityPolicy } from './vsl-public.mjs';
 import { CloudflareStream } from './cloudflare-stream.mjs';
 import { readRuntimeFlags, requiredTrackingEngines } from './runtime-flags.mjs';
 import { billingRuntimeEnvironment } from './runtime-flags.mjs';
@@ -370,6 +370,7 @@ export function createApp({
     '/vsl-opcoes.js': ['public/vsl-opcoes.js', 'text/javascript'],
     '/vsl-player-css.js': ['public/vsl-player-css.js', 'text/javascript'],
     '/vsl-previa.js': ['public/vsl-previa.js', 'text/javascript'],
+    '/projeto-configuracoes.js': ['public/projeto-configuracoes.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
@@ -424,6 +425,7 @@ export function createApp({
         }
       }
       const publicVsl = req.method === 'GET' ? path.match(/^\/(embed\/)?v\/([^/]+)$/) : null;
+      const previaDoStudio = new URL(req.url, 'http://' + expected).searchParams.get('previa') === '1';
       const publicFontAsset = req.method === 'GET' && path === '/material-symbols-outlined.woff2';
       const effectiveHost = gatewayHost || req.headers.host;
       const studioHost = publicOrigin && effectiveHost === new URL(publicOrigin).host;
@@ -613,7 +615,8 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const trackerPublicId = analytics ? await trackerPublicIdForVideo(database, publicVsl[2]) : null;
-        return res.end(renderVslPage(video, { embed, publicOrigin: publicOrigin || expectedOrigin, trackerPublicId }));
+        const medir = medirEstaVisita({ previa: previaDoStudio, referer: req.headers.referer || req.headers.referrer || '', studioOrigin: publicOrigin || expectedOrigin });
+        return res.end(renderVslPage(video, { embed, publicOrigin: publicOrigin || expectedOrigin, trackerPublicId, medir }));
       }
       if (req.method === 'GET' && path === '/api/session') return json(await auth.state(req));
       if (req.method === 'POST' && (path === '/api/setup' || path === '/api/login')) {

@@ -1,0 +1,57 @@
+// As configurações da conta: cada aba com o seu assunto. Antes, Empresa, Equipe e Plano
+// mostravam o mesmo bloco (o conteúdo era movido entre elas), e o token da Vercel vivia
+// escondido atrás de um botão numa aba que a engrenagem nunca abria — enquanto a tela de
+// Publicação mandava justamente para lá.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { JSDOM } from 'jsdom';
+import { ABAS_DA_CONTA, mostrarSecoesDaAba, settingsAccess } from '../public/owner.js';
+
+test('a conta tem uma aba por assunto, e Integrações é uma delas', () => {
+  assert.deepEqual(ABAS_DA_CONTA.map(([chave]) => chave), ['account', 'company', 'team', 'integrations', 'billing']);
+  assert.equal(ABAS_DA_CONTA[0][1], 'Conta');
+  assert.equal(ABAS_DA_CONTA[3][1], 'Integrações');
+});
+
+test('a aba pedida é respeitada, inclusive a de integrações', () => {
+  assert.equal(settingsAccess({ canManageIntegration: true, requestedTab: 'integrations' }).tab, 'integrations');
+  assert.equal(settingsAccess({ canManageIntegration: true, requestedTab: 'team' }).tab, 'team');
+  // Sem permissão de integração, quem pede integrações cai na conta em vez de ver um painel vazio.
+  assert.equal(settingsAccess({ canManageIntegration: false, requestedTab: 'integrations' }).tab, 'account');
+});
+
+test('cada aba mostra só as seções do seu assunto', () => {
+  const { window } = new JSDOM(`<div id="c">
+    <section data-settings-area="company"><h2>Projetos</h2></section>
+    <section data-settings-area="team"><h2>Equipe</h2></section>
+    <section data-settings-area="billing"><h2>Plano e cobrança</h2></section>
+  </div>`);
+  const conteudo = window.document.querySelector('#c');
+  const visiveis = () => [...conteudo.querySelectorAll('[data-settings-area]')].filter((s) => !s.hidden).map((s) => s.dataset.settingsArea);
+  mostrarSecoesDaAba(conteudo, 'team');
+  assert.deepEqual(visiveis(), ['team']);
+  mostrarSecoesDaAba(conteudo, 'billing');
+  assert.deepEqual(visiveis(), ['billing']);
+  mostrarSecoesDaAba(conteudo, 'company');
+  assert.deepEqual(visiveis(), ['company']);
+  window.close();
+});
+
+test('as licenças de terceiros aparecem uma vez, não em toda aba', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const secao = html.slice(html.indexOf('id="settings-view"'), html.indexOf('</section>', html.indexOf('id="settings-view"')));
+  assert.match(secao, /Licenças de terceiros/);
+  assert.match(secao, /data-settings-area="account"/, 'o bloco pertence a uma aba, como qualquer outra seção');
+});
+
+test('a engrenagem abre a conta, não desvia para outra aba', async () => {
+  const owner = await readFile(new URL('../public/owner.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(owner, /tab === 'account' \? 'company' : tab/);
+});
+
+test('o token da Vercel mora na aba Integrações, não escondido atrás de um botão', async () => {
+  const owner = await readFile(new URL('../public/owner.js', import.meta.url), 'utf8');
+  assert.match(owner, /panel-integrations/);
+  assert.doesNotMatch(owner, /id="account-publication"[^-]/, 'o botão-porta "Conectar a Vercel" deixa de existir');
+});

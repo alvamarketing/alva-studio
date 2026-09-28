@@ -91,6 +91,10 @@
             <span class="material-symbols-outlined" aria-hidden="true">smart_toy</span>
             <span class="sidebar-label">Agentes</span>
           </button>
+          <button class="nav-item" id="nav-project-settings" title="Configurações do projeto" hidden>
+            <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+            <span class="sidebar-label">Configurações</span>
+          </button>
         </nav>
         <div class="sidebar-footer">
           <button class="sidebar-settings" id="app-settings" title="Configurações do app" aria-label="Configurações do app">
@@ -142,7 +146,7 @@
           <header class="dashboard-header">
             <div><div class="eyebrow">SEU STUDIO</div><h1 id="settings-view-title">Configurações<span class="accent">.</span></h1><p>Administre sua conta, empresa e publicação em um só lugar.</p></div>
           </header>
-          <section class="surface" aria-labelledby="third-party-licenses-title" style="margin-top: 28px; max-width: 720px">
+          <section data-settings-area="account" class="surface" aria-labelledby="third-party-licenses-title" style="margin-top: 28px; max-width: 720px">
             <div class="surface-head"><div><h2 id="third-party-licenses-title">Licenças de terceiros</h2><p class="helper">Consulte as atribuições dos componentes de Analytics e Rastreamento usados pelo Studio.</p></div></div>
             <a class="button" href="/third-party-licenses.html" target="_blank" rel="noopener">Abrir atribuições legais ↗</a>
           </section>
@@ -433,13 +437,27 @@
           </section>
           <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>
+        <section id="project-settings-view" aria-labelledby="project-settings-view-title" hidden>
+          <div class="dashboard-header"><div><span class="eyebrow">PROJETO</span><h1 id="project-settings-view-title">Configurações<span class="accent">.</span></h1><p>Tudo que este projeto precisa para ir ao ar: endereço, publicação e rastreamento.</p></div></div>
+          <form id="project-settings-form">
+        <div class="eyebrow">CONFIGURAÇÃO DO PROJETO</div>
+        <h2>Nome e endereço</h2>
+        <label>Nome do projeto<input name="name" required maxlength="100" placeholder="Ex.: Campanha de primavera" /></label>
+        <label>Identificador do projeto<input name="slug" required maxlength="80" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="campanha-de-primavera" /></label>
+        <p class="help">O identificador entra no endereço das páginas publicadas. Mudar depois de publicar quebra os links que já estão no ar.</p>
+        <p class="form-error" id="project-settings-error" role="alert"></p>
+        <div class="owner-form-actions">
+          <button class="primary">Salvar projeto</button>
+        </div>
+      </form>
+        </section>
         <section id="publication-view" aria-labelledby="project-publication-title" hidden>
           <section id="project-publication" class="project-surface publication-surface" aria-labelledby="project-publication-title">
             <div class="section-heading"><div><span class="eyebrow">PUBLICAÇÃO</span><h2 id="project-publication-title">Coloque seu projeto no ar</h2></div><span id="publication-state" class="publication-state" role="status">Conecte a Vercel</span></div>
             <p id="publication-summary">As rotas publicadas deste projeto serão enviadas juntas para um único destino.</p>
             <p id="publication-routes" class="publication-routes">Nenhuma rota publicada ainda.</p>
             <div class="publication-actions"><button type="button" id="publication-preview">Criar prévia</button><button type="button" id="publication-production" class="primary">Publicar em produção</button></div>
-            <details class="publication-details"><summary>Projeto na Vercel e domínio</summary><form id="publication-connection-form"><label>Projeto na Vercel<input name="vercelProjectId" placeholder="taian" autocomplete="off"></label><p class="help">As páginas deste projeto sobem como rotas dele: taian.vercel.app/pagina1, /quiz, e assim por diante. O acesso à Vercel é da empresa e fica em Configurações · Preferências.</p><div class="publication-actions"><button type="button" id="publication-sync">Criar na Vercel</button><button class="primary">Salvar</button></div></form><form id="publication-domain-form"><label>Domínio <input name="domain" placeholder="lp.suaempresa.com.br"></label><button type="submit">Conectar domínio</button></form><div id="publication-dns-record" class="publication-dns-record" hidden></div><details class="publication-dns"><summary>Como configurar seu domínio</summary><p class="help">O domínio é configurado uma vez por projeto: todas as páginas, quizzes e funis dele sobem como caminhos desse endereço (seudominio.com.br/oferta, /quiz…).</p><ol><li><b>Conecte o domínio no campo "Domínio"</b>, que aparece depois de ligar o projeto à Vercel. O Studio adiciona o domínio ao projeto na Vercel.</li><li><b>Crie o registro no provedor do domínio</b> (Registro.br, GoDaddy, Hostinger, Cloudflare…):<ul><li>Domínio raiz (<code>suaempresa.com.br</code>): registro <b>A</b> com o valor que a Vercel mostrar, em geral <code>76.76.21.21</code>.</li><li>Subdomínio (<code>lp.suaempresa.com.br</code>): registro <b>CNAME</b> com o valor que a Vercel mostrar para o projeto. Esse valor é único por projeto: copie do painel, não de outro projeto.</li></ul></li><li><b>Espere a propagação.</b> Pode levar de minutos a algumas horas. Quando a Vercel confirmar, o domínio aparece como válido no projeto.</li></ol><p class="help"><a href="https://vercel.com/docs/domains/working-with-domains/add-a-domain" target="_blank" rel="noopener noreferrer">Guia oficial da Vercel: adicionar e configurar um domínio</a> · <a href="https://vercel.com/docs/domains/troubleshooting" target="_blank" rel="noopener noreferrer">Quando o domínio não valida</a></p></details><p id="publication-detail-error" class="form-error" role="alert"></p></details>
+            <details class="publication-details"><summary>Projeto na Vercel e domínio</summary><form id="publication-connection-form"><label>Projeto na Vercel<input name="vercelProjectId" placeholder="taian" autocomplete="off"></label><p class="help">As páginas deste projeto sobem como rotas dele: taian.vercel.app/pagina1, /quiz, e assim por diante. O acesso à Vercel é da conta e fica em Configurações · Integrações.</p><div class="publication-actions"><button type="button" id="publication-sync">Criar na Vercel</button><button class="primary">Salvar</button></div></form><form id="publication-domain-form"><label>Domínio <input name="domain" placeholder="lp.suaempresa.com.br"></label><button type="submit">Conectar domínio</button></form><div id="publication-dns-record" class="publication-dns-record" hidden></div><details class="publication-dns"><summary>Como configurar seu domínio</summary><p class="help">O domínio é configurado uma vez por projeto: todas as páginas, quizzes e funis dele sobem como caminhos desse endereço (seudominio.com.br/oferta, /quiz…).</p><ol><li><b>Conecte o domínio no campo "Domínio"</b>, que aparece depois de ligar o projeto à Vercel. O Studio adiciona o domínio ao projeto na Vercel.</li><li><b>Crie o registro no provedor do domínio</b> (Registro.br, GoDaddy, Hostinger, Cloudflare…):<ul><li>Domínio raiz (<code>suaempresa.com.br</code>): registro <b>A</b> com o valor que a Vercel mostrar, em geral <code>76.76.21.21</code>.</li><li>Subdomínio (<code>lp.suaempresa.com.br</code>): registro <b>CNAME</b> com o valor que a Vercel mostrar para o projeto. Esse valor é único por projeto: copie do painel, não de outro projeto.</li></ul></li><li><b>Espere a propagação.</b> Pode levar de minutos a algumas horas. Quando a Vercel confirmar, o domínio aparece como válido no projeto.</li></ol><p class="help"><a href="https://vercel.com/docs/domains/working-with-domains/add-a-domain" target="_blank" rel="noopener noreferrer">Guia oficial da Vercel: adicionar e configurar um domínio</a> · <a href="https://vercel.com/docs/domains/troubleshooting" target="_blank" rel="noopener noreferrer">Quando o domínio não valida</a></p></details><p id="publication-detail-error" class="form-error" role="alert"></p></details>
           </section>
           <footer>Dados do projeto selecionado. <span>ALVA STUDIO</span></footer>
         </section>
@@ -496,19 +514,7 @@
         </div>
       </form>
     </dialog>
-    <dialog id="project-settings-dialog">
-      <form id="project-settings-form">
-        <div class="eyebrow">CONFIGURAÇÃO DO PROJETO</div>
-        <h2>Nome e endereço</h2>
-        <label>Nome do projeto<input name="name" required maxlength="100" placeholder="Ex.: Campanha de primavera" /></label>
-        <label>Identificador do projeto<input name="slug" required maxlength="80" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="campanha-de-primavera" /></label>
-        <p class="help">O identificador entra no endereço das páginas publicadas. Mudar depois de publicar quebra os links que já estão no ar.</p>
-        <p class="form-error" id="project-settings-error" role="alert"></p>
-        <div class="dialog-actions">
-          <button type="button" data-close>Cancelar</button><button class="primary">Salvar projeto</button>
-        </div>
-      </form>
-    </dialog>
+    
     <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-dialog-title">
       <h2 id="confirm-dialog-title"></h2>
       <p id="confirm-dialog-description"></p>

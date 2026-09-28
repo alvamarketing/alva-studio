@@ -50,7 +50,7 @@ export const ehQuiz = (estado) => estado?.root?.tipo === 'quiz';
 const MARCADOR_DE_VSL = /<div class="alva-vsl" data-alva-vsl="([A-Za-z0-9_-]{16,32})">[\s\S]*?<\/div>/g;
 function vslNaPrevia(html, origem) {
   if (!/^https?:\/\/[^/\s"]+$/.test(origem)) return html;
-  return html.replace(MARCADOR_DE_VSL, (_, publicId) => `<iframe class="alva-vsl-frame" src="${origem}/embed/v/${publicId}" title="VSL" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`);
+  return html.replace(MARCADOR_DE_VSL, (_, publicId) => `<iframe class="alva-vsl-frame" src="${origem}/embed/v/${publicId}?previa=1" title="VSL" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`);
 }
 
 // A página conversa com o player da VSL (que mora no Studio, num iframe): o segundo do vídeo

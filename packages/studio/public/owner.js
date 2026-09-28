@@ -7,10 +7,30 @@ export function vercelPayload({ token, teamId }) {
   if (String(token || '').trim()) payload.token = String(token).trim();
   return payload;
 }
+// As configurações da conta: um assunto por aba. Integrações é onde mora o acesso à Vercel,
+// que vale para a conta inteira — cada projeto escolhe o seu projeto na Vercel nas
+// configurações dele.
+export const ABAS_DA_CONTA = [
+  ['account', 'Conta', 'person'],
+  ['company', 'Empresa', 'corporate_fare'],
+  ['team', 'Equipe e acessos', 'group'],
+  ['integrations', 'Integrações', 'link'],
+  ['billing', 'Plano e cobrança', 'credit_card'],
+];
+
 export function settingsAccess({ canManageIntegration = false, requestedTab = 'account' } = {}) {
   const integration = Boolean(canManageIntegration);
-  const tab = ['company', 'team', 'billing'].includes(requestedTab) ? requestedTab : 'account';
+  const conhecida = ABAS_DA_CONTA.some(([chave]) => chave === requestedTab);
+  // Sem permissão para integrações, a aba não existe para essa pessoa.
+  const tab = conhecida && (requestedTab !== 'integrations' || integration) ? requestedTab : 'account';
   return { integration, tab };
+}
+
+// Dentro do bloco da empresa, cada seção sabe a que aba pertence. Antes o bloco inteiro era
+// movido de painel em painel, e as três abas mostravam a mesma coisa.
+export function mostrarSecoesDaAba(conteudo, aba) {
+  if (!conteudo) return;
+  for (const secao of conteudo.querySelectorAll('[data-settings-area]')) secao.hidden = secao.dataset.settingsArea !== aba;
 }
 
 export function selectSettingsTab({ container, tabList = container, requestedTab = 'account', canManageIntegration = false } = {}) {
@@ -45,7 +65,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       <div class="access-panel"><form id="access-form"><span class="eyebrow" id="access-eyebrow">BEM-VINDO DE VOLTA</span><h2 id="access-title">Entre no seu Studio.</h2><p id="access-description">Use a conta que você criou para acessar suas páginas.</p><label id="access-name-label" hidden>Seu nome<input name="name" autocomplete="name" maxlength="100"></label><label>E-mail<input name="email" type="email" autocomplete="username" required maxlength="254" placeholder="voce@empresa.com.br"></label><label>Senha<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label><label id="access-confirm-label" hidden>Confirme a senha<input name="confirmation" type="password" autocomplete="new-password" maxlength="256"></label><p class="form-error" id="access-error" role="alert"></p><p class="access-note" id="access-note" hidden></p><button class="primary" id="access-submit">Entrar</button><p class="access-footnote" id="access-footnote">Suas páginas ficam disponíveis após entrar.</p><button type="button" class="access-switch" id="access-switch">Criar uma conta</button></form></div>
     </section>
     <dialog id="owner-dialog" class="owner-dialog"><header class="owner-header"><div><span class="eyebrow">CONFIGURAÇÕES</span><h2>Empresa e equipe<span class="accent">.</span></h2><p class="owner-context"><span aria-hidden="true">✓</span> Conta <strong id="owner-company-name">Alva Marketing</strong></p></div><div class="owner-header-actions"><button type="button" class="primary" id="owner-save">Salvar alterações</button></div></header>
-    <section id="panel-account" role="tabpanel"><form id="account-form"><p class="owner-description">Estes são os dados de acesso do dono do aplicativo.</p><div class="owner-two-col"><label>Seu nome<input name="name" required maxlength="100" autocomplete="name"></label><label>E-mail de acesso<input name="email" type="email" required maxlength="254" autocomplete="username"></label></div><label>Senha atual<input name="currentPassword" type="password" required autocomplete="current-password" placeholder="Confirme para salvar alterações" maxlength="256"></label><details class="owner-password"><summary>Trocar minha senha</summary><div class="owner-two-col"><label>Nova senha<input name="newPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="Pelo menos 12 caracteres"></label><label>Confirme a nova senha<input name="confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div></details><p class="form-error" id="account-error" role="alert"></p><div class="owner-form-actions"><button class="primary">Salvar minha conta</button></div></form><section class="owner-publication" aria-labelledby="account-publication-title"><div><strong id="account-publication-title">Vercel (publicação)</strong><p>Cole aqui o token da Vercel da agência. Ele vale para todos os projetos; cada projeto escolhe o seu projeto na Vercel em Publicação.</p></div><button type="button" id="account-publication" aria-controls="account-publication-settings" aria-expanded="false">Conectar a Vercel</button></section><section id="account-publication-settings" class="owner-publication-settings" aria-labelledby="account-publication-settings-title" hidden><div class="vercel-intro"><div class="vercel-symbol" aria-hidden="true">▲</div><div><h3 id="account-publication-settings-title" tabindex="-1">Conecte sua conta Vercel</h3><p>Configure uma vez. Publique cada página em seu próprio projeto e domínio.</p></div></div><p class="connection" id="owner-vercel-status" role="status">Carregando conexão…</p><form id="vercel-form"><label>Token de acesso da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole seu token de acesso" maxlength="1024"></label><p class="help">O token fica protegido no servidor e não aparece nas páginas. <a href="https://vercel.com/account/tokens" target="_blank" rel="noopener noreferrer">Criar um token na Vercel ↗</a></p><label>Identificador da equipe <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off" maxlength="120"></label><p class="help">Preencha se você publica por uma equipe. Para uma conta pessoal, deixe em branco.</p><p class="form-error" id="vercel-error" role="alert"></p><div class="owner-form-actions"><button type="button" id="vercel-test">Testar conexão salva</button><button class="primary">Salvar conexão</button></div></form><div class="owner-session"><p>O domínio de cada projeto fica em Publicação; os pixels, em Rastreamento; o destino dos leads de cada página, no botão Leads do editor.</p><button type="button" id="vercel-disconnect">Desconectar</button></div></section><div class="owner-session"><div><strong>Sessão de acesso</strong><p>Encerre o acesso neste navegador quando terminar.</p></div><button type="button" id="owner-logout">Sair da conta</button></div></section></dialog>`;
+    <section id="panel-account" role="tabpanel"><form id="account-form"><p class="owner-description">Estes são os dados de acesso do dono do aplicativo.</p><div class="owner-two-col"><label>Seu nome<input name="name" required maxlength="100" autocomplete="name"></label><label>E-mail de acesso<input name="email" type="email" required maxlength="254" autocomplete="username"></label></div><label>Senha atual<input name="currentPassword" type="password" required autocomplete="current-password" placeholder="Confirme para salvar alterações" maxlength="256"></label><details class="owner-password"><summary>Trocar minha senha</summary><div class="owner-two-col"><label>Nova senha<input name="newPassword" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="Pelo menos 12 caracteres"></label><label>Confirme a nova senha<input name="confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div></details><p class="form-error" id="account-error" role="alert"></p><div class="owner-form-actions"><button class="primary">Salvar minha conta</button></div></form><div class="owner-session"><div><strong>Sessão de acesso</strong><p>Encerre o acesso neste navegador quando terminar.</p></div><button type="button" id="owner-logout">Sair da conta</button></div></section></dialog>`;
   document.body.append(host);
   const dialogNode = host.querySelector('#owner-dialog');
   const settingsContainer = settingsMount || host;
@@ -82,17 +102,29 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   teamPanel.setAttribute('role', 'tabpanel');
   teamPanel.setAttribute('aria-labelledby', 'tab-team');
   teamPanel.hidden = true;
+  const integrationsPanel = document.createElement('section');
+  integrationsPanel.id = 'panel-integrations';
+  integrationsPanel.setAttribute('role', 'tabpanel');
+  integrationsPanel.setAttribute('aria-labelledby', 'tab-integrations');
+  integrationsPanel.hidden = true;
+  integrationsPanel.innerHTML = `<section id="account-publication-settings" class="owner-publication-settings" aria-labelledby="account-publication-settings-title"><div class="vercel-intro"><div class="vercel-symbol" aria-hidden="true">▲</div><div><h3 id="account-publication-settings-title" tabindex="-1">Conecte sua conta Vercel</h3><p>Configure uma vez. Publique cada página em seu próprio projeto e domínio.</p></div></div><p class="connection" id="owner-vercel-status" role="status">Carregando conexão…</p><form id="vercel-form"><label>Token de acesso da Vercel<input name="token" type="password" autocomplete="off" placeholder="Cole seu token de acesso" maxlength="1024"></label><p class="help">O token fica protegido no servidor e não aparece nas páginas. <a href="https://vercel.com/account/tokens" target="_blank" rel="noopener noreferrer">Criar um token na Vercel ↗</a></p><label>Identificador da equipe <span class="optional">(opcional)</span><input name="teamId" placeholder="team_…" autocomplete="off" maxlength="120"></label><p class="help">Preencha se você publica por uma equipe. Para uma conta pessoal, deixe em branco.</p><p class="form-error" id="vercel-error" role="alert"></p><div class="owner-form-actions"><button type="button" id="vercel-test">Testar conexão salva</button><button class="primary">Salvar conexão</button></div></form><div class="owner-session"><p>O domínio de cada projeto fica em Publicação; os pixels, em Rastreamento; o destino dos leads de cada página, no botão Leads do editor.</p><button type="button" id="vercel-disconnect">Desconectar</button></div></section>`;
   const billingPanel = document.createElement('section');
   billingPanel.id = 'panel-billing';
   billingPanel.setAttribute('role', 'tabpanel');
   billingPanel.setAttribute('aria-labelledby', 'tab-billing');
   billingPanel.hidden = true;
-  $('#owner-dialog')?.append(companyPanel, teamPanel, billingPanel);
+  $('#owner-dialog')?.append(companyPanel, teamPanel, integrationsPanel, billingPanel);
   const placeCompanyContent = (section = 'company') => {
     const content = $('#settings-company-content');
     if (!content) return;
     const destination = section === 'team' ? teamPanel : section === 'billing' ? billingPanel : companyPanel;
     if (content.parentElement !== destination) destination.append(content);
+    mostrarSecoesDaAba(content, section);
+    // Os dados da empresa só fazem sentido na aba da empresa.
+    const detalhes = $('.company-details');
+    if (detalhes) detalhes.hidden = section !== 'company';
+    const resumo = $('.settings-company-summary');
+    if (resumo) resumo.hidden = section !== 'company';
   };
   const companyName = $('#owner-company-name');
   const companyDetailsName = $('#company-details-name');
@@ -176,13 +208,8 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       nav.setAttribute('role', 'tablist');
       nav.setAttribute('aria-label', 'Áreas de configurações');
       nav.setAttribute('aria-orientation', 'horizontal');
-      const items = [
-        ['account', 'Preferências', 'tune'],
-        ['company', 'Empresa', 'corporate_fare'],
-        ['team', 'Equipe e acessos', 'group'],
-        ['billing', 'Plano e cobrança', 'credit_card'],
-      ];
-      for (const [key, text, icon] of items) {
+      for (const [key, text, icon] of ABAS_DA_CONTA) {
+        if (key === 'integrations' && !canManageIntegration()) continue;
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'settings-tab';
@@ -315,27 +342,22 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     });
   };
   function selectTab(requestedTab) {
-    const publicationVisible = requestedTab === 'vercel' && canManageIntegration();
     const faixaDeAbas = settingsContainer.querySelector?.('.settings-tabs') || document.querySelector('.settings-tabs') || settingsContainer;
     const tab = selectSettingsTab({ container: settingsContainer, tabList: faixaDeAbas, requestedTab, canManageIntegration: canManageIntegration() });
     updateSettingsSidebar(tab);
-    const publicationSettings = $('#account-publication-settings');
-    if (publicationSettings) publicationSettings.hidden = !publicationVisible;
-    $('#account-publication')?.setAttribute('aria-expanded', String(publicationVisible));
+    // Vale para tudo que está na página de configurações, inclusive o que é estático.
+    mostrarSecoesDaAba(settingsContainer, tab);
     if (['company', 'team', 'billing'].includes(tab)) {
       placeCompanyContent(tab);
       syncCompanyDetails();
       onCompanySettings();
     }
+    if (tab === 'integrations') refreshSettings().catch((erro) => toast(erro.message));
     const saveButton = $('#owner-save');
-    if (saveButton) saveButton.hidden = tab !== 'account';
+    if (saveButton) saveButton.hidden = !['account', 'integrations'].includes(tab);
   }
   function applyIntegrationAccess(requestedTab) {
-    const access = settingsAccess({ canManageIntegration: canManageIntegration(), requestedTab });
-    const publication = $('#account-publication');
-    if (publication) publication.hidden = !access.integration;
-    if (!access.integration) $('#account-publication-settings').hidden = true;
-    return { ...access, publication: access.integration && requestedTab === 'vercel' };
+    return settingsAccess({ canManageIntegration: canManageIntegration(), requestedTab });
   }
   async function refreshSettings() {
     const settings = await loadSettings();
@@ -355,7 +377,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     $('#vercel-disconnect').disabled = !configured;
     await onSettingsChanged(settings);
   }
-  async function openSettings(tab = 'company') {
+  async function openSettings(tab = 'account') {
     const request = settingsGuard.begin();
     try {
       session = await api('/session');
@@ -367,10 +389,9 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       form.elements.email.value = session.owner?.email || '';
       $('#account-error').textContent = '';
       $('#vercel-error').textContent = '';
-      const requestedTab = tab === 'account' ? 'company' : tab;
-      const access = applyIntegrationAccess(requestedTab);
+      const access = applyIntegrationAccess(tab);
       activateSettingsShell(access.tab);
-      selectTab(access.publication ? 'vercel' : access.tab);
+      selectTab(access.tab);
       if (!settingsGuard.isCurrent(request)) return;
       if (!dialog.open) dialog.showModal();
       (settingsSidebarTabs().find((button) => button.dataset.settingsSidebarTab === access.tab) || dialog.querySelector('h2'))?.focus();
@@ -390,13 +411,8 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   }
   $('#owner-save').onclick = () => {
     const selected = settingsSidebar?.querySelector('[data-settings-sidebar-tab][aria-selected="true"]')?.dataset.settingsSidebarTab;
-    if (selected !== 'account') return;
-    if (!$('#account-publication-settings').hidden) $('#vercel-form').requestSubmit();
-    else $('#account-form').requestSubmit();
-  };
-  $('#account-publication').onclick = () => {
-    selectTab('vercel');
-    $('#account-publication-settings-title')?.focus();
+    if (selected === 'integrations') $('#vercel-form').requestSubmit();
+    else if (selected === 'account') $('#account-form').requestSubmit();
   };
   $('#account-form').onsubmit = async (event) => {
     event.preventDefault();

@@ -219,7 +219,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
         render: ({ puck, id: _id, ...props }) => (
           <div ref={puck.dragRef} className={classesDoBloco(props)}>
             {/^[A-Za-z0-9_-]{16,32}$/.test(props.publicId ?? '')
-              ? <iframe className="alva-vsl-frame" src={`${window.location.origin}/embed/v/${props.publicId}`} title="VSL" allow="autoplay; fullscreen" style={{ pointerEvents: 'none' }} />
+              ? <iframe className="alva-vsl-frame" src={`${window.location.origin}/embed/v/${props.publicId}?previa=1`} title="VSL" allow="autoplay; fullscreen" style={{ pointerEvents: 'none' }} />
               : <Miolo type="vsl" props={props} />}
           </div>
         ),

@@ -52,3 +52,8 @@ test('quem volta à página já vê as seções que o vídeo revelou antes', () 
   assert.equal(guardado, '31');
   primeira.window.close();
 });
+
+test('a prévia da página embute o player sem medir: quem edita não é visitante', () => {
+  const html = documentoDaPagina(estado, { publicOrigin: 'https://studio.example.test', previa: true });
+  assert.match(html, /src="https:\/\/studio\.example\.test\/embed\/v\/abcdefghijklmnop\?previa=1"/);
+});

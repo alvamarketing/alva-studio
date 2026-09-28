@@ -8,6 +8,7 @@ import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
+import { abaDoAssunto, abrirAbaDoProjeto, montarConfiguracoesDoProjeto } from './projeto-configuracoes.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { renderFunis } from './funis-view.js';
 import { observarIcones } from './icones.js';
@@ -84,6 +85,7 @@ function setActiveNavigation(view) {
     leads: $('#nav-project-leads'),
     publication: $('#nav-project-publication'),
     agents: $('#nav-project-agents'),
+    projectSettings: $('#nav-project-settings'),
     settings: $('#app-settings'),
   };
   applyDashboardNavigation(Object.fromEntries(Object.entries(navigation).filter(([, element]) => element)), activeView);
@@ -97,6 +99,7 @@ function abrirView(view, options = {}) {
   if (view === 'funnels') return void action(abrirFunis)();
   if (view === 'agents') return void action(abrirAgentes)();
   if (view === 'publication') return void action(abrirPublicacao)();
+  if (view === 'projectSettings') return void action(() => abrirConfiguracoesDoProjeto(options))();
   return setDashboardView(view, options);
 }
 // Ao recarregar em #/vsl, a tela ainda não sabe se o envio de vídeo está ligado (isso vem
@@ -113,7 +116,7 @@ async function abrirVsl(options = {}) {
 }
 function sidebarContextFor(view, hasProject = false) {
   if (view === 'home') return 'studio';
-  return hasProject || ['project', 'pages', 'forms', 'funnels', 'vsl', 'analytics', 'tracking', 'agents', 'publication'].includes(view) ? 'project' : 'studio';
+  return hasProject || ['project', 'pages', 'forms', 'funnels', 'vsl', 'analytics', 'tracking', 'agents', 'publication', 'projectSettings'].includes(view) ? 'project' : 'studio';
 }
 function syncSidebarContext(view) {
   const sidebar = $('#studio-sidebar');
@@ -138,6 +141,8 @@ function syncSidebarContext(view) {
   const leads = $('#nav-project-leads');
   if (leads) leads.hidden = !hasProject || !studioShell?.can?.('submission.read');
   if (agents) agents.hidden = !hasProject || !canManageProject;
+  const configuracoes = $('#nav-project-settings');
+  if (configuracoes) configuracoes.hidden = !hasProject || !canManageProject;
 }
 function updateVslNavigation() {
   const videosFilter = $('[data-project-filter="videos"]');
@@ -177,6 +182,7 @@ function setDashboardView(view, { settingsTab = 'account', fromHistory = false }
     funnels: '#funnels-view',
     agents: '#agents-view',
     publication: '#publication-view',
+    projectSettings: '#project-settings-view',
   };
   if (view !== 'settings') ownerUI?.closeSettings({ notify: false });
   for (const [selector, escondida] of Object.entries(secoesEscondidas(sections, view))) $(selector).hidden = escondida;
@@ -415,6 +421,7 @@ function renderCompanyOverview(overview, { content = $('#company-content'), titl
     count.append(amount, caption);
     counts.append(count);
   }
+  details.dataset.settingsArea = 'company';
   details.append(detailsTitle, counts);
   const projects = document.createElement('section');
   projects.className = 'company-overview-section';
@@ -424,6 +431,7 @@ function renderCompanyOverview(overview, { content = $('#company-content'), titl
   projectsList.className = 'project-grid';
   if (!overview.projects.length) projectsList.append(emptyCard('Nenhum projeto disponível.', 'Os projetos autorizados aparecerão aqui.'));
   for (const project of overview.projects) projectsList.append(projectCard(project));
+  projects.dataset.settingsArea = 'company';
   projects.append(projectsTitle, projectsList);
   content.append(details, projects);
   if (overview.members) {
@@ -449,11 +457,13 @@ function renderCompanyOverview(overview, { content = $('#company-content'), titl
       item.append(identity, role);
       list.append(item);
     }
+    team.dataset.settingsArea = 'team';
     team.append(teamTitle, list);
     content.append(team);
   }
   const billingCard = document.createElement('section');
   billingCard.className = 'company-overview-section company-future';
+  billingCard.dataset.settingsArea = 'billing';
   const billingTitle = document.createElement('h2');
   billingTitle.textContent = 'Plano e cobrança';
   const billingText = document.createElement('p');
@@ -2218,15 +2228,25 @@ $('#new-project').onclick = () => {
   $('#new-project-dialog').showModal();
 };
 $('#project-create-action').onclick = () => $('#new-project').click();
-$('#project-settings-action').onclick = action(async () => {
+$('#project-settings-action').onclick = action(async () => abrirConfiguracoesDoProjeto());
+// Tudo que se configura no projeto mora numa tela só; `assunto` escolhe a aba para quem
+// chega de outra tela (o domínio, por exemplo, vem da Publicação).
+async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
   const projeto = dashboardState().currentProject;
   if (!projeto?.id) throw new Error('Escolha um projeto para configurar.');
+  montarConfiguracoesDoProjeto(document);
   const form = $('#project-settings-form');
-  form.elements.name.value = projeto.name || '';
-  form.elements.slug.value = projeto.slug || '';
-  $('#project-settings-error').textContent = '';
-  $('#project-settings-dialog').showModal();
-});
+  if (form) {
+    form.elements.name.value = projeto.name || '';
+    form.elements.slug.value = projeto.slug || '';
+  }
+  const erro = $('#project-settings-error');
+  if (erro) erro.textContent = '';
+  setDashboardView('projectSettings');
+  abrirAbaDoProjeto(abaDoAssunto(assunto), document);
+  // Os blocos movidos para cá continuam sendo pintados por quem sempre os pintou.
+  await Promise.all([renderProject().catch(() => {}), recarregarDestinos().catch(() => {})]);
+}
 $('#project-settings-form').onsubmit = action(async (event) => {
   event.preventDefault();
   const projectId = dashboardState().currentProject?.id;
@@ -2247,7 +2267,6 @@ $('#project-settings-form').onsubmit = action(async (event) => {
   button.disabled = true;
   try {
     await api('/projects/' + projectId, 'PUT', { name, slug });
-    $('#project-settings-dialog').close();
     await studioShell.initialize();
     await selectProject(projectId);
     toast('Projeto atualizado.');
