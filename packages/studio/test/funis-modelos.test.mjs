@@ -40,3 +40,13 @@ test('a aplicação vira um quiz com pergunta de qualificação', () => {
   const [captura] = capturasDoEstado(normalizarEstadoAlva(editorState)).forms;
   assert.ok(captura.fields.some((campo) => campo.type === 'single_choice' && campo.options.includes('Acima de R$ 500 mil')));
 });
+
+test('a miniatura do cartão desenha cada etapa na cor do grupo e cada seta', async () => {
+  const { miniaturaDoFunil } = await import('../public/funis-view.js');
+  const tripwire = modelosDeFunil.find((modelo) => modelo.id === 'funil-tripwire-slo');
+  const svg = miniaturaDoFunil(tripwire);
+  assert.equal((svg.match(/<rect /g) || []).length, tripwire.nos.length);
+  assert.equal((svg.match(/<line /g) || []).length, tripwire.setas.length);
+  assert.match(svg, /class="funil-mini-pagina"/);
+  assert.match(miniaturaDoFunil({ nos: [], setas: [] }), /<svg class="funil-mini"/, 'funil vazio não quebra');
+});
