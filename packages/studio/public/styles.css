@@ -226,7 +226,8 @@ textarea:disabled {
 .vsl-form summary { cursor: pointer; color: var(--alva-ink); font-size: var(--text-md); font-weight: 600; }
 .vsl-form details label { margin-top: 12px; }
 .vsl-form-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.vsl-preview { position: sticky; top: 24px; padding: 18px; background: var(--alva-white); border: 1px solid var(--alva-line); border-radius: var(--radius-lg); }
+.vsl-lateral { position: sticky; top: 24px; display: grid; gap: 20px; }
+.vsl-preview { padding: 18px; background: var(--alva-white); border: 1px solid var(--alva-line); border-radius: var(--radius-lg); }
 .vsl-preview-label { color: var(--alva-muted); font-size: var(--text-xs); letter-spacing: 1.4px; }
 .vsl-preview-screen { --vsl-preview-accent: #286eea; position: relative; display: grid; min-height: 0; aspect-ratio: 16 / 9; margin-top: 12px; padding: 24px; align-content: end; gap: 7px; overflow: hidden; color: var(--alva-white); background: linear-gradient(145deg, #16294c, var(--vsl-preview-accent)); border-radius: var(--radius-md); }
 .vsl-preview-screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .65; }
@@ -239,13 +240,13 @@ textarea:disabled {
 @media (max-width: 620px) {
   .vsl-list-row { grid-template-columns: 1fr; }
   .vsl-editor-layout { grid-template-columns: 1fr; }
-  .vsl-preview { position: static; order: -1; }
+  .vsl-lateral { position: static; order: -1; }
   .vsl-inline-fields { grid-template-columns: 1fr; }
   .vsl-form-actions { flex-direction: column; }
 }
 @media (min-width: 621px) and (max-width: 900px) {
   .vsl-editor-layout { grid-template-columns: 1fr; }
-  .vsl-preview { position: static; }
+  .vsl-lateral { position: static; }
   .vsl-preview-screen { max-width: 560px; }
 }
 #dashboard {

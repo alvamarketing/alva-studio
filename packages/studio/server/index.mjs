@@ -366,6 +366,7 @@ export function createApp({
     '/material-symbols-outlined.woff2': ['public/material-symbols-outlined.woff2', 'font/woff2'],
     '/templates.js': ['public/templates.js', 'text/javascript'],
     '/vsl-player.js': ['public/vsl-player.js', 'text/javascript'],
+    '/vsl-opcoes.js': ['public/vsl-opcoes.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],

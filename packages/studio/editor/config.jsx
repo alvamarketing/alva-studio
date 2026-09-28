@@ -60,6 +60,8 @@ const camposDaSecao = (enviarImagem) => ({
   alinhamento: { type: 'radio', label: 'Alinhar conteúdo', labelIcon: ICONE_DO_CAMPO.alinhamento, options: [{ label: 'Esquerda', value: 'esquerda' }, { label: 'Centro', value: 'centro' }] },
   respiro: escala('Espaço dentro da seção'),
   espacamento: escala('Espaço entre os blocos'),
+  // Com VSL na página: a seção só aparece quando o vídeo chega a este segundo.
+  revelarNoSegundo: { type: 'number', label: 'Mostrar só depois do segundo (VSL)', min: 1, max: 86400 },
   // Campo só funciona dentro de formulário, e seção só na página: dentro de outra seção
   // ela vira uma faixa espremida.
   [SLOT]: { type: 'slot', disallow: ['field', 'section', ...secoesProntas.map((pronta) => pronta.id)] },
@@ -210,7 +212,18 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       icon: bloco('icon', 'Ícone', { name: campoDeIcone('Ícone') }, { name: 'star' }),
       image: bloco('image', 'Imagem', { src: campoDeImagem('Imagem', enviarImagem), alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
       video: bloco('video', 'Vídeo (YouTube ou Vimeo)', { url: { type: 'text', label: 'Link do vídeo no YouTube ou no Vimeo' }, title: { type: 'text', label: 'Título do vídeo (para leitores de tela)' } }, { url: '', title: '' }),
-      vsl: bloco('vsl', 'VSL do Studio', { publicId: { type: 'select', label: 'VSL publicada', options: opcoesDeVsl } }, { publicId: '' }),
+      vsl: {
+        ...bloco('vsl', 'VSL do Studio', { publicId: { type: 'select', label: 'VSL publicada', options: opcoesDeVsl } }, { publicId: '' }),
+        // No canvas, a VSL escolhida já aparece tocando: o player do próprio Studio. O
+        // clique vai para o bloco (selecionar, arrastar), não para o vídeo.
+        render: ({ puck, id: _id, ...props }) => (
+          <div ref={puck.dragRef} className={classesDoBloco(props)}>
+            {/^[A-Za-z0-9_-]{16,32}$/.test(props.publicId ?? '')
+              ? <iframe className="alva-vsl-frame" src={`${window.location.origin}/embed/v/${props.publicId}`} title="VSL" allow="autoplay; fullscreen" style={{ pointerEvents: 'none' }} />
+              : <Miolo type="vsl" props={props} />}
+          </div>
+        ),
+      },
       form: {
         label: 'Formulário',
         inline: true,

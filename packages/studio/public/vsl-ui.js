@@ -1,4 +1,5 @@
 import { modeloDaCurva } from './vsl-retention-ui.js';
+import { normalizarOpcoesDaVsl } from './vsl-opcoes.js';
 import { estadoDoEnvio, mensagemDoEnvio, enviarArquivo } from './vsl-upload.js';
 
 export function vslStatusLabel(video = {}) {
@@ -21,9 +22,18 @@ export function normalizeCtaUrl(value) {
   return /^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(text) ? `https://${text}` : text;
 }
 
+// Os campos das opções do player se chamam `opcoes.<nome>` e viram o objeto `opcoes`.
+const OPCOES_MARCADAS = ['somInteligente', 'perguntarAoRetomar', 'pausarForaDaAba', 'travarAvanco', 'ocultarTempo'];
 export function parseVslFormValues(values = {}) {
+  const opcoes = {};
+  const resto = {};
+  for (const [chave, valor] of Object.entries(values)) {
+    if (chave.startsWith('opcoes.')) opcoes[chave.slice(7)] = valor;
+    else resto[chave] = valor;
+  }
   return {
-    ...values,
+    ...resto,
+    ...(Object.keys(opcoes).length ? { opcoes } : {}),
     ctaUrl: normalizeCtaUrl(values.ctaUrl),
     ctaSeconds: values.ctaSeconds === '' || values.ctaSeconds === null || values.ctaSeconds === undefined ? null : Number(values.ctaSeconds),
     autoplayMuted: values.autoplayMuted === true || values.autoplayMuted === 'on',
@@ -71,6 +81,8 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     const aspectRatio = field(target, 'aspectRatio').value || '16:9';
     meta.textContent = `${field(target, 'sourceType').value.toUpperCase()} · ${aspectRatio}`;
     screen.style.aspectRatio = aspectRatio.replace(':', ' / ');
+    const videoDaPrevia = document.querySelector('#vsl-preview-video');
+    if (videoDaPrevia) videoDaPrevia.style.aspectRatio = aspectRatio.replace(':', ' / ');
     const color = field(target, 'accentColor').value.trim();
     if (/^#[0-9a-f]{6}$/i.test(color)) screen.style.setProperty('--vsl-preview-accent', color);
     playback.textContent = `${field(target, 'autoplayMuted').checked ? 'Sem som' : 'Som ativado'} · ${field(target, 'resumeEnabled').checked ? 'Retomada ativada' : 'Retomada desativada'}`;
@@ -94,6 +106,9 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     hlsDaPrevia?.destroy?.();
     hlsDaPrevia = null;
     video.hidden = !endereco;
+    // Com o vídeo de verdade na tela, o cartão-resumo sai: dois quadros pareciam dois vídeos.
+    const resumo = document.querySelector('.vsl-preview-screen');
+    if (resumo) resumo.hidden = Boolean(endereco);
     if (!endereco) { video.removeAttribute('src'); video.load(); return; }
     if (tipo !== 'hls' || video.canPlayType('application/vnd.apple.mpegurl')) { video.src = endereco; return; }
     carregarHls().then((Hls) => {
@@ -219,6 +234,12 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
     for (const name of ['name', 'sourceUrl', 'sourceType', 'posterUrl', 'captionsUrl', 'accentColor', 'aspectRatio', 'ctaText', 'ctaUrl', 'ctaSeconds']) field(target, name).value = video?.[name] ?? ({ accentColor: '#286eea', aspectRatio: '16:9', sourceType: 'mp4' }[name] ?? '');
     field(target, 'autoplayMuted').checked = video?.autoplayMuted ?? true;
     field(target, 'resumeEnabled').checked = video?.resumeEnabled ?? true;
+    const opcoes = normalizarOpcoesDaVsl(video?.opcoes);
+    for (const [nome, valor] of Object.entries(opcoes)) {
+      const campo = field(target, `opcoes.${nome}`);
+      if (!campo) continue;
+      if (campo.type === 'checkbox') campo.checked = valor; else campo.value = valor;
+    }
     updatePreview();
     for (const control of target.querySelectorAll('input, select, textarea')) control.disabled = !policy.canEdit;
     const submit = target.querySelector('[type="submit"]');
@@ -258,7 +279,8 @@ export function createVslUI({ api, shell, getShell, toast = () => {} }) {
   const collect = () => {
     const target = form();
     const values = Object.fromEntries(new FormData(target));
-    return parseVslFormValues({ ...values, autoplayMuted: field(target, 'autoplayMuted').checked, resumeEnabled: field(target, 'resumeEnabled').checked });
+    const marcadas = Object.fromEntries(OPCOES_MARCADAS.map((nome) => [`opcoes.${nome}`, Boolean(field(target, `opcoes.${nome}`)?.checked)]));
+    return parseVslFormValues({ ...values, ...marcadas, autoplayMuted: field(target, 'autoplayMuted').checked, resumeEnabled: field(target, 'resumeEnabled').checked });
   };
   if (typeof document !== 'undefined' && form()) {
     form().addEventListener('input', updatePreview);

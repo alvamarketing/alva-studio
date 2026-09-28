@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { withTransaction } from '../db/postgres.mjs';
 import { hasCapability } from '../domain/access.mjs';
+import { normalizarOpcoesDaVsl } from '../../public/vsl-opcoes.js';
 
 function fail(message, statusCode = 400) {
   const error = new Error(message);
@@ -101,6 +102,8 @@ function normalizedInput(input = {}, current = {}) {
     ctaUrl,
     ctaSeconds: seconds,
     milestones: milestones(input.milestones === undefined ? current.milestones : input.milestones),
+    // Opções mandadas pela metade completam as que já estavam.
+    opcoes: normalizarOpcoesDaVsl(input.opcoes === undefined ? current.opcoes : { ...(current.opcoes ?? {}), ...input.opcoes }),
   };
 }
 
@@ -127,6 +130,7 @@ function record(row) {
     ctaUrl: row.cta_url,
     ctaSeconds: row.cta_seconds,
     milestones: row.milestones ?? [],
+    opcoes: normalizarOpcoesDaVsl(row.opcoes),
     lockVersion: row.lock_version,
     publishedVersionId: row.published_version_id,
     publishedLockVersion: row.published_lock_version,
@@ -184,12 +188,12 @@ export class VideoRepository {
     const { rows } = await this.database.query(
       `INSERT INTO videos
         (company_id, project_id, public_id, name, source_url, source_type, poster_url, captions_url,
-         accent_color, aspect_ratio, autoplay_muted, resume_enabled, cta_text, cta_url, cta_seconds, milestones, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17)
+         accent_color, aspect_ratio, autoplay_muted, resume_enabled, cta_text, cta_url, cta_seconds, milestones, created_by, opcoes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb)
        RETURNING *`,
       [input.companyId, input.projectId, id, next.name, next.sourceUrl, next.sourceType, next.posterUrl, next.captionsUrl,
         next.accentColor, next.aspectRatio, next.autoplayMuted, next.resumeEnabled, next.ctaText, next.ctaUrl, next.ctaSeconds,
-        JSON.stringify(next.milestones), input.actorId],
+        JSON.stringify(next.milestones), input.actorId, JSON.stringify(next.opcoes)],
     );
     return record(rows[0]);
   }
@@ -221,11 +225,11 @@ export class VideoRepository {
       const { rows } = await client.query(
         `UPDATE videos SET name=$4, source_url=$5, source_type=$6, poster_url=$7, captions_url=$8,
          accent_color=$9, aspect_ratio=$10, autoplay_muted=$11, resume_enabled=$12, cta_text=$13, cta_url=$14,
-         cta_seconds=$15, milestones=$16::jsonb, lock_version=lock_version+1, updated_at=now()
+         cta_seconds=$15, milestones=$16::jsonb, opcoes=$18::jsonb, lock_version=lock_version+1, updated_at=now()
          WHERE company_id=$1 AND project_id=$2 AND id=$3 AND lock_version=$17 AND deleted_at IS NULL RETURNING *`,
         [companyId, projectId, videoId, next.name, next.sourceUrl, next.sourceType, next.posterUrl, next.captionsUrl,
           next.accentColor, next.aspectRatio, next.autoplayMuted, next.resumeEnabled, next.ctaText, next.ctaUrl, next.ctaSeconds,
-          JSON.stringify(next.milestones), lockVersion],
+          JSON.stringify(next.milestones), lockVersion, JSON.stringify(next.opcoes)],
       );
       if (!rows.length) throw fail('A VSL mudou em outra aba. Reabra antes de salvar.', 409);
       return record({ ...rows[0], version_id: current.version_id, version_number: current.version_number });
@@ -242,11 +246,12 @@ export class VideoRepository {
       const { rows } = await client.query(
         `INSERT INTO video_versions
          (company_id, project_id, video_id, version_number, public_id, name, source_url, source_type, poster_url, captions_url,
-          accent_color, aspect_ratio, autoplay_muted, resume_enabled, cta_text, cta_url, cta_seconds, milestones, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19) RETURNING *`,
+          accent_color, aspect_ratio, autoplay_muted, resume_enabled, cta_text, cta_url, cta_seconds, milestones, created_by, opcoes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20::jsonb) RETURNING *`,
         [companyId, projectId, videoId, versionNumber, current.public_id, current.name, current.source_url, current.source_type,
           current.poster_url, current.captions_url, current.accent_color, current.aspect_ratio, current.autoplay_muted,
-          current.resume_enabled, current.cta_text, current.cta_url, current.cta_seconds, JSON.stringify(current.milestones), actorId],
+          current.resume_enabled, current.cta_text, current.cta_url, current.cta_seconds, JSON.stringify(current.milestones), actorId,
+          JSON.stringify(normalizarOpcoesDaVsl(current.opcoes))],
       );
       await client.query(
         'UPDATE videos SET published_version_id=$4, published_lock_version=$5, updated_at=now() WHERE company_id=$1 AND project_id=$2 AND id=$3',
@@ -265,6 +270,7 @@ export class VideoRepository {
       posterUrl: source.poster_url, captionsUrl: source.captions_url, accentColor: source.accent_color,
       aspectRatio: source.aspect_ratio, autoplayMuted: source.autoplay_muted, resumeEnabled: source.resume_enabled,
       ctaText: source.cta_text, ctaUrl: source.cta_url, ctaSeconds: source.cta_seconds, milestones: source.milestones,
+      opcoes: source.opcoes,
     };
     return this.createVideo(input);
   }

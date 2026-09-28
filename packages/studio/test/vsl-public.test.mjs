@@ -64,7 +64,7 @@ test('embed permite ancestrais HTTPS, mantém proporção e inclui allow autopla
   const html = renderVslPage({ ...video, aspectRatio: '9:16' }, { embed: true });
   assert.match(html, /allow="autoplay"/);
   assert.match(html, /aspect-ratio:9\/16/);
-  assert.match(vslContentSecurityPolicy(video.sourceUrl, { embed: true, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl }), /frame-ancestors https:/);
+  assert.match(vslContentSecurityPolicy(video.sourceUrl, { embed: true, posterUrl: video.posterUrl, captionsUrl: video.captionsUrl }), /frame-ancestors 'self' https:/);
 });
 
 test('player público reorganiza controles e quebra mensagens em telas estreitas', () => {
@@ -110,4 +110,21 @@ test('rotas HTTP servem somente versão publicada e o hls.js local', async (t) =
   assert.equal((await fetch(`${disabledBase}/embed/v/${created.publicId}`)).status, 404);
   await new Promise((resolve) => disabled.close(resolve));
   await database.close();
+});
+
+test('a página pública leva as opções do player e o visual do aviso de som e da retomada', () => {
+  const html = renderVslPage({ ...video, opcoes: { travarAvanco: true, ctaSubtexto: 'Só hoje' } }, { publicOrigin: 'https://studio.example.test' });
+  const config = JSON.parse(html.match(/data-vsl-config="([^"]*)"/)[1].replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+  assert.equal(config.opcoes.travarAvanco, true);
+  assert.equal(config.opcoes.ctaSubtexto, 'Só hoje');
+  assert.equal(config.opcoes.somInteligente, true);
+  assert.match(html, /\.vsl-som\{/);
+  assert.match(html, /\.vsl-retomar\{/);
+});
+
+test('incorporada, a VSL ocupa o quadro todo: sem título, sem margem e aceita a própria origem', () => {
+  const html = renderVslPage(video, { embed: true, publicOrigin: 'https://studio.example.test' });
+  assert.doesNotMatch(html, /class="vsl-heading"/);
+  assert.match(html, /body\{[^}]*padding:0/);
+  assert.match(vslContentSecurityPolicy(video.sourceUrl, { embed: true }), /frame-ancestors 'self' https:/);
 });

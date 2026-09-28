@@ -234,6 +234,23 @@ const refresh = () => fetch(endpoint, { credentials: 'same-origin' })
     document.body.appendChild(banner(state));
   })
   .catch(() => document.body.appendChild(banner('pending')));
+// A VSL da página (o script de pagina-alva.js repassa o que o player conta) vira evento
+// personalizado no pixel, com o nome interno — os da VSL não têm nome padrão. Só com
+// consentimento no momento; antes dele, o marco se perde, como qualquer medição.
+// - https://developers.facebook.com/docs/meta-pixel/implementation/conversion-tracking#custom-events
+// - https://ads.tiktok.com/help/article/custom-events (ttq.track('nome', { content_id }))
+const EVENTOS_DA_VSL = { inicio: 'vsl_start', marco: 'vsl_progress', fim: 'vsl_complete', cta: 'vsl_cta_click' };
+if (window.addEventListener) window.addEventListener('alva:vsl', (evento) => {
+  const dados = (evento && evento.detail) || {};
+  const nome = EVENTOS_DA_VSL[dados.tipo];
+  if (!nome || !carregado || !permitido) return;
+  const publicId = String(dados.publicId || '').slice(0, 40);
+  const valor = Number.isInteger(dados.valor) ? { value: dados.valor } : {};
+  cfg.providers.forEach((item) => {
+    if (item.provider === 'meta') window.fbq('trackCustom', nome, { ...valor, content_ids: [publicId] });
+    if (item.provider === 'tiktok') window.ttq.track(nome, { ...valor, content_id: publicId });
+  });
+});
 window.alvaRuntime = { publicationId: cfg.publicationId, conversao, refresh };
 const aviso = avisada();
 if (aviso) conversao(aviso[0], aviso[1]);

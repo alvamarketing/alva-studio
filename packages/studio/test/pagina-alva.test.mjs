@@ -116,3 +116,12 @@ test('todo nó ganha identidade estável e única', () => {
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(normalizarEstadoAlva(estado), estado, 'normalizar de novo não muda nada');
 });
+
+test('na prévia, o bloco de VSL já mostra o player; fora dela fica o marcador que a publicação troca', () => {
+  const estado = normalizarEstadoAlva({ formato: FORMATO_ALVA, root: { title: 'P' }, content: [{ type: 'vsl', props: { id: 'v1', publicId: 'abcdefghijklmnop' } }] });
+  const previa = documentoDaPagina(estado, { publicOrigin: 'https://studio.example.test', previa: true });
+  assert.match(previa, /<iframe class="alva-vsl-frame" src="https:\/\/studio\.example\.test\/embed\/v\/abcdefghijklmnop"/);
+  const publicada = documentoDaPagina(estado, { publicOrigin: 'https://studio.example.test' });
+  assert.match(publicada, /data-alva-vsl="abcdefghijklmnop"/);
+  assert.doesNotMatch(publicada, /<iframe/);
+});

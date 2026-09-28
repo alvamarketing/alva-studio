@@ -117,3 +117,32 @@ test('repositório exige video.read para listar e detalhar VSL', async (t) => {
     await database.close();
   }
 });
+
+test('opções do player vão da edição para a versão publicada e para a leitura pública', async (t) => {
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  const seeded = await seed(database, 'opcoes');
+  const repository = new VideoRepository(database);
+  try {
+    const created = await repository.createVideo(input(seeded));
+    assert.equal(created.opcoes.somInteligente, true);
+    assert.equal(created.opcoes.travarAvanco, false);
+    await assert.rejects(() => repository.updateVideo({ ...input(seeded), videoId: created.id, lockVersion: 0, opcoes: { ctaCor: 'azul' } }), /cor/i);
+    const updated = await repository.updateVideo({ ...input(seeded), videoId: created.id, lockVersion: 0, opcoes: { travarAvanco: true, ctaSubtexto: 'Só hoje' } });
+    assert.equal(updated.opcoes.travarAvanco, true);
+    assert.equal(updated.opcoes.ctaSubtexto, 'Só hoje');
+    // Salvar sem mandar opções não apaga as que já estavam.
+    const kept = await repository.updateVideo({ ...input(seeded), videoId: created.id, lockVersion: 1, name: 'Outro nome' });
+    assert.equal(kept.opcoes.travarAvanco, true);
+    await repository.publishVideo({ ...input(seeded), videoId: created.id, lockVersion: 2 });
+    await repository.updateVideo({ ...input(seeded), videoId: created.id, lockVersion: 2, opcoes: { travarAvanco: false } });
+    const publico = await repository.getPublicVideo(created.publicId);
+    assert.equal(publico.opcoes.travarAvanco, true, 'a leitura pública é a da versão publicada');
+    const copia = await repository.duplicateVideo({ ...input(seeded), videoId: created.id });
+    assert.equal(copia.opcoes.travarAvanco, false);
+    assert.equal(copia.opcoes.ctaSubtexto, 'Só hoje');
+  } finally {
+    await database.close();
+  }
+});

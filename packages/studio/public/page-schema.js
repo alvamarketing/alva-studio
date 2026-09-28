@@ -84,6 +84,12 @@ export const classesDoBloco = (bruto = {}) => {
   return `alva-bloco${LARGURAS[props.largura] ?? ''}${ALINHAMENTOS[props.alinhamento] ?? ''}${topo}${base}`;
 };
 export const movimentoDoBloco = (bruto = {}) => { const props = ajustes(bruto); return MOVIMENTOS.includes(props.movimento) ? props.movimento : ''; };
+// Seção que só aparece quando a VSL da página chega ao segundo escolhido (o preço, a
+// oferta). O script da página (pagina-alva.js) é quem revela.
+export const atributoDeRevelar = (props = {}) => {
+  const segundo = Number(props.revelarNoSegundo);
+  return Number.isInteger(segundo) && segundo >= 1 && segundo <= 86400 ? ` data-alva-revelar="${segundo}"` : '';
+};
 const atributoDeMovimento = (props) => (movimentoDoBloco(props) ? ` data-alva-motion="${movimentoDoBloco(props)}"` : '');
 
 // Degradê: duas cores e uma direção.
@@ -136,7 +142,7 @@ const ELEMENTOS = {
   section: {
     render: (node, desenharFilhos) => {
       const estilo = estiloDaSecao(node.props);
-      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeMovimento(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
+      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeMovimento(node.props)}${atributoDeRevelar(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
     },
   },
   // A Linha: os blocos dentro dela dividem o espaço em partes iguais — soltar o segundo já

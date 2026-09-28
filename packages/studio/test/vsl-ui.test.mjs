@@ -79,3 +79,12 @@ test('publicação da VSL depende de deployment.publish separadamente do CRUD', 
   assert.deepEqual(vslUiAccessPolicy({ hasVideo: true, can: () => true }), { canEdit: true, canPublish: true });
   assert.deepEqual(vslUiAccessPolicy({ hasVideo: false, can: () => true }), { canEdit: true, canPublish: false });
 });
+
+test('o formulário junta as opções do player num objeto só', () => {
+  const valores = parseVslFormValues({
+    name: 'VSL', 'opcoes.textoDoSom': 'Clique para ouvir', 'opcoes.ctaCor': '#ff0000', 'opcoes.ctaSubtexto': 'Só hoje',
+    'opcoes.somInteligente': true, 'opcoes.travarAvanco': false, 'opcoes.ocultarTempo': true,
+  });
+  assert.deepEqual(valores.opcoes, { textoDoSom: 'Clique para ouvir', ctaCor: '#ff0000', ctaSubtexto: 'Só hoje', somInteligente: true, travarAvanco: false, ocultarTempo: true });
+  assert.equal(Object.keys(valores).some((chave) => chave.startsWith('opcoes.')), false);
+});

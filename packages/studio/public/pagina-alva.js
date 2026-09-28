@@ -45,6 +45,31 @@ export function normalizarEstadoAlva(estado, uuid = novoId) {
 
 export const ehQuiz = (estado) => estado?.root?.tipo === 'quiz';
 
+// A publicação troca o marcador da VSL pelo player; na prévia, a troca é feita aqui, com o
+// player do próprio Studio. Sem isso, a prévia mostrava só a palavra "VSL".
+const MARCADOR_DE_VSL = /<div class="alva-vsl" data-alva-vsl="([A-Za-z0-9_-]{16,32})">[\s\S]*?<\/div>/g;
+function vslNaPrevia(html, origem) {
+  if (!/^https?:\/\/[^/\s"]+$/.test(origem)) return html;
+  return html.replace(MARCADOR_DE_VSL, (_, publicId) => `<iframe class="alva-vsl-frame" src="${origem}/embed/v/${publicId}" title="VSL" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`);
+}
+
+// A página conversa com o player da VSL (que mora no Studio, num iframe): o segundo do vídeo
+// revela as seções marcadas, o CTA com caminho relativo navega a página, e início, marcos,
+// fim e clique viram o evento `alva:vsl`, que o carregador do pixel escuta. Só vale mensagem
+// que venha de um iframe de VSL desta página. O maior segundo visto fica guardado por
+// endereço: quem volta já encontra a oferta aberta.
+const CSS_DE_REVELAR = '[data-alva-revelar]:not(.alva-revelada){display:none!important}.alva-revelada{animation:alva-fade-up .6s both}@media(prefers-reduced-motion:reduce){.alva-revelada{animation:none}}';
+const SCRIPT_DA_VSL = `(()=>{const chave='alva-vsl-revelado:'+location.pathname;let visto=0;try{visto=Number(localStorage.getItem(chave))||0}catch(e){}`
+  + `const revelar=(s)=>document.querySelectorAll('[data-alva-revelar]').forEach((el)=>{if(Number(el.getAttribute('data-alva-revelar'))<=s)el.classList.add('alva-revelada')});`
+  + `if(visto>0)revelar(visto);`
+  + `const doPlayer=(fonte)=>Array.from(document.querySelectorAll('iframe.alva-vsl-frame')).some((q)=>q.contentWindow===fonte);`
+  + `addEventListener('message',(e)=>{const d=e.data;if(!d||d.alvaVsl!==1||!e.source||!doPlayer(e.source))return;`
+  + `if(d.tipo==='tempo'){const s=Math.floor(Number(d.segundos)||0);revelar(s);if(s>visto){visto=s;try{localStorage.setItem(chave,String(s))}catch(e){}}return}`
+  + `if(d.tipo==='abrir'){const c=String(d.caminho||'');if(c.startsWith('/')&&!c.startsWith('//'))location.href=c;return}`
+  + `if(!['inicio','marco','fim','cta'].includes(d.tipo))return;`
+  + `const detail={tipo:d.tipo,publicId:String(d.publicId||'').slice(0,40)};if(Number.isInteger(d.valor))detail.valor=d.valor;`
+  + `dispatchEvent(new CustomEvent('alva:vsl',{detail}))})})();`;
+
 export function documentoDaPagina(estado, { publicOrigin = '', previa = false } = {}) {
   const limpo = normalizarEstadoAlva(estado, () => { throw new Error('Estado sem identificadores: normalize antes de desenhar.'); });
   const quiz = ehQuiz(limpo);
@@ -57,14 +82,17 @@ export function documentoDaPagina(estado, { publicOrigin = '', previa = false } 
   // O quiz: todas as etapas dentro de uma captura (o runtime mostra uma por vez e envia no
   // fim). O script vai com o marcador de nonce que a publicação troca pelo da CSP — sem
   // ele, a página publicada bloquearia o próprio quiz.
+  const miolo = renderTree(limpo.content);
+  const conversaComVsl = /data-alva-revelar=|class="alva-vsl"/.test(miolo);
+  const scriptDaVsl = conversaComVsl ? `<script nonce="__ALVA_RUNTIME_NONCE__">${SCRIPT_DA_VSL}</script>` : '';
   const corpo = quiz
-    ? `<body data-alva-quiz="true" data-alva-quiz-voltar="true">${topo}<main class="alva-pagina"><form class="alva-quiz" data-alva-capture-id="${escapeHtml(limpo.root.captureId)}" action="#" method="post" novalidate>${renderTree(limpo.content)}</form></main>`
-      + `<script nonce="__ALVA_RUNTIME_NONCE__">${quizRuntimeScript({ previa })}</script></body>`
-    : `<body><main class="alva-pagina">${renderTree(limpo.content)}</main></body>`;
+    ? `<body data-alva-quiz="true" data-alva-quiz-voltar="true">${topo}<main class="alva-pagina"><form class="alva-quiz" data-alva-capture-id="${escapeHtml(limpo.root.captureId)}" action="#" method="post" novalidate>${previa ? vslNaPrevia(miolo, publicOrigin) : miolo}</form></main>`
+      + `<script nonce="__ALVA_RUNTIME_NONCE__">${quizRuntimeScript({ previa })}</script>${scriptDaVsl}</body>`
+    : `<body><main class="alva-pagina">${previa ? vslNaPrevia(miolo, publicOrigin) : miolo}</main>${scriptDaVsl}</body>`;
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">'
-    + `<title>${escapeHtml(limpo.root.title)}</title><style>${folhas}</style></head>`
+    + `<title>${escapeHtml(limpo.root.title)}</title><style>${folhas}${conversaComVsl ? CSS_DE_REVELAR : ''}</style></head>`
     + `${corpo}</html>`;
 }
 
