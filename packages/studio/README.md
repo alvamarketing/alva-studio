@@ -1,6 +1,6 @@
 # Alva Studio
 
-Construtor visual de landing pages e formulários dinâmicos da Alva Marketing, criado sobre o GrapesJS 0.23.6. A fundação SaaS usa PostgreSQL para separar empresas, membros, projetos, páginas, formulários, respostas e sessões. O logo e a identidade visual atuais do Studio são preservados.
+Construtor visual de landing pages, quizzes e funis da Alva Marketing. O editor é o Puck (React, confinado ao editor); a página publicada é HTML desenhado pelo servidor a partir do esquema `alva/1`. O editor antigo (GrapesJS) saiu em 28/09/2026. A fundação SaaS usa PostgreSQL para separar empresas, membros, projetos, páginas, formulários, respostas e sessões. O logo e a identidade visual atuais do Studio são preservados.
 
 ## Dois modos durante a transição
 
@@ -33,7 +33,7 @@ Em produção, `/api/setup` só aceita requisições feitas do próprio servidor
 - API que devolve `404` para recursos de outra empresa e exige capacidade para escrita, respostas e administração.
 - Importação local transacional, com checksum e repetição segura.
 
-O documento do GrapesJS agora é chamado `editorState` na API SaaS e `editor_state` no banco. Ele não deve ser confundido com um **Projeto do Studio** nem com um **Projeto da Vercel**.
+O estado do editor (esquema `alva/1`) é chamado `editorState` na API SaaS e `editor_state` no banco. Ele não deve ser confundido com um **Projeto do Studio** nem com um **Projeto da Vercel**.
 
 ## Editor e formulários existentes
 

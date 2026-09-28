@@ -1,14 +1,16 @@
 # public
 
 - `index.html`: estrutura da aplicação.
-- `app.js`: interações e editor.
+- `app.js`: interações do painel (o editor abre em `editor.html`).
 - `save-cycle.js`: esgotamento das alterações pendentes antes de sair.
 - `templates.js`: modelo inicial e blocos.
 - `styles.css`: aparência do painel.
 - `vsl-player.js` e `vsl-ui.js`: runtime acessível do player público e tela de configuração de VSLs.
 - `tracker.js`: tracker interno de primeira parte, sem cookie, sem PII e com allowlist de UTMs, click IDs e eventos estruturados.
 
-- `editor-shell.js` e `editor-shell.css`: editor guiado com blocos e controles contextuais.
+- `editor.html` + `../editor/*.jsx` (bundle em `build/editor.js`): editor de landing e quiz (Puck), no esquema do Alva.
+- `page-schema.js`, `pagina-alva.js`, `puck-conversao.js`: o esquema `alva/1`, o documento publicado e a ponte com o Puck.
+- `funil.html` + `../editor/funil.jsx` (bundle em `build/funil.js`), `funil.js`, `funis-etapas.js`, `funis-modelos.js`, `funis-view.js`: a aba Funis (canvas com React Flow, modelos e páginas por etapa).
 - `owner.js` e `owner.css`: acesso do dono e configurações do aplicativo.
 - `templates.js`: catálogo de modelos, blocos de ícone e gráficos, movimentos e aparência independente dos formulários.
 - `ui-preferences.js`: preferências locais de aparência e largura do menu.
