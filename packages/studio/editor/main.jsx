@@ -2,7 +2,7 @@
 //
 // Abre a página pela API, edita o esquema e salva o esquema — o HTML publicado quem
 // desenha é o servidor. React mora só aqui: a página publicada é HTML puro.
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Puck, createUsePuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
@@ -46,7 +46,7 @@ function IframeComFolhas({ children, document: doc }) {
   return <>{children}</>;
 }
 
-function Acoes({ pagina, aoSalvar, aviso }) {
+function Acoes({ pagina, aoSalvar, aviso, pendente }) {
   const dados = usePuck((estado) => estado.appState.data);
   const [ocupado, setOcupado] = useState(false);
   const executar = (tarefa) => async () => {
@@ -55,7 +55,11 @@ function Acoes({ pagina, aoSalvar, aviso }) {
   };
   return (
     <>
-      <button type="button" className="alva-acao" onClick={() => { location.href = '/#/paginas'; }}>
+      <button type="button" className="alva-acao" onClick={() => {
+        if (pendente.current && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
+        pendente.current = false;
+        location.href = '/#/paginas';
+      }}>
         <ArrowLeft size={16} aria-hidden="true" /> Voltar
       </button>
       <button type="button" className="alva-acao" onClick={() => {
@@ -87,6 +91,14 @@ function Editor() {
   const [config, setConfig] = useState(null);
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
+  // O que está salvo, para saber se há alteração a perder ao sair.
+  const salvo = useRef('');
+  const pendente = useRef(false);
+  useEffect(() => {
+    const aoSair = (evento) => { if (pendente.current) evento.preventDefault(); };
+    addEventListener('beforeunload', aoSair);
+    return () => removeEventListener('beforeunload', aoSair);
+  }, []);
   useEffect(() => {
     if (!paginaId) { setErro('Abra o editor a partir da lista de páginas.'); return; }
     (async () => {
@@ -102,12 +114,15 @@ function Editor() {
         leitor.readAsDataURL(arquivo);
       });
       setConfig(criarConfig({ vsls: (Array.isArray(videos) ? videos : []).filter((video) => video.publishedVersionId), enviarImagem }));
+      salvo.current = JSON.stringify(puckParaAlva(alvaParaPuck(aberta.editorState)));
       setPagina(aberta);
     })().catch((falha) => setErro(falha.message));
   }, []);
   const aviso = (texto) => { setMensagem(texto); setTimeout(() => setMensagem(''), 4000); };
   const aoSalvar = async (dados) => {
     const salva = await api(`/pages/${pagina.id}`, 'PUT', { revision: pagina.revision, editorState: puckParaAlva(dados) });
+    salvo.current = JSON.stringify(puckParaAlva(dados));
+    pendente.current = false;
     setPagina(salva);
     aviso('Página salva.');
     return salva;
@@ -123,9 +138,10 @@ function Editor() {
         dictionary={dicionario}
         viewports={larguras}
         onPublish={aoSalvar}
+        onChange={(dados) => { pendente.current = JSON.stringify(puckParaAlva(dados)) !== salvo.current; }}
         overrides={{
           iframe: IframeComFolhas,
-          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aviso={aviso} />,
+          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aviso={aviso} pendente={pendente} />,
           drawerItem: ({ name }) => <ItemDaBiblioteca name={name} rotulo={config.components[name]?.label} />,
         }}
       />
