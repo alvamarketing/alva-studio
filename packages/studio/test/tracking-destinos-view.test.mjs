@@ -154,7 +154,7 @@ test('o bloco de destinos explica que prévia e produção têm credenciais sepa
 // A Biblioteca visual é a seção que rege esta tela, já que o wireframe não a desenha:
 // nada de cor, raio ou tamanho inventado aqui.
 test('o formulário usa apenas tokens que já existem', () => {
-  const regra = css.match(/\.tracking-view \.provider-form input \{[^}]*\}/)?.[0] ?? '';
+  const regra = css.match(/\.tracking-view \.provider-form input[^{]*\{[^}]*\}/)?.[0] ?? '';
   assert.notEqual(regra, '', 'a regra do campo precisa existir');
   assert.doesNotMatch(regra, /#[0-9a-fA-F]{3,8}\b/, 'cor literal no lugar de token');
   for (const token of ['var(--alva-line)', 'var(--alva-ink)', 'var(--radius-sm)', 'var(--text-sm)']) {

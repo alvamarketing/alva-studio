@@ -15,10 +15,11 @@ export const ABAS_DO_PROJETO = [
 const ASSUNTOS = { dominio: 'publicacao', vercel: 'publicacao', publicacao: 'publicacao', pixel: 'rastreamento', rastreamento: 'rastreamento' };
 export const abaDoAssunto = (assunto) => ASSUNTOS[String(assunto ?? '')] ?? 'geral';
 
+// A explicação da aba só existe onde os cartões não a trazem: repetida, vira ruído.
 const AJUDA = {
-  geral: 'Nome e endereço deste projeto.',
-  publicacao: 'Onde este projeto é publicado: o projeto na Vercel e o domínio dele. O acesso à Vercel é da conta e fica em Configurações · Integrações.',
-  rastreamento: 'Para onde as conversões deste projeto são entregues.',
+  geral: '',
+  publicacao: 'O acesso à Vercel é da conta e fica em Configurações · Integrações.',
+  rastreamento: '',
 };
 
 function painel(doc, chave) {
@@ -27,21 +28,37 @@ function painel(doc, chave) {
   secao.className = 'project-settings-panel';
   secao.setAttribute('role', 'tabpanel');
   secao.setAttribute('aria-labelledby', `project-settings-tab-${chave}`);
-  const ajuda = doc.createElement('p');
-  ajuda.className = 'helper';
-  ajuda.textContent = AJUDA[chave] ?? '';
-  secao.append(ajuda);
+  if (AJUDA[chave]) {
+    const ajuda = doc.createElement('p');
+    ajuda.className = 'helper';
+    ajuda.textContent = AJUDA[chave];
+    secao.append(ajuda);
+  }
   return secao;
+}
+
+// O contrato visual (wireframe, "Empresa e equipe") monta configuração em cartões:
+// `.surface` com `.surface-head`. Um bloco de relatório (`.page-block`, separado por
+// hairline) é outra gramática — a das telas de Analytics e Rastreamento.
+function cartao(doc, no) {
+  no.classList.remove('page-block');
+  no.classList.add('surface');
+  const cabecalho = no.querySelector(':scope > .block-head');
+  if (cabecalho) cabecalho.classList.add('surface-head');
+  return no;
 }
 
 // Um "details" dentro das configurações não tem sentido: aqui já é o lugar de configurar.
 function abrirDetails(doc, no) {
   if (!no || no.tagName !== 'DETAILS') return no;
   const secao = doc.createElement('section');
-  secao.className = 'page-block';
+  secao.className = 'surface';
+  const cabecalho = doc.createElement('div');
+  cabecalho.className = 'surface-head';
   const titulo = doc.createElement('h2');
   titulo.textContent = no.querySelector('summary')?.textContent ?? '';
-  secao.append(titulo);
+  cabecalho.append(titulo);
+  secao.append(cabecalho);
   for (const filho of [...no.children]) if (filho.tagName !== 'SUMMARY') secao.append(filho);
   no.remove();
   return secao;
@@ -75,8 +92,15 @@ export function montarConfiguracoesDoProjeto(doc = document) {
   const formDoProjeto = doc.querySelector('#project-settings-form');
   if (formDoProjeto && !paineis.get('geral').contains(formDoProjeto)) {
     const bloco = doc.createElement('section');
-    bloco.className = 'page-block';
-    bloco.append(formDoProjeto);
+    bloco.className = 'surface';
+    const cabecalho = doc.createElement('div');
+    cabecalho.className = 'surface-head';
+    const titulo = doc.createElement('h2');
+    titulo.textContent = 'Nome e endereço';
+    cabecalho.append(titulo);
+    // O título do cartão substitui o cabeçalho que o formulário trazia do diálogo.
+    for (const velho of formDoProjeto.querySelectorAll(':scope > h2, :scope > .eyebrow')) velho.remove();
+    bloco.append(cabecalho, formDoProjeto);
     paineis.get('geral').append(bloco);
     doc.querySelector('#project-settings-dialog')?.remove();
   }
@@ -86,7 +110,7 @@ export function montarConfiguracoesDoProjeto(doc = document) {
   // Rastreamento: o cadastro dos destinos. Os relatórios ficam na tela de Rastreamento.
   const destinos = doc.querySelector('#tracking-view #tracking-destinations');
   const blocoDeDestinos = destinos?.closest('.page-block') ?? destinos;
-  if (blocoDeDestinos) paineis.get('rastreamento').append(blocoDeDestinos);
+  if (blocoDeDestinos) paineis.get('rastreamento').append(cartao(doc, blocoDeDestinos));
   abrirAbaDoProjeto(tela.dataset.abaAtual || 'geral', doc);
   return tela;
 }
