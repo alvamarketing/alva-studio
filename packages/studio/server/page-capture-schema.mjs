@@ -44,7 +44,9 @@ function fieldType(node) {
   if (!INPUT_TYPES.has(type)) throw fail(`Tipo de campo “${type}” não é suportado na captura.`);
   if (type === 'radio') return 'single_choice';
   if (type === 'checkbox') return 'multiple_choice';
-  return type === 'tel' ? 'short_text' : type;
+  // `text` é o tipo do parágrafo, que não tem resposta: campo de texto é `short_text`. Até
+  // 27/09 o nome de todo lead de landing chegava vazio por isso.
+  return type === 'tel' || type === 'text' ? 'short_text' : type;
 }
 function visibleForms(value, result = []) {
   if (Array.isArray(value)) value.forEach((item) => visibleForms(item, result));

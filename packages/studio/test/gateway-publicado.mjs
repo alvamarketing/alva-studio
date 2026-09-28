@@ -31,3 +31,28 @@ export async function gatewayPublicado({ artefato, env, fetchImpl, dominio }) {
     return { status: resposta.statusCode, headers: resposta.headers, body: corpo, text: corpo.toString() };
   };
 }
+
+// Uma chamada HTTP ao app local, com o Host do Studio — como o proxy entregaria.
+import { request as httpRequest } from 'node:http';
+export function chamarStudio(porta, { method, path, headers = {}, body }) {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port: porta, method, path, headers: { host: 'studio.example.test', ...headers } }, (res) => {
+      const partes = []; res.on('data', (parte) => partes.push(parte));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(partes).toString() }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+// O `fetch` que o gateway publicado usa, levando ao app local.
+export function fetchAoStudio(porta) {
+  return async (url, opcoes = {}) => {
+    const destino = new URL(url);
+    const resposta = await chamarStudio(porta, { method: opcoes.method || 'GET', path: destino.pathname + destino.search, headers: { ...opcoes.headers, 'x-forwarded-for': '76.76.21.21' }, body: opcoes.body });
+    const cabecalhos = new Headers();
+    for (const [nome, valor] of Object.entries(resposta.headers)) for (const item of [valor].flat()) cabecalhos.append(nome, String(item));
+    return new Response(resposta.text, { status: resposta.status, headers: cabecalhos });
+  };
+}

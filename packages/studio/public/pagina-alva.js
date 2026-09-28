@@ -43,7 +43,8 @@ export function documentoDaPagina(estado, { publicOrigin = '' } = {}) {
 }
 
 // O tipo de resposta do esquema no vocabulário que a validação da captura usa.
-const TIPO_DA_CAPTURA = Object.freeze({ text: 'text', email: 'email', tel: 'short_text', number: 'number', date: 'date', file: 'file', long_text: 'long_text' });
+// `text` é o tipo do parágrafo, que não tem resposta: campo de texto é `short_text`.
+const TIPO_DA_CAPTURA = Object.freeze({ text: 'short_text', email: 'email', tel: 'short_text', number: 'number', date: 'date', file: 'file', long_text: 'long_text' });
 
 export function capturasDoEstado(estado, { webhook = '' } = {}) {
   return {

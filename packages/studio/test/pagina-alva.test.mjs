@@ -54,7 +54,7 @@ test('os campos viram a captura no formato que a publicação valida', () => {
   assert.equal(forms[0].captureId, estado.content[0].children[3].id);
   assert.equal(forms[0].name, 'Fale com a gente');
   assert.deepEqual(forms[0].fields, [
-    { id: 'nome', type: 'text', title: 'Nome', required: true },
+    { id: 'nome', type: 'short_text', title: 'Nome', required: true },
     { id: 'email', type: 'email', title: 'E-mail', required: true },
     { id: 'whatsapp', type: 'short_text', title: 'WhatsApp', required: false },
   ]);
