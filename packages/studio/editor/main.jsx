@@ -8,7 +8,8 @@ import { Puck, createUsePuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
 import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
-import { ArrowLeft, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
+import { ArrowLeft, Eye, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
+import { documentoDaPagina, normalizarEstadoAlva } from '../public/pagina-alva.js';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
 import { elementosCss } from '../public/catalogo-elementos.js';
 import { runtimeCss, templateCss } from '../public/templates.js';
@@ -56,6 +57,16 @@ function Acoes({ pagina, aoSalvar, aviso }) {
     <>
       <button type="button" className="alva-acao" onClick={() => { location.href = '/#/paginas'; }}>
         <ArrowLeft size={16} aria-hidden="true" /> Voltar
+      </button>
+      <button type="button" className="alva-acao" onClick={() => {
+        // A prévia é o mesmo documento que o servidor publica, montado aqui com o que está na
+        // tela — inclusive o que ainda não foi salvo.
+        const html = documentoDaPagina(normalizarEstadoAlva(puckParaAlva(dados)), { publicOrigin: location.origin });
+        const endereco = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+        window.open(endereco, '_blank');
+        setTimeout(() => URL.revokeObjectURL(endereco), 60_000);
+      }}>
+        <Eye size={16} aria-hidden="true" /> Prévia
       </button>
       <button type="button" className="alva-acao" disabled={ocupado} onClick={executar(() => aoSalvar(dados))}>
         <Save size={16} aria-hidden="true" /> Salvar
