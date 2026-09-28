@@ -1,6 +1,6 @@
 # Alva Studio
 
-Construtor visual de landing pages, quizzes e funis da Alva Marketing. O editor é o Puck (React, confinado ao editor); a página publicada é HTML desenhado pelo servidor a partir do esquema `alva/1`. O editor antigo (GrapesJS) saiu em 28/09/2026. A fundação SaaS usa PostgreSQL para separar empresas, membros, projetos, páginas, formulários, respostas e sessões. O logo e a identidade visual atuais do Studio são preservados.
+Construtor visual de landing pages, quizzes e funis da Alva Marketing. O editor é o Puck (React, confinado ao editor); a página publicada é HTML desenhado pelo servidor a partir do esquema `alva/1`. O editor antigo (GrapesJS) saiu em 28/09/2026. A fundação SaaS usa PostgreSQL para separar empresas, membros, projetos, páginas, respostas e sessões. O logo e a identidade visual atuais do Studio são preservados.
 
 ## Dois modos durante a transição
 
@@ -27,25 +27,20 @@ Em produção, `/api/setup` só aceita requisições feitas do próprio servidor
 - Empresas, memberships e os papéis proprietário, administrador, editor e analista.
 - Projetos por empresa, com concessão específica para editor e analista.
 - Sessões persistentes e revogáveis; cada sessão mantém a empresa e o projeto atual.
-- Páginas e formulários ligados a empresa e projeto, com rotas únicas e validação de caminhos reservados.
-- Controle de revisão concorrente, exclusão lógica e snapshots imutáveis de páginas e formulários publicados.
-- Respostas de formulários vinculadas à versão que as recebeu.
+- Páginas (landing e quiz) ligadas a empresa e projeto, com rotas únicas e validação de caminhos reservados.
+- Controle de revisão concorrente, exclusão lógica e snapshots imutáveis das páginas publicadas.
+- Respostas das capturas vinculadas à versão da página que as recebeu.
 - API que devolve `404` para recursos de outra empresa e exige capacidade para escrita, respostas e administração.
-- Importação local transacional, com checksum e repetição segura.
 
 O estado do editor (esquema `alva/1`) é chamado `editorState` na API SaaS e `editor_state` no banco. Ele não deve ser confundido com um **Projeto do Studio** nem com um **Projeto da Vercel**.
 
-## Editor e formulários existentes
+## Captura e respostas
 
-O Studio mantém páginas criáveis, duplicáveis, renomeáveis e removíveis, modelos, editor visual em português, prévia, download de HTML, blocos de formulário e seção de aparência. Os formulários dinâmicos continuam oferecendo texto, e-mail, telefone, escolhas, data, número, escala, endereço, arquivo, imagem, vídeo, tela informativa, CTA e gráficos; elementos podem usar Material Symbols e movimento.
-
-No modo SaaS, salvar o formulário mantém um rascunho; publicar é uma ação explícita de quem tem permissão de publicação. A rota pública local usa empresa, projeto e formulário, como `/f/<empresa>/<projeto>/<formulario>`. Em um domínio conectado, o servidor aceita publicamente somente o `GET` dessa experiência e o `POST` da submissão; o painel e as demais rotas continuam fechados.
-
-A submissão é persistida antes do webhook. Nesta fundação, configurar o destino valida somente uma URL HTTPS sem credenciais; não há consulta DNS, bloqueio de endereço privado ou proteção contra DNS rebinding ainda. A entrega assíncrona permanece com estado `pending` e não faz saída de rede. Validação de destino completa e o worker de entrega são próximas etapas. O webhook não recebe credenciais do Studio.
+Landing e quiz são páginas do esquema `alva/1`. O formulário de uma landing e as etapas de um quiz viram, na publicação, a captura da versão (`page_versions.capture_schema`); a página publicada envia para `/api/public/pages/.../captures/<id>/submissions`, pelo gateway assinado. O servidor valida as respostas contra a captura congelada — num quiz, refazendo o caminho das etapas — e só então grava em `page_submissions`, enfileira o webhook da página e a conversão. O formulário dinâmico antigo (tabela `forms`, rota `/f/...`) saiu em 28/09/2026.
 
 ### Coletor interno de analytics
 
-O Studio coleta visitas, origem, UTMs, click IDs, conversões por formulário e marcos de VSL no próprio PostgreSQL, isolados por empresa e projeto. O `tracker.js` é servido de primeira parte e não usa cookie nem serviço externo; o navegador envia somente caminho, query filtrada, domínio de referência e identificadores/eventos estruturados. Nome, e-mail, telefone, arquivos e respostas abertas são rejeitados e nunca entram em `analytics_*`. Sessões e eventos brutos são retidos por 90 dias, enquanto agregados diários permanecem por até 24 meses. Páginas públicas usam CSP com nonce por resposta, e o coletor aceita somente origens publicadas e trackers provisionados para o projeto.
+O Studio coleta visitas, origem, UTMs, click IDs, conversões e marcos de VSL no próprio PostgreSQL, isolados por empresa e projeto. O `tracker.js` é servido de primeira parte e não usa cookie nem serviço externo; o navegador envia somente caminho, query filtrada, domínio de referência e identificadores/eventos estruturados. Nome, e-mail, telefone, arquivos e respostas abertas são rejeitados e nunca entram em `analytics_*`. Sessões e eventos brutos são retidos por 90 dias, enquanto agregados diários permanecem por até 24 meses. Páginas públicas usam CSP com nonce por resposta, e o coletor aceita somente origens publicadas e trackers provisionados para o projeto.
 
 Nome, e-mail, telefone, arquivos e respostas abertas nunca entram no Analytics interno, em URLs, em UTMs ou em logs. O canal de conversões de mídia usa identificadores pseudônimos de atribuição e processamento limitado sem autorização de PII direta; nos estados `pending` e `denied`, envia somente o evento, tempo, conteúdo, valor/moeda e IDs permitidos por adaptador. Em `granted`, hashes SHA-256 de e-mail e telefone normalizados são produzidos somente no servidor. Nunca PII em claro, endereço IP ou user agent. Cada projeto declara a empresa cliente como controladora e a Alva Marketing como operadora, com URL de política de privacidade obrigatória antes de qualquer envio de conversão.
 
@@ -63,15 +58,9 @@ As migrações atuais são aplicadas em ordem e nunca devem ser editadas depois 
 
 Para uma mudança futura, crie uma nova migração numerada. Não altere uma migração já registrada: o checksum foi criado para interromper exatamente esse caso.
 
-## Inspecionar, importar e voltar atrás
+## Voltar atrás
 
-Os arquivos locais tratados pela transição são `owner.json`, `pages.json`, `forms.json` e `form-submissions.json`, no diretório configurado por `DATA_DIR` ou em `packages/studio/.data/`.
-
-1. Pare as gravações locais e copie o diretório inteiro para um local imutável. Preserve também `secret.key`, mesmo que ele não seja importado para o banco.
-2. Rode `inspectLocalData(dir)` de `server/import-local.mjs`. A inspeção retorna validade, problemas, tamanho e SHA-256 por arquivo, além de um checksum consolidado; ela não abre transação nem escreve no banco.
-3. Em uma cópia do banco de destino, rode `importLocalData({ dir, database, ownerPassword })`. A senha local é conferida antes da transação. A importação preserva UUIDs, revisões e datas, cria a empresa Alva Marketing e o projeto inicial e registra o checksum em `local_imports`.
-4. Compare as contagens de páginas, formulários e respostas com o relatório retornado. Repetir a importação do mesmo conjunto retorna o relatório armazenado e não duplica registros.
-5. Só então direcione o processo SaaS ao banco migrado. O JSON original fica guardado como snapshot de rollback e não deve receber novas gravações depois do corte.
+A importação dos JSONs locais (`server/import-local.mjs`) serviu à transição para o banco e saiu em 28/09, junto com o formulário antigo: ela importava `forms.json` e `form-submissions.json` para tabelas que a migração 028 removeu.
 
 O rollback seguro do corte é restaurar a cópia do banco anterior ou apontar novamente para o snapshot local preservado. Não existe rollback SQL automático para migrações de produção: toda migração nova precisa de plano de restauração do backup antes de ser aplicada.
 

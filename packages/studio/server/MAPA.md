@@ -22,11 +22,12 @@
   - `migrations/017_asaas_billing.sql`: plano por ambiente, pedidos, assinatura, entitlement, inbox idempotente por evento Asaas, retry com disponibilidade e fila de revisão.
   - `migrations/018_agent_mcp.sql`: chaves MCP por projeto, operações idempotentes, limite persistente e vínculo de auditoria de agente.
   - `migrations/023_conversions_outbox.sql`: renomeia `nvs_commercial_outbox` para `conversions_outbox` (tabela, índices e constraints), troca `destination` do valor fixo `nvs` para o destino real (`meta`, `tiktok`, `google`, `linkedin`, `taboola`) com uma linha por destino, reduz o motor de tracking a `conversions` e remove os bindings do Umami.
+  - `migrations/028_remove_forms.sql`: tira o formulário antigo do banco — `forms`, `form_versions`, `form_submissions`, as colunas de formulário de `webhook_deliveries` (que fica só com entrega de página) e as rotas `form` de `project_routes`.
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
 - `session-service.mjs`: contas, sessões persistentes, contexto de empresa/projeto e revogação.
-- `project-api.mjs`: API multiempresa, rotas de cobrança e administração de chaves MCP autenticadas, compatibilidade das rotas atuais do editor e lista/CSV de leads por projeto.
+- `project-api.mjs`: API multiempresa, rotas de cobrança e administração de chaves MCP autenticadas, a rota curta `/api/pages` do painel e lista/CSV de leads (respostas das páginas) por projeto.
 - `mcp-server.mjs`: fronteira JSON-RPC MCP negociada, catálogo fechado de leitura/rascunho e respostas de erro seguras.
 - `asaas-client.mjs`, `billing-service.mjs`, `billing-webhook.mjs`, `billing-worker.mjs` e `billing-policy.mjs`: contrato recorrente hospedado, reconsulta assíncrona de pagamento/assinatura, inbox limitado/autenticado e gates transacionais 5/10/5.
 - `tracking-destinos.mjs`: adaptadores dos destinos de conversão (Meta, TikTok, Google, LinkedIn, Taboola), portados do PHP que morava no runtime NVS.
@@ -34,18 +35,19 @@
 - `tracking-provisionador-local.mjs`: provisiona um destino sem chamada de rede, com o identificador da propriedade derivado do próprio binding.
 - `tracking-provision-worker.mjs` e `commercial-events-worker.mjs`: filas do worker de tracking — provisionamento por projeto e entrega assíncrona de conversões comerciais.
 - `outbound-webhook.mjs`: entrega best-effort pós-persistência por HTTPS, com timeout, sem credenciais/cabeçalhos repassados, bloqueio de destinos locais/privados e status `delivered`/`failed`; fila, retry, idempotência e defesa contra DNS rebinding ficam no nó `worker_webhook`.
-- `import-local.mjs`: inspeção validada e importação transacional/idempotente dos quatro JSONs locais.
-- `store.mjs` e `form-store.mjs`: armazenamento local legado que permanece como fonte de compatibilidade e migração.
-- `repositories/content-repository.mjs`: submissões paginadas por projeto, CSV por formulário e atualização escopada do status de entrega.
+- `store.mjs`: armazenamento local das páginas no modo legado (`start:legacy`), sem banco.
+- `repositories/content-repository.mjs`: páginas (landing e quiz), publicação de versão, captura publicada e respostas paginadas por projeto.
+- `repositories/webhook-repository.mjs`: fila de entrega do webhook de cada resposta de página.
 - `leads-csv.mjs`: serialização CSV UTF-8 com BOM, colunas estáveis e neutralização de fórmulas de planilha.
-- `dynamic-form.mjs`: documento público sequencial com mídia, gráficos, movimento e confirmação de envio.
+- `pagina-de-obrigado.mjs`: a página de obrigado depois de uma captura, com o aviso de conversão que liga os pixels ao lead do servidor.
+- `form-answer-validation.mjs` e `page-capture-schema.mjs`: a validação das respostas de uma captura, refazendo o caminho do quiz.
 - `analytics-collect.mjs`: parser, allowlist, proteção contra PII e limitador do endpoint público de coleta.
 - `content-security-policy.mjs`: nonce e políticas CSP das experiências públicas.
 - `repositories/analytics-repository.mjs`: persistência isolada de sessões, eventos, atribuição, conversões, marcos VSL, resumo e retenção.
-- `publication-snapshot.mjs`: snapshot determinístico de todas as rotas publicadas de um projeto.
+- `publication-snapshot.mjs`: snapshot determinístico de todas as páginas publicadas de um projeto.
 - `publication-service.mjs`: coordenação de preview, produção confirmada, status, domínio e auditoria.
 - `publication-runtime.mjs`, `runtime-consent-gateway.mjs` e `runtime-gateway-security.mjs`: manifesto público, consentimento decidido no servidor e verificação da fronteira assinada por host/publicação/snapshot/ambiente/replay.
-- `vercel-runtime-gateway.mjs`: artefatos da Function e rewrites de deploy, derivação da chave escopada e proxy preservando cookie/corpo.
+- `vercel-runtime-gateway.mjs`: artefatos da Function e rewrites de deploy (runtime e capturas de página), derivação da chave escopada e proxy preservando cookie/corpo.
 - `conversion-consent-policy.mjs` e `commercial-conversion-service.mjs`: policy de conversões, allowlists de atribuição e fan-out consent-aware.
 - `publication-cors.mjs`: validação de origens HTTPS autorizadas para submissões públicas do projeto.
 - `repositories/publication-repository.mjs`: cofre de segredos, conexão Vercel por projeto, reserva transacional de domínio e execuções idempotentes.
