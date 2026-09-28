@@ -248,6 +248,12 @@ Pequenas, independentes, podem correr ao lado de qualquer fase.
   zeradas.
 - Três blocos de quiz com ícone genérico; título e texto sem respiro lateral
   fora de uma seção.
+- **Guia de DNS** na Publicação (feito em 28/09): um domínio por projeto, registro A no
+  domínio raiz e CNAME no subdomínio, com o valor copiado do painel da Vercel (o CNAME é
+  único por projeto). Link para o guia oficial da Vercel.
+- **Valores de DNS exatos no Studio** (pedido do dono em 28/09): perguntar à Vercel os
+  registros do domínio do projeto e mostrar "crie este registro com este valor". Conferir
+  antes na documentação da API da Vercel se ela devolve esses valores.
 - O wireframe ainda escreve "Aurora · Umami + NVS". *Decisão do dono: é o
   contrato visual.*
 
