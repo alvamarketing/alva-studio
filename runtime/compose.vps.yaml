@@ -1,0 +1,14 @@
+# Produção na VPS da Hostinger, atrás do Traefik que já roda lá (rede do host, Let's
+# Encrypt por desafio HTTP). Os rótulos publicam o Studio no subdomínio com HTTPS; nenhum
+# outro serviço da VPS é tocado. O DNS do subdomínio aponta direto para a VPS (sem o
+# proxy da Cloudflare), para o Let's Encrypt conseguir emitir o certificado.
+#
+# Uso, na VPS: docker compose --project-name alva-studio -f runtime/compose.yaml -f runtime/compose.vps.yaml up -d --build
+services:
+  studio-web:
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.alva-studio.rule: Host(`studio.alvamarketing.com.br`)
+      traefik.http.routers.alva-studio.entrypoints: websecure
+      traefik.http.routers.alva-studio.tls.certresolver: letsencrypt
+      traefik.http.services.alva-studio.loadbalancer.server.port: "4178"
