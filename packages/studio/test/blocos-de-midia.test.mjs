@@ -5,7 +5,7 @@ import { renderNode, enderecoDoVideo } from '../public/page-schema.js';
 
 test('seção com cor, imagem de fundo e cor do texto', () => {
   const html = renderNode({ type: 'section', props: { corDeFundo: '#0B3D2E', corDoTexto: '#ffffff', imagemDeFundo: 'https://studio.exemplo/i/3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e' }, children: [] });
-  assert.match(html, /style="background-color:#0B3D2E;color:#ffffff;background-image:url\(&quot;https:\/\/studio\.exemplo\/i\/3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e&quot;\);background-size:cover;background-position:center"/);
+  assert.match(html, /style="background-color:#0B3D2E;background-image:url\(&quot;https:\/\/studio\.exemplo\/i\/3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e&quot;\);background-size:cover;background-position:center;color:#ffffff"/);
 });
 
 // O estilo é CSS dentro de um atributo: cor fora do formato e endereço com aspas ou

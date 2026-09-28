@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeNode, renderNode, renderTree, PAGE_NODE_TYPES } from '../public/page-schema.js';
+import { renderConteudo, normalizeNode, renderNode, renderTree, PAGE_NODE_TYPES } from '../public/page-schema.js';
 
 // O esquema é a fonte da verdade e o HTML passa a ser derivado dele no servidor. Isso
 // muda o peso de duas coisas: o que sai precisa ser idêntico ao que o editor produzia
@@ -15,19 +15,34 @@ test('uma seção com filhos sai igual ao que o editor produzia', () => {
       { type: 'text', props: { text: 'Conte sua história aqui.' } },
     ],
   });
-  assert.equal(html, '<section class="alva-secao"><h2 class="alva-titulo">Uma nova seção</h2><p class="alva-texto">Conte sua história aqui.</p></section>');
+  // A seção guarda o conteúdo numa área central, e cada bloco numa caixa de layout.
+  assert.equal(html, '<section class="alva-secao"><div class="alva-conteudo"><div class="alva-bloco"><h2 class="alva-titulo">Uma nova seção</h2></div><div class="alva-bloco"><p class="alva-texto">Conte sua história aqui.</p></div></div></section>');
 });
 
 test('o título respeita o nível escolhido, e recusa o que não é nível', () => {
-  assert.equal(renderNode({ type: 'heading', props: { text: 'Olá', level: 1 } }), '<h1 class="alva-titulo">Olá</h1>');
-  assert.equal(renderNode({ type: 'heading', props: { text: 'Olá', level: 9 } }), '<h2 class="alva-titulo">Olá</h2>');
+  assert.equal(renderConteudo({ type: 'heading', props: { text: 'Olá', level: 1 } }), '<h1 class="alva-titulo">Olá</h1>');
+  assert.equal(renderConteudo({ type: 'heading', props: { text: 'Olá', level: 9 } }), '<h2 class="alva-titulo">Olá</h2>');
 });
 
 test('o botão leva destino e abertura em nova aba', () => {
   assert.equal(
-    renderNode({ type: 'button', props: { text: 'Quero saber mais ↗', href: 'https://alva.test/x', newTab: true } }),
+    renderConteudo({ type: 'button', props: { text: 'Quero saber mais ↗', href: 'https://alva.test/x', newTab: true } }),
     '<a href="https://alva.test/x" class="cta" target="_blank" rel="noopener noreferrer">Quero saber mais ↗</a>',
   );
+});
+
+// Como no Elementor: o bloco ocupa a linha inteira, e a pessoa escolhe largura,
+// alinhamento e movimento de entrada. O que não for opção conhecida é ignorado.
+test('cada bloco sai numa caixa com a largura, o alinhamento e o movimento escolhidos', () => {
+  assert.equal(renderNode({ type: 'text', props: { text: 'x', largura: '1/2', alinhamento: 'centro', movimento: 'fade-up' } }),
+    '<div class="alva-bloco alva-l-1-2 alva-a-centro" data-alva-motion="fade-up"><p class="alva-texto">x</p></div>');
+  assert.equal(renderNode({ type: 'text', props: { text: 'x', largura: '7/8', alinhamento: 'torto', movimento: 'explodir' } }),
+    '<div class="alva-bloco"><p class="alva-texto">x</p></div>');
+});
+
+test('botão com degradê e cor de texto próprios', () => {
+  assert.match(renderConteudo({ type: 'button', props: { text: 'Ir', href: '#', corDoBotao: '#286EEA', corDoBotao2: '#5B8CFF', direcaoDoDegrade: 'horizontal', corDoTextoDoBotao: '#ffffff' } }),
+    /style="background-image:linear-gradient\(90deg,#286EEA,#5B8CFF\);color:#ffffff"/);
 });
 
 // O servidor renderiza; portanto o servidor é quem impede que um texto vire marcação.

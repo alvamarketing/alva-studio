@@ -48,16 +48,42 @@ function nomeDeCampo(valor) {
 const FUNDOS = { branco: '', suave: ' alva-secao-suave', escuro: ' alva-secao-escura' };
 export const classeDaSecao = (props = {}) => `alva-secao${FUNDOS[props.fundo] ?? ''}`;
 
+// O layout de cada bloco, como no Elementor: ocupa a linha inteira por padrão, e a pessoa
+// escolhe a largura e o alinhamento. Movimento de entrada é opcional.
+const COR = /^#[0-9a-f]{6}$/i;
+const LARGURAS = Object.freeze({ inteira: '', '3/4': ' alva-l-3-4', '2/3': ' alva-l-2-3', '1/2': ' alva-l-1-2', '1/3': ' alva-l-1-3', '1/4': ' alva-l-1-4' });
+const ALINHAMENTOS = Object.freeze({ esquerda: '', centro: ' alva-a-centro', direita: ' alva-a-direita' });
+export const MOVIMENTOS = Object.freeze(['fade-up', 'slide-left', 'zoom-in']);
+export const classesDoBloco = (props = {}) => `alva-bloco${LARGURAS[props.largura] ?? ''}${ALINHAMENTOS[props.alinhamento] ?? ''}`;
+export const movimentoDoBloco = (props = {}) => (MOVIMENTOS.includes(props.movimento) ? props.movimento : '');
+const atributoDeMovimento = (props) => (movimentoDoBloco(props) ? ` data-alva-motion="${movimentoDoBloco(props)}"` : '');
+
+// Degradê: duas cores e uma direção.
+const DIRECOES = Object.freeze({ vertical: '180deg', horizontal: '90deg', diagonal: '135deg' });
+function fundoDeCores(cor, cor2, direcao) {
+  if (COR.test(cor ?? '') && COR.test(cor2 ?? '')) return [`background-image:linear-gradient(${DIRECOES[direcao] ?? '180deg'},${cor},${cor2})`];
+  return COR.test(cor ?? '') ? [`background-color:${cor}`] : [];
+}
+
 // O fundo livre da seção vira CSS dentro de um atributo: só entra cor no formato #rrggbb e
 // imagem de endereço https sem aspas, parênteses ou espaço — qualquer um deles fecharia o
 // url() e abriria CSS de quem digitou.
-const COR = /^#[0-9a-f]{6}$/i;
 const IMAGEM_DE_FUNDO = /^(?:https:\/\/|\/i\/)[^\s"'()\\<>]{1,1000}$/i;
 export function estiloDaSecao(props = {}) {
   const partes = [];
-  if (COR.test(props.corDeFundo ?? '')) partes.push(`background-color:${props.corDeFundo}`);
+  // Imagem de fundo vence o degradê; a cor de fundo fica por baixo enquanto ela carrega.
+  if (IMAGEM_DE_FUNDO.test(props.imagemDeFundo ?? '')) {
+    if (COR.test(props.corDeFundo ?? '')) partes.push(`background-color:${props.corDeFundo}`);
+    partes.push(`background-image:url("${props.imagemDeFundo}")`, 'background-size:cover', 'background-position:center');
+  } else partes.push(...fundoDeCores(props.corDeFundo, props.corDeFundo2, props.direcaoDoDegrade));
   if (COR.test(props.corDoTexto ?? '')) partes.push(`color:${props.corDoTexto}`);
-  if (IMAGEM_DE_FUNDO.test(props.imagemDeFundo ?? '')) partes.push(`background-image:url("${props.imagemDeFundo}")`, 'background-size:cover', 'background-position:center');
+  return partes.join(';');
+}
+
+// O botão com cor própria ou degradê, e a cor do texto dele.
+export function estiloDoBotao(props = {}) {
+  const partes = fundoDeCores(props.corDoBotao, props.corDoBotao2, props.direcaoDoDegrade);
+  if (COR.test(props.corDoTextoDoBotao ?? '')) partes.push(`color:${props.corDoTextoDoBotao}`);
   return partes.join(';');
 }
 
@@ -80,7 +106,7 @@ const ELEMENTOS = {
   section: {
     render: (node, desenharFilhos) => {
       const estilo = estiloDaSecao(node.props);
-      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}>${desenharFilhos(node)}</section>`;
+      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeMovimento(node.props)}><div class="alva-conteudo">${desenharFilhos(node)}</div></section>`;
     },
   },
   columns: {
@@ -98,7 +124,8 @@ const ELEMENTOS = {
   button: {
     render: (node) => {
       const alvo = node.props.newTab === true ? ' target="_blank" rel="noopener noreferrer"' : '';
-      return `<a href="${escapeHtml(endereco(node.props.href))}" class="cta"${alvo}>${escapeHtml(texto(node.props.text, 200))}</a>`;
+      const estilo = estiloDoBotao(node.props);
+      return `<a href="${escapeHtml(endereco(node.props.href))}" class="cta"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${alvo}>${escapeHtml(texto(node.props.text, 200))}</a>`;
     },
   },
   icon: {
@@ -165,13 +192,26 @@ export function normalizeNode(node) {
   };
 }
 
-export function renderNode(node, profundidade = 0) {
+// Seção é a faixa da página, e campo mora dentro do formulário: os dois não entram no
+// layout de bloco. Todo o resto ganha a caixa com largura e alinhamento.
+const SEM_CAIXA = new Set(['section', 'field']);
+
+// O miolo de um bloco, sem a caixa de layout — é o que o editor desenha dentro da caixa
+// dele, para o Puck poder arrastar a caixa inteira.
+export function renderConteudo(node, profundidade = 0) {
   if (profundidade > PROFUNDIDADE_MAXIMA) throw falhar('Estrutura da página profunda demais.');
   const limpo = normalizeNode(node);
   const elemento = ELEMENTOS[limpo.type];
   const desenharFilhos = (atual) => atual.children.map((filho) => renderNode(filho, profundidade + 1)).join('');
   if (!limpo.children.length && elemento.vazio) return elemento.vazio;
   return elemento.render(limpo, desenharFilhos);
+}
+
+export function renderNode(node, profundidade = 0) {
+  const miolo = renderConteudo(node, profundidade);
+  if (SEM_CAIXA.has(node?.type)) return miolo;
+  const props = node?.props ?? {};
+  return `<div class="${classesDoBloco(props)}"${atributoDeMovimento(props)}>${miolo}</div>`;
 }
 
 export function renderTree(nodes) {
