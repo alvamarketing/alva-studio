@@ -95,3 +95,38 @@ test('a confirmação da entrega apaga o endereço e o navegador da linha', asyn
     assert.equal(depois.payload.event_name, 'lead');
   } finally { await database.close(); }
 });
+
+// Decisão de 27/09: quem recusa a medição não tem o IP enviado às plataformas. O IP é dado
+// pessoal na LGPD; o navegador, sozinho, não identifica ninguém — e sem ele a Meta não
+// aceita evento de site, então ele continua.
+test('com o consentimento negado, o IP fica; o navegador vai', async (t) => {
+  const { createDatabase, migrate } = await import('../server/db/postgres.mjs');
+  const { postgresFixture } = await import('./postgres-fixture.mjs');
+  const { SecretVault } = await import('../server/repositories/publication-repository.mjs');
+  const { ConversionsOutboxRepository } = await import('../server/repositories/conversions-outbox-repository.mjs');
+  const { TrackingRepository } = await import('../server/repositories/tracking-repository.mjs');
+  const { connectionString } = await postgresFixture(t);
+  const database = createDatabase({ connectionString });
+  await migrate(database);
+  try {
+    const user = (await database.query("INSERT INTO users (email, password_hash, display_name) VALUES ('n@alva.test','h','P') RETURNING id")).rows[0];
+    const company = (await database.query("INSERT INTO companies (name, slug) VALUES ('N','n') RETURNING id")).rows[0];
+    const project = (await database.query("INSERT INTO projects (company_id, name, slug, created_by) VALUES ($1,'P','p',$2) RETURNING id", [company.id, user.id])).rows[0];
+    const vault = new SecretVault({ masterKey: 'chave-de-teste-negado' });
+    await new TrackingRepository(database, { vault }).saveDestination({ companyId: company.id, projectId: project.id, environment: 'preview', provider: 'meta', configuration: { pixel_id: '1', access_token: 't' } });
+    await database.query(
+      `UPDATE tracking_bindings SET status='ready', encrypted_remote_reference=$4 WHERE company_id=$1 AND project_id=$2 AND environment=$3 AND engine='conversions'`,
+      [company.id, project.id, 'preview', vault.encrypt('alva_p', `tracking-binding:${company.id}:${project.id}:preview:conversions`)],
+    );
+    const outbox = new ConversionsOutboxRepository(database, { vault });
+    for (const [id, consentState] of [['a1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', 'denied'], ['b1c9a8b4-558e-4a4f-9cc4-d2d2a47a1b29', 'granted']]) {
+      await database.transaction((client) => outbox.enqueue(client, {
+        companyId: company.id, projectId: project.id, environment: 'preview', trackingEventId: id, eventName: 'lead', consentState,
+        cliente: { ip: '203.0.113.7', userAgent: 'Mozilla/5.0 (iPhone)' }, contexto: { sourceUrl: 'https://lp.exemplo.test/oferta' },
+      }));
+    }
+    const linha = async (prefixo) => (await database.query("SELECT payload FROM conversions_outbox WHERE tracking_event_id::text LIKE $1", [`${prefixo}%`])).rows[0].payload;
+    assert.deepEqual((await linha('a1')).client, { user_agent: 'Mozilla/5.0 (iPhone)' });
+    assert.deepEqual((await linha('b1')).client, { ip: '203.0.113.7', user_agent: 'Mozilla/5.0 (iPhone)' });
+  } finally { await database.close(); }
+});

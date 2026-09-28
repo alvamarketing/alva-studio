@@ -144,3 +144,10 @@ test('o registro que a tela recebe traz a nota, e nenhum dos dados que a produzi
     assert.ok(resumo.faltando.every((item) => item.oQueFazer.length > 20));
   } finally { await database.close(); }
 });
+
+// Quem recusou a medição não tem o IP enviado (decisão de 27/09). A falta dele não é
+// defeito de configuração, e a tela não pode mandar ninguém consertá-la.
+test('consentimento negado não cobra o endereço de quem converteu', () => {
+  const avaliacao = qualidadeDaCorrespondencia({ consent_state: 'denied', source_url: 'https://lp.exemplo.test/', client: { user_agent: 'Mozilla/5.0 (iPhone)' } });
+  assert.equal(avaliacao.faltando.some((item) => item.chave === 'visitante'), false);
+});

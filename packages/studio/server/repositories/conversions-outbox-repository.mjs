@@ -149,7 +149,10 @@ export class ConversionsOutboxRepository {
     const cliques = identificadoresDeClique(cleanAttribution, at);
     const funil = contextoDoFunil(contexto);
     const utm = utmDe(rawAttribution);
-    const visitante = contextoDoVisitante(cliente);
+    // Quem recusou a medição não tem o IP enviado (dado pessoal na LGPD). O navegador fica:
+    // sozinho não identifica ninguém, e sem ele a Meta não aceita evento de site.
+    // Decisão de 27/09/2026.
+    const visitante = contextoDoVisitante(consentState === 'denied' ? { userAgent: cliente?.userAgent } : cliente);
     const payload = { property_id: propertyId, tracking_event_id: trackingEventId, event_name: eventName, event_time: Math.floor(at.getTime() / 1000), consent_state: consentState, user: consentState === 'granted' ? hashesDeContato(answers) : {}, ...(Object.keys(cleanAttribution).length ? { attribution: cleanAttribution } : {}), ...(Object.keys(cliques).length ? { click_ids: cliques } : {}), ...(funil.sourceUrl ? { source_url: funil.sourceUrl } : {}), ...(Object.keys(visitante).length ? { client: visitante } : {}), params: { ...funil.params, ...utm, ...params } };
     // Só vai para a fila o destino que consegue atribuir o evento — a mesma pergunta que o
     // adaptador faz antes de recusar. Um lead de Facebook não vira entrega morta para o

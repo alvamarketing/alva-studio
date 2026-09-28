@@ -1878,7 +1878,7 @@ $('#analytics-range').onchange = action(async () => {
 const CONSENTIMENTO = {
   granted: ['granted', 'Concedido', 'Click IDs e hashes de contato gerados no servidor seguem para os destinos.'],
   pending: ['pending', 'Aguardando decisão', 'O evento e os identificadores pseudônimos permitidos continuam sendo processados. Sem nome, e-mail ou telefone.'],
-  denied: ['denied', 'Negado', 'Nenhum hash derivado é gerado. Só seguem os identificadores estritamente permitidos.'],
+  denied: ['denied', 'Negado', 'Nenhum hash é gerado e o endereço de quem converteu não sai. Seguem só os identificadores de clique e o navegador.'],
 };
 const TRACKING_PAGINA = 10;
 let trackingDeliveries = [];
