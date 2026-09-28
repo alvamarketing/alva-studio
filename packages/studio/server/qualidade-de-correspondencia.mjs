@@ -52,8 +52,6 @@ const SINAIS = [
     chave: 'visitante',
     sinal: 'Endereço e navegador de quem converteu',
     peso: 20,
-    // Quem recusou a medição não tem o IP enviado (decisão de 27/09/2026).
-    exigeConsentimento: true,
     presente: (evento) => Boolean(evento?.client?.ip) && Boolean(evento?.client?.user_agent),
     // Só some quando a conversão veio por um caminho que não é a página publicada, ou
     // quando o endereço que chegou era o do proxy — que é descartado de propósito, porque
