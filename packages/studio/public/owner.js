@@ -358,7 +358,7 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
     if (titulo) titulo.innerHTML = `${tituloDaAba(tab)}<span class="accent">.</span>`;
     if (['company', 'team', 'billing'].includes(tab)) placeCompanyContent(tab);
     syncCompanyDetails();
-    onCompanySettings();
+    Promise.resolve(onCompanySettings()).then(syncCompanyDetails).catch(() => {});
     if (tab === 'integrations') refreshSettings().catch((erro) => toast(erro.message));
     const saveButton = $('#owner-save');
     if (saveButton) saveButton.hidden = !['account', 'integrations'].includes(tab);

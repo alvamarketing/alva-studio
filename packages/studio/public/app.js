@@ -2354,7 +2354,9 @@ ownerUI = createOwnerUI({
     $('#settings-company-status').textContent = 'Carregando dados da empresa…';
     const target = $('#settings-company-content');
     if (!state?.currentCompany || !target) return;
-    Promise.all([api(`/companies/${state.currentCompany.id}/overview`), api('/billing').catch(() => null)]).then(([overview, billing]) => {
+    // Devolve a promessa: a lateral das configurações só sabe o nome da empresa depois
+    // que ele chega, e quem chamou precisa esperar para copiá-lo.
+    return Promise.all([api(`/companies/${state.currentCompany.id}/overview`), api('/billing').catch(() => null)]).then(([overview, billing]) => {
       if (studioShell?.state().currentCompany?.id !== state.currentCompany.id || $('#settings-view').hidden) return;
       $('#settings-company-status').textContent = '';
       renderCompanyOverview(overview, { content: target, title: $('#settings-company-name'), role: $('#settings-company-role'), billing });

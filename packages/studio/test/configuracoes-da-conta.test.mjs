@@ -100,6 +100,14 @@ test('nenhum bloco das configurações carrega largura própria no atributo styl
 test('a empresa é carregada em qualquer aba: a lateral não fica em "Carregando"', async () => {
   const owner = await readFile(new URL('../public/owner.js', import.meta.url), 'utf8');
   const trecho = owner.slice(owner.indexOf('function selectTab'), owner.indexOf('function applyIntegrationAccess'));
-  assert.doesNotMatch(trecho, /includes\(tab\)\) \{\s*placeCompanyContent[\s\S]*onCompanySettings\(\);\s*\}/, 'carregar a empresa não pode depender da aba');
-  assert.match(trecho, /onCompanySettings\(\);/);
+  assert.doesNotMatch(trecho, /includes\(tab\)\) \{\s*placeCompanyContent[\s\S]*onCompanySettings\(\)/, 'carregar a empresa não pode depender da aba');
+  assert.match(trecho, /onCompanySettings\(\)/);
+});
+
+test('a lateral recebe o nome da empresa depois que ele chega do servidor', async () => {
+  const owner = await readFile(new URL('../public/owner.js', import.meta.url), 'utf8');
+  assert.match(owner, /Promise\.resolve\(onCompanySettings\(\)\)\.then\(syncCompanyDetails\)/);
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const bloco = app.slice(app.indexOf('onCompanySettings: () =>'), app.indexOf('onSettingsClosed:'));
+  assert.match(bloco, /return Promise\.all\(/, 'sem devolver a promessa, quem chamou não tem o que esperar');
 });
