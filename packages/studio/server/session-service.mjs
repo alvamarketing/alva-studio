@@ -126,6 +126,25 @@ export class SessionService {
     });
   }
 
+  // Aceitar um convite cria a conta de quem foi convidado. O primeiro acesso do Studio cria
+  // só o dono e depois se recusa; sem este caminho, um convite não levava a lugar nenhum.
+  // O e-mail é o do convite, não o que a pessoa digitar: o convite é que diz quem ela é.
+  async acceptInvitation(companies, { secret, name, password }) {
+    const convite = await companies.invitationBySecret(secret);
+    const userName = displayName(name);
+    const passwordHash = await newHash(password);
+    const existente = await this.database.query('SELECT id FROM users WHERE lower(email) = $1', [convite.email]);
+    if (existente.rowCount) throw fail('Já existe uma conta com este e-mail. Entre e abra o convite de novo.', 409);
+    const user = (await this.database.query(
+      'INSERT INTO users (email, password_hash, display_name) VALUES ($1, $2, $3) RETURNING id, email, display_name',
+      [convite.email, passwordHash, userName],
+    )).rows[0];
+    await companies.acceptInvitation({ secret, userId: user.id });
+    const context = await this.firstContext(user.id, convite.companyId);
+    if (!context) throw fail('Convite inválido.', 404);
+    return { user: { id: user.id, email: user.email, displayName: user.display_name }, ...context };
+  }
+
   async login(input) {
     const userEmail = email(input.email);
     const supplied = typeof input.password === 'string' ? input.password : '';

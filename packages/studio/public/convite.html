@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Convite · Alva Studio</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/owner.css">
+<link rel="stylesheet" href="/material-symbols.css">
+</head>
+<body>
+<main class="access-gate" aria-label="Convite para o Alva Studio">
+  <div class="access-story">
+    <a class="brand" href="/" aria-label="Alva Studio"><strong>ALVA</strong><span>Studio</span></a>
+    <div>
+      <span class="eyebrow">VOCÊ FOI CONVIDADO</span>
+      <h1 id="convite-titulo">Carregando o convite…</h1>
+      <p id="convite-descricao">Um instante.</p>
+    </div>
+    <small>ALVA MARKETING / STUDIO</small>
+  </div>
+  <div class="access-panel">
+    <form id="convite-form" hidden>
+      <span class="eyebrow">CRIE SUA SENHA</span>
+      <h2>Entre no Studio.</h2>
+      <p id="convite-para"></p>
+      <label>Seu nome<input name="name" autocomplete="name" required maxlength="100" placeholder="Como você assina"></label>
+      <label>Senha<input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="256" placeholder="Pelo menos 12 caracteres"></label>
+      <label>Confirme a senha<input name="confirmation" type="password" autocomplete="new-password" required maxlength="256"></label>
+      <p class="form-error" id="convite-erro" role="alert"></p>
+      <button class="primary" type="submit">Entrar no Studio</button>
+      <p class="access-footnote">O e-mail é o do convite e não muda.</p>
+    </form>
+    <p class="form-error" id="convite-invalido" role="alert" hidden></p>
+  </div>
+</main>
+<script type="module">
+  import { textoDoConvite } from '/equipe-ui.js';
+
+  const codigo = new URL(location.href).searchParams.get('codigo') || '';
+  const titulo = document.querySelector('#convite-titulo');
+  const descricao = document.querySelector('#convite-descricao');
+  const form = document.querySelector('#convite-form');
+  const erro = document.querySelector('#convite-erro');
+  const invalido = document.querySelector('#convite-invalido');
+
+  const recusar = (mensagem) => {
+    titulo.textContent = 'Este convite não vale mais';
+    descricao.textContent = 'Peça um link novo para quem administra a conta.';
+    invalido.hidden = false;
+    invalido.textContent = mensagem;
+  };
+
+  const pedir = async (caminho, corpo) => {
+    const resposta = await fetch(caminho, {
+      method: corpo ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.error || 'Não foi possível continuar.');
+    return dados;
+  };
+
+  try {
+    const convite = await pedir(`/api/invitations/${encodeURIComponent(codigo)}`);
+    const texto = textoDoConvite(convite);
+    titulo.textContent = texto.titulo;
+    descricao.textContent = texto.descricao;
+    document.querySelector('#convite-para').textContent = convite.email;
+    form.hidden = false;
+    form.elements.name.focus();
+  } catch (falha) {
+    recusar(falha.message);
+  }
+
+  form.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    erro.textContent = '';
+    const name = form.elements.name.value.trim();
+    const password = form.elements.password.value;
+    if (password !== form.elements.confirmation.value) {
+      erro.textContent = 'As senhas não conferem. Digite novamente.';
+      return;
+    }
+    const botao = form.querySelector('button[type="submit"]');
+    botao.disabled = true;
+    try {
+      await pedir(`/api/invitations/${encodeURIComponent(codigo)}/accept`, { name, password });
+      location.href = '/';
+    } catch (falha) {
+      erro.textContent = falha.message;
+      botao.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

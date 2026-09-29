@@ -271,6 +271,39 @@ export class CompanyRepository {
     return { invitation, secret };
   }
 
+  // Os convites que ainda esperam resposta: quem convidou precisa saber quem está pendente
+  // e poder mandar o link de novo.
+  async invitations({ companyId, actorUserId }) {
+    const { rows } = await this.database.query(
+      `SELECT convite.*
+         FROM invitations convite
+         JOIN company_memberships actor
+           ON actor.company_id = convite.company_id AND actor.user_id = $2 AND actor.status = 'active'
+        WHERE convite.company_id = $1 AND convite.accepted_at IS NULL AND convite.expires_at > now()
+          AND actor.role IN ('owner', 'admin')
+        ORDER BY convite.created_at DESC`,
+      [companyId, actorUserId],
+    );
+    return rows.map(invitationRecord);
+  }
+
+  // O que o link do convite mostra a quem o abre, antes de qualquer conta existir: para quem
+  // ele é e de que empresa. Código inválido ou vencido é "não encontrado" — um convite que
+  // não vale não conta nada de ninguém.
+  async invitationBySecret(secret) {
+    if (typeof secret !== 'string' || !secret) throw fail('Convite inválido.', 404);
+    const { rows } = await this.database.query(
+      `SELECT convite.email, convite.role, convite.expires_at, company.id AS company_id, company.name AS company_name
+         FROM invitations convite
+         JOIN companies company ON company.id = convite.company_id AND company.status = 'active'
+        WHERE convite.token_hash = $1 AND convite.accepted_at IS NULL AND convite.expires_at > now()`,
+      [hashSecret(secret)],
+    );
+    const convite = rows[0];
+    if (!convite) throw fail('Convite inválido.', 404);
+    return { email: convite.email, role: convite.role, companyId: convite.company_id, companyName: convite.company_name, expiresAt: convite.expires_at };
+  }
+
   async acceptInvitation({ secret, userId }) {
     if (typeof secret !== 'string' || !secret) throw fail('Convite inválido.', 404);
     const secretHash = hashSecret(secret);

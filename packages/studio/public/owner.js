@@ -1,4 +1,5 @@
 import { confirmarAcao } from './confirm-dialog.js';
+import { formularioDeConvite, listaDeConvites } from './equipe-ui.js';
 export function validatePasswordConfirmation(password, confirmation) {
   if (password !== confirmation) throw new Error('As senhas não conferem. Digite novamente.');
 }
@@ -156,13 +157,30 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
   // O bloco da empresa é repintado por app.js depois que a aba já foi escolhida; as seções
   // novas nascem visíveis e precisam obedecer a aba aberta.
   let abaAtual = 'account';
+  // O bloco da equipe ganha o formulário de convite e a lista de quem já foi convidado.
+  // Antes dizia que convites viriam "quando a gestão de equipe for configurada" — e nunca
+  // vinham: a rota não existia.
   const syncTeamInvitationState = () => {
     const team = $('#settings-company-content')?.querySelector('.company-overview-section:has(.member-list)');
-    if (!team || team.querySelector('.member-invite-note')) return;
-    const note = document.createElement('p');
-    note.className = 'member-invite-note';
-    note.textContent = 'Convites estarão disponíveis quando a gestão de equipe for configurada neste Studio.';
-    team.querySelector('h2')?.after(note);
+    if (!team || team.querySelector('.convite-bloco')) return;
+    const bloco = formularioDeConvite(document, {
+      convidar: async (dados) => {
+        const convite = await api(`/companies/${empresaAtual()}/invitations`, 'POST', dados);
+        pintarConvites().catch(() => {});
+        return convite;
+      },
+    });
+    team.append(bloco);
+    pintarConvites().catch(() => {});
+  };
+  const empresaAtual = () => session?.companyId || session?.currentCompanyId || '';
+  const pintarConvites = async () => {
+    const team = $('#settings-company-content')?.querySelector('.company-overview-section:has(.member-list)');
+    if (!team || !empresaAtual()) return;
+    const convites = await api(`/companies/${empresaAtual()}/invitations`);
+    team.querySelector('.convite-pendentes')?.remove();
+    const lista = listaDeConvites(document, convites);
+    if (lista.children.length) team.querySelector('.convite-bloco')?.before(lista);
   };
   if (typeof MutationObserver !== 'undefined') {
     new MutationObserver(() => { syncTeamInvitationState(); mostrarSecoesDaAba(settingsContainer, abaAtual); }).observe($('#settings-company-content'), { childList: true, subtree: true });

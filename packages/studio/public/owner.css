@@ -1061,3 +1061,71 @@
 #settings-view > #owner-dialog {
   order: 1;
 }
+
+/* Convidar alguém: o formulário e o link que quem convida envia. */
+.convite-bloco {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--alva-line);
+}
+.convite-form {
+  display: grid;
+  gap: 14px;
+}
+.convite-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--alva-muted);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.convite-form input,
+.convite-form select {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-sm);
+  background: var(--alva-white);
+  color: var(--alva-ink);
+  font-size: var(--text-md);
+  font-weight: 400;
+}
+.convite-resultado {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-md);
+  background: var(--alva-cloud);
+}
+.convite-resultado p {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.convite-link {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-sm);
+  background: var(--alva-white);
+  color: var(--alva-ink);
+  font-size: var(--text-sm);
+}
+.convite-resultado button {
+  justify-self: start;
+}
+.convite-pendentes {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.convite-pendentes h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--alva-muted);
+}

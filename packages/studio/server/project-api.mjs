@@ -108,6 +108,7 @@ export function createProjectApi({
   body,
   secure = false,
   limit,
+  publicOrigin = '',
   validateWebhook = async (value) => value,
   integrations,
   publication,
@@ -149,6 +150,22 @@ export function createProjectApi({
       return json({ ok: true });
     }
     if (method === 'PUT' && path === '/api/account') return json(await sessionService.account(req, await body(req), res, secure));
+
+    // O convite é aberto por quem ainda não tem conta: estas duas rotas vêm antes da sessão.
+    const convitePublico = path.match(/^\/api\/invitations\/([A-Za-z0-9_-]{20,120})(\/accept)?$/);
+    if (convitePublico) {
+      const [, codigo, aceitar] = convitePublico;
+      if (!aceitar && method === 'GET') {
+        const convite = await companies.invitationBySecret(codigo);
+        return json({ email: convite.email, role: convite.role, companyName: convite.companyName, expiresAt: convite.expiresAt });
+      }
+      if (aceitar && method === 'POST') {
+        limit?.(ipDoVisitante(req));
+        const contextoNovo = await sessionService.acceptInvitation(companies, { secret: codigo, ...(await body(req)) });
+        await sessionService.issue(res, contextoNovo, secure);
+        return json(await sessionService.stateFor(contextoNovo));
+      }
+    }
 
     const context = await sessionService.require(req);
     if (method === 'GET' && path === '/api/billing') {
@@ -216,6 +233,21 @@ export function createProjectApi({
     if (companyOverview && method === 'GET') {
       if (companyOverview[1] !== context.companyId) throw fail('Empresa não encontrada.', 404);
       return json(await companies.overview({ companyId: context.companyId, userId: context.user.id }));
+    }
+
+    const convites = path.match(/^\/api\/companies\/([^/]+)\/invitations$/);
+    if (convites) {
+      if (convites[1] !== context.companyId) throw fail('Empresa não encontrada.', 404);
+      await sessionService.authorize(context, 'member.manage');
+      if (method === 'GET') return json(await companies.invitations({ companyId: context.companyId, actorUserId: context.user.id }));
+      if (method === 'POST') {
+        const { email, role } = await body(req);
+        const { invitation, secret } = await companies.invite({ companyId: context.companyId, actorUserId: context.user.id, email, role });
+        // Sem servidor de e-mail configurado, quem convida recebe o link e o envia. É o que
+        // o convidado precisa para criar a conta; o segredo não fica guardado em lugar nenhum.
+        const origem = publicOrigin || `http://${req.headers.host}`;
+        return json({ ...invitation, link: `${origem}/convite?codigo=${encodeURIComponent(secret)}` }, 201);
+      }
     }
 
     const members = path.match(/^\/api\/companies\/([^/]+)\/members$/);
