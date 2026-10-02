@@ -23,6 +23,7 @@
   - `migrations/018_agent_mcp.sql`: chaves MCP por projeto, operações idempotentes, limite persistente e vínculo de auditoria de agente.
   - `migrations/023_conversions_outbox.sql`: renomeia `nvs_commercial_outbox` para `conversions_outbox` (tabela, índices e constraints), troca `destination` do valor fixo `nvs` para o destino real (`meta`, `tiktok`, `google`, `linkedin`, `taboola`) com uma linha por destino, reduz o motor de tracking a `conversions` e remove os bindings do Umami.
   - `migrations/028_remove_forms.sql`: tira o formulário antigo do banco — `forms`, `form_versions`, `form_submissions`, as colunas de formulário de `webhook_deliveries` (que fica só com entrega de página) e as rotas `form` de `project_routes`.
+  - `migrations/030_sinais_de_bloco.sql`: sinais de bloco do tracker (etapa 7) em tabelas próprias, fora de `analytics_events`: `analytics_block_signals` (entrada, segundos à vista e cliques por id de bloco) e `analytics_scroll_marks` (um marco 25/50/75/100 por visita).
 - `domain/access.mjs`: papéis, capacidades e normalização de slugs e rotas.
   - `repositories/`: consultas de empresas, projetos e conteúdo sempre limitadas à empresa e ao projeto autorizados.
     - `video-repository.mjs`: CRUD, snapshots e leitura pública de VSLs.
@@ -42,6 +43,7 @@
 - `pagina-de-obrigado.mjs`: a página de obrigado depois de uma captura, com o aviso de conversão que liga os pixels ao lead do servidor.
 - `form-answer-validation.mjs` e `page-capture-schema.mjs`: a validação das respostas de uma captura, refazendo o caminho do quiz.
 - `analytics-collect.mjs`: parser, allowlist, proteção contra PII e limitador do endpoint público de coleta.
+- `sinais-de-bloco.mjs`: junta o agregado de sinais com a estrutura da página salva (nome e ordem dos blocos) para o relatório "Onde a página perde gente".
 - `content-security-policy.mjs`: nonce e políticas CSP das experiências públicas.
 - `repositories/analytics-repository.mjs`: persistência isolada de sessões, eventos, atribuição, conversões, marcos VSL, resumo e retenção.
 - `publication-snapshot.mjs`: snapshot determinístico de todas as páginas publicadas de um projeto.

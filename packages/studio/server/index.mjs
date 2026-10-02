@@ -382,6 +382,7 @@ export function createApp({
     '/confirm-dialog.js': ['public/confirm-dialog.js', 'text/javascript'],
     '/vendor/hls.min.js': ['node_modules/hls.js/dist/hls.min.js', 'text/javascript'],
     '/vsl-retention-ui.js': ['public/vsl-retention-ui.js', 'text/javascript'],
+    '/sinais-de-bloco-ui.js': ['public/sinais-de-bloco-ui.js', 'text/javascript'],
     '/vsl-upload.js': ['public/vsl-upload.js', 'text/javascript'],
     '/quiz-runtime.js': ['public/quiz-runtime.js', 'text/javascript'],
     '/quiz-mecanica.js': ['public/quiz-mecanica.js', 'text/javascript'],
@@ -553,6 +554,20 @@ export function createApp({
         if (cors.corsOrigin) {
           res.setHeader('Access-Control-Allow-Origin', cors.corsOrigin);
           res.setHeader('Vary', 'Origin');
+        }
+        // O lote de sinais de bloco não é um acontecimento da jornada: tem tabelas próprias,
+        // não cria sessão e nunca vai para a fila de conversões.
+        if (event.event_name === 'bloco_sinais') {
+          await analytics.ingestBlockSignals({
+            websiteId: website.websiteId,
+            companyId: website.companyId,
+            projectId: website.projectId,
+            urlPath: event.url_path,
+            rolagem: event.event_data.rolagem,
+            blocos: event.event_data.blocos,
+          });
+          res.writeHead(204);
+          return res.end();
         }
         const visitorHash = analytics.visitorHash({
           websiteId: website.websiteId,

@@ -10,6 +10,7 @@ import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
 import { abaDoAssunto, abrirAbaDoProjeto, montarConfiguracoesDoProjeto } from './projeto-configuracoes.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
+import { carregarSinaisDeBloco } from './sinais-de-bloco-ui.js';
 import { renderFunis } from './funis-view.js';
 import { observarIcones } from './icones.js';
 // Ícones da interface: todos do Lucide (ver scripts/gerar-icones.mjs).
@@ -1608,6 +1609,7 @@ async function abrirAnalytics() {
     if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
     pintarAnalyticsView(summary);
     void carregarJornada();
+    void carregarSinaisDeBloco({ api, projectId, from, to, alvo: $('#analytics-blocks'), aindaVale: () => analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id) });
   } catch (error) {
     if (!analyticsPanelGuard.isCurrent(request, projectId, dashboardState().currentProject?.id)) return;
     pintarAnalyticsView(null, { phase: 'error', message: error.message });

@@ -5,7 +5,8 @@
 - `save-cycle.js`: esgotamento das alterações pendentes antes de sair.
 - `styles.css`: aparência do painel.
 - `vsl-player.js` e `vsl-ui.js`: runtime acessível do player público e tela de configuração de VSLs.
-- `tracker.js`: tracker interno de primeira parte, sem cookie, sem PII e com allowlist de UTMs, click IDs e eventos estruturados.
+- `tracker.js`: tracker interno de primeira parte, sem cookie, sem PII e com allowlist de UTMs, click IDs e eventos estruturados. Mede também, por `data-alva-bloco`, entrada na tela, tempo à vista, cliques e rolagem (um lote por visita).
+- `sinais-de-bloco-ui.js`: o relatório "Onde a página perde gente" na tela de Analytics, só com as listas que a tela já tem.
 
 - `editor.html` + `../editor/*.jsx` (bundle em `build/editor.js`): editor de landing e quiz (Puck), no esquema do Alva.
 - `page-schema.js`, `pagina-alva.js`, `puck-conversao.js`: o esquema `alva/1`, o documento publicado e a ponte com o Puck.
