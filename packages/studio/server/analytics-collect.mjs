@@ -1,3 +1,5 @@
+import { FORMATO_ID_DE_BLOCO } from '../public/page-schema.js';
+
 const MAX_BODY_BYTES = 64 * 1024;
 const WINDOW_MS = 60_000;
 
@@ -11,7 +13,17 @@ const EVENT_NAMES = new Set([
   'vsl_complete',
   'vsl_cta_click',
   'vsl_error',
+  'bloco_sinais',
 ]);
+
+// Sinais de bloco (etapa 7): um lote por visita, com o que mudou desde o lote anterior. O
+// formato do evento continua plano na raiz; o aninhamento fica confinado a este event_data, e
+// cada nível é uma allowlist fechada de números e do id do nó. Texto livre não tem por onde entrar.
+const MARCOS_DE_ROLAGEM = [25, 50, 75, 100];
+const MAX_BLOCOS_POR_LOTE = 100;
+const MAX_SEGUNDOS_POR_BLOCO = 3600;
+const MAX_CLIQUES_POR_BLOCO = 100;
+const CHAVES_DO_BLOCO = new Set(['id', 'entrou', 'segundos', 'cliques']);
 
 const ALLOWED_KEYS = new Set(['trackerPublicId', 'event_name', 'url_path', 'url_query', 'referrer', 'event_data']);
 
@@ -47,7 +59,46 @@ function safeIdentifier(value, label) {
   return value;
 }
 
+function inteiroEntre(value, minimo, maximo, label) {
+  if (!Number.isInteger(value) || value < minimo || value > maximo) throw fail(`${label} inválido.`, 400);
+  return value;
+}
+
+function dadosDosSinais(value) {
+  if (value === undefined) throw fail('event_data é obrigatório para bloco_sinais.', 400);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('event_data inválido.', 400);
+  for (const key of Object.keys(value)) if (key !== 'rolagem' && key !== 'blocos') throw fail(`Campo de evento não permitido: ${key}.`, 400);
+  const data = {};
+  if (value.rolagem !== undefined) {
+    if (!Array.isArray(value.rolagem) || value.rolagem.length > MARCOS_DE_ROLAGEM.length) throw fail('rolagem inválida.', 400);
+    const marcos = new Set(value.rolagem.map((marco) => (MARCOS_DE_ROLAGEM.includes(marco) ? marco : null)));
+    if (marcos.has(null)) throw fail('rolagem inválida.', 400);
+    if (marcos.size) data.rolagem = [...marcos].sort((a, b) => a - b);
+  }
+  if (value.blocos !== undefined) {
+    if (!Array.isArray(value.blocos) || value.blocos.length > MAX_BLOCOS_POR_LOTE) throw fail('blocos inválidos.', 400);
+    const vistos = new Set();
+    data.blocos = value.blocos.map((bloco) => {
+      if (!bloco || typeof bloco !== 'object' || Array.isArray(bloco)) throw fail('bloco inválido.', 400);
+      for (const key of Object.keys(bloco)) if (!CHAVES_DO_BLOCO.has(key)) throw fail(`Campo de bloco não permitido: ${key}.`, 400);
+      if (typeof bloco.id !== 'string' || !FORMATO_ID_DE_BLOCO.test(bloco.id)) throw fail('id do bloco inválido.', 400);
+      if (vistos.has(bloco.id)) throw fail('id do bloco repetido no lote.', 400);
+      vistos.add(bloco.id);
+      return {
+        id: bloco.id,
+        entrou: inteiroEntre(bloco.entrou, 0, 1, 'entrou'),
+        segundos: inteiroEntre(bloco.segundos, 0, MAX_SEGUNDOS_POR_BLOCO, 'segundos'),
+        cliques: inteiroEntre(bloco.cliques, 0, MAX_CLIQUES_POR_BLOCO, 'cliques'),
+      };
+    });
+    if (!data.blocos.length) delete data.blocos;
+  }
+  if (!data.rolagem && !data.blocos) throw fail('Lote de sinais vazio.', 400);
+  return data;
+}
+
 function eventData(eventName, value) {
+  if (eventName === 'bloco_sinais') return dadosDosSinais(value);
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('event_data inválido.', 400);
   const isVsl = eventName.startsWith('vsl_');
@@ -149,6 +200,8 @@ export function parseCollectPayload(raw, contentType) {
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw fail('referrer inválido.', 400);
     event.referrer = url.origin;
   }
+  // Os sinais são agregados por página: sem url_path eles não têm a quem pertencer.
+  if (eventName === 'bloco_sinais' && event.url_path === undefined) throw fail('url_path é obrigatório para bloco_sinais.', 400);
   const data = eventData(eventName, rawEventData);
   if (data !== undefined) event.event_data = data;
   return { trackerPublicId, event };

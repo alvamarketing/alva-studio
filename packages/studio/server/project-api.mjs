@@ -3,6 +3,7 @@ import { normalizeProjectSlug, normalizeRoute } from './domain/access.mjs';
 import { renderLeadsCsv } from './leads-csv.mjs';
 import { publicRuntimeCapabilities } from './runtime-flags.mjs';
 import { buildJourneyGraph } from './analytics-journey.mjs';
+import { montarRelatorioDeSinais } from './sinais-de-bloco.mjs';
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status, statusCode: status });
@@ -341,6 +342,19 @@ export function createProjectApi({
       const search = new URL(req.url, 'http://localhost').searchParams;
       const { from, to } = analyticsRange(search.get('from'), search.get('to'));
       return json(await analytics.vslRetention({ companyId: context.companyId, projectId, from, to }));
+    }
+
+    // Onde a página perde gente: rolagem e, por bloco, entradas, tempo à vista e cliques.
+    // O banco só sabe ids; os nomes vêm da página salva, lida aqui para quem tem analytics.read.
+    const blockSignals = path.match(/^\/api\/projects\/([^/]+)\/analytics\/blocks$/);
+    if (blockSignals && method === 'GET') {
+      const projectId = blockSignals[1];
+      await sessionService.authorize(context, 'analytics.read', projectId);
+      const search = new URL(req.url, 'http://localhost').searchParams;
+      const { from, to } = analyticsRange(search.get('from'), search.get('to'));
+      const agregado = await analytics.blockSignals({ companyId: context.companyId, projectId, from, to });
+      const paginas = content ? await content.listPages({ companyId: context.companyId, projectId, actorId: context.user.id }) : [];
+      return json(montarRelatorioDeSinais({ ...agregado, paginas }));
     }
 
     const analyticsSummary = path.match(/^\/api\/projects\/([^/]+)\/analytics\/summary$/);

@@ -404,6 +404,66 @@ export class AnalyticsRepository {
       .sort((a, b) => b.inicios - a.inicios || a.publicId.localeCompare(b.publicId));
   }
 
+  // Sinais de bloco (etapa 7). Não passam por `ingest`: o lote não é um acontecimento da
+  // jornada, não cria sessão (quem mede não vira visita) e não entra em analytics_events.
+  async ingestBlockSignals({ websiteId, companyId, projectId, urlPath, rolagem = [], blocos = [], at = new Date() }) {
+    if (!rolagem.length && !blocos.length) return { blocos: 0, marcos: 0 };
+    return withTransaction(this.database, async (client) => {
+      if (blocos.length) {
+        await client.query(
+          `INSERT INTO analytics_block_signals
+             (company_id, project_id, website_id, url_path, block_id, entered, seconds_visible, clicks, created_at)
+           SELECT $1, $2, $3, $4, item.block_id, item.entered, item.seconds_visible, item.clicks, $9
+             FROM unnest($5::text[], $6::smallint[], $7::int[], $8::int[]) AS item(block_id, entered, seconds_visible, clicks)`,
+          [companyId, projectId, websiteId, urlPath,
+            blocos.map((bloco) => bloco.id), blocos.map((bloco) => bloco.entrou),
+            blocos.map((bloco) => bloco.segundos), blocos.map((bloco) => bloco.cliques), at],
+        );
+      }
+      if (rolagem.length) {
+        await client.query(
+          `INSERT INTO analytics_scroll_marks (company_id, project_id, website_id, url_path, mark, created_at)
+           SELECT $1, $2, $3, $4, mark, $6 FROM unnest($5::smallint[]) AS mark`,
+          [companyId, projectId, websiteId, urlPath, rolagem, at],
+        );
+      }
+      return { blocos: blocos.length, marcos: rolagem.length };
+    });
+  }
+
+  // O que o relatório de blocos precisa do banco: pageviews por página (o denominador) e as
+  // somas por bloco e por marco. Nomear os blocos é com server/sinais-de-bloco.mjs.
+  async blockSignals({ companyId, projectId, from, to } = {}) {
+    const range = [companyId, projectId, from, to];
+    const { rows: visitas } = await this.database.query(
+      `SELECT url_path, COUNT(*)::int AS total
+         FROM analytics_events
+        WHERE company_id = $1 AND project_id = $2 AND event_type = 'pageview'
+          AND event_at >= $3 AND event_at < $4
+        GROUP BY url_path`,
+      range,
+    );
+    const { rows: blocos } = await this.database.query(
+      `SELECT url_path, block_id, SUM(entered)::int AS entradas, SUM(seconds_visible)::int AS segundos, SUM(clicks)::int AS cliques
+         FROM analytics_block_signals
+        WHERE company_id = $1 AND project_id = $2 AND created_at >= $3 AND created_at < $4
+        GROUP BY url_path, block_id`,
+      range,
+    );
+    const { rows: rolagem } = await this.database.query(
+      `SELECT url_path, mark, COUNT(*)::int AS total
+         FROM analytics_scroll_marks
+        WHERE company_id = $1 AND project_id = $2 AND created_at >= $3 AND created_at < $4
+        GROUP BY url_path, mark`,
+      range,
+    );
+    return {
+      visitas: visitas.map((linha) => ({ urlPath: linha.url_path, total: linha.total })),
+      blocos: blocos.map((linha) => ({ urlPath: linha.url_path, blockId: linha.block_id, entradas: linha.entradas, segundos: linha.segundos, cliques: linha.cliques })),
+      rolagem: rolagem.map((linha) => ({ urlPath: linha.url_path, marco: linha.mark, total: linha.total })),
+    };
+  }
+
   // Pageviews crus da janela, com a sessão e a origem de cada um: é o que o motor da
   // jornada precisa para reconstruir o caminho de cada visita.
   async journeyEvents({ companyId, projectId, from, to, limit = 10_000 } = {}) {
@@ -470,6 +530,19 @@ export class AnalyticsRepository {
       );
       removidos += rowCount;
       if (rowCount < limit) break;
+    }
+    // Os sinais de bloco seguem a mesma janela dos eventos.
+    for (const tabela of ['analytics_block_signals', 'analytics_scroll_marks']) {
+      for (;;) {
+        const { rowCount } = await this.database.query(
+          `DELETE FROM ${tabela} WHERE ctid IN (
+             SELECT ctid FROM ${tabela} WHERE created_at < now() - ($1 || ' days')::interval LIMIT $2
+           )`,
+          [eventDays, limit],
+        );
+        removidos += rowCount;
+        if (rowCount < limit) break;
+      }
     }
     for (;;) {
       const { rowCount } = await this.database.query(

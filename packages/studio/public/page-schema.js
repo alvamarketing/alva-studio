@@ -92,6 +92,14 @@ export const atributoDeRevelar = (props = {}) => {
 };
 const atributoDeMovimento = (props) => (movimentoDoBloco(props) ? ` data-alva-motion="${movimentoDoBloco(props)}"` : '');
 
+// A identidade de cada bloco na página publicada: é o id do nó, o mesmo que o editor guarda
+// e que sobrevive aos salvamentos. O tracker mede por ele (rolagem, tempo à vista, clique) e
+// nunca lê o conteúdo do bloco. O formato é o que o coletor aceita (server/analytics-collect.mjs
+// importa esta mesma expressão): um id que o servidor recusaria nem vira atributo.
+// Sem id, sem atributo — o HTML de quem renderiza um nó solto continua o de sempre.
+export const FORMATO_ID_DE_BLOCO = /^[A-Za-z0-9_-]{1,80}$/;
+export const atributoDeBloco = (node) => (FORMATO_ID_DE_BLOCO.test(String(node?.id ?? '')) ? ` data-alva-bloco="${node.id}"` : '');
+
 // Degradê: duas cores e uma direção.
 const DIRECOES = Object.freeze({ vertical: '180deg', horizontal: '90deg', diagonal: '135deg' });
 function fundoDeCores(cor, cor2, direcao) {
@@ -142,7 +150,7 @@ const ELEMENTOS = {
   section: {
     render: (node, desenharFilhos) => {
       const estilo = estiloDaSecao(node.props);
-      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeMovimento(node.props)}${atributoDeRevelar(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
+      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeBloco(node)}${atributoDeMovimento(node.props)}${atributoDeRevelar(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
     },
   },
   // A Linha: os blocos dentro dela dividem o espaço em partes iguais — soltar o segundo já
@@ -197,7 +205,7 @@ const ELEMENTOS = {
   etapa: {
     render: (node, desenharFilhos) => {
       const estilo = estiloDaSecao(node.props);
-      return `<section class="${classeDaSecao(node.props).replace('alva-secao', 'alva-secao alva-etapa')}" data-alva-etapa="${escapeHtml(texto(node.id, 80))}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
+      return `<section class="${classeDaSecao(node.props).replace('alva-secao', 'alva-secao alva-etapa')}" data-alva-etapa="${escapeHtml(texto(node.id, 80))}"${atributoDeBloco(node)}${estilo ? ` style="${escapeHtml(estilo)}"` : ''}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
     },
   },
   // A pergunta de escolha do quiz. Cada opção é um rótulo clicável com o input dentro; o
@@ -293,7 +301,7 @@ export function renderNode(node, profundidade = 0) {
   const miolo = renderConteudo(node, profundidade);
   if (SEM_CAIXA.has(node?.type)) return miolo;
   const props = node?.props ?? {};
-  return `<div class="${classesDoBloco(props)}"${atributoDeMovimento(props)}>${miolo}</div>`;
+  return `<div class="${classesDoBloco(props)}"${atributoDeBloco(node)}${atributoDeMovimento(props)}>${miolo}</div>`;
 }
 
 export function renderTree(nodes) {
