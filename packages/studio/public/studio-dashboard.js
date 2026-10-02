@@ -241,6 +241,8 @@ export function motivoDaFalha(codigo, nome = 'este destino') {
   const fora = texto.match(/^destination_unavailable_(\d+)$/);
   if (fora) return `A plataforma estava indisponível (código ${fora[1]}). O envio tenta de novo sozinho.`;
   if (texto === 'transport_error') return 'Não foi possível falar com a plataforma. O envio tenta de novo sozinho.';
+  if (texto === 'destination_connection_needs_reconnect') return `A conta da Meta conectada precisa ser conectada de novo (o acesso venceu ou foi recusado). Clique em "Reconectar" no cartão "Conta da Meta" das Configurações do projeto.`;
+  if (texto === 'destination_connection_unavailable') return 'O envio pela conexão com o Facebook não está configurado no servidor de envio. Avise quem administra o Studio.';
   if (texto === 'destination_not_configured') return `Sem credencial de ${nome} neste ambiente. Configure-a em Destinos, nesta tela.`;
   if (texto === 'destination_event_name_missing') return `Falta o nome deste evento na configuração de ${nome}. Preencha em Destinos, nesta tela.`;
   if (texto === 'destination_user_agent_required') return 'O evento chegou sem o navegador de quem converteu, que esta plataforma exige.';
@@ -431,6 +433,13 @@ export function configuracaoParaSalvar(destino, valores = {}) {
   return configuration;
 }
 
+// O que o campo de token diz. Destino vindo da conexão não tem token guardado: no modo
+// manual o campo não pode prometer "Guardado" e passa a ser exigido.
+export function rotuloDoSegredo(destino) {
+  if (destino?.semTokenGuardado) return { placeholder: 'Configurado pela conexão — informe o token para preencher à mão', exigido: true };
+  return { placeholder: destino?.configured ? 'Guardado — deixe em branco para manter' : '', exigido: false };
+}
+
 export function nomeDoDestino(chave) {
   return NOME_DO_DESTINO[chave]?.[0] ?? String(chave ?? '');
 }
@@ -460,14 +469,23 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
     const configured = salvo?.configured === true;
     const testCode = configured ? salvo?.publicConfiguration?.test_event_code ?? '' : '';
     const vencimento = configured && provider === 'linkedin' ? vencimentoDoLinkedin(salvo, agora) : null;
-    const state = configured ? (testCode || vencimento ? 'teste' : entregando.has(provider) ? 'ok' : 'idle') : 'off';
+    // Meta pela conexão com o Facebook (F2): o pixel veio da escolha no cartão "Conta da
+    // Meta" e o token é o da conexão — não há campo de token nem de pixel a mostrar, e a
+    // conexão que precisa de novo login aparece aqui também, não só no cartão.
+    const pelaConexao = configured && provider === 'meta' && salvo?.publicConfiguration?.token_source === 'connection';
+    const reconectar = pelaConexao && salvo?.conexao?.precisaReconectar === true;
+    const state = configured ? (testCode || vencimento || reconectar ? 'teste' : entregando.has(provider) ? 'ok' : 'idle') : 'off';
+    const camposManuais = podeConfigurar === true ? CAMPOS_DE_DESTINO[provider] : [];
     return {
       provider,
       name,
       description,
       configured,
       state,
-      stateLabel: !configured ? 'Não configurado' : vencimento ?? (testCode ? 'Modo de teste' : entregando.has(provider) ? 'Enviando' : 'Configurado'),
+      stateLabel: !configured ? 'Não configurado' : reconectar ? 'Precisa reconectar' : vencimento ?? (testCode ? 'Modo de teste' : pelaConexao ? 'Configurado pela conexão' : entregando.has(provider) ? 'Enviando' : 'Configurado'),
+      pelaConexao,
+      precisaReconectar: reconectar,
+      camposManuais,
       aviso: AVISO_DO_DESTINO[provider] ?? '',
       testCode,
       publicValue: salvo?.publicConfiguration?.[CAMPO_PUBLICO[provider]] ?? '',
@@ -475,7 +493,7 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
       // A tela abre com permissão de leitura, mas salvar credencial é `integration.manage`.
       // Mostrar o formulário a quem não pode enviá-lo seria convidar ao erro.
       editable: podeConfigurar === true,
-      fields: podeConfigurar === true ? CAMPOS_DE_DESTINO[provider] : [],
+      fields: pelaConexao ? camposManuais.filter((campo) => campo.teste) : camposManuais,
       semCredencial: CAMPOS_DE_DESTINO[provider].length === 0,
     };
   });

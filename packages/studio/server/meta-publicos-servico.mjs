@@ -13,7 +13,10 @@ function recusa(mensagem, status = 400) { return Object.assign(new Error(mensage
 // quais vieram do Studio — e é o nome que serve de chave para reconhecer o que já foi criado.
 export const nomeNaMeta = (definicao) => `Alva · ${definicao.nome}`;
 
-export function criarServicoDePublicos({ repository, tracking, fetch: buscar = globalThis.fetch }) {
+// `tokenDaConexao` (meta-token-da-conexao.mjs): quando o projeto escolheu a conta pela
+// conexão da empresa, o token é o dela, resolvido na hora. Sem escolha pela conexão, vale a
+// credencial colada de sempre.
+export function criarServicoDePublicos({ repository, tracking, fetch: buscar = globalThis.fetch, tokenDaConexao = null }) {
   // Duas sincronizações do mesmo projeto ao mesmo tempo listariam a conta antes de qualquer
   // uma criar, e criariam o público em dobro. Dentro deste processo elas esperam a vez.
   const emAndamento = new Map();
@@ -41,13 +44,18 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
       // O que falta, na ordem em que se resolve: cada item diz o que é e onde se consegue.
       const faltando = [];
       if (!pixelId) faltando.push({ chave: 'pixel', titulo: 'Pixel da Meta', onde: 'Configure o pixel da Meta na seção "Destinos" desta aba. Os públicos são montados com os eventos que ele recebe.' });
+      if (credenciais?.origem === 'connection' && !(await tokenDaConexao?.resolver(escopo.companyId).catch(() => null))) faltando.push({
+        chave: 'conexao',
+        titulo: 'Conta da Meta conectada',
+        onde: 'A conta de anúncios deste projeto foi escolhida pela conexão com o Facebook, e a conexão precisa ser refeita. Clique em "Reconectar" no cartão "Conta da Meta", acima.',
+      });
       if (!credenciais) faltando.push({
         chave: 'credenciais',
         titulo: 'ID da conta de anúncios e token de acesso',
         onde: 'O ID da conta de anúncios está no Gerenciador de Anúncios (número da conta, só dígitos). O token vem do Gerenciador de Negócios: crie um usuário do sistema, dê a ele acesso à conta de anúncios e gere um token com a permissão ads_management. Não serve o token que já enviamos para a Conversions API: aquele é do pixel e não cria públicos. Antes, aceite os Termos de Públicos Personalizados na conta de anúncios.',
       });
       return {
-        credenciais: { configuradas: Boolean(credenciais), adAccountId: credenciais?.adAccountId ?? null },
+        credenciais: { configuradas: Boolean(credenciais), adAccountId: credenciais?.adAccountId ?? null, origem: credenciais ? credenciais.origem ?? 'manual' : null },
         pixelId,
         faltando,
         publicos: PUBLICOS.map((definicao) => {
@@ -92,7 +100,14 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
         if (!credenciais) throw recusa('Falta o token de acesso da Meta e o ID da conta de anúncios.', 409);
         const pixelId = await pixelDoProjeto(escopo);
         if (!pixelId) throw recusa('Falta o pixel da Meta neste projeto. Configure-o em "Destinos" antes de criar públicos.', 409);
-        const cliente = criarClienteDePublicos({ fetch: buscar, token: credenciais.token, contaDeAnuncios: credenciais.adAccountId });
+        const pelaConexao = credenciais.origem === 'connection';
+        let acesso = { token: credenciais.token, prova: null };
+        if (pelaConexao) {
+          const resolvido = await tokenDaConexao?.resolver(companyId);
+          if (!resolvido) throw recusa('A conta da Meta conectada precisa ser conectada de novo. Clique em "Reconectar" no cartão "Conta da Meta".', 409);
+          acesso = { token: resolvido.token, prova: resolvido.assinar ?? resolvido };
+        }
+        const cliente = criarClienteDePublicos({ fetch: buscar, token: acesso.token, contaDeAnuncios: credenciais.adAccountId, prova: acesso.prova, pelaConexao });
         const registrados = new Map((await repository.listar(escopo)).map((item) => [item.chave, item]));
         let naConta = null;
         const resultados = [];
@@ -122,6 +137,8 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
             resultados.push({ chave: definicao.chave, estado: 'criado', metaId });
           } catch (erro) {
             if (!(erro instanceof MetaApiError)) throw erro;
+            // Token da conexão recusado (190): a conexão inteira passa a pedir "Reconectar".
+            if (pelaConexao && (erro.code === 190 || erro.code === 102)) await tokenDaConexao?.marcarParaReconectar({ companyId, motivo: 'publicos_token_recusado' }).catch(() => {});
             await repository.gravar({ ...escopo, chave: definicao.chave, status: 'error', erro: erro.message });
             resultados.push({ chave: definicao.chave, estado: 'erro', erro: erro.message });
             if (erro.fatal) falhaFatal = erro;

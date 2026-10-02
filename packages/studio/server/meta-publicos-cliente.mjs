@@ -49,12 +49,20 @@ export function limpar(valor, token) {
     .replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
-export function erroDaMeta(corpo, token) {
+// `pelaConexao`: o token é o da conexão da empresa — a saída é reconectar, não gerar token.
+// 102 (sessão inválida) se resolve do mesmo jeito que 190, com novo login.
+// https://developers.facebook.com/docs/graph-api/guides/error-handling
+export function erroDaMeta(corpo, token, { pelaConexao = false } = {}) {
   const erro = corpo?.error ?? {};
   const code = Number.isInteger(erro.code) ? erro.code : null;
   const subcode = Number.isInteger(erro.error_subcode) ? erro.error_subcode : null;
   const detalhe = limpar(erro.error_user_msg || erro.message, token);
-  if (code === 190) return new MetaApiError('A Meta recusou o token (inválido ou expirado). Gere outro token e salve de novo.', { code, subcode, fatal: true, status: 502 });
+  if (code === 190 || code === 102) {
+    const mensagem = pelaConexao
+      ? 'A Meta não aceita mais a conta conectada. Reconecte a conta da Meta no cartão "Conta da Meta" e tente de novo.'
+      : 'A Meta recusou o token (inválido ou expirado). Gere outro token e salve de novo.';
+    return new MetaApiError(mensagem, { code, subcode, fatal: true, status: 502 });
+  }
   if (code === 200) return new MetaApiError('O token não tem permissão para criar públicos nesta conta de anúncios. Ele precisa da permissão ads_management e de acesso à conta.', { code, subcode, fatal: true, status: 502 });
   if (code !== null && LIMITE_DE_CHAMADAS.has(code)) return new MetaApiError('A Meta recebeu muitas chamadas desta conta. Espere alguns minutos e tente de novo.', { code, subcode, status: 429 });
   if (subcode !== null && BLOQUEIO_DE_INTEGRIDADE.has(subcode)) return new MetaApiError('A Meta bloqueou este público por política de integridade. Revise o público no Gerenciador de Anúncios.', { code, subcode, status: 502 });
@@ -74,7 +82,15 @@ function pixelDaRegra(regra) {
   }
 }
 
-export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token, contaDeAnuncios }) {
+// `prova` só vem quando o token é o da conexão da empresa (D8): uma função que devolve
+// {appsecret_proof, appsecret_time} novos a cada chamada (a prova vence em 5 minutos), ou o
+// par pronto. Vai em toda chamada, inclusive na página seguinte da listagem.
+// https://developers.facebook.com/documentation/facebook-login/security#proof
+export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token, contaDeAnuncios, prova = null, pelaConexao = false }) {
+  const assinatura = () => {
+    const par = typeof prova === 'function' ? prova() : prova;
+    return par?.appsecret_proof && par?.appsecret_time ? { appsecret_proof: String(par.appsecret_proof), appsecret_time: String(par.appsecret_time) } : {};
+  };
   const segredo = typeof token === 'string' ? token.trim() : '';
   if (!segredo) throw Object.assign(new Error('Informe o token de acesso da Meta.'), { status: 400, statusCode: 400 });
   const conta = String(contaDeAnuncios ?? '').trim().replace(/^act_/i, '');
@@ -92,7 +108,7 @@ export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token
     }
     let corpo = null;
     try { corpo = await resposta.json(); } catch { corpo = null; }
-    if (!resposta.ok || corpo?.error) throw erroDaMeta(corpo, segredo);
+    if (!resposta.ok || corpo?.error) throw erroDaMeta(corpo, segredo, { pelaConexao });
     return corpo ?? {};
   }
 
@@ -102,7 +118,7 @@ export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token
     // string JSON, e `prefill=1` traz a atividade de antes da criação (até 180 dias).
     // https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/guides/website-custom-audiences
     async criar({ nome, regra }) {
-      const corpo = new URLSearchParams({ name: nome, rule: JSON.stringify(regra), prefill: '1', access_token: segredo });
+      const corpo = new URLSearchParams({ name: nome, rule: JSON.stringify(regra), prefill: '1', access_token: segredo, ...assinatura() });
       const resultado = await chamar(base, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: corpo.toString() });
       if (typeof resultado.id !== 'string' || !resultado.id) throw new MetaApiError('A Meta respondeu sem identificador do público criado.', { status: 502 });
       return { id: resultado.id };
@@ -114,16 +130,19 @@ export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token
     // da Meta (conferido em 02/10/2026) e a regra do projeto é não adivinhar integração.
     // https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/guides/website-custom-audiences
     async listar() {
+      // A página seguinte é montada pelo cursor `after`, com prova nova; o `next` da Meta
+      // não é seguido porque traz o token na URL. https://developers.facebook.com/docs/graph-api/results
       const achados = [];
-      let url = `${base}?${new URLSearchParams({ fields: 'id,name,rule', limit: '100', access_token: segredo })}`;
-      for (let pagina = 0; url && pagina < LIMITE_DE_PAGINAS; pagina += 1) {
-        const resultado = await chamar(url, { method: 'GET' });
+      let depois = null;
+      for (let pagina = 0; pagina < LIMITE_DE_PAGINAS; pagina += 1) {
+        const parametros = { fields: 'id,name,rule', limit: '100', ...(depois ? { after: depois } : {}), access_token: segredo, ...assinatura() };
+        const resultado = await chamar(`${base}?${new URLSearchParams(parametros)}`, { method: 'GET' });
         for (const item of Array.isArray(resultado.data) ? resultado.data : []) {
           if (typeof item?.id === 'string') achados.push({ id: item.id, nome: String(item.name ?? ''), pixelId: pixelDaRegra(item.rule) });
         }
-        const proxima = resultado.paging?.next;
-        // O `next` traz o token. Só se segue o que aponta para a própria Graph API.
-        url = typeof proxima === 'string' && proxima.startsWith(`${RAIZ}/`) ? proxima : null;
+        const cursor = resultado.paging?.cursors?.after;
+        if (!resultado.paging?.next || typeof cursor !== 'string' || !cursor || cursor === depois) break;
+        depois = cursor;
       }
       return achados;
     },

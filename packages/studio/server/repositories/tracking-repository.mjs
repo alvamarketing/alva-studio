@@ -37,8 +37,11 @@ const PROVIDER_VALUE_RULES = {
   linkedin: { conversion_urn: /^urn:lla:llaPartnerConversion:\d{1,20}$/, access_token: CREDENTIAL, linkedin_version: /^\d{6}$/ },
   taboola: { account_id: /^\d{1,20}$/, lead_event_name: NOME_DE_EVENTO_TABOOLA, initiate_checkout_event_name: NOME_DE_EVENTO_TABOOLA, purchase_event_name: NOME_DE_EVENTO_TABOOLA },
 };
+// `token_source` só existe na Meta e só o servidor o escreve (ver saveDestination): diz se o
+// token da Conversions API é o colado (`manual`) ou o da conexão da empresa (`connection`).
+const ORIGENS_DO_TOKEN = new Set(['manual', 'connection']);
 const PUBLIC_PROVIDER_FIELDS = {
-  meta: { pixel_id: /^\d{1,20}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/ }, tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/ },
+  meta: { pixel_id: /^\d{1,20}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/, token_source: /^connection$/ }, tiktok: { pixel_code: /^[A-Za-z0-9_-]{1,255}$/, test_event_code: /^[A-Za-z0-9_-]{1,64}$/ },
   google: { measurement_id: /^G-[A-Z0-9]{4,20}$/ }, linkedin: { partner_id: /^\d{1,30}$/ }, taboola: { account_id: /^\d{1,20}$/ },
 };
 
@@ -195,14 +198,21 @@ export class TrackingRepository {
     return this.database.transaction ? this.database.transaction(run) : run(this.database);
   }
 
-  async saveDestination({ companyId, projectId, environment: rawEnvironment, provider, configuration, publicConfiguration = undefined }) {
+  // `tokenSource` (só Meta) não vem do corpo da requisição: a rota manual nunca o passa, e o
+  // `token_source` não é campo aceito em `configuration`. Só a escolha pela conexão grava
+  // 'connection'. Regra D2: a origem é uma só — com 'connection' o token colado é apagado; um
+  // token colado depois volta a origem para 'manual'.
+  // `client`: quem já está numa transação (a escolha pela conexão) passa a dele.
+  async saveDestination({ companyId, projectId, environment: rawEnvironment, provider, configuration, publicConfiguration = undefined, tokenSource = undefined, client: clienteExterno = null }) {
     const targetEnvironment = environment(rawEnvironment);
     if (!PROVIDERS.has(provider)) throw fail('Destino de rastreamento inválido.');
+    if (tokenSource !== undefined && (provider !== 'meta' || !ORIGENS_DO_TOKEN.has(tokenSource))) throw fail('Origem do token inválida.');
     if (!configuration || typeof configuration !== 'object' || Array.isArray(configuration)) throw fail('Configuração do destino inválida.');
     // A validação de formato é sobre o que chegou nesta chamada — mesclar não isenta um
     // campo enviado de obedecer o contrato do provedor, só preenche o que ficou de fora.
     if (Object.keys(configuration).some((key) => !PROVIDER_FIELDS[provider].has(key) || typeof configuration[key] !== 'string' || !PROVIDER_VALUE_RULES[provider][key]?.test(configuration[key]))) throw fail('Configuração do destino inválida.');
-    await this.database.transaction(async (client) => {
+    const naTransacao = (tarefa) => (clienteExterno ? tarefa(clienteExterno) : this.database.transaction(tarefa));
+    await naTransacao(async (client) => {
       const binding = await client.query(
         `SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions' FOR UPDATE`,
         [companyId, projectId, targetEnvironment],
@@ -224,7 +234,22 @@ export class TrackingRepository {
         : {};
       const configuracaoEfetiva = { ...configuracaoAtual, ...configuration };
       if (configuracaoEfetiva.test_event_code === '') delete configuracaoEfetiva.test_event_code;
-      if (REQUIRED_PROVIDER_FIELDS[provider].some((key) => !configuracaoEfetiva[key])) throw fail('Configuração do destino inválida.');
+      if (provider === 'meta') {
+        // Pixel escolhido pela conexão só muda pela conexão (que confere a lista da Meta) ou
+        // virando manual, com um token colado junto. Sem isso, um pixel nunca validado
+        // seguiria com o token da empresa.
+        const trocaPixelDaConexao = configuracaoAtual.token_source === 'connection' && tokenSource !== 'connection'
+          && !configuration.access_token && configuration.pixel_id !== undefined && configuration.pixel_id !== configuracaoAtual.pixel_id;
+        if (trocaPixelDaConexao) throw fail('Este pixel foi escolhido pela conexão com o Facebook. Para trocar o pixel pela conexão, escolha no cartão "Conta da Meta"; para digitar manualmente, informe também o token de acesso.');
+        if (tokenSource === 'connection') {
+          configuracaoEfetiva.token_source = 'connection';
+          delete configuracaoEfetiva.access_token;
+        } else if (tokenSource === 'manual' || configuration.access_token) {
+          delete configuracaoEfetiva.token_source;
+        }
+      }
+      const pelaConexao = provider === 'meta' && configuracaoEfetiva.token_source === 'connection';
+      if (REQUIRED_PROVIDER_FIELDS[provider].some((key) => !configuracaoEfetiva[key] && !(pelaConexao && key === 'access_token'))) throw fail('Configuração do destino inválida.');
       // O código de teste não é segredo — a plataforma o mostra às claras — e a tela precisa
       // saber que o destino está em modo de teste, ou "Entregue" pareceria entrega de verdade.
       const teste = configuracaoEfetiva.test_event_code ? { test_event_code: configuracaoEfetiva.test_event_code } : {};
@@ -232,7 +257,10 @@ export class TrackingRepository {
         : provider === 'tiktok' ? { pixel_code: configuracaoEfetiva.pixel_code, ...teste }
         : provider === 'taboola' ? { account_id: configuracaoEfetiva.account_id }
         : {};
-      const publicValue = publicConfiguration === undefined ? derived : publicConfiguration;
+      // A origem pública é a do servidor, nunca a que o cliente mandou.
+      const { token_source: _ignorada, ...publicaDoCliente } = publicConfiguration && typeof publicConfiguration === 'object' && !Array.isArray(publicConfiguration) ? publicConfiguration : {};
+      const publicValue = publicConfiguration === undefined ? { ...derived } : publicConfiguration === null || typeof publicConfiguration !== 'object' || Array.isArray(publicConfiguration) ? publicConfiguration : publicaDoCliente;
+      if (pelaConexao && publicValue && typeof publicValue === 'object') publicValue.token_source = 'connection';
       if (!publicValue || typeof publicValue !== 'object' || Array.isArray(publicValue) || Object.keys(publicValue).some((key) => !Object.hasOwn(PUBLIC_PROVIDER_FIELDS[provider], key) || typeof publicValue[key] !== 'string' || !PUBLIC_PROVIDER_FIELDS[provider][key].test(publicValue[key]))) throw fail('Configuração pública do destino inválida.');
       const plain = JSON.stringify(configuracaoEfetiva);
       if (plain.length > 12_000) throw fail('Configuração do destino excede o limite.');

@@ -123,6 +123,7 @@ export function createProjectApi({
   tracking,
   publicosMeta = null,
   metaConexao = null,
+  metaSelecao = null,
   commercialOutbox,
   runtimeFlags,
   billing,
@@ -267,7 +268,7 @@ export function createProjectApi({
     // Conectar com o Facebook (spec 2026-10-02). A conexão é da empresa; quem pode mexer em
     // integrações é quem conecta. Empresa, pessoa e sessão saem sempre do contexto — o corpo
     // do `finish` só traz o que o Facebook devolveu (code ou error, e o state).
-    const conexaoMeta = path.match(/^\/api\/companies\/([^/]+)\/meta-connection(?:\/(start|finish))?$/);
+    const conexaoMeta = path.match(/^\/api\/companies\/([^/]+)\/meta-connection(?:\/(start|finish|ad-accounts))?$/);
     if (conexaoMeta) {
       const [, empresa, acao = ''] = conexaoMeta;
       const mutacao = method !== 'GET';
@@ -287,12 +288,46 @@ export function createProjectApi({
           ...escopo, projectId, userId: context.user.id, sessionId: context.sessionId, origem: publicOrigin || `http://${req.headers.host}`,
         }));
       }
+      // F2: as contas de anúncios que a conexão alcança (para o seletor do projeto).
+      if (acao === 'ad-accounts' && method === 'GET') {
+        if (!metaSelecao) throw fail('A conexão com o Facebook não está configurada neste ambiente.', 409);
+        return json(await metaSelecao.contasDeAnuncios(escopo));
+      }
       if (acao === 'finish' && method === 'POST') {
         const input = await body(req);
         return json(await metaConexao.concluir({
           ...escopo, userId: context.user.id, sessionId: context.sessionId, code: input?.code, error: input?.error, state: input?.state,
         }));
       }
+      if (mutacao) await body(req);
+      throw fail('Não encontrado.', 404);
+    }
+
+    // F2: a escolha de conta de anúncios e pixel do projeto, pela conexão da empresa (D1).
+    // GET lê o estado; GET pixels lista os da conta; PUT selection grava — e o serviço só
+    // aceita conta e pixel que a Meta devolveu para esta conexão.
+    const escolhaMeta = path.match(/^\/api\/projects\/([^/]+)\/meta-connection(?:\/(pixels|selection))?$/);
+    if (escolhaMeta) {
+      const [, projectId, acao = ''] = escolhaMeta;
+      const mutacao = method !== 'GET';
+      try {
+        await sessionService.authorize(context, 'integration.manage', projectId);
+      } catch (erro) { if (mutacao) await body(req); throw erro; }
+      if (!metaSelecao) { if (mutacao) await body(req); throw fail('A conexão com o Facebook não está configurada neste ambiente.', 409); }
+      const escopo = { companyId: context.companyId, projectId };
+      if (!acao && method === 'GET') return json(await metaSelecao.estado(escopo));
+      if (acao === 'pixels' && method === 'GET') {
+        const search = new URL(req.url, 'http://localhost').searchParams;
+        return json(await metaSelecao.pixels({ ...escopo, adAccountId: search.get('adAccountId') }));
+      }
+      if (acao === 'selection' && (method === 'PUT' || method === 'POST')) {
+        const input = await body(req);
+        return json(await metaSelecao.escolher({
+          ...escopo, userId: context.user.id, adAccountId: input?.adAccountId, pixelId: input?.pixelId,
+          substituirManual: input?.substituirManual === true, automatica: input?.automatica === true,
+        }));
+      }
+      if (acao === 'selection' && method === 'GET') return json({ escolha: (await metaSelecao.estado(escopo)).escolha });
       if (mutacao) await body(req);
       throw fail('Não encontrado.', 404);
     }
@@ -481,7 +516,12 @@ export function createProjectApi({
       }
       if (action === 'destinations' && !provider && method === 'GET') {
         const search = new URL(req.url, 'http://localhost').searchParams;
-        return json(await tracking.destinationsFor({ companyId: context.companyId, projectId, environment: search.get('environment') || 'production' }));
+        const destinos = await tracking.destinationsFor({ companyId: context.companyId, projectId, environment: search.get('environment') || 'production' });
+        // Destino da Meta pela conexão: a lista diz se a conexão precisa de novo login, para
+        // a falha não ficar escondida atrás de um "Configurado".
+        const meta = destinos.find((item) => item.provider === 'meta' && item.publicConfiguration?.token_source === 'connection');
+        if (meta) meta.conexao = { precisaReconectar: metaSelecao ? await metaSelecao.precisaReconectar({ companyId: context.companyId }) : true };
+        return json(destinos);
       }
       if (action === 'destinations' && provider && method === 'DELETE') {
         const search = new URL(req.url, 'http://localhost').searchParams;

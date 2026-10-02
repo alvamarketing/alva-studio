@@ -35,6 +35,9 @@ import { CAMINHO_DO_RETORNO, lerConfiguracaoDaMeta } from './meta-config.mjs';
 import { criarClienteDaConexao } from './meta-conexao-cliente.mjs';
 import { criarServicoDeConexaoMeta } from './meta-conexao-servico.mjs';
 import { MetaConnectionsRepository } from './repositories/meta-connections-repository.mjs';
+import { MetaProjectSelectionsRepository } from './repositories/meta-project-selections-repository.mjs';
+import { criarServicoDeSelecaoMeta } from './meta-selecao-servico.mjs';
+import { criarTokenDaConexao } from './meta-token-da-conexao.mjs';
 import { ConversionsOutboxRepository } from './repositories/conversions-outbox-repository.mjs';
 import { PublicationRuntimeRepository } from './repositories/publication-runtime-repository.mjs';
 import { RuntimeConsentGateway } from './runtime-consent-gateway.mjs';
@@ -280,17 +283,28 @@ export function createApp({
   const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
   // Os públicos da Meta guardam o token no mesmo cofre dos destinos (mesma chave-mestra) e
   // leem o pixel dos destinos: sem rastreamento configurado, não há o que montar.
-  const publicosMeta = tracking ? criarServicoDePublicos({ repository: new MetaAudiencesRepository(database), tracking }) : null;
   // Conectar com o Facebook: só existe com banco, chave-mestra (cofre do token e segredo do
   // state) e o app da Meta configurado. Sem META_APP_ID/META_APP_SECRET, fica desligado e o
   // preenchimento manual continua sendo o caminho.
   const configuracaoDaMeta = lerConfiguracaoDaMeta(metaOptions.env ?? process.env, { publicOrigin });
-  const metaConexao = database && process.env.TRACKING_MASTER_KEY && configuracaoDaMeta
+  const conexoesMeta = database && process.env.TRACKING_MASTER_KEY ? new MetaConnectionsRepository(database) : null;
+  const clienteDaConexao = configuracaoDaMeta ? criarClienteDaConexao({ fetch: metaOptions.fetch ?? globalThis.fetch, configuracao: configuracaoDaMeta }) : null;
+  const metaConexao = conexoesMeta && configuracaoDaMeta
     ? criarServicoDeConexaoMeta({
-      repository: new MetaConnectionsRepository(database),
-      cliente: criarClienteDaConexao({ fetch: metaOptions.fetch ?? globalThis.fetch, configuracao: configuracaoDaMeta }),
+      repository: conexoesMeta,
+      cliente: clienteDaConexao,
       configuracao: configuracaoDaMeta,
       chaveMestra: process.env.TRACKING_MASTER_KEY,
+    })
+    : null;
+  // F2: com a conexão, o projeto escolhe conta e pixel, e os públicos usam o token dela.
+  const tokenDaConexaoMeta = conexoesMeta && configuracaoDaMeta ? criarTokenDaConexao({ conexoes: conexoesMeta, configuracao: configuracaoDaMeta }) : null;
+  const repositorioDePublicosMeta = tracking ? new MetaAudiencesRepository(database) : null;
+  const publicosMeta = tracking ? criarServicoDePublicos({ repository: repositorioDePublicosMeta, tracking, tokenDaConexao: tokenDaConexaoMeta, ...(metaOptions.fetch ? { fetch: metaOptions.fetch } : {}) }) : null;
+  const metaSelecao = metaConexao && tracking
+    ? criarServicoDeSelecaoMeta({
+      conexoes: conexoesMeta, cliente: clienteDaConexao, selecoes: new MetaProjectSelectionsRepository(database), tracking, publicos: repositorioDePublicosMeta,
+      transacao: (tarefa) => database.transaction(tarefa),
     })
     : null;
   const images = database ? new ImageRepository(database, { publicOrigin }) : null;
@@ -361,6 +375,7 @@ export function createApp({
       tracking,
       publicosMeta,
       metaConexao,
+      metaSelecao,
       commercialOutbox,
       body,
       secure: Boolean(publicOrigin),

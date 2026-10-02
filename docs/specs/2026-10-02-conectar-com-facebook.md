@@ -45,7 +45,19 @@ preenchido de memória.
   erro 200 / subcódigo 1870090. Se um app pode aceitar pelo cliente: **NÃO CONFIRMADO** — tratar como
   "o cliente aceita pelo link".
   https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-account
-- **Contas e pixels:** `/me/adaccounts` **NÃO CONFIRMADO** na v26. Documentados:
+- **Contas e pixels (conferido pelo builder da F2 em 02/10/2026):** `/me/adaccounts` não aparece
+  na referência do nó User — **não é usado**. A F2 usa `/me/businesses` →
+  `/{business_id}/owned_ad_accounts` e `/client_ad_accounts` (contas pessoais fora de portfólio
+  não aparecem), `act_<id>/adspixels`, `/me/accounts` (Páginas, só nome) e
+  `act_<id>?fields=tos_accepted`. Paginação pelo cursor `after`, com teto de páginas.
+  https://developers.facebook.com/docs/graph-api/reference/user/businesses/
+  https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/business/owned_ad_accounts
+  https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/business/client_ad_accounts
+  https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-account/adspixels
+  https://developers.facebook.com/docs/graph-api/reference/user/accounts/
+  https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/reference/custom-audience-terms-of-service
+  https://developers.facebook.com/docs/graph-api/results
+- **Contas e pixels (pesquisa original):** `/me/adaccounts` **NÃO CONFIRMADO** na v26. Documentados:
   `/me/businesses` → `/{business_id}/owned_ad_accounts` e `/client_ad_accounts`;
   `act_<id>/adspixels`; `/{business_id}/owned_pixels` e `/client_pixels`; com BISU,
   `/me?fields=client_business_id`. O builder confere cada um na documentação antes de usar.
@@ -69,7 +81,8 @@ preenchido de memória.
 |---|---|
 | D1 | Conexão **da empresa** (uma pessoa conecta; vale para todos os projetos). A escolha de conta de anúncios e pixel é **do projeto**. Uma conexão por empresa por ora; a tabela tem `id` próprio para afrouxar depois. |
 | D2 | O preenchimento manual **continua**, como "Prefiro preencher manualmente". A origem gravada no projeto (`manual` ou `connection`) vale; nunca as duas ao mesmo tempo. |
-| D3 | O tipo de token é **parâmetro** (`user` ou `system_user`). A CAPI só usa a conexão se o token for `system_user` (não vence); com token de usuário (≈60 dias) a conexão escolhe só o pixel e o token da CAPI segue colado — vencimento silencioso perderia conversões. |
+| D3 | O tipo de token é **parâmetro** (`user` ou `system_user`). ~~A CAPI só usa a conexão se o token for `system_user` (não vence); com token de usuário (≈60 dias) a conexão escolhe só o pixel e o token da CAPI segue colado — vencimento silencioso perderia conversões.~~ **Mudada em 02/10/2026 (ver D3′).** |
+| D3′ | **02/10/2026, pedido do dono (tudo automático):** a CAPI **usa o token da conexão mesmo sendo `user`** (≈60 dias). Mitigações obrigatórias, todas com teste: (i) o vencimento (`token_expires_at`, do `expires_in` da troca por token longo) aparece no cartão como "vence em N dias", com aviso destacado e **Reconectar** quando faltam ≤ 7 dias; (ii) token vencido pela data, recusado (190/102) ou conexão desfeita fazem a entrega falhar **sem retentar**, com o motivo `destination_connection_needs_reconnect` na tela de eventos, a conexão marcada `needs_reconnect` e o destino "Meta" mostrando "Precisa reconectar" — nunca falha silenciosa; (iii) a origem gravada é uma só (`token_source`: `connection` apaga o token colado; colar um token volta para `manual`), e trocar o manual pela conexão exige confirmação na tela. O destino guarda só o pixel: o token é decifrado da conexão da empresa a cada envio, assinado com `appsecret_proof`. |
 | D4 | `/privacidade` é página pública exigida pela Meta; o texto é do dono (o Studio entrega um rascunho para revisão, sem valor jurídico). |
 | D5 | Redirect fixo: `PUBLIC_ORIGIN + /conexoes/meta/retorno`. Trocar o domínio exige atualizar o app na Meta. |
 | D6 | Exclusão de dados apaga a pessoa (token, id, nome, escopos). **Não** apaga as escolhas de conta e pixel dos projetos (dado da empresa). |
@@ -96,6 +109,10 @@ o código com a Meta.
 `TRACKING_MASTER_KEY`, escopo/AAD `meta-connection:{companyId}:{metaUserId}`). Nunca em log, erro,
 resposta ou HTML.
 
+**Dados — migração 035 (F2):** `meta_project_selections` (empresa, projeto, conta, pixel, nomes,
+`automatic`, `connection_id` com `ON DELETE SET NULL` — desconectar mantém a escolha como histórico,
+D6/D10). O worker passa a receber `META_APP_ID`/`META_APP_SECRET` (compose) para assinar a CAPI.
+
 **Dados — migração 034 (a 033 já existe):** `meta_connections`, `meta_oauth_states`,
 `meta_data_deletion_requests`; `ALTER meta_audience_credentials` (+`source`, +`connection_id`,
 `encrypted_token` aceita NULL com CHECK). `tracking_destinations` sem mudança de schema: a configuração
@@ -111,6 +128,8 @@ cifrada da Meta ganha `token_source: 'manual'|'connection'`.
 | DELETE | `/api/companies/:id/meta-connection` | integration.manage |
 | GET | `/api/companies/:id/meta-connection/ad-accounts` | integration.manage |
 | GET | `/api/projects/:pid/meta-connection/pixels?adAccountId=` | integration.manage |
+| GET | `/api/projects/:pid/meta-connection` (estado do projeto: escolha, destino, Páginas, vencimento, termos) | integration.manage |
+| PUT | `/api/projects/:pid/meta-connection/selection` `{adAccountId, pixelId, substituirManual?, automatica?}` · GET lê a escolha | integration.manage |
 | GET | `/conexoes/meta/retorno` (HTML estático) | público |
 | POST | `/conexoes/meta/desautorizar`, `/conexoes/meta/exclusao` (`signed_request`) | público, assinado |
 | GET | `/conexoes/meta/exclusao/:codigo`, `/privacidade` | público |
@@ -140,6 +159,19 @@ de conta e pixel, Desconectar) → vence em breve → precisa reconectar (190/46
 | F5 | Business Verification, Access Verification, App Review (e talvez tela de métricas de anúncio), abrir para clientes | pequeno de código, grande de espera | **sim** |
 
 ## Riscos e o que continua em aberto
+
+**Conhecidos na F2 (conferência de 02/10/2026), deixados para depois de propósito:**
+
+- Contas de anúncios por portfólio: um erro ao ler um portfólio derruba a lista inteira, e conta
+  de anúncios pessoal (fora de portfólio) não aparece — `/me/adaccounts` não é usado por não estar
+  documentado no nó User.
+- Reconectar com **outra pessoa** da Meta mantém as escolhas dos projetos feitas pela anterior; se a
+  pessoa nova não alcança aquela conta ou pixel, a CAPI e os públicos falham (de forma visível) até
+  alguém escolher de novo.
+- Dois cliques rápidos em abas das Configurações podem disparar carregamentos concorrentes do cartão
+  "Conta da Meta"; o último a responder vence.
+- O vencimento vem do `expires_in` da troca ou, na falta dele, do `debug_token` (`expires_at`); o que
+  `expires_at = 0` significa não está na referência e é tratado como "não informado".
 
 - Sem F5, só quem tem papel no app usa o botão; **o preenchimento manual segue sendo o caminho dos clientes**.
 - O screencast do App Review exige métricas de anúncio na tela; o Studio não tem. Decidir antes de enviar.
