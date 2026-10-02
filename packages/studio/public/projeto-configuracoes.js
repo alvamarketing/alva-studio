@@ -11,7 +11,7 @@ import { criarCartaoDeLeads } from './projeto-leads.js';
 export const ABAS_DO_PROJETO = [
   ['geral', 'Geral', 'tune'],
   ['publicacao', 'Publicação', 'cloud_upload'],
-  ['rastreamento', 'Rastreamento', 'conversion_path'],
+  ['rastreamento', 'Plataformas', 'conversion_path'],
   ['leads', 'Leads', 'inbox'],
 ];
 

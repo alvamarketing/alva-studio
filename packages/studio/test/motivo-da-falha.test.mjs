@@ -13,7 +13,7 @@ import { estadoDaEntrega, motivoDaFalha, passosDaJornada, trackingEventsModel } 
 test('credencial recusada vira uma frase que diz o que conferir, e onde', () => {
   for (const codigo of ['destination_rejected_401', 'destination_rejected_403']) {
     assert.match(motivoDaFalha(codigo, 'Meta'), /recusou a credencial/i);
-    assert.match(motivoDaFalha(codigo, 'Meta'), /Meta.*em Plataformas, na aba Rastreamento das Configurações do projeto/);
+    assert.match(motivoDaFalha(codigo, 'Meta'), /Meta.*na aba Plataformas das Configurações do projeto/);
   }
 });
 
