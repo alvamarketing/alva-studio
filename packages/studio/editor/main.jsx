@@ -12,6 +12,7 @@ import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
 import { ArrowLeft, CircleCheck, CircleDot, Eye, Inbox, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
 import { Estrutura } from './estrutura.jsx';
+import { ZONAS_DO_CANVAS } from './zonas-do-canvas.js';
 import { FONTE_DO_CONTRATO, documentoDaPagina, ehQuiz, normalizarEstadoAlva } from '../public/pagina-alva.js';
 import { quizRuntimeCss } from '../public/quiz-runtime.js';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
@@ -42,7 +43,7 @@ const ROTULOS_DAS_ETAPAS = `.alva-quiz-no-editor{counter-reset:etapa}
 .alva-quiz-no-editor .alva-etapa::before{content:'Etapa ' counter(etapa);position:absolute;top:10px;left:14px;font:600 12px/1 Inter,system-ui,sans-serif;color:#667085;letter-spacing:.02em}
 .alva-quiz-no-editor .alva-etapa:last-of-type::before{content:'Tela final'}
 .alva-quiz-no-editor .alva-etapa .alva-conteudo>*:has(.answer-wrap){flex:0 0 100%}`;
-const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + FONTE_DO_CONTRATO + elementosCss + escolhaCss + quizRuntimeCss + ROTULOS_DAS_ETAPAS;
+const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + FONTE_DO_CONTRATO + elementosCss + escolhaCss + quizRuntimeCss + ROTULOS_DAS_ETAPAS + ZONAS_DO_CANVAS;
 function IframeComFolhas({ children, document: doc }) {
   useEffect(() => {
     if (!doc || doc.getElementById('alva-folhas')) return;
