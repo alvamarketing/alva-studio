@@ -425,6 +425,7 @@ export function createApp({
     '/equipe-ui.js': ['public/equipe-ui.js', 'text/javascript'],
     '/publicos-meta-ui.js': ['public/publicos-meta-ui.js', 'text/javascript'],
     '/conexao-meta-ui.js': ['public/conexao-meta-ui.js', 'text/javascript'],
+    '/escolha-pesquisavel.js': ['public/escolha-pesquisavel.js', 'text/javascript'],
     [CAMINHO_DO_RETORNO]: ['public/conexao-meta-retorno.html', 'text/html'],
     '/conexao-meta-retorno.js': ['public/conexao-meta-retorno.js', 'text/javascript'],
     '/projeto-configuracoes.js': ['public/projeto-configuracoes.js', 'text/javascript'],

@@ -56,12 +56,12 @@ test('uma conta e um pixel, nada escolhido: escolhe e grava sozinho, e avisa', a
   assert.match(cartao.textContent, /Pixel Alva \(555\)/);
 });
 
-test('perfil e Páginas que a pessoa administra aparecem', async () => {
+test('o perfil aparece; a lista de Páginas não (ficava enorme e ninguém usa para escolher)', async () => {
   const { cartao } = montar();
   await cartao.recarregar();
   assert.match(cartao.textContent, /Taian na Meta/);
-  assert.match(cartao.textContent, /Páginas que você administra/);
-  assert.match(cartao.textContent, /Página Alva/);
+  assert.doesNotMatch(cartao.textContent, /Páginas que você administra/);
+  assert.doesNotMatch(cartao.textContent, /Página Alva/);
   assert.match(cartao.textContent, /vence em 40 dias/);
 });
 
@@ -88,15 +88,19 @@ test('várias contas: seletor de conta, depois de pixel; trocar de conta lê os 
   const { cartao, chamadas } = montar({ contas, pixels });
   await cartao.recarregar();
   assert.equal(chamadas.some(([nome]) => nome === 'escolher'), false);
-  const conta = cartao.querySelector('select[name="adAccountId"]');
-  assert.deepEqual([...conta.options].map((item) => item.value), ['', '111', '222']);
-  assert.equal(cartao.querySelector('select[name="pixelId"]'), null);
+  const conta = cartao.querySelector('.escolha[data-nome="adAccountId"]');
+  assert.deepEqual([...conta.querySelectorAll('[role="option"]')].map((item) => item.dataset.valor), []);
+  conta.querySelector('.escolha-botao').click();
+  assert.deepEqual([...conta.querySelectorAll('[role="option"]')].map((item) => item.dataset.valor), ['111', '222']);
+  assert.equal(cartao.querySelector('.escolha[data-nome="pixelId"]'), null);
   await cartao.aoTrocarConta('222');
-  const pixel = cartao.querySelector('select[name="pixelId"]');
-  assert.deepEqual([...pixel.options].map((item) => item.value), ['', '666', '777']);
+  const pixel = cartao.querySelector('.escolha[data-nome="pixelId"]');
+  pixel.querySelector('.escolha-botao').click();
+  assert.deepEqual([...pixel.querySelectorAll('[role="option"]')].map((item) => item.dataset.valor), ['666', '777']);
+  pixel.querySelector('.escolha-botao').click();
   assert.equal(botao(cartao, 'Usar esta conta e este pixel').disabled, true, 'sem pixel escolhido não grava');
-  pixel.value = '777';
-  pixel.dispatchEvent(new pixel.ownerDocument.defaultView.Event('change'));
+  pixel.querySelector('.escolha-botao').click();
+  pixel.querySelector('[data-valor="777"]').click();
   botao(cartao, 'Usar esta conta e este pixel').click();
   await new Promise((resolver) => setTimeout(resolver, 0));
   assert.deepEqual(chamadas.find(([nome]) => nome === 'escolher'), ['escolher', { adAccountId: '222', pixelId: '777' }]);
@@ -193,7 +197,9 @@ test('fidelidade: o módulo e o CSS novo só usam tokens, sem style em linha', a
   const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
   const bloco = css.slice(css.indexOf('/* "Conta da Meta", F2'));
   assert.ok(bloco.length > 100);
-  assert.doesNotMatch(bloco, /#[0-9a-f]{3,8}\b|rgba?\(|box-shadow|font-weight|font-family/i);
+  assert.doesNotMatch(bloco, /#[0-9a-f]{3,8}\b|rgba?\(|font-weight|font-family/i);
+  // Sombra só pelos tokens que já existem (--ring-halo, --shadow-*): nenhuma sombra nova.
+  for (const sombra of bloco.match(/box-shadow:[^;]+/g) ?? []) assert.match(sombra, /var\(--(?:ring|shadow)-/);
   for (const raio of bloco.match(/border-radius:[^;]+/g) ?? []) assert.match(raio, /var\(--radius-/);
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   assert.match(app, /confirmarSubstituicao: \(\) => confirmarAcao\(/);

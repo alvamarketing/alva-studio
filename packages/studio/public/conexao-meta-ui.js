@@ -12,6 +12,8 @@
 // D9: "Conectar" navega na mesma aba. Um pop-up aberto depois de um `await` é bloqueado no
 // celular, e o facebook.com corta o `window.opener` — a volta vem por /conexoes/meta/retorno.
 
+import { criarEscolhaPesquisavel } from './escolha-pesquisavel.js';
+
 function elemento(doc, tag, classe, texto) {
   const no = doc.createElement(tag);
   if (classe) no.className = classe;
@@ -129,13 +131,6 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     return item;
   }
 
-  function linhaDasPaginas() {
-    if (doProjeto?.erroPaginas) return linha('Páginas que você administra', `Não foi possível ler: ${doProjeto.erroPaginas}`);
-    const paginas = doProjeto?.paginas;
-    if (!Array.isArray(paginas)) return null;
-    return linha('Páginas que você administra', paginas.length ? paginas.map((item) => item.nome).join(', ') : 'Nenhuma Página encontrada nesta conta do Facebook.');
-  }
-
   function linhaDoDestino() {
     const destino = doProjeto?.destino;
     const escolha = doProjeto?.escolha;
@@ -168,15 +163,10 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     return linha('Termos de Públicos Personalizados', detalhe, termos.aceitos === false ? 'Pendente' : undefined, 'alerta');
   }
 
-  function seletor(rotulo, nome, opcoes, valor, vazio) {
-    const campo = elemento(doc, 'label', '', rotulo);
-    const lista = doc.createElement('select');
-    lista.name = nome;
-    lista.append(Object.assign(doc.createElement('option'), { value: '', textContent: vazio }));
-    for (const opcao of opcoes) lista.append(Object.assign(doc.createElement('option'), { value: opcao.id, textContent: `${opcao.nome} (${opcao.id})` }));
-    lista.value = valor;
-    lista.disabled = gravando;
-    campo.append(lista);
+  function seletor(rotulo, nome, opcoes, valor, vazio, aoMudar) {
+    const campo = elemento(doc, 'div', 'conta-meta-campo');
+    campo.append(elemento(doc, 'span', 'conta-meta-rotulo', rotulo));
+    campo.append(criarEscolhaPesquisavel(doc, { nome, rotulo, opcoes, valor, vazio, desligado: gravando, aoMudar }));
     return campo;
   }
 
@@ -185,17 +175,13 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     if (erroDeContas) { bloco.append(elemento(doc, 'p', 'form-error', `Não foi possível ler as contas de anúncios: ${erroDeContas}`)); return bloco; }
     if (!contas) { bloco.append(elemento(doc, 'p', 'help', 'Carregando contas de anúncios…')); return bloco; }
     if (!contas.length) { bloco.append(elemento(doc, 'p', 'help', SEM_CONTAS)); return bloco; }
-    const conta = seletor('Conta de anúncios', 'adAccountId', contas, contaEscolhida, 'Escolha a conta de anúncios');
-    conta.querySelector('select').onchange = (evento) => cartao.aoTrocarConta(evento.target.value);
-    bloco.append(conta);
+    bloco.append(seletor('Conta de anúncios', 'adAccountId', contas, contaEscolhida, 'Escolha a conta de anúncios', (valor) => cartao.aoTrocarConta(valor)));
     if (contaEscolhida) {
       if (carregandoPixels) bloco.append(elemento(doc, 'p', 'help', 'Carregando pixels…'));
       else if (erroDePixels) bloco.append(elemento(doc, 'p', 'form-error', `Não foi possível ler os pixels: ${erroDePixels}`));
       else if (pixels && !pixels.length) bloco.append(elemento(doc, 'p', 'help', SEM_PIXELS));
       else if (pixels) {
-        const pixel = seletor('Pixel', 'pixelId', pixels, pixelEscolhido, 'Escolha o pixel');
-        pixel.querySelector('select').onchange = (evento) => { pixelEscolhido = evento.target.value; desenhar(); };
-        bloco.append(pixel);
+        bloco.append(seletor('Pixel', 'pixelId', pixels, pixelEscolhido, 'Escolha o pixel', (valor) => { pixelEscolhido = valor; desenhar(); }));
       }
     }
     const atual = doProjeto?.escolha;
@@ -211,7 +197,7 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     if (erroDoProjeto) { secao.append(elemento(doc, 'p', 'help', `Não foi possível ler a escolha deste projeto: ${erroDoProjeto}`)); return secao; }
     if (!doProjeto) { secao.append(elemento(doc, 'p', 'help', 'Carregando a conta de anúncios deste projeto…')); return secao; }
     const lista = elemento(doc, 'div', 'member-list');
-    for (const item of [linhaDasPaginas(), linhaDoDestino(), linhaDosTermos()]) if (item) lista.append(item);
+    for (const item of [linhaDoDestino(), linhaDosTermos()]) if (item) lista.append(item);
     secao.append(lista, elemento(doc, 'h3', '', 'Neste projeto'), formularioDeEscolha());
     if (avisoAutomatico) secao.append(elemento(doc, 'p', 'help conta-meta-automatico', avisoAutomatico));
     return secao;

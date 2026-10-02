@@ -14,6 +14,7 @@ const MAPA = {
   key: 'Key', arrow_forward: 'ArrowRight', edit: 'Pencil', content_copy: 'Copy', delete: 'Trash2', tune: 'SlidersHorizontal',
   person: 'User', link: 'Link', movie: 'Clapperboard', arrow_back: 'ArrowLeft',
   open_in_new: 'ExternalLink', close: 'X', help: 'CircleHelp',
+  expand_more: 'ChevronDown', check: 'Check',
   corporate_fare: 'Building2', group: 'Users', credit_card: 'CreditCard', cloud: 'Cloud', language: 'Globe', light_mode: 'Sun', dark_mode: 'Moon', search: 'Search', inbox: 'Inbox',
 };
 

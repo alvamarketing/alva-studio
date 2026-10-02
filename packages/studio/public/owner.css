@@ -1535,14 +1535,111 @@
   max-width: 46ch;
   margin-top: 10px;
 }
-.conta-meta-escolha label {
+.conta-meta-campo {
   display: grid;
   gap: 6px;
+}
+.conta-meta-rotulo {
   color: var(--alva-muted);
   font-size: var(--text-sm);
 }
-.conta-meta-escolha select {
+/* Caixa de escolha com busca (escolha-pesquisavel.js): no lugar do menu nativo, que não se desenha. */
+.escolha {
+  position: relative;
+}
+.escolha-botao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
+  text-align: left;
+  border-radius: var(--radius-md);
+  padding: 11px 12px;
+}
+.escolha-botao[aria-expanded="true"] {
+  border-color: var(--alva-blue);
+  box-shadow: var(--ring-halo);
+}
+.escolha-botao:disabled {
+  background: var(--alva-cloud);
+  color: var(--alva-muted);
+  cursor: not-allowed;
+}
+.escolha-botao .material-symbols-outlined {
+  flex: none;
+  color: var(--alva-muted);
+}
+.escolha-texto {
+  display: grid;
+  min-width: 0;
+}
+.escolha-texto.vazio {
+  color: var(--alva-muted);
+}
+.escolha-titulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.escolha-detalhe {
+  color: var(--alva-muted);
+  font-size: var(--text-sm);
+}
+.escolha-painel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--alva-white);
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lift);
+}
+.escolha-painel[hidden] {
+  display: none;
+}
+.escolha-busca {
+  width: 100%;
+}
+.escolha-lista {
+  display: grid;
+  gap: 2px;
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.escolha-opcao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.escolha-opcao.destaque {
+  background: var(--alva-highlight);
+}
+.escolha-opcao[aria-selected="true"] {
+  color: var(--alva-blue);
+}
+.escolha-opcao .material-symbols-outlined {
+  flex: none;
+}
+.escolha-opcao-texto {
+  display: grid;
+  min-width: 0;
+}
+.escolha-vazio {
+  padding: 12px 10px;
+  color: var(--alva-muted);
 }
 .conta-meta-escolha .provider-actions {
   margin-top: 2px;
