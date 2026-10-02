@@ -35,7 +35,7 @@ const AJUDA = {
   reconectar: 'A Meta não aceita mais esta conexão. Conecte de novo para continuar.',
 };
 
-export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar, irParaManual }) {
+export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar, irParaManual, confirmar = async () => true }) {
   const cartao = elemento(doc, 'section', 'surface conta-meta');
   cartao.id = 'conta-meta';
   const cabecalho = elemento(doc, 'div', 'surface-head');
@@ -133,6 +133,8 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
   cartao.aoDesconectar = async () => {
     aviso.textContent = '';
     erro.textContent = '';
+    // Desconectar também retira o acesso na Meta: quem aperta sem querer não pode perder a conexão.
+    if (!(await confirmar())) return;
     try {
       await desconectar();
       await cartao.recarregar();
@@ -157,7 +159,7 @@ function abrirPreenchimentoManual(doc) {
 
 // Liga o cartão à API e ao painel "Rastreamento". `ligado` diz se a sessão trouxe
 // runtime.metaConexao (META_APP_ID e META_APP_SECRET no servidor); sem isso, nem aparece.
-export function criarConexaoMetaUI({ api, getShell, ligado = () => false, doc = document, navegar = (url) => window.location.assign(url) }) {
+export function criarConexaoMetaUI({ api, getShell, ligado = () => false, doc = document, navegar = (url) => window.location.assign(url), confirmar = async () => true }) {
   let cartao = null;
   const empresa = () => getShell().state().currentCompany?.id;
   const projeto = () => getShell().state().currentProject?.id;
@@ -173,6 +175,7 @@ export function criarConexaoMetaUI({ api, getShell, ligado = () => false, doc = 
           desconectar: () => api(base(), 'DELETE'),
           navegar,
           irParaManual: () => abrirPreenchimentoManual(doc),
+          confirmar,
         });
       }
       if (painel.firstElementChild !== cartao) painel.prepend(cartao);

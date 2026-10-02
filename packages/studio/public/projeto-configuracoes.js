@@ -18,6 +18,13 @@ export const ABAS_DO_PROJETO = [
 const ASSUNTOS = { dominio: 'publicacao', vercel: 'publicacao', publicacao: 'publicacao', pixel: 'rastreamento', rastreamento: 'rastreamento', leads: 'leads', webhook: 'leads' };
 export const abaDoAssunto = (assunto) => ASSUNTOS[String(assunto ?? '')] ?? 'geral';
 
+// A aba que vai no endereço (#/configuracoes-do-projeto/<aba>). A primeira aba é a padrão e não
+// aparece: o roteador chama de 'account' a aba que não precisa de trecho no endereço.
+export const abaParaOEndereco = (assunto) => {
+  const aba = abaDoAssunto(assunto);
+  return aba === 'geral' ? 'account' : aba;
+};
+
 // A explicação da aba só existe onde os cartões não a trazem: repetida, vira ruído.
 const AJUDA = { geral: '', publicacao: '', rastreamento: '', leads: '' };
 

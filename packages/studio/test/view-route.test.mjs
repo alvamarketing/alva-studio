@@ -124,5 +124,43 @@ test('configurações do projeto têm endereço, com a aba, e só abrem com proj
 test('ao restaurar as configurações do projeto, a aba do endereço vira o assunto', async () => {
   const { readFile } = await import('node:fs/promises');
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(app, /view === 'projectSettings'\) return void action\(\(\) => abrirConfiguracoesDoProjeto\(\{ assunto: options\.assunto \?\? options\.settingsTab \}\)\)\(\)/);
+  assert.match(app, /view === 'projectSettings'\) return void action\(\(\) => abrirConfiguracoesDoProjeto\(\{ assunto: options\.assunto \?\? options\.settingsTab, fromHistory: options\.fromHistory \}\)\)\(\)/);
+});
+
+// --- Conferência de 02/10/2026: o botão voltar prendia a pessoa depois de conectar o Facebook ---
+// A volta do Facebook cai em #/configuracoes-do-projeto/rastreamento. A tela abria sem dizer a aba
+// ao roteador, que gravava #/configuracoes-do-projeto (sem a aba): diferente do endereço atual,
+// virava uma entrada nova no histórico, e o voltar reabria a tela e empilhava de novo.
+import { abaParaOEndereco } from '../public/projeto-configuracoes.js';
+
+test('a aba da configuração do projeto vira o mesmo trecho de endereço que a trouxe', () => {
+  assert.equal(abaParaOEndereco('rastreamento'), 'rastreamento');
+  assert.equal(abaParaOEndereco('publicacao'), 'publicacao');
+  assert.equal(abaParaOEndereco('leads'), 'leads');
+  assert.equal(abaParaOEndereco('geral'), 'account', 'a aba inicial não aparece no endereço');
+  assert.equal(abaParaOEndereco(''), 'account');
+  assert.equal(abaParaOEndereco('qualquer-coisa'), 'account');
+});
+
+test('abrir a configuração pela volta do Facebook não empilha uma entrada nova no histórico', () => {
+  const historico = ['#/configuracoes-do-projeto/rastreamento'];
+  const win = {
+    location: { get hash() { return historico.at(-1); }, set hash(valor) { historico.push(valor); } },
+    addEventListener() {},
+  };
+  const roteador = createViewRouter({ window: win });
+  // O que app.js faz ao abrir a tela: grava a visão com a aba que veio no endereço.
+  const { settingsTab } = hashToView(win.location.hash);
+  roteador.commit('projectSettings', { settingsTab: abaParaOEndereco(settingsTab) });
+  assert.deepEqual(historico, ['#/configuracoes-do-projeto/rastreamento'], 'o endereço já era esse: nada a empilhar');
+  // Clicar em "Configurações" no menu, sem aba, leva à primeira aba e aí sim muda o endereço.
+  roteador.commit('projectSettings', { settingsTab: abaParaOEndereco('') });
+  assert.equal(historico.at(-1), '#/configuracoes-do-projeto');
+});
+
+test('app.js repassa a aba e o "veio do histórico" ao abrir a configuração do projeto', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /abrirConfiguracoesDoProjeto\(\{ assunto: options\.assunto \?\? options\.settingsTab, fromHistory: options\.fromHistory \}\)/);
+  assert.match(app, /setDashboardView\('projectSettings', \{ settingsTab: abaParaOEndereco\(assunto\), fromHistory \}\)/);
 });

@@ -10,7 +10,7 @@ import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
 import { estadoDoPublicar } from './publicacao-pendente.js';
 import { abrirGuiaPublicosMeta } from './guia-publicos-meta.js';
-import { abaDoAssunto, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto, ocultarAbaDeLeads } from './projeto-configuracoes.js';
+import { abaDoAssunto, abaParaOEndereco, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto, ocultarAbaDeLeads } from './projeto-configuracoes.js';
 import { criarPublicosMetaUI } from './publicos-meta-ui.js';
 import { criarConexaoMetaUI } from './conexao-meta-ui.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
@@ -104,7 +104,7 @@ function abrirView(view, options = {}) {
   if (view === 'funnels') return void action(abrirFunis)();
   if (view === 'agents') return void action(abrirAgentes)();
   if (view === 'publication') return void action(abrirPublicacao)();
-  if (view === 'projectSettings') return void action(() => abrirConfiguracoesDoProjeto({ assunto: options.assunto ?? options.settingsTab }))();
+  if (view === 'projectSettings') return void action(() => abrirConfiguracoesDoProjeto({ assunto: options.assunto ?? options.settingsTab, fromHistory: options.fromHistory }))();
   return setDashboardView(view, options);
 }
 // Ao recarregar em #/vsl, a tela ainda não sabe se o envio de vídeo está ligado (isso vem
@@ -1309,7 +1309,12 @@ const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
 const publicosMetaUI = criarPublicosMetaUI({ api, getShell: () => studioShell });
 // A sessão diz se o servidor tem o app da Meta configurado (runtime.metaConexao).
 let metaConexaoLigada = false;
-const conexaoMetaUI = criarConexaoMetaUI({ api, getShell: () => studioShell, ligado: () => metaConexaoLigada });
+const conexaoMetaUI = criarConexaoMetaUI({
+  api,
+  getShell: () => studioShell,
+  ligado: () => metaConexaoLigada,
+  confirmar: () => confirmarAcao({ titulo: 'Desconectar a conta da Meta?', descricao: 'O Studio perde o acesso a esta conta do Facebook, e o acesso também é retirado na Meta. Os públicos já criados continuam na sua conta de anúncios.', confirmar: 'Desconectar', perigo: true }),
+});
 contextBoundary = createStudioContextBoundary({
   // O editor abre em outra página (/editor.html): não há editor aberto aqui para salvar.
   savePage: async () => {},
@@ -2253,7 +2258,7 @@ $('#project-create-action').onclick = () => $('#new-project').click();
 $('#project-settings-action').onclick = action(async () => abrirConfiguracoesDoProjeto());
 // Tudo que se configura no projeto mora numa tela só; `assunto` escolhe a aba para quem
 // chega de outra tela (o domínio, por exemplo, vem da Publicação).
-async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
+async function abrirConfiguracoesDoProjeto({ assunto = '', fromHistory = false } = {}) {
   const projeto = dashboardState().currentProject;
   if (!projeto?.id) throw new Error('Escolha um projeto para configurar.');
   montarConfiguracoesDoProjeto(document, { api, toast });
@@ -2264,7 +2269,9 @@ async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
   }
   const erro = $('#project-settings-error');
   if (erro) erro.textContent = '';
-  setDashboardView('projectSettings');
+  // O endereço leva a aba: sem ela, a volta do Facebook (#/…/rastreamento) gravava um endereço
+  // diferente a cada abertura e o botão voltar prendia a pessoa na tela.
+  setDashboardView('projectSettings', { settingsTab: abaParaOEndereco(assunto), fromHistory });
   abrirAbaDoProjeto(abaDoAssunto(assunto), document);
   // Os blocos movidos para cá continuam sendo pintados por quem sempre os pintou.
   await Promise.all([

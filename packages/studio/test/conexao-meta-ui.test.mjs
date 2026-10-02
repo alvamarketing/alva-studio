@@ -155,3 +155,33 @@ test('"Prefiro preencher manualmente" abre o destino da Meta que já existe', as
   assert.equal(meta.dataset.rolou, 'sim');
   assert.equal(doc.activeElement?.name, 'pixel_id');
 });
+
+// Conferência de 02/10/2026: Desconectar revoga o acesso na Meta, e não pedia confirmação.
+test('Desconectar pergunta antes: quem cancela não perde a conexão', async () => {
+  const perguntas = [];
+  const { cartao, chamadas } = montar({ conectado: true, nome: 'Taian', status: 'active' }, {
+    confirmar: async () => { perguntas.push('perguntou'); return false; },
+  });
+  await cartao.recarregar();
+  botao(cartao, 'Desconectar').click();
+  await new Promise((resolver) => setTimeout(resolver, 0));
+  assert.deepEqual(perguntas, ['perguntou']);
+  assert.equal(chamadas.some(([nome]) => nome === 'desconectar'), false, 'cancelou: nada foi desconectado');
+});
+
+test('Desconectar confirmado desconecta', async () => {
+  const { cartao, chamadas } = montar({ conectado: true, nome: 'Taian', status: 'active' }, { confirmar: async () => true });
+  await cartao.recarregar();
+  botao(cartao, 'Desconectar').click();
+  await new Promise((resolver) => setTimeout(resolver, 0));
+  assert.equal(chamadas.some(([nome]) => nome === 'desconectar'), true);
+});
+
+test('o app liga a confirmação ao diálogo do Studio, com o aviso de que o acesso some na Meta', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const trecho = app.slice(app.indexOf('const conexaoMetaUI = criarConexaoMetaUI('), app.indexOf('const conexaoMetaUI = criarConexaoMetaUI(') + 900);
+  assert.match(trecho, /confirmarAcao\(\{ titulo: 'Desconectar a conta da Meta\?'/);
+  assert.match(trecho, /perigo: true/);
+  assert.match(trecho, /continuam na sua conta de anúncios/);
+});
