@@ -92,3 +92,29 @@ export function lerConfiguracaoDaMeta(env = process.env, { publicOrigin = '' } =
   Object.defineProperty(configuracao, 'appSecret', { value: appSecret, enumerable: false });
   return Object.freeze(configuracao);
 }
+
+// F2: listas de contas, pixels e Páginas. A Graph API pagina por cursor: a resposta traz
+// `paging.cursors.after` e, enquanto houver mais, `paging.next`. O Studio pede a página
+// seguinte com `after` e uma prova nova, em vez de seguir o `next` (que leva o token na URL).
+// O teto evita laço infinito numa resposta defeituosa: 20 páginas de 100 itens bastam.
+// https://developers.facebook.com/docs/graph-api/results
+export const PAGINACAO = Object.freeze({ porPagina: 100, maximoDePaginas: 20, maximoDeNegocios: 50 });
+
+// O aviso de vencimento do token de usuário (≈60 dias, sem renovação: só novo login).
+// https://developers.facebook.com/documentation/facebook-login/guides/access-tokens/get-long-lived
+export const AVISO_DE_VENCIMENTO_DIAS = 7;
+
+// Quantos dias faltam para o token vencer: null quando a Meta não informou o prazo (token
+// de sistema, ou troca sem `expires_in`). Zero ou menos é vencido.
+export function diasParaVencer(expiraEm, agora = Date.now()) {
+  if (!expiraEm) return null;
+  const momento = new Date(expiraEm).getTime();
+  if (!Number.isFinite(momento)) return null;
+  return Math.ceil((momento - agora) / 86_400_000) + 0;
+}
+
+// Termos de Públicos Personalizados: quem aceita é uma pessoa, pelo link da conta. O app não
+// aceita por ela. `GET act_<id>?fields=tos_accepted` devolve `{custom_audience_tos: 1}` quando
+// assinados.
+// https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/reference/custom-audience-terms-of-service
+export const linkDosTermos = (adAccountId) => `https://business.facebook.com/ads/manage/customaudiences/tos/?act=${encodeURIComponent(String(adAccountId))}`;

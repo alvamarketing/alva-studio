@@ -6,7 +6,7 @@
 // segredo (é assim que a documentação pede), e a de leitura leva o token.
 import { createHmac } from 'node:crypto';
 import {
-  CAMPOS_DO_PERFIL, ESCOPOS, PARAMETROS_EXTRAS_DO_DIALOGO, PRAZOS, RAIZ_DA_GRAPH, URL_DO_DIALOGO, VERSAO_DA_GRAPH_API,
+  CAMPOS_DO_PERFIL, ESCOPOS, PAGINACAO, PARAMETROS_EXTRAS_DO_DIALOGO, PRAZOS, RAIZ_DA_GRAPH, URL_DO_DIALOGO, VERSAO_DA_GRAPH_API,
   faltaPermissao, tokenInvalido,
 } from './meta-config.mjs';
 import { MetaApiError, erroDaMeta, limpar } from './meta-publicos-cliente.mjs';
@@ -20,6 +20,23 @@ function semSegredos(texto, segredos) {
   for (const segredo of segredos) if (segredo) limpo = limpo.split(segredo).join('[oculto]');
   return limpar(limpo);
 }
+
+// D8: a prova do segredo do app. A página de segurança de hoje assina `token|tempo` com o
+// segredo (HMAC-SHA256, hexadecimal) e manda o tempo junto em `appsecret_time`; a prova vence
+// em 5 minutos, então é gerada a cada chamada. Exportada porque a Conversions API e os
+// públicos, quando usam o token da conexão, assinam do mesmo jeito.
+// https://developers.facebook.com/documentation/facebook-login/security#proof
+export function provaDoSegredo({ token, appSecret, agora = Date.now() }) {
+  const tempo = String(Math.floor(agora / 1000));
+  return { appsecret_proof: createHmac('sha256', appSecret).update(`${token}|${tempo}`).digest('hex'), appsecret_time: tempo };
+}
+
+// Um id de conta de anúncios chega como `act_123` (campo `id`) ou `123` (`account_id`).
+// Daqui para dentro, só os dígitos.
+const CONTA = /^\d{1,20}$/;
+export const soDigitosDaConta = (valor) => String(valor ?? '').trim().replace(/^act_/i, '');
+
+function texto(valor, limite = 200) { return String(valor ?? '').replace(/\s+/g, ' ').trim().slice(0, limite); }
 
 function expiracao(corpo, agora) {
   const segundos = Number(corpo?.expires_in);
@@ -67,9 +84,31 @@ export function criarClienteDaConexao({ fetch: buscar = globalThis.fetch, config
   // `appsecret_time`; a prova vence em 5 minutos, então é gerada a cada chamada.
   // https://developers.facebook.com/documentation/facebook-login/security#proof
   function comProva(token, parametros = {}) {
-    const tempo = String(Math.floor(agora() / 1000));
-    const prova = createHmac('sha256', appSecret).update(`${token}|${tempo}`).digest('hex');
-    return new URLSearchParams({ ...parametros, access_token: token, appsecret_proof: prova, appsecret_time: tempo });
+    return new URLSearchParams({ ...parametros, access_token: token, ...provaDoSegredo({ token, appSecret, agora: agora() }) });
+  }
+
+  // Lê uma aresta inteira, página por página, pelo cursor `after`. Cada página leva uma prova
+  // nova; o `next` da Meta não é seguido porque traz o token na URL e a prova velha. Para no
+  // teto de páginas mesmo que a Meta diga que há mais.
+  // https://developers.facebook.com/docs/graph-api/results
+  async function paginar(caminho, token, parametros = {}) {
+    const itens = [];
+    let depois = null;
+    for (let pagina = 0; pagina < PAGINACAO.maximoDePaginas; pagina += 1) {
+      const consulta = { ...parametros, limit: String(PAGINACAO.porPagina), ...(depois ? { after: depois } : {}) };
+      const corpo = await chamar(`${base}/${caminho}?${comProva(token, consulta)}`, { segredos: [appSecret, token] });
+      if (Array.isArray(corpo.data)) itens.push(...corpo.data);
+      const cursor = corpo.paging?.cursors?.after;
+      if (!corpo.paging?.next || typeof cursor !== 'string' || !cursor || cursor === depois) break;
+      depois = cursor;
+    }
+    return itens;
+  }
+
+  function conta(item, negocio) {
+    const id = soDigitosDaConta(item?.account_id ?? item?.id);
+    if (!CONTA.test(id)) return null;
+    return { id, nome: texto(item?.name) || `Conta ${id}`, negocio };
   }
 
   function tokenDaResposta(corpo) {
@@ -133,6 +172,60 @@ export function criarClienteDaConexao({ fetch: buscar = globalThis.fetch, config
       if (!ID_DA_META.test(String(metaUserId ?? ''))) throw new Error('Identificador de usuário da Meta inválido.');
       await chamar(`${base}/${metaUserId}/permissions?${comProva(token)}`, { method: 'DELETE', segredos: [appSecret, token] });
       return true;
+    },
+
+    // As contas de anúncios que a pessoa alcança, por portfólio: `/me/businesses` e, em cada
+    // um, as contas próprias (`owned_ad_accounts`) e as de clientes (`client_ad_accounts`).
+    // `/me/adaccounts` não aparece na referência do nó User (conferido em 02/10/2026) — por
+    // isso não é usado. Conta pessoal fora de portfólio não aparece aqui.
+    // https://developers.facebook.com/docs/graph-api/reference/user/businesses/
+    // https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/business/owned_ad_accounts
+    // https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/business/client_ad_accounts
+    async contasDeAnuncios(token) {
+      const negocios = (await paginar('me/businesses', token, { fields: 'id,name' }))
+        .filter((item) => typeof item?.id === 'string' && ID_DA_META.test(item.id))
+        .slice(0, PAGINACAO.maximoDeNegocios);
+      const porId = new Map();
+      for (const negocio of negocios) {
+        const dono = { id: negocio.id, nome: texto(negocio.name) };
+        for (const aresta of ['owned_ad_accounts', 'client_ad_accounts']) {
+          for (const item of await paginar(`${negocio.id}/${aresta}`, token, { fields: 'id,account_id,name' })) {
+            const achada = conta(item, dono);
+            if (achada && !porId.has(achada.id)) porId.set(achada.id, achada);
+          }
+        }
+      }
+      return [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    },
+
+    // Os pixels de uma conta de anúncios.
+    // https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-account/adspixels
+    async pixels(token, adAccountId) {
+      const contaId = soDigitosDaConta(adAccountId);
+      if (!CONTA.test(contaId)) throw Object.assign(new Error('Conta de anúncios inválida.'), { status: 400, statusCode: 400 });
+      const lista = await paginar(`act_${contaId}/adspixels`, token, { fields: 'id,name' });
+      return lista
+        .filter((item) => typeof item?.id === 'string' && CONTA.test(item.id))
+        .map((item) => ({ id: item.id, nome: texto(item.name) || `Pixel ${item.id}` }));
+    },
+
+    // As Páginas que a pessoa administra — só para mostrar no cartão (nome e id).
+    // https://developers.facebook.com/docs/graph-api/reference/user/accounts/
+    async paginas(token) {
+      const lista = await paginar('me/accounts', token, { fields: 'id,name' });
+      return lista
+        .filter((item) => typeof item?.id === 'string' && ID_DA_META.test(item.id))
+        .map((item) => ({ id: item.id, nome: texto(item.name) || `Página ${item.id}` }));
+    },
+
+    // Os Termos de Públicos Personalizados da conta: `tos_accepted.custom_audience_tos === 1`
+    // quando assinados. Qualquer outra resposta é "não aceitos".
+    // https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/reference/custom-audience-terms-of-service
+    async termosAceitos(token, adAccountId) {
+      const contaId = soDigitosDaConta(adAccountId);
+      if (!CONTA.test(contaId)) throw Object.assign(new Error('Conta de anúncios inválida.'), { status: 400, statusCode: 400 });
+      const corpo = await chamar(`${base}/act_${contaId}?${comProva(token, { fields: 'tos_accepted' })}`, { segredos: [appSecret, token] });
+      return Number(corpo?.tos_accepted?.custom_audience_tos) === 1;
     },
   };
 }
