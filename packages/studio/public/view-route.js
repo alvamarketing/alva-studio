@@ -12,17 +12,21 @@ const ROUTES = {
   tracking: 'rastreamento',
   agents: 'agentes',
   publication: 'publicacao',
+  projectSettings: 'configuracoes-do-projeto',
 };
 // Endereços antigos continuam abrindo a tela nova: quem guardou o link de "formularios"
 // não descobre uma página inicial no lugar do quiz.
 const APELIDOS = { formularios: 'forms' };
 const VIEWS = { ...APELIDOS, ...Object.fromEntries(Object.entries(ROUTES).map(([view, slug]) => [slug, view])) };
 const DEFAULT_SETTINGS_TAB = 'account';
+// As duas telas de configuração guardam a aba no endereço: a da conta e a do projeto (a volta
+// do Facebook cai direto em "Rastreamento").
+const VIEWS_WITH_TAB = new Set(['settings', 'projectSettings']);
 
 export function viewToHash(view, { settingsTab = DEFAULT_SETTINGS_TAB } = {}) {
   const slug = ROUTES[view];
   if (!slug) return '#/';
-  if (view === 'settings' && settingsTab !== DEFAULT_SETTINGS_TAB) return `#/${slug}/${settingsTab}`;
+  if (VIEWS_WITH_TAB.has(view) && settingsTab !== DEFAULT_SETTINGS_TAB) return `#/${slug}/${settingsTab}`;
   return `#/${slug}`;
 }
 
@@ -31,7 +35,7 @@ export function hashToView(hash) {
     .replace(/^#\/?/, '')
     .split('/');
   const view = VIEWS[slug] ?? 'home';
-  return { view, settingsTab: view === 'settings' && tab ? tab : DEFAULT_SETTINGS_TAB };
+  return { view, settingsTab: VIEWS_WITH_TAB.has(view) && tab ? tab : DEFAULT_SETTINGS_TAB };
 }
 
 export function createViewRouter({ window: win = window, onNavigate = () => {} } = {}) {
@@ -57,7 +61,7 @@ export function createViewRouter({ window: win = window, onNavigate = () => {} }
   };
 }
 
-const VIEWS_NEEDING_PROJECT = new Set(['project', 'pages', 'forms', 'funnels', 'vsl', 'analytics', 'tracking', 'agents', 'publication']);
+const VIEWS_NEEDING_PROJECT = new Set(['project', 'pages', 'forms', 'funnels', 'vsl', 'analytics', 'tracking', 'agents', 'publication', 'projectSettings']);
 
 export function viewToRestore(route, { hasProject = false } = {}) {
   const fallback = hasProject ? 'project' : 'home';

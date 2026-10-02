@@ -9,7 +9,7 @@
 // um segundo token, só para isto.
 // - https://developers.facebook.com/documentation/ads-commerce/conversions-api/get-started
 // - https://developers.facebook.com/documentation/ads-commerce/marketing-api/get-started/authorization
-import { VERSAO_DA_GRAPH_API } from './tracking-destinos.mjs';
+import { VERSAO_DA_GRAPH_API } from './meta-config.mjs';
 
 const RAIZ = 'https://graph.facebook.com';
 const LIMITE_DE_PAGINAS = 50;
@@ -39,7 +39,7 @@ export class MetaApiError extends Error {
   }
 }
 
-function limpar(valor, token) {
+export function limpar(valor, token) {
   let texto = String(valor ?? '');
   if (token) texto = texto.split(token).join('[token]');
   return texto
@@ -49,7 +49,7 @@ function limpar(valor, token) {
     .replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
-function erroDaMeta(corpo, token) {
+export function erroDaMeta(corpo, token) {
   const erro = corpo?.error ?? {};
   const code = Number.isInteger(erro.code) ? erro.code : null;
   const subcode = Number.isInteger(erro.error_subcode) ? erro.error_subcode : null;

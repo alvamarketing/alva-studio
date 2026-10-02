@@ -122,6 +122,7 @@ export function createProjectApi({
     analytics,
   tracking,
   publicosMeta = null,
+  metaConexao = null,
   commercialOutbox,
   runtimeFlags,
   billing,
@@ -131,7 +132,9 @@ export function createProjectApi({
   return async function projectApi({ req, res, path, method, json }) {
     // A sessão já diz se o envio de vídeo (VSL) está ligado: o menu precisa saber disso em
     // qualquer tela, não só depois que a Visão geral carrega.
-    if (method === 'GET' && path === '/api/session') return json({ ...(await sessionService.state(req)), runtime: { media: runtimeFlags?.mediaPipeline === true } });
+    // `metaConexao` só existe quando META_APP_ID e META_APP_SECRET estão no ambiente: sem
+    // eles a tela nem mostra o cartão "Conta da Meta".
+    if (method === 'GET' && path === '/api/session') return json({ ...(await sessionService.state(req)), runtime: { media: runtimeFlags?.mediaPipeline === true, metaConexao: Boolean(metaConexao) } });
     if (method === 'POST' && path === '/api/setup') {
       limit?.(ipDoVisitante(req));
       // Como no n8n: o primeiro acesso cria a conta de dono, e só ele — com uma conta
@@ -259,6 +262,39 @@ export function createProjectApi({
       if (members[1] !== context.companyId) throw fail('Empresa não encontrada.', 404);
       await sessionService.authorize(context, 'member.manage');
       return json(await companies.members({ companyId: context.companyId, actorUserId: context.user.id }));
+    }
+
+    // Conectar com o Facebook (spec 2026-10-02). A conexão é da empresa; quem pode mexer em
+    // integrações é quem conecta. Empresa, pessoa e sessão saem sempre do contexto — o corpo
+    // do `finish` só traz o que o Facebook devolveu (code ou error, e o state).
+    const conexaoMeta = path.match(/^\/api\/companies\/([^/]+)\/meta-connection(?:\/(start|finish))?$/);
+    if (conexaoMeta) {
+      const [, empresa, acao = ''] = conexaoMeta;
+      const mutacao = method !== 'GET';
+      if (empresa !== context.companyId) { if (mutacao) await body(req); throw fail('Empresa não encontrada.', 404); }
+      try {
+        await sessionService.authorize(context, 'integration.manage');
+      } catch (erro) { if (mutacao) await body(req); throw erro; }
+      if (!metaConexao) { if (mutacao) await body(req); throw fail('A conexão com o Facebook não está configurada neste ambiente.', 409); }
+      const escopo = { companyId: context.companyId };
+      if (!acao && method === 'GET') return json(await metaConexao.estado(escopo));
+      if (!acao && method === 'DELETE') { await body(req); return json(await metaConexao.desconectar(escopo)); }
+      if (acao === 'start' && method === 'POST') {
+        const { projectId } = await body(req);
+        if (typeof projectId !== 'string' || !projectId) throw fail('Informe o projeto.', 400);
+        await sessionService.authorize(context, 'integration.manage', projectId);
+        return json(await metaConexao.iniciar({
+          ...escopo, projectId, userId: context.user.id, sessionId: context.sessionId, origem: publicOrigin || `http://${req.headers.host}`,
+        }));
+      }
+      if (acao === 'finish' && method === 'POST') {
+        const input = await body(req);
+        return json(await metaConexao.concluir({
+          ...escopo, userId: context.user.id, sessionId: context.sessionId, code: input?.code, error: input?.error, state: input?.state,
+        }));
+      }
+      if (mutacao) await body(req);
+      throw fail('Não encontrado.', 404);
     }
 
     const projectOverview = path.match(/^\/api\/projects\/([^/]+)\/overview$/);

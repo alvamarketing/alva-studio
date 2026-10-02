@@ -12,6 +12,7 @@ import { estadoDoPublicar } from './publicacao-pendente.js';
 import { abrirGuiaPublicosMeta } from './guia-publicos-meta.js';
 import { abaDoAssunto, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto, ocultarAbaDeLeads } from './projeto-configuracoes.js';
 import { criarPublicosMetaUI } from './publicos-meta-ui.js';
+import { criarConexaoMetaUI } from './conexao-meta-ui.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { carregarSinaisDeBloco } from './sinais-de-bloco-ui.js';
 import { renderFunis } from './funis-view.js';
@@ -103,7 +104,7 @@ function abrirView(view, options = {}) {
   if (view === 'funnels') return void action(abrirFunis)();
   if (view === 'agents') return void action(abrirAgentes)();
   if (view === 'publication') return void action(abrirPublicacao)();
-  if (view === 'projectSettings') return void action(() => abrirConfiguracoesDoProjeto(options))();
+  if (view === 'projectSettings') return void action(() => abrirConfiguracoesDoProjeto({ assunto: options.assunto ?? options.settingsTab }))();
   return setDashboardView(view, options);
 }
 // Ao recarregar em #/vsl, a tela ainda não sabe se o envio de vídeo está ligado (isso vem
@@ -1306,6 +1307,9 @@ async function returnToProject(projectId) {
 }
 const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
 const publicosMetaUI = criarPublicosMetaUI({ api, getShell: () => studioShell });
+// A sessão diz se o servidor tem o app da Meta configurado (runtime.metaConexao).
+let metaConexaoLigada = false;
+const conexaoMetaUI = criarConexaoMetaUI({ api, getShell: () => studioShell, ligado: () => metaConexaoLigada });
 contextBoundary = createStudioContextBoundary({
   // O editor abre em outra página (/editor.html): não há editor aberto aqui para salvar.
   savePage: async () => {},
@@ -2268,6 +2272,7 @@ async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
     recarregarDestinos().catch(() => {}),
     studioShell.can('integration.manage') ? carregarLeadsDoProjeto(document, projeto.id) : ocultarAbaDeLeads(document),
     publicosMetaUI.abrir().catch(() => {}),
+    conexaoMetaUI.abrir().catch(() => {}),
   ]);
 }
 $('#project-settings-form').onsubmit = action(async (event) => {
@@ -2358,6 +2363,7 @@ ownerUI = createOwnerUI({
   toast,
   onAuthenticated: async (sessao) => {
     if (sessao?.runtime?.media === true) mediaPipelineEnabled = true;
+    metaConexaoLigada = sessao?.runtime?.metaConexao === true;
     await studioShell.initialize();
     dashboardContextFlow.bootstrap();
     updateVslNavigation();

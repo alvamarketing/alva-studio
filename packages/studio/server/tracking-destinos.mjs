@@ -15,6 +15,7 @@
 // hasheados em SHA-256 e é isso que as plataformas esperam.
 
 import { nomeNaPlataforma } from './nomes-de-evento.mjs';
+import { VERSAO_DA_GRAPH_API } from './meta-config.mjs';
 
 function recusa(motivo) {
   return Object.assign(new Error(motivo), { destino: true });
@@ -41,11 +42,9 @@ function modoDeTeste(credenciais = {}) {
 // https://business-api.tiktok.com/portal/docs/parameters/v1.3
 const TEM_PAGINA = (evento) => Boolean(texto(evento.source_url));
 
-// A versão da Graph API em vigor. A v20.0 ficou no ar até 24/09/2026; cada versão dura
-// cerca de dois anos. https://developers.facebook.com/docs/graph-api/changelog
-// Exportada porque o cliente de públicos (meta-publicos-cliente.mjs) fala com a mesma Graph
-// API: uma versão só, trocada num lugar só quando a Meta aposentar esta.
-export const VERSAO_DA_GRAPH_API = 'v26.0';
+// A versão da Graph API mora em meta-config.mjs, com o resto do que é da Meta. Continua
+// exportada daqui para quem já a importava deste módulo.
+export { VERSAO_DA_GRAPH_API };
 
 const meta = {
   chave: 'meta',

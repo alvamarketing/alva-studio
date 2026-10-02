@@ -12,6 +12,8 @@
 - `page-schema.js`, `pagina-alva.js`, `puck-conversao.js`: o esquema `alva/1`, o documento publicado e a ponte com o Puck.
 - `funil.html` + `../editor/funil.jsx` (bundle em `build/funil.js`), `funil.js`, `funis-etapas.js`, `funis-modelos.js`, `funis-view.js`: a aba Funis (canvas com React Flow, modelos e páginas por etapa).
 - `owner.js` e `owner.css`: acesso do dono e configurações do aplicativo.
+- `conexao-meta-ui.js`: cartão "Conta da Meta" no topo da aba Rastreamento das configurações do projeto (conectar com o Facebook na mesma aba, quem conectou, desconectar, reconectar).
+- `conexao-meta-retorno.html` e `conexao-meta-retorno.js`: a página para onde o Facebook devolve a pessoa; limpa a barra e conclui a conexão por POST na mesma origem.
 - `publicos-meta-ui.js`: cartão "Públicos automáticos na Meta" na aba Rastreamento das configurações do projeto (liga/desliga, estado, erro e credenciais).
 - `templates.js`, `catalogo-elementos.js` e `quiz-elements.js`: as folhas de estilo da página (`templateCss`, `formCss`, `runtimeCss`, `elementosCss`, `escolhaCss`), a fonte de ícones e os tipos que não pedem resposta (`TIPOS_SEM_RESPOSTA`, usado pela validação do servidor).
 - `ui-preferences.js`: preferências locais de aparência e largura do menu.
