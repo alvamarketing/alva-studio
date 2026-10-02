@@ -81,11 +81,17 @@ export function criarServicoDeConexaoMeta({ repository, cliente, configuracao, c
       const trocado = await cliente.trocarCodigo({ code, redirectUri: consumido.redirectUri });
       // D3: token de usuário vira de longa duração (≈60 dias); o de sistema não vence.
       const final = configuracao.tipoDeToken === 'user' ? await cliente.estenderToken(trocado.token) : trocado;
+      // Sem `expires_in` na troca, o prazo vem do debug_token. Falhar aqui não impede
+      // conectar: o cartão só não mostra o prazo.
+      let expiraEm = final.expiraEm ?? trocado.expiraEm ?? null;
+      if (!expiraEm && configuracao.tipoDeToken === 'user' && cliente.inspecionarToken) {
+        expiraEm = await cliente.inspecionarToken(final.token).then((inspecao) => inspecao.expiraEm).catch(() => null);
+      }
       const perfil = await cliente.quemSou(final.token);
       const { concedidas } = await cliente.permissoes(final.token);
       const conexao = await repository.salvar({
         companyId, metaUserId: perfil.id, nome: perfil.nome, tipoDeToken: configuracao.tipoDeToken, token: final.token,
-        escopos: concedidas, clientBusinessId: perfil.clientBusinessId, expiraEm: final.expiraEm ?? trocado.expiraEm ?? null, conectadoPor: userId,
+        escopos: concedidas, clientBusinessId: perfil.clientBusinessId, expiraEm, conectadoPor: userId,
       });
       return { estado: 'conectado', projectId: consumido.projectId, conexao };
     },

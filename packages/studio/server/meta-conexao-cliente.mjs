@@ -198,6 +198,19 @@ export function criarClienteDaConexao({ fetch: buscar = globalThis.fetch, config
       return [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     },
 
+    // Quando o token vence, perguntado à Meta. Usado quando a troca não trouxe `expires_in`.
+    // A chamada leva o token do app no formato `{app-id}|{app-secret}`, que a página de
+    // tokens de acesso documenta; `expires_at` e `data_access_expires_at` são unixtime. O que
+    // 0 significa não está na referência: 0 ou ausente é tratado como "não informado".
+    // https://developers.facebook.com/docs/graph-api/reference/debug_token/
+    // https://developers.facebook.com/docs/facebook-login/guides/access-tokens#apptokens
+    async inspecionarToken(token) {
+      const parametros = new URLSearchParams({ input_token: token, access_token: `${appId}|${appSecret}` });
+      const corpo = await chamar(`${base}/debug_token?${parametros}`, { segredos: [appSecret, token] });
+      const data = (segundos) => (Number.isFinite(Number(segundos)) && Number(segundos) > 0 ? new Date(Number(segundos) * 1000) : null);
+      return { expiraEm: data(corpo?.data?.expires_at), acessoAosDadosExpiraEm: data(corpo?.data?.data_access_expires_at) };
+    },
+
     // Os pixels de uma conta de anúncios.
     // https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-account/adspixels
     async pixels(token, adAccountId) {
