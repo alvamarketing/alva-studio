@@ -25,7 +25,7 @@ export const PLATAFORMAS = Object.freeze({
   taboola: { marca: 'taboola', conectar: 'Conectar com a Taboola' },
 });
 
-const EM_BREVE = 'Conexão direta em breve. Por enquanto, preencha à mão.';
+const EM_BREVE = 'conexão direta em breve';
 const SEM_PERMISSAO = 'Configurar plataformas exige permissão de integrações. Peça a um administrador do projeto.';
 
 function el(doc, tag, classe, texto) {
@@ -120,7 +120,7 @@ function pintarBlocoSimples(doc, bloco, destino, opcoes) {
   bloco.dataset.estado = emBreve ? 'em-breve' : destino.configured ? 'configurado' : 'nao-configurado';
   bloco.querySelector('.plataforma-nome').textContent = destino.name;
   const status = bloco.querySelector('.plataforma-status');
-  if (emBreve) status.textContent = EM_BREVE;
+  if (emBreve) status.textContent = `${destino.description} · ${EM_BREVE}`;
   else status.textContent = destino.publicValue ? `${destino.description} · ${destino.publicValue}` : destino.description;
   // O chip fica no canto do cabeçalho; o botão "Conectar com…" (em breve) logo abaixo, largo.
   bloco.querySelector('.plataforma-acoes').replaceChildren(emBreve ? chip(doc, 'Em breve', 'neutro') : chip(doc, destino.stateLabel, TOM[destino.state] ?? 'neutro'));
@@ -140,6 +140,7 @@ function pintarBlocoSimples(doc, bloco, destino, opcoes) {
 // destinos (não é "nada configurado"); `aviso`, a entrega de conversões desligada.
 export function pintarPlataformas(raiz, modelos, { doc = raiz.ownerDocument, salvar, remover, erro = '', aviso = '' } = {}) {
   raiz.pintura = { salvar, remover };
+  raiz.classList.remove('providers');
   raiz.classList.add('plataformas-grade');
   const avisos = [];
   if (erro) avisos.push(`Não foi possível ler as plataformas deste ambiente: ${erro}`);

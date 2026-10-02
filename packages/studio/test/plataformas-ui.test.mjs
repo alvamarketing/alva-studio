@@ -58,7 +58,7 @@ test('em breve: TikTok, Google, LinkedIn e Taboola sem configuração têm "Cone
     assert.equal(nomeAcessivel, texto, 'o logo do botão é decorativo; o nome é o texto');
     assert.equal(oficial.getAttribute('aria-disabled'), 'true');
     const explicacao = item.ownerDocument.getElementById(oficial.getAttribute('aria-describedby'));
-    assert.match(explicacao.textContent, /Conexão direta em breve/);
+    assert.match(explicacao.textContent, / · conexão direta em breve$/);
     assert.ok([...item.querySelectorAll('.role-chip')].some((c) => c.textContent === 'Em breve'));
   }
   // A Meta não é "em breve": ela conecta pelo cartão da conexão, ou fica só no manual.

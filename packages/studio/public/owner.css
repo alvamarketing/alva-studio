@@ -1207,7 +1207,9 @@
 .publicos-meta-corpo {
   margin-top: 16px;
 }
-.publicos-meta-corpo[hidden] {
+.publicos-meta-corpo[hidden],
+.publicos-meta > .help:empty,
+.publicos-meta > .form-error:empty {
   display: none;
 }
 .publicos-meta-explicacao {
@@ -1294,7 +1296,7 @@
   outline-offset: 2px;
 }
 @media (max-width: 720px) {
-  .publicos-meta .publico-meta { flex-wrap: wrap; }
+  .publicos-meta .publico-meta { align-items: flex-start; }
   .project-settings-panel .publicos-meta .surface-head { flex-wrap: wrap; }
   .publicos-meta .publico-meta .publico-meta-descricao { white-space: normal; }
 }
@@ -1574,8 +1576,14 @@
   .plataformas-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .conta-meta-campos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+.plataformas-grade {
+  align-items: start;
+}
+/* O bloco com o formulário manual aberto ganha a largura toda: os campos não ficam
+   espremidos numa coluna, e o vizinho não estica junto. */
 .plataformas-grade > .plataformas-aviso,
-.plataformas-grade > .plataforma-larga {
+.plataformas-grade > .plataforma-larga,
+.plataformas-grade > .plataforma:has(> .plataforma-formulario:not([hidden])) {
   grid-column: 1 / -1;
 }
 .plataformas-grade > .plataformas-aviso { margin: 0; }
@@ -1727,6 +1735,14 @@
 .conta-meta > .plataforma-corpo {
   padding-top: 12px;
   border-top: 1px solid var(--alva-line);
+}
+.conta-meta > .conta-meta-aviso-texto:empty,
+.conta-meta > .form-error:empty {
+  display: none;
+}
+.conta-meta > .conta-meta-aviso-texto,
+.conta-meta > .form-error {
+  margin: 0;
 }
 .conta-meta-chips {
   display: flex;
