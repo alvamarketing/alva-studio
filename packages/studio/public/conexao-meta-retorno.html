@@ -14,26 +14,28 @@
 </head>
 <body>
 <!-- A volta do Facebook. O código de autorização chega na URL; o script limpa a barra antes de
-     qualquer outra coisa e conclui por POST na mesma origem. Nada da URL é escrito aqui. -->
-<main class="access-gate" aria-label="Conta da Meta">
+     qualquer outra coisa e conclui por POST na mesma origem. Nada da URL é escrito aqui.
+     O estado fica no painel, e não na coluna da esquerda: no celular só o painel aparece.
+     É `section`, como o login: `main` herda a margem da barra lateral do app. -->
+<section class="access-gate" aria-label="Conta da Meta">
   <div class="access-story">
     <a class="brand" href="/" aria-label="Alva Studio"><strong>ALVA</strong><span>Studio</span></a>
     <div>
       <span class="eyebrow">CONTA DA META</span>
-      <h1 id="retorno-titulo">Concluindo a conexão…</h1>
-      <p id="retorno-texto" role="status">Um instante.</p>
+      <h1>Conectando com o Facebook.</h1>
+      <p>A conta da Meta fica nas configurações do projeto, aba Rastreamento.</p>
     </div>
     <small>ALVA MARKETING / STUDIO</small>
   </div>
   <div class="access-panel">
-    <form id="retorno-acoes" hidden>
-      <span class="eyebrow">PRÓXIMO PASSO</span>
-      <h2>Volte ao Studio.</h2>
-      <p>A conta da Meta fica nas configurações do projeto, aba Rastreamento.</p>
-      <button class="primary" id="retorno-voltar" type="button">Voltar ao Studio</button>
+    <form id="retorno-cartao">
+      <span class="eyebrow">CONTA DA META</span>
+      <h2 id="retorno-titulo">Concluindo a conexão…</h2>
+      <p id="retorno-texto" role="status">Um instante.</p>
+      <button class="primary" id="retorno-voltar" type="button" hidden>Voltar ao Studio</button>
     </form>
   </div>
-</main>
+</section>
 <script type="module" src="/conexao-meta-retorno.js"></script>
 </body>
 </html>

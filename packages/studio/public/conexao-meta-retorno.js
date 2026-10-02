@@ -26,12 +26,12 @@ export async function concluirRetornoDaMeta({
 
   const titulo = doc.querySelector('#retorno-titulo');
   const texto = doc.querySelector('#retorno-texto');
-  const acoes = doc.querySelector('#retorno-acoes');
-  doc.querySelector('#retorno-voltar')?.addEventListener('click', () => navegar(DESTINO_DO_RETORNO));
+  const voltar = doc.querySelector('#retorno-voltar');
+  voltar?.addEventListener('click', () => navegar(DESTINO_DO_RETORNO));
   const mostrar = (cabecalho, mensagem) => {
     if (titulo) titulo.textContent = cabecalho;
     if (texto) texto.textContent = mensagem;
-    if (acoes) acoes.hidden = false;
+    if (voltar) voltar.hidden = false;
   };
 
   if (!state || (!code && !error)) {

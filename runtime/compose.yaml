@@ -21,6 +21,12 @@ services:
       MEDIA_PIPELINE_ENABLED: ${MEDIA_PIPELINE_ENABLED:-false}
       CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
       CLOUDFLARE_STREAM_TOKEN: ${CLOUDFLARE_STREAM_TOKEN:-}
+      # "Conectar com o Facebook": desligado enquanto META_APP_ID e META_APP_SECRET estiverem
+      # vazios. O redirect cadastrado na Meta é PUBLIC_ORIGIN + /conexoes/meta/retorno.
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_LOGIN_CONFIG_ID: ${META_LOGIN_CONFIG_ID:-}
+      META_TOKEN_TYPE: ${META_TOKEN_TYPE:-}
       BILLING_ENFORCEMENT: ${BILLING_ENFORCEMENT:-false}
       ASAAS_ENVIRONMENT: ${ASAAS_ENVIRONMENT:-sandbox}
       ASAAS_SANDBOX_API_KEY: ${ASAAS_SANDBOX_API_KEY:-}

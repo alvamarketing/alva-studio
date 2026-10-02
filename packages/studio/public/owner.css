@@ -1479,3 +1479,9 @@
   .guia-passo::before { width: 28px; height: 28px; }
   .project-leads-controls .ajuda-botao { margin-left: 0; }
 }
+
+/* "Conta da Meta": no celular a ação do cabeçalho desce para baixo do título, em vez de
+   espremer "Conectar com o Facebook" em três linhas ao lado do texto. */
+@media (max-width: 760px) {
+  .conta-meta .surface-head { flex-wrap: wrap; }
+}

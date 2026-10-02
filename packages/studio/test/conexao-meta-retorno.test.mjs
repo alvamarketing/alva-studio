@@ -62,7 +62,7 @@ test('cancelado no Facebook: manda o erro, mostra o aviso e oferece voltar', asy
   assert.deepEqual(ambiente.pedidos.at(-1).corpo, { error: 'access_denied', state: STATE });
   const doc = ambiente.janela.document;
   assert.match(doc.querySelector('#retorno-texto').textContent, /cancelou/);
-  assert.equal(doc.querySelector('#retorno-acoes').hidden, false);
+  assert.equal(doc.querySelector('#retorno-voltar').hidden, false);
   doc.querySelector('#retorno-voltar').click();
   assert.deepEqual(ambiente.destinos, [DESTINO_DO_RETORNO]);
   assert.equal(doc.documentElement.outerHTML.includes('Permissions'), false, 'a descrição do Facebook não é ecoada');
