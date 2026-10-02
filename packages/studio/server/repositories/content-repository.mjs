@@ -118,6 +118,10 @@ function pageRecord(row) {
     renderedHtml: row.rendered_html,
     lockVersion: row.lock_version,
     publishedVersionId: row.published_version_id,
+    publishedLockVersion: row.published_lock_version ?? null,
+    // Tem versão no ar e o que está salvo é mais novo que ela. Rascunho nunca publicado não
+    // conta: não há nada no ar para estar desatualizado.
+    unpublishedChanges: Boolean(row.published_version_id) && row.lock_version !== (row.published_lock_version ?? row.lock_version),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -761,7 +765,7 @@ export class ContentRepository {
       );
       await client.query(
         `UPDATE pages
-         SET published_version_id = $4, updated_at = now()
+         SET published_version_id = $4, published_lock_version = lock_version, updated_at = now()
          WHERE company_id = $1 AND project_id = $2 AND id = $3 AND deleted_at IS NULL`,
         [companyId, projectId, pageId, rows[0].id],
       );

@@ -383,6 +383,7 @@ export function createApp({
     '/vsl-opcoes.js': ['public/vsl-opcoes.js', 'text/javascript'],
     '/vsl-player-css.js': ['public/vsl-player-css.js', 'text/javascript'],
     '/vsl-previa.js': ['public/vsl-previa.js', 'text/javascript'],
+    '/publicacao-pendente.js': ['public/publicacao-pendente.js', 'text/javascript'],
     '/convite': ['public/convite.html', 'text/html'],
     '/convite.html': ['public/convite.html', 'text/html'],
     '/equipe-ui.js': ['public/equipe-ui.js', 'text/javascript'],

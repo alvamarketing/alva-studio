@@ -2,6 +2,7 @@ import { registroRecomendado } from './dns-do-dominio.mjs';
 import { Publisher } from './publisher.mjs';
 import { runtimeGatewayArtifacts } from './vercel-runtime-gateway.mjs';
 import { buildRuntimeManifest } from './publication-runtime.mjs';
+import { pixelsDesatualizados } from './publicacao-pendente.mjs';
 
 function fail(message, status = 400) { return Object.assign(new Error(message), { status, statusCode: status }); }
 
@@ -99,6 +100,17 @@ export class PublicationService {
     return this.send({ ...input, environment: 'preview', snapshot });
   }
 
+  // Os pixels mudaram depois da última publicação em produção? Eles ficam gravados no momento
+  // da publicação, então mudar o pixel no Studio só vale para quem visita depois de publicar
+  // de novo. Sem nada publicado em produção não há o que desatualizar.
+  async pixelsPendentes({ companyId, projectId }) {
+    if (!this.runtimeEnabled || !this.runtimeManifests?.current || !this.tracking?.publicProviders) return false;
+    const noAr = await this.runtimeManifests.current({ companyId, projectId, environment: 'production' });
+    if (!noAr) return false;
+    const atuais = await this.tracking.publicProviders({ companyId, projectId, environment: 'production' });
+    return pixelsDesatualizados(noAr.providers, atuais);
+  }
+
   async overview({ companyId, projectId }) {
     const production = await this.deployments.latest({ companyId, projectId, environment: 'production' });
     const preview = await this.deployments.latest({ companyId, projectId, environment: 'preview' });
@@ -111,6 +123,7 @@ export class PublicationService {
       production,
       preview,
       latestPreviewReady,
+      pixelsPendentes: await this.pixelsPendentes({ companyId, projectId }),
     };
   }
 

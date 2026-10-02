@@ -954,6 +954,9 @@ main {
 }
 .publication-state[data-state='ready'] { background: #e7f7ee; color: #18794e; }
 .publication-state[data-state='error'] { background: #fff0f0; color: #b42318; }
+.publication-state[data-state='pending'] { background: var(--alva-warning-bg); color: var(--alva-warning); }
+.publication-pendente { background: var(--alva-warning-bg); border-color: var(--alva-warning); color: var(--alva-warning); }
+.badge.badge-pendente { background: var(--alva-warning-bg); border-color: var(--alva-warning); color: var(--alva-warning); }
 .publication-surface > p { color: var(--alva-muted); font-size: var(--text-md); line-height: 1.55; }
 .publication-routes { font-weight: 600; }
 .publication-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 17px; }

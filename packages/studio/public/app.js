@@ -8,6 +8,7 @@ import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
+import { estadoDoPublicar } from './publicacao-pendente.js';
 import { abaDoAssunto, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto, ocultarAbaDeLeads } from './projeto-configuracoes.js';
 import { criarPublicosMetaUI } from './publicos-meta-ui.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
@@ -962,6 +963,15 @@ function renderPublication(overview, publication = {}) {
     : 'Conecte a Vercel uma vez para publicar todas as rotas deste projeto juntas.');
   $('#publication-preview').disabled = !model.canPreview;
   $('#publication-production').disabled = !model.canProduction;
+  // Os pixels ficam gravados na publicação em produção: mudar um depois disso só vale
+  // publicando de novo. O botão e o estado ficam amarelos, como no editor.
+  const aviso = estadoDoPublicar({ publicada: publishedRoutes.length > 0, pixelsPendentes: publication.pixelsPendentes === true });
+  $('#publication-production').classList.toggle('publication-pendente', aviso.pendente);
+  $('#publication-production').title = aviso.dica;
+  if (aviso.pendente && model.canProduction) {
+    $('#publication-state').textContent = 'Alterações a publicar';
+    $('#publication-state').dataset.state = 'pending';
+  }
   $('#publication-domain-form').hidden = !model.canProduction || !studioShell.can('integration.manage');
   if (!$('#publication-domain-form').hidden) mostrarRegistroDeDns(studioShell.state().currentProject?.id);
   const connection = $('#publication-connection-form');
@@ -1132,7 +1142,9 @@ function renderList() {
     const editable = studioShell?.can('page.write');
     const state = p.deployment?.state;
     const label =
-      state === 'READY'
+      p.unpublishedChanges
+        ? 'ALTERADA'
+        : state === 'READY'
         ? p.deployment.revision === p.revision
           ? 'PUBLICADA'
           : 'ALTERADA'
@@ -1144,7 +1156,7 @@ function renderList() {
     card.innerHTML =
       '<div class="thumbnail"><div class="blank">↗</div></div><div class="card-content"><div class="card-top"><h3>' +
       escape(p.name) +
-      '</h3><span class="badge">' +
+      '</h3><span class="badge' + (label === 'ALTERADA' ? ' badge-pendente' : '') + '">' +
       label +
       '</span></div><p>' +
       escape(p.domain || 'Domínio ainda não conectado') +

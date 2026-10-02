@@ -2,6 +2,7 @@
 //
 // Abre a página pela API, edita o esquema e salva o esquema — o HTML publicado quem
 // desenha é o servidor. React mora só aqui: a página publicada é HTML puro.
+import { estadoDoPublicar } from '../public/publicacao-pendente.js';
 import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
@@ -103,8 +104,15 @@ function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
   );
 }
 
-function Acoes({ pagina, aoSalvar, aoSalvarWebhook, aviso, pendente, alterada }) {
+function Acoes({ pagina, aoSalvar, aoPublicar, aoSalvarWebhook, aviso, pendente, alterada }) {
   const dados = usePuck((estado) => estado.appState.data);
+  // Página no ar com o que está salvo (ou na tela) diferente do que foi publicado: amarelo,
+  // como no RD Station. Rascunho nunca publicado não acende.
+  const publicar = estadoDoPublicar({
+    publicada: Boolean(pagina.publishedVersionId),
+    alteracoesNaoPublicadas: pagina.unpublishedChanges === true,
+    alteracoesNaoSalvas: alterada,
+  });
   const [ocupado, setOcupado] = useState(false);
   const executar = (tarefa) => async () => {
     setOcupado(true);
@@ -135,12 +143,11 @@ function Acoes({ pagina, aoSalvar, aoSalvarWebhook, aviso, pendente, alterada })
       }}>
         <Eye size={16} aria-hidden="true" /> Prévia
       </button>
-      <button type="button" className="alva-acao" disabled={ocupado} onClick={executar(async () => {
-        const salva = await aoSalvar(dados);
-        await api(`/pages/${pagina.id}/publish`, 'POST', { revision: salva.revision });
+      <button type="button" className={`alva-acao${publicar.pendente ? ' alva-acao-pendente' : ''}`} disabled={ocupado} title={publicar.dica || undefined} onClick={executar(async () => {
+        await aoPublicar(dados);
         aviso('Enviada à Vercel. O andamento aparece em Publicação.');
       })}>
-        <Rocket size={16} aria-hidden="true" /> Publicar
+        <Rocket size={16} aria-hidden="true" /> {publicar.rotulo}
       </button>
       <button type="button" className="alva-acao alva-acao-principal" disabled={ocupado} onClick={executar(() => aoSalvar(dados))}>
         <Save size={16} aria-hidden="true" /> Salvar
@@ -200,6 +207,13 @@ function Editor() {
     aviso('Página salva.');
     return salva;
   };
+  // Salva e publica; depois relê a página para o botão voltar ao normal (o servidor é quem
+  // sabe em qual salvamento ela foi publicada).
+  const aoPublicar = async (dados) => {
+    const salva = await aoSalvar(dados);
+    await api(`/pages/${pagina.id}/publish`, 'POST', { revision: salva.revision });
+    setPagina(await api(`/pages/${encodeURIComponent(pagina.id)}`));
+  };
   if (erro) return <p className="alva-erro">{erro}</p>;
   if (!pagina || !config) return <p className="alva-carregando">Abrindo a página…</p>;
   return (
@@ -215,7 +229,7 @@ function Editor() {
         overrides={{
           iframe: IframeComFolhas,
           outline: () => <Estrutura quiz={ehQuiz(pagina.editorState)} />,
-          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aoSalvarWebhook={aoSalvarWebhook} aviso={aviso} pendente={pendente} alterada={alterada} />,
+          headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aoPublicar={aoPublicar} aoSalvarWebhook={aoSalvarWebhook} aviso={aviso} pendente={pendente} alterada={alterada} />,
           drawerItem: ({ name }) => <ItemDaBiblioteca name={name} rotulo={config.components[name]?.label} />,
         }}
       />
