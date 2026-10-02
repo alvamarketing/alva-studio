@@ -29,6 +29,8 @@ import { PublicationSnapshotBuilder } from './publication-snapshot.mjs';
 import { PublicationService } from './publication-service.mjs';
 import { AuditRepository, DeploymentRepository, ProjectDomainRepository, ProjectIntegrationRepository, SecretVault } from './repositories/publication-repository.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
+import { MetaAudiencesRepository } from './repositories/meta-audiences-repository.mjs';
+import { criarServicoDePublicos } from './meta-publicos-servico.mjs';
 import { ConversionsOutboxRepository } from './repositories/conversions-outbox-repository.mjs';
 import { PublicationRuntimeRepository } from './repositories/publication-runtime-repository.mjs';
 import { RuntimeConsentGateway } from './runtime-consent-gateway.mjs';
@@ -263,6 +265,9 @@ export function createApp({
     : null;
   const integrations = database && process.env.VERCEL_MASTER_KEY ? new ProjectIntegrationRepository(database, { vault: new SecretVault() }) : null;
   const tracking = database && process.env.TRACKING_MASTER_KEY ? new TrackingRepository(database) : null;
+  // Os públicos da Meta guardam o token no mesmo cofre dos destinos (mesma chave-mestra) e
+  // leem o pixel dos destinos: sem rastreamento configurado, não há o que montar.
+  const publicosMeta = tracking ? criarServicoDePublicos({ repository: new MetaAudiencesRepository(database), tracking }) : null;
   const images = database ? new ImageRepository(database, { publicOrigin }) : null;
   const commercialOutbox = runtimeFlags.conversions && database && process.env.TRACKING_MASTER_KEY
     ? new ConversionsOutboxRepository(database) : null;
@@ -329,6 +334,7 @@ export function createApp({
       funnels: database ? new FunnelRepository(database, { content }) : null,
       analytics,
       tracking,
+      publicosMeta,
       commercialOutbox,
       body,
       secure: Boolean(publicOrigin),
@@ -374,6 +380,7 @@ export function createApp({
     '/convite': ['public/convite.html', 'text/html'],
     '/convite.html': ['public/convite.html', 'text/html'],
     '/equipe-ui.js': ['public/equipe-ui.js', 'text/javascript'],
+    '/publicos-meta-ui.js': ['public/publicos-meta-ui.js', 'text/javascript'],
     '/projeto-configuracoes.js': ['public/projeto-configuracoes.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],

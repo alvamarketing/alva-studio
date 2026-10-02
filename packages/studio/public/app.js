@@ -9,6 +9,7 @@ import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
 import { abaDoAssunto, abrirAbaDoProjeto, montarConfiguracoesDoProjeto } from './projeto-configuracoes.js';
+import { criarPublicosMetaUI } from './publicos-meta-ui.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { renderFunis } from './funis-view.js';
 import { observarIcones } from './icones.js';
@@ -1290,6 +1291,7 @@ async function returnToProject(projectId) {
   if (projectId && studioShell?.state().currentProject?.id !== projectId) await studioShell.selectProject(projectId);
 }
 const vslUI = createVslUI({ api, getShell: () => studioShell, toast });
+const publicosMetaUI = criarPublicosMetaUI({ api, getShell: () => studioShell });
 contextBoundary = createStudioContextBoundary({
   // O editor abre em outra página (/editor.html): não há editor aberto aqui para salvar.
   savePage: async () => {},
@@ -2246,7 +2248,7 @@ async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
   setDashboardView('projectSettings');
   abrirAbaDoProjeto(abaDoAssunto(assunto), document);
   // Os blocos movidos para cá continuam sendo pintados por quem sempre os pintou.
-  await Promise.all([renderProject().catch(() => {}), recarregarDestinos().catch(() => {})]);
+  await Promise.all([renderProject().catch(() => {}), recarregarDestinos().catch(() => {}), publicosMetaUI.abrir().catch(() => {})]);
 }
 $('#project-settings-form').onsubmit = action(async (event) => {
   event.preventDefault();

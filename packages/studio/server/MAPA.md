@@ -30,6 +30,8 @@
 - `project-api.mjs`: API multiempresa, rotas de cobrança e administração de chaves MCP autenticadas, a rota curta `/api/pages` do painel e lista/CSV de leads (respostas das páginas) por projeto.
 - `mcp-server.mjs`: fronteira JSON-RPC MCP negociada, catálogo fechado de leitura/rascunho e respostas de erro seguras.
 - `asaas-client.mjs`, `billing-service.mjs`, `billing-webhook.mjs`, `billing-worker.mjs` e `billing-policy.mjs`: contrato recorrente hospedado, reconsulta assíncrona de pagamento/assinatura, inbox limitado/autenticado e gates transacionais 5/10/5.
+  - `migrations/032_publicos_meta.sql`: credencial cifrada (ID da conta de anúncios e token de gerenciar anúncios) e públicos de site já criados na Meta, por projeto.
+- `meta-publicos.mjs`, `meta-publicos-cliente.mjs`, `meta-publicos-servico.mjs` e `repositories/meta-audiences-repository.mjs`: públicos automáticos na Meta — catálogo de públicos e regra no formato da Graph API, cliente com `fetch` injetável (única parte que escreve na conta de anúncios), serviço idempotente e armazenamento cifrado. Rotas em `/api/projects/:id/meta-audiences`.
 - `tracking-destinos.mjs`: adaptadores dos destinos de conversão (Meta, TikTok, Google, LinkedIn, Taboola), portados do PHP que morava no runtime NVS.
 - `tracking-entrega.mjs` e `tracking-cliente-direto.mjs`: decisão de quando vale reter e envio do evento comercial direto ao destino, sem gateway no meio.
 - `tracking-provisionador-local.mjs`: provisiona um destino sem chamada de rede, com o identificador da propriedade derivado do próprio binding.
