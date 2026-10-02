@@ -160,6 +160,19 @@ de conta e pixel, Desconectar) → vence em breve → precisa reconectar (190/46
 
 ## Riscos e o que continua em aberto
 
+**Conhecidos na F2 (conferência de 02/10/2026), deixados para depois de propósito:**
+
+- Contas de anúncios por portfólio: um erro ao ler um portfólio derruba a lista inteira, e conta
+  de anúncios pessoal (fora de portfólio) não aparece — `/me/adaccounts` não é usado por não estar
+  documentado no nó User.
+- Reconectar com **outra pessoa** da Meta mantém as escolhas dos projetos feitas pela anterior; se a
+  pessoa nova não alcança aquela conta ou pixel, a CAPI e os públicos falham (de forma visível) até
+  alguém escolher de novo.
+- Dois cliques rápidos em abas das Configurações podem disparar carregamentos concorrentes do cartão
+  "Conta da Meta"; o último a responder vence.
+- O vencimento vem do `expires_in` da troca ou, na falta dele, do `debug_token` (`expires_at`); o que
+  `expires_at = 0` significa não está na referência e é tratado como "não informado".
+
 - Sem F5, só quem tem papel no app usa o botão; **o preenchimento manual segue sendo o caminho dos clientes**.
 - O screencast do App Review exige métricas de anúncio na tela; o Studio não tem. Decidir antes de enviar.
 - BISU não funciona no celular; o dono trabalha muito pelo celular. Por isso o tipo de token é parâmetro.
