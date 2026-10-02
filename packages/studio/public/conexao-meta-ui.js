@@ -133,8 +133,8 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     const destino = doProjeto?.destino;
     const escolha = doProjeto?.escolha;
     if (destino?.origem === 'connection') {
-      const pixel = escolha?.pixelId === destino.pixelId && escolha?.pixelNome ? `${escolha.pixelNome} (${destino.pixelId})` : destino.pixelId;
-      return linha('Pixel e Conversions API configurados pela conexão', `Pixel ${pixel}. O token é o da conta conectada; nada foi colado.`, 'Ativo');
+      const pixel = escolha?.pixelId === destino.pixelId && escolha?.pixelNome ? `${escolha.pixelNome} (${destino.pixelId})` : `Pixel ${destino.pixelId}`;
+      return linha('Pixel e Conversions API configurados pela conexão', `${pixel}. O token é o da conta conectada; nada foi colado.`, 'Ativo');
     }
     if (destino?.origem === 'manual') return linha('Pixel e Conversions API preenchidos à mão', `Pixel ${destino.pixelId ?? ''} em "Destinos". Escolha abaixo para passar a usar a conexão.`, 'Manual');
     return linha('Pixel e Conversions API', 'Ainda não configurados neste projeto. Escolha a conta e o pixel abaixo.');
