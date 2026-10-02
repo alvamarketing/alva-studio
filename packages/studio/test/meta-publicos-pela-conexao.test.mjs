@@ -59,13 +59,16 @@ test('pela conexão, sem conexão utilizável: 409 pedindo reconectar, nada sai'
   assert.equal(estado.credenciais.origem, 'connection');
 });
 
-test('pela conexão, a Meta recusa o token (190): a conexão é marcada para reconectar', async () => {
-  const meta = metaFalsa({ error: { code: 190, message: 'expirou' } });
-  const tokenDaConexao = resolvedor({ token: TOKEN, ...PROVA });
-  const servico = criarServicoDePublicos({ repository: repositorioFalso({ adAccountId: '111', origem: 'connection', token: null }), tracking, fetch: meta.fetch, tokenDaConexao });
-  const { resultados } = await servico.sincronizar({ ...escopo, chaves: ['lead'] });
-  assert.equal(resultados[0].estado, 'erro');
-  assert.deepEqual(tokenDaConexao.marcadas, [{ companyId: 'c1', motivo: 'publicos_token_recusado' }]);
+test('pela conexão, a Meta recusa o token (190 ou 102): a conexão é marcada e a mensagem pede reconectar', async () => {
+  for (const code of [190, 102]) {
+    const meta = metaFalsa({ error: { code, message: 'expirou' } });
+    const tokenDaConexao = resolvedor({ token: TOKEN, ...PROVA });
+    const servico = criarServicoDePublicos({ repository: repositorioFalso({ adAccountId: '111', origem: 'connection', token: null }), tracking, fetch: meta.fetch, tokenDaConexao });
+    const { resultados } = await servico.sincronizar({ ...escopo, chaves: ['lead'] });
+    assert.equal(resultados[0].estado, 'erro');
+    assert.match(resultados[0].erro, /Reconecte a conta da Meta/);
+    assert.deepEqual(tokenDaConexao.marcadas, [{ companyId: 'c1', motivo: 'publicos_token_recusado' }]);
+  }
 });
 
 test('credencial manual continua valendo, sem consultar a conexão e sem prova', async () => {

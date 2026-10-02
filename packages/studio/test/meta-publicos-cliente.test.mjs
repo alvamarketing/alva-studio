@@ -50,7 +50,7 @@ test('a versão da Graph API vem de um lugar só', () => {
 test('listar: segue a paginação e devolve id, nome e o pixel da regra', async () => {
   const regra = JSON.stringify(regraDoPublico(publicoPorChave('lead'), PIXEL));
   const falso = respostas(
-    { status: 200, corpo: { data: [{ id: '1', name: 'Outro' }], paging: { next: `https://graph.facebook.com/${VERSAO_DA_GRAPH_API}/act_${CONTA}/customaudiences?after=ABC&access_token=${TOKEN}` } } },
+    { status: 200, corpo: { data: [{ id: '1', name: 'Outro' }], paging: { cursors: { after: 'ABC' }, next: `https://graph.facebook.com/${VERSAO_DA_GRAPH_API}/act_${CONTA}/customaudiences?after=ABC&access_token=${TOKEN}&outro=1` } } },
     { status: 200, corpo: { data: [{ id: '2', name: 'Alva · Virou lead', rule: regra }] } },
   );
   const lista = await cliente(falso).listar();
@@ -61,6 +61,34 @@ test('listar: segue a paginação e devolve id, nome e o pixel da regra', async 
   assert.equal(primeira.searchParams.get('fields'), 'id,name,rule');
   assert.equal(primeira.searchParams.get('access_token'), TOKEN);
   assert.equal(falso.chamadas.length, 2);
+  // Conferência F2: a página seguinte é montada pelo cursor `after`, não pela URL do `next`.
+  const segunda = new URL(falso.chamadas[1].url);
+  assert.equal(segunda.pathname, primeira.pathname);
+  assert.equal(segunda.searchParams.get('after'), 'ABC');
+  assert.equal(segunda.searchParams.has('outro'), false);
+});
+
+test('listar pela conexão: cada página leva uma prova nova', async () => {
+  let n = 0;
+  const assinar = () => { n += 1; return { appsecret_proof: `prova-${n}`, appsecret_time: `${n}` }; };
+  const falso = respostas(
+    { status: 200, corpo: { data: [], paging: { cursors: { after: 'A1' }, next: 'https://graph.facebook.com/x' } } },
+    { status: 200, corpo: { data: [] } },
+  );
+  await criarClienteDePublicos({ fetch: falso.fetch, token: TOKEN, contaDeAnuncios: CONTA, prova: assinar }).listar();
+  assert.deepEqual(falso.chamadas.map((chamada) => new URL(chamada.url).searchParams.get('appsecret_proof')), ['prova-1', 'prova-2']);
+});
+
+test('pela conexão, token recusado (190 e 102) pede para reconectar, não para gerar outro token', async () => {
+  for (const code of [190, 102]) {
+    const falso = respostas({ status: 400, corpo: { error: { code, message: 'x' } } });
+    await assert.rejects(
+      () => criarClienteDePublicos({ fetch: falso.fetch, token: TOKEN, contaDeAnuncios: CONTA, prova: () => ({ appsecret_proof: 'p', appsecret_time: '1' }), pelaConexao: true }).listar(),
+      (erro) => /Reconecte a conta da Meta/.test(erro.message) && !/Gere outro token/.test(erro.message) && erro.fatal === true && erro.code === code,
+    );
+  }
+  const manual = respostas({ status: 400, corpo: { error: { code: 102, message: 'x' } } });
+  await assert.rejects(() => cliente(manual).listar(), (erro) => /Gere outro token/.test(erro.message) && erro.fatal === true);
 });
 
 test('listar: não segue um "next" que aponta para fora da Graph API', async () => {

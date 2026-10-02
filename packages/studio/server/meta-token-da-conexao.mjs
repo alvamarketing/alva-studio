@@ -34,11 +34,10 @@ export function criarTokenDaConexao({ conexoes, configuracao, agora = () => Date
         await marcarParaReconectar({ companyId, motivo: 'token_vencido' });
         return null;
       }
-      return {
-        conexaoId: conexao.id,
-        token: conexao.token,
-        ...provaDoSegredo({ token: conexao.token, appSecret: configuracao.appSecret, agora: agora() }),
-      };
+      // `assinar` gera uma prova nova a cada chamada (vence em 5 minutos): quem faz várias
+      // chamadas seguidas, como os públicos, não reaproveita uma prova velha.
+      const assinar = () => provaDoSegredo({ token: conexao.token, appSecret: configuracao.appSecret, agora: agora() });
+      return { conexaoId: conexao.id, token: conexao.token, ...assinar(), assinar };
     },
 
     marcarParaReconectar,

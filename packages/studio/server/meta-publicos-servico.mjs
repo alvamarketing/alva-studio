@@ -105,9 +105,9 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
         if (pelaConexao) {
           const resolvido = await tokenDaConexao?.resolver(companyId);
           if (!resolvido) throw recusa('A conta da Meta conectada precisa ser conectada de novo. Clique em "Reconectar" no cartão "Conta da Meta".', 409);
-          acesso = { token: resolvido.token, prova: resolvido };
+          acesso = { token: resolvido.token, prova: resolvido.assinar ?? resolvido };
         }
-        const cliente = criarClienteDePublicos({ fetch: buscar, token: acesso.token, contaDeAnuncios: credenciais.adAccountId, prova: acesso.prova });
+        const cliente = criarClienteDePublicos({ fetch: buscar, token: acesso.token, contaDeAnuncios: credenciais.adAccountId, prova: acesso.prova, pelaConexao });
         const registrados = new Map((await repository.listar(escopo)).map((item) => [item.chave, item]));
         let naConta = null;
         const resultados = [];
@@ -138,7 +138,7 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
           } catch (erro) {
             if (!(erro instanceof MetaApiError)) throw erro;
             // Token da conexão recusado (190): a conexão inteira passa a pedir "Reconectar".
-            if (pelaConexao && erro.code === 190) await tokenDaConexao?.marcarParaReconectar({ companyId, motivo: 'publicos_token_recusado' }).catch(() => {});
+            if (pelaConexao && (erro.code === 190 || erro.code === 102)) await tokenDaConexao?.marcarParaReconectar({ companyId, motivo: 'publicos_token_recusado' }).catch(() => {});
             await repository.gravar({ ...escopo, chave: definicao.chave, status: 'error', erro: erro.message });
             resultados.push({ chave: definicao.chave, estado: 'erro', erro: erro.message });
             if (erro.fatal) falhaFatal = erro;
