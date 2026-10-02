@@ -253,3 +253,13 @@ test('nenhum texto da tela ou do servidor aponta para "Conta da Meta" ou "Destin
     assert.doesNotMatch(motivoDaFalha(codigo, 'Meta'), /Destinos|Conta da Meta/, codigo);
   }
 });
+
+// Conferência A3: no tema escuro o quadrado preto do TikTok sumia sobre o bloco escuro. No
+// escuro ele inverte (fundo claro, logo escuro), só com tokens que já existem.
+test('tema escuro: o quadrado do TikTok inverte com tokens existentes e continua visível', async () => {
+  const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
+  const regra = css.match(/:root\[data-color-scheme='dark'\] \.plataforma-logo\.marca-tiktok \{[^}]*\}/)?.[0] ?? '';
+  assert.match(regra, /background: var\(--alva-ink\)/);
+  assert.match(regra, /color: var\(--alva-white\)/);
+  assert.doesNotMatch(regra, /#|rgb/);
+});

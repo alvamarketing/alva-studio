@@ -1642,6 +1642,9 @@
 .plataforma-logo.marca-meta { background: var(--marca-meta); }
 .plataforma-logo.marca-tiktok { background: var(--marca-tiktok); }
 .plataforma-logo.marca-googleads { background: var(--marca-googleads); }
+/* No tema escuro o quadrado preto do TikTok some no bloco escuro: inverte (fundo claro,
+   logo escuro — a versão clara oficial da marca), só com tokens do tema. */
+:root[data-color-scheme='dark'] .plataforma-logo.marca-tiktok { background: var(--alva-ink); color: var(--alva-white); }
 .plataforma-logo.sem-logo {
   border: 1px solid var(--alva-line);
   background: var(--alva-cloud);
