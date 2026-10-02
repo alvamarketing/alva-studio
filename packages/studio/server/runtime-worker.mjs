@@ -5,6 +5,9 @@ import { WebhookDeliveryRepository } from './repositories/webhook-repository.mjs
 import { startWebhookWorker } from './webhook-worker.mjs';
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
 import { criarClienteDeDestinos } from './tracking-cliente-direto.mjs';
+import { MetaConnectionsRepository } from './repositories/meta-connections-repository.mjs';
+import { criarTokenDaConexao } from './meta-token-da-conexao.mjs';
+import { lerConfiguracaoDaMeta } from './meta-config.mjs';
 import { criarProvisionadorLocal } from './tracking-provisionador-local.mjs';
 import { startTrackingProvisionWorker } from './tracking-provision-worker.mjs';
 import { ConversionsOutboxRepository } from './repositories/conversions-outbox-repository.mjs';
@@ -28,7 +31,14 @@ export async function startRuntimeWorker({
   trackingClientsFactory = (database) => ({ conversions: criarProvisionadorLocal({ tracking: trackingRepositoryFactory(database) }) }),
   startTrackingWorkerFn = startTrackingProvisionWorker,
   commercialRepositoryFactory = (database) => new ConversionsOutboxRepository(database),
-  commercialClientFactory = (database) => criarClienteDeDestinos({ tracking: trackingRepositoryFactory(database) }),
+  // A Conversions API pela conexão (F2) resolve o token da empresa na hora do envio e o
+  // assina com o segredo do app: o worker precisa de META_APP_ID e META_APP_SECRET. Sem
+  // eles, um destino pela conexão falha com motivo próprio, visível na tela de eventos.
+  commercialClientFactory = (database) => {
+    const configuracao = lerConfiguracaoDaMeta(process.env);
+    const tokenDaConexao = configuracao ? criarTokenDaConexao({ conexoes: new MetaConnectionsRepository(database), configuracao }) : null;
+    return criarClienteDeDestinos({ tracking: trackingRepositoryFactory(database), tokenDaConexao });
+  },
   startCommercialWorkerFn = startCommercialEventsWorker,
   billingRepositoryFactory = (database) => new BillingRepository(database),
   startBillingWorkerFn = startBillingWorker,

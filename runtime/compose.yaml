@@ -63,6 +63,11 @@ services:
       TRACKING_PROVISION_ENABLED: ${TRACKING_PROVISION_ENABLED:-false}
       CONVERSIONS_ENABLED: ${CONVERSIONS_ENABLED:-false}
       TRACKING_MASTER_KEY: ${TRACKING_MASTER_KEY:?Defina TRACKING_MASTER_KEY no ambiente do Coolify}
+      # Conversions API pela conexão com o Facebook: o envio usa o token da conexão e o
+      # assina com o segredo do app (appsecret_proof). Os mesmos valores do studio-web.
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_TOKEN_TYPE: ${META_TOKEN_TYPE:-}
     depends_on:
       studio-postgres:
         condition: service_healthy
