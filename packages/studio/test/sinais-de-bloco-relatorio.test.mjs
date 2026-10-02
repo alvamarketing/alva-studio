@@ -102,3 +102,40 @@ test('o tempo médio é por entrada, com uma casa', () => {
   });
   assert.equal(relatorio[0].blocos[0].segundosMedios, 3.3);
 });
+
+// --- Conferência de 02/10/2026: o relatório tem teto ---
+// O tracker público é conhecido por qualquer um: dá para forjar ids válidos e caminhos
+// arbitrários. Sem teto, 100.000 linhas forjadas viravam 13 MB de resposta.
+test('o relatório limita páginas e blocos órfãos: dado forjado não vira resposta gigante', () => {
+  const blocos = [];
+  const rolagem = [];
+  for (let p = 0; p < 80; p += 1) {
+    for (let b = 0; b < 300; b += 1) blocos.push({ urlPath: `/forjada-${p}`, blockId: `id-${b}`, entradas: 1 + (b % 7), segundos: 1, cliques: 0 });
+    rolagem.push({ urlPath: `/forjada-${p}`, marco: 25, total: 1 });
+  }
+  const { paginas } = montarRelatorioDeSinais({ visitas: [], blocos, rolagem, paginas: [] });
+  assert.ok(paginas.length <= 50, `no máximo 50 páginas (veio ${paginas.length})`);
+  assert.ok(paginas.every((pagina) => pagina.blocos.length <= 20), 'no máximo 20 blocos que saíram da página, por página');
+});
+
+test('as páginas mais visitadas é que ficam quando o teto corta', () => {
+  const blocos = [];
+  for (let p = 0; p < 60; p += 1) blocos.push({ urlPath: `/p-${p}`, blockId: 'a', entradas: p + 1, segundos: 1, cliques: 0 });
+  const visitas = Array.from({ length: 60 }, (_, p) => ({ urlPath: `/p-${p}`, total: p + 1 }));
+  const { paginas } = montarRelatorioDeSinais({ visitas, blocos, rolagem: [], paginas: [] });
+  assert.equal(paginas[0].urlPath, '/p-59');
+  assert.equal(paginas.some((pagina) => pagina.urlPath === '/p-0'), false);
+});
+
+test('página que só mandou rolagem (publicada antes dos sinais) vem marcada, para a tela explicar', () => {
+  const { paginas } = montarRelatorioDeSinais({
+    visitas: [{ urlPath: '/antiga', total: 10 }], blocos: [],
+    rolagem: [{ urlPath: '/antiga', marco: 25, total: 8 }], paginas: [],
+  });
+  assert.equal(paginas[0].semBlocos, true);
+  const comBlocos = montarRelatorioDeSinais({
+    visitas: [{ urlPath: '/nova', total: 10 }],
+    blocos: [{ urlPath: '/nova', blockId: 'a', entradas: 4, segundos: 8, cliques: 1 }], rolagem: [], paginas: [],
+  });
+  assert.equal(comBlocos.paginas[0].semBlocos, false);
+});

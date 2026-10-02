@@ -67,6 +67,11 @@ const chaveDoCaminho = (caminho) => {
 
 const porcentagem = (parte, total) => (total > 0 ? Math.min(100, Math.round((parte / total) * 100)) : 0);
 
+// O tracker público é conhecido por qualquer um: dá para forjar ids válidos e caminhos
+// arbitrários. Estes tetos mantêm a resposta pequena mesmo assim (conferência de 02/10/2026).
+const MAX_PAGINAS = 50;
+const MAX_ORFAOS_POR_PAGINA = 20;
+
 export function montarRelatorioDeSinais({ visitas = [], blocos = [], rolagem = [], paginas = [] } = {}) {
   const dePagina = new Map(paginas.map((pagina) => [chaveDoCaminho(pagina.route), pagina]));
   // Só entram as páginas que enviaram sinais: o pageview de uma VSL avulsa não tem bloco a mostrar.
@@ -104,6 +109,7 @@ export function montarRelatorioDeSinais({ visitas = [], blocos = [], rolagem = [
     const orfaos = doCaminho
       .filter((linha) => !sabidos.has(linha.blockId))
       .sort((a, b) => b.entradas - a.entradas || a.blockId.localeCompare(b.blockId))
+      .slice(0, MAX_ORFAOS_POR_PAGINA)
       .map((linha) => montar(linha.blockId, null, false));
 
     const doMarco = (marco) => marcos.find((linha) => linha.marco === marco)?.total ?? 0;
@@ -111,9 +117,12 @@ export function montarRelatorioDeSinais({ visitas = [], blocos = [], rolagem = [
       urlPath,
       nome: pagina?.name ?? null,
       visitas: total,
+      // Mandou rolagem e nenhum bloco: foi publicada antes dos sinais. A tela explica o que fazer.
+      semBlocos: doCaminho.length === 0,
       rolagem: [25, 50, 75, 100].map((marco) => ({ marco, visitas: doMarco(marco), percentual: porcentagem(doMarco(marco), total) })),
       blocos: [...naOrdem, ...orfaos],
     };
   });
-  return { paginas: relatorio.sort((a, b) => b.visitas - a.visitas || a.urlPath.localeCompare(b.urlPath)) };
+  const maisVisitadas = relatorio.sort((a, b) => b.visitas - a.visitas || a.urlPath.localeCompare(b.urlPath));
+  return { paginas: maisVisitadas.slice(0, MAX_PAGINAS) };
 }

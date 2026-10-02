@@ -194,3 +194,15 @@ test('na página publicada, o tracker envia para o Studio que o serviu (data-hos
   bootTracker({ doc, location: fakeLocation('/', ''), navigator: { sendBeacon: (url) => { calls.push(url); return true; } } });
   assert.deepEqual(calls, ['https://studio.example.test/api/public/collect']);
 });
+
+// Conferência de 02/10/2026: a lista de termos proibidos cobria campos de formulário, mas o
+// tracker poderia ler o TEXTO da página por outros caminhos. Os sinais medem blocos por id,
+// nunca o que está escrito neles.
+test('o tracker não lê texto, marcação nem formulários da página por nenhum caminho', () => {
+  const source = readFileSync(trackerSourcePath, 'utf8')
+    // Comentários explicam o porquê e podem citar os termos; só o código conta.
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  for (const forbidden of ['textContent', 'innerText', 'innerHTML', 'outerHTML', '.forms', 'getElementsBy', 'querySelector(', 'getSelection', 'clipboard']) {
+    assert.equal(source.includes(forbidden), false, `tracker.js não deve conter "${forbidden}"`);
+  }
+});

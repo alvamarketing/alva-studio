@@ -22,7 +22,7 @@ export function modeloDosSinais(relatorio) {
     return {
       vazio: true,
       paginas: [],
-      mensagem: 'Ainda não há sinais. Eles aparecem assim que uma página publicada, com o tracker, receber visitas.',
+      mensagem: 'Ainda não há sinais. Eles aparecem assim que uma página publicada receber visitas.',
     };
   }
   return {
@@ -34,6 +34,11 @@ export function modeloDosSinais(relatorio) {
       const nome = (bloco) => (bloco.naPagina === false ? `${bloco.rotulo} (saiu da página)` : bloco.rotulo);
       return {
         titulo: pagina.nome ? `${pagina.nome} · ${pagina.urlPath}` : pagina.urlPath,
+        // Página publicada antes dos sinais: só a rolagem chega. Publicar de novo não basta, porque
+        // o HTML publicado é o que foi gerado quando a página foi salva.
+        aviso: pagina.semBlocos
+          ? 'Esta página foi publicada antes dos sinais por bloco. Para ver cada bloco, salve a página e publique de novo — só publicar não basta.'
+          : '',
         resumo: `${NUMERO.format(Number(pagina.visitas) || 0)} visitas medidas no período. Os blocos aparecem na ordem da página.`,
         rolagem: MARCOS.map((marco) => {
           const dado = (pagina.rolagem || []).find((linha) => linha.marco === marco) || { visitas: 0, percentual: 0 };
@@ -91,6 +96,11 @@ export function pintarSinaisDeBloco(alvo, relatorio, { doc = globalThis.document
     cabeca.append(elemento(doc, 'h3', '', pagina.titulo), elemento(doc, 'p', 'helper', pagina.resumo));
     const cartao = elemento(doc, 'div', 'list-card');
     cartao.append(cabeca, listaDeLinhas(doc, pagina.rolagem));
+    // Página publicada antes dos sinais: em vez de três cartões em branco, a explicação.
+    if (pagina.aviso) {
+      alvo.append(cartao, cartaoVazio(doc, 'Os blocos desta página ainda não aparecem', pagina.aviso));
+      continue;
+    }
     const colunas = elemento(doc, 'div', 'analytics-lists analytics-lists-3');
     colunas.append(
       coluna(doc, 'Quem chegou ao bloco', pagina.chegou),

@@ -215,9 +215,14 @@ export function parseCollectPayload(raw, contentType) {
 //   barrar quem não conhece nenhum tracker_public_id real e tenta descobrir um por força bruta —
 //   essa checagem deve ser chamada pelo index.mjs com só {ip}, antes de ler/parsear o corpo.
 // Nenhum dos dois Maps cresce sem limite: ao passar do teto de chaves, descarta a mais antiga.
+// Tetos pensados para site com tráfego pago (conferência de 02/10/2026): 5.000 visitas por hora
+// são ~83 por minuto, com pico de 3 a 5 vezes isso, e cada visita manda alguns eventos. Os
+// 60 por minuto de antes valiam pelo site inteiro e derrubariam as conversões que alimentam
+// Meta e TikTok. O que protege de abuso continua sendo o 403 para tracker ou origem inválidos,
+// o corpo máximo, a lista fechada de campos, o teto por IP e o de trackers distintos por IP.
 export function createCollectLimiter({
   now = () => Date.now(),
-  maxPerMinute = 60,
+  maxPerMinute = 1_500,
   maxTrackers = 10_000,
   maxPerMinutePerIp = 120,
   maxIps = 20_000,
@@ -226,13 +231,18 @@ export function createCollectLimiter({
   const trackerBuckets = new Map();
   const ipBuckets = new Map();
   return {
-    allow({ ip, trackerPublicId } = {}) {
+    // `contarIp` e `contarTracker` existem porque a mesma requisição passa aqui duas vezes: a
+    // verificação barata, só com o IP, antes de ler o corpo, e a que já conhece o tracker.
+    // Contar nas duas gastava duas vagas do visitante por evento. Quem chama pela segunda vez
+    // diz `contarIp: false`; o evento que tem balde próprio (sinais) diz `contarTracker: false`
+    // para não tirar vaga de pageview e de conversão.
+    allow({ ip, trackerPublicId, contarIp = true, contarTracker = true } = {}) {
       const time = now();
       if (ip !== undefined) {
         let ipBucket = ipBuckets.get(ip);
         if (ipBucket) ipBuckets.delete(ip);
         if (!ipBucket || time - ipBucket.windowStart >= WINDOW_MS) ipBucket = { count: 0, windowStart: time, trackers: new Set() };
-        ipBucket.count += 1;
+        if (contarIp) ipBucket.count += 1;
         if (trackerPublicId !== undefined) ipBucket.trackers.add(trackerPublicId);
         ipBuckets.set(ip, ipBucket);
         while (ipBuckets.size > maxIps) ipBuckets.delete(ipBuckets.keys().next().value);
@@ -243,10 +253,11 @@ export function createCollectLimiter({
         let bucket = trackerBuckets.get(trackerPublicId);
         if (bucket) trackerBuckets.delete(trackerPublicId);
         if (!bucket || time - bucket.windowStart >= WINDOW_MS) bucket = { count: 0, windowStart: time };
-        bucket.count += 1;
+        if (contarTracker) bucket.count += 1;
         trackerBuckets.set(trackerPublicId, bucket);
         while (trackerBuckets.size > maxTrackers) trackerBuckets.delete(trackerBuckets.keys().next().value);
-        if (bucket.count > maxPerMinute) return false;
+        // Sem contar, a pergunta é "ainda há vaga para mais um?", não "já passou do teto?".
+        if (contarTracker ? bucket.count > maxPerMinute : bucket.count >= maxPerMinute) return false;
       }
       return true;
     },

@@ -210,3 +210,43 @@ test('limitador de coleta: aceita checagem só por IP, antes de qualquer parse d
   assert.equal(limiter.allow({ ip: '203.0.113.50' }), true);
   assert.equal(limiter.allow({ ip: '203.0.113.50' }), false, 'terceira chamada só com IP já deve bloquear, sem depender de trackerPublicId');
 });
+
+// --- Limites pensados para tráfego pago (conferência de 02/10/2026) ---
+// O teto de 60 por minuto valia pelo site inteiro, e a verificação barata antes de ler o corpo
+// e a verificação com o tracker contavam o mesmo visitante duas vezes. Com anúncio no ar, os
+// sinais de bloco (que são o tipo de evento mais barato de perder) competiam com pageview e
+// com as conversões que alimentam Meta e TikTok.
+test('limitador: os tetos padrão aguentam tráfego de anúncio, não 60 eventos por minuto no site todo', () => {
+  const limiter = createCollectLimiter({ now: () => 0 });
+  let aceitos = 0;
+  for (let i = 0; i < 1200; i += 1) {
+    if (limiter.allow({ ip: `198.51.100.${i % 250}`, trackerPublicId: 'trk_a', contarIp: i < 250 })) aceitos += 1;
+  }
+  assert.ok(aceitos >= 1200, `1.200 eventos de 250 visitantes em um minuto cabem (aceitou ${aceitos})`);
+});
+
+test('limitador: contar o visitante na verificação do tracker não o conta de novo', () => {
+  const limiter = createCollectLimiter({ now: () => 0, maxPerMinutePerIp: 4 });
+  // Cada requisição: uma verificação barata com o IP e outra com o tracker, sem recontar o IP.
+  for (let i = 0; i < 4; i += 1) {
+    assert.equal(limiter.allow({ ip: '203.0.113.9' }), true, `requisição ${i + 1}, verificação barata`);
+    assert.equal(limiter.allow({ ip: '203.0.113.9', trackerPublicId: 'trk_a', contarIp: false }), true, `requisição ${i + 1}, com tracker`);
+  }
+  assert.equal(limiter.allow({ ip: '203.0.113.9' }), false, 'a quinta requisição já passa do teto de 4 — e não da metade dele');
+});
+
+test('limitador: quem já estourou o teto do tracker continua barrado mesmo sem somar mais um', () => {
+  const limiter = createCollectLimiter({ now: () => 0, maxPerMinute: 2, maxPerMinutePerIp: 1000 });
+  assert.equal(limiter.allow({ ip: '203.0.113.1', trackerPublicId: 'trk_a' }), true);
+  assert.equal(limiter.allow({ ip: '203.0.113.2', trackerPublicId: 'trk_a' }), true);
+  assert.equal(limiter.allow({ ip: '203.0.113.3', trackerPublicId: 'trk_a', contarTracker: false }), false);
+});
+
+test('limitador de sinais: balde próprio, que não tira vaga de pageview nem de conversão', () => {
+  const principal = createCollectLimiter({ now: () => 0, maxPerMinute: 2, maxPerMinutePerIp: 1000 });
+  const sinais = createCollectLimiter({ now: () => 0, maxPerMinute: 1, maxPerMinutePerIp: 1000 });
+  assert.equal(sinais.allow({ ip: '203.0.113.5', trackerPublicId: 'trk_a' }), true);
+  assert.equal(sinais.allow({ ip: '203.0.113.6', trackerPublicId: 'trk_a' }), false, 'sinais estouraram o balde deles');
+  assert.equal(principal.allow({ ip: '203.0.113.7', trackerPublicId: 'trk_a' }), true, 'pageview e conversão seguem passando');
+  assert.equal(principal.allow({ ip: '203.0.113.8', trackerPublicId: 'trk_a' }), true);
+});

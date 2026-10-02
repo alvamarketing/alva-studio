@@ -337,3 +337,42 @@ test('nenhuma tela do Studio carrega o tracker: quem edita não é visitante', (
     assert.doesNotMatch(readFileSync(fileURLToPath(new URL(`../editor/${fonte}`, import.meta.url)), 'utf8'), /tracker\.js|data-alva-tracker/, fonte);
   }
 });
+
+// --- Conferência de 02/10/2026 ---
+function montarSemBlocos() {
+  const dom = new JSDOM('<body><main><p>página publicada antes dos sinais, ou o player da VSL embutido</p></main></body>', { pretendToBeVisual: true });
+  const { window } = dom;
+  const { document } = window;
+  Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, get: () => 4000 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => 800 });
+  let rolado = 0;
+  Object.defineProperty(window, 'scrollY', { configurable: true, get: () => rolado });
+  window.requestAnimationFrame = (f) => f();
+  const lotes = [];
+  const sinais = criarSinaisDeBloco({ document, window, track: (nome, dados) => lotes.push({ nome, dados }), now: () => 1, IntersectionObserverImpl: ObservadorFalso });
+  sinais.iniciar();
+  return { window, document, lotes, sinais, rolarPara: (y) => { rolado = y; window.dispatchEvent(new window.Event('scroll')); } };
+}
+
+test('página sem nenhum bloco (publicada antes dos sinais, ou o player da VSL) não manda sinal nenhum', () => {
+  // Antes, mandava só a rolagem: a página antiga aparecia no relatório com barras e cartões
+  // vazios, e cada visita gastava uma chamada do limitador sem dizer nada útil.
+  const t = montarSemBlocos();
+  t.rolarPara(3500);
+  t.window.dispatchEvent(new t.window.Event('pagehide'));
+  assert.equal(t.sinais.blocosObservados(), 0);
+  assert.deepEqual(t.lotes, []);
+  t.window.close();
+});
+
+test('uma visita manda poucos lotes, mesmo se a pessoa alternar de aba dezenas de vezes', () => {
+  const t = montar();
+  for (let i = 0; i < 40; i += 1) {
+    t.io.mostrar(t.el('titulo-1'), { razao: 0.6 });
+    t.passar(2000);
+    t.esconderAba();
+    t.mostrarAba();
+  }
+  assert.ok(t.lotes.length >= 3, `o teste só vale se mandou lotes de verdade (mandou ${t.lotes.length})`);
+  assert.ok(t.lotes.length <= 6, `no máximo 6 lotes por visita (mandou ${t.lotes.length})`);
+});

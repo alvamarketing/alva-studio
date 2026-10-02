@@ -91,3 +91,15 @@ test('falha da API vira mensagem na própria seção e não derruba o resto de A
   await carregarSinaisDeBloco({ api: async () => { throw new Error('Sem rede.'); }, projectId: 'p1', from: 'a', to: 'b', alvo, doc, aindaVale: () => true });
   assert.match(alvo.textContent, /Sem rede\./);
 });
+
+test('página medida sem blocos diz ao dono o que fazer: salvar e publicar de novo', () => {
+  const modelo = modeloDosSinais({ paginas: [{ urlPath: '/antiga', nome: 'Oferta', visitas: 10, semBlocos: true, rolagem: [], blocos: [] }] });
+  assert.match(modelo.paginas[0].aviso, /salve a página e publique de novo/i);
+  assert.match(modelo.paginas[0].aviso, /publicar sozinho não basta|só publicar não basta/i);
+});
+
+test('o texto de "ainda não há sinais" é para leigo, sem a palavra tracker', () => {
+  const modelo = modeloDosSinais({ paginas: [] });
+  assert.doesNotMatch(modelo.mensagem, /tracker/i);
+  assert.match(modelo.mensagem, /visitas/);
+});

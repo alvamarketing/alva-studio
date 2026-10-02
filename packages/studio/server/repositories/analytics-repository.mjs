@@ -440,21 +440,24 @@ export class AnalyticsRepository {
          FROM analytics_events
         WHERE company_id = $1 AND project_id = $2 AND event_type = 'pageview'
           AND event_at >= $3 AND event_at < $4
-        GROUP BY url_path`,
+        GROUP BY url_path
+        ORDER BY total DESC LIMIT 1000`,
       range,
     );
     const { rows: blocos } = await this.database.query(
       `SELECT url_path, block_id, SUM(entered)::int AS entradas, SUM(seconds_visible)::int AS segundos, SUM(clicks)::int AS cliques
          FROM analytics_block_signals
         WHERE company_id = $1 AND project_id = $2 AND created_at >= $3 AND created_at < $4
-        GROUP BY url_path, block_id`,
+        GROUP BY url_path, block_id
+        ORDER BY SUM(entered) DESC LIMIT 5000`,
       range,
     );
     const { rows: rolagem } = await this.database.query(
       `SELECT url_path, mark, COUNT(*)::int AS total
          FROM analytics_scroll_marks
         WHERE company_id = $1 AND project_id = $2 AND created_at >= $3 AND created_at < $4
-        GROUP BY url_path, mark`,
+        GROUP BY url_path, mark
+        ORDER BY COUNT(*) DESC LIMIT 4000`,
       range,
     );
     return {

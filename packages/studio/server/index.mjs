@@ -222,6 +222,7 @@ export function createApp({
   webhookWorkerEnabled = process.env.WEBHOOK_WORKER_ENABLED !== 'false',
   analyticsRetentionIntervalMs,
   collectLimiterOptions,
+  collectLimiterSinaisOptions,
   runtimeFlags = readRuntimeFlags(),
   runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET,
   billingOptions = {},
@@ -248,6 +249,11 @@ export function createApp({
     : null;
   const analytics = database ? new AnalyticsRepository(database) : null;
   const collectLimiter = createCollectLimiter(collectLimiterOptions);
+  // Os sinais de bloco têm balde próprio: são o evento mais barato de perder e o mais
+  // numeroso, e não podem tirar vaga de pageview nem das conversões. Um visitante legítimo
+  // manda de 1 a 3 lotes por visita; 20 por minuto por IP cobrem NAT de operadora e de
+  // escritório sem deixar um IP forjar linhas à vontade.
+  const collectLimiterSinais = createCollectLimiter({ maxPerMinute: 600, maxPerMinutePerIp: 20, ...collectLimiterSinaisOptions });
   const analyticsRetention = analytics
     ? startAnalyticsRetentionWorker({
       analytics,
@@ -550,7 +556,12 @@ export function createApp({
         if (!collectLimiter.allow({ ip: ipDoVisitante(req) })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
         // O escopo (empresa/projeto) vem sempre de resolveWebsite(), nunca do corpo enviado pelo navegador.
         const { trackerPublicId, event } = parseCollectPayload(await collectBody(req), req.headers['content-type']);
-        if (!collectLimiter.allow({ ip: ipDoVisitante(req), trackerPublicId })) throw error('Muitos eventos. Tente novamente em instantes.', 429);
+        const ipDoEvento = ipDoVisitante(req);
+        const permitido = event.event_name === 'bloco_sinais'
+          ? collectLimiter.allow({ ip: ipDoEvento, trackerPublicId, contarIp: false, contarTracker: false })
+            && collectLimiterSinais.allow({ ip: ipDoEvento, trackerPublicId })
+          : collectLimiter.allow({ ip: ipDoEvento, trackerPublicId, contarIp: false });
+        if (!permitido) throw error('Muitos eventos. Tente novamente em instantes.', 429);
         const website = await analytics.resolveWebsite({ trackerPublicId });
         const allowedOrigins = website && origin && origin !== expectedOrigin
           ? await content.publicationOrigins({ companySlug: website.companySlug, projectSlug: website.projectSlug })

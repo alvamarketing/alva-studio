@@ -77,6 +77,8 @@ export function createTracker({
 // quando a aba some (visibilitychange) ou a página fecha (pagehide) — um evento por pixel
 // derrubaria o limitador do coletor e a bateria do celular. Cada lote leva só o que mudou desde
 // o anterior, então somar os lotes no servidor nunca conta a mesma entrada duas vezes.
+// Teto de lotes por visita: cada `visibilitychange` para "hidden" manda um.
+const MAX_LOTES_POR_VISITA = 6;
 const SELETOR_DE_BLOCO = '[data-alva-bloco]';
 const SELETOR_DE_ACAO = 'a[href], button';
 // Mesmo formato do id do nó que o coletor aceita (FORMATO_ID_DE_BLOCO em page-schema.js).
@@ -104,6 +106,7 @@ export function criarSinaisDeBloco({
   let marcoAtingido = 0;
   const marcosNovos = [];
   let observador = null;
+  let lotesEnviados = 0;
 
   const abaVisivel = () => doc.visibilityState !== 'hidden';
   const abrir = (bloco, agora) => { if (bloco.desde === null && bloco.noVisor && abaVisivel()) bloco.desde = agora; };
@@ -185,7 +188,13 @@ export function criarSinaisDeBloco({
     }
     const rolagem = marcosNovos.splice(0);
     if (!itens.length && !rolagem.length) return;
+    // Quem alterna de aba dezenas de vezes no celular gerava um lote a cada volta. O que sobra
+    // depois do teto continua somando e vai no próximo lote que couber — e, se não couber
+    // nenhum, a visita já disse o que tinha de mais importante.
+    if (lotesEnviados >= MAX_LOTES_POR_VISITA) return;
     for (let inicio = 0; inicio === 0 || inicio < itens.length; inicio += MAX_BLOCOS_POR_LOTE) {
+      if (lotesEnviados >= MAX_LOTES_POR_VISITA) break;
+      lotesEnviados += 1;
       const lote = itens.slice(inicio, inicio + MAX_BLOCOS_POR_LOTE);
       const dados = {};
       if (inicio === 0 && rolagem.length) dados.rolagem = rolagem;
@@ -213,6 +222,10 @@ export function criarSinaisDeBloco({
       idDoElemento.set(elemento, id);
       observador.observe(elemento);
     }
+    // Sem nenhum bloco (página publicada antes dos sinais, ou o player da VSL embutido) não há
+    // o que medir: antes, mandava só a rolagem, e a página antiga aparecia no relatório com
+    // barras e cartões vazios, gastando uma chamada do limitador por visita.
+    if (!blocos.size) { observador.disconnect?.(); return; }
     doc.addEventListener('click', aoClicar, true);
     doc.addEventListener('visibilitychange', aoMudarDeAba);
     janela.addEventListener('pagehide', enviar);
