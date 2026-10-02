@@ -85,9 +85,15 @@ const meta = {
     // O token vai como `access_token` na URL, que é como a documentação da Conversions API
     // descreve o envio; ela não fala em cabeçalho Bearer.
     // https://developers.facebook.com/docs/marketing-api/conversions-api/using-the-api
+    // Com o token da conexão da empresa, a chamada leva também a prova do segredo do app
+    // (D8), que quem resolveu o token já calculou.
+    // https://developers.facebook.com/documentation/facebook-login/security#proof
+    const prova = texto(credenciais.appsecret_proof) && texto(credenciais.appsecret_time)
+      ? `&appsecret_proof=${encodeURIComponent(texto(credenciais.appsecret_proof))}&appsecret_time=${encodeURIComponent(texto(credenciais.appsecret_time))}`
+      : '';
     return {
       metodo: 'POST',
-      url: `https://graph.facebook.com/${VERSAO_DA_GRAPH_API}/${encodeURIComponent(pixel)}/events?access_token=${encodeURIComponent(token)}`,
+      url: `https://graph.facebook.com/${VERSAO_DA_GRAPH_API}/${encodeURIComponent(pixel)}/events?access_token=${encodeURIComponent(token)}${prova}`,
       cabecalhos: [],
       corpo: { ...meta.corpo(evento), ...modoDeTeste(credenciais) },
     };

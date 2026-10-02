@@ -241,6 +241,8 @@ export function motivoDaFalha(codigo, nome = 'este destino') {
   const fora = texto.match(/^destination_unavailable_(\d+)$/);
   if (fora) return `A plataforma estava indisponível (código ${fora[1]}). O envio tenta de novo sozinho.`;
   if (texto === 'transport_error') return 'Não foi possível falar com a plataforma. O envio tenta de novo sozinho.';
+  if (texto === 'destination_connection_needs_reconnect') return `A conta da Meta conectada precisa ser conectada de novo (o acesso venceu ou foi recusado). Clique em "Reconectar" no cartão "Conta da Meta" das Configurações do projeto.`;
+  if (texto === 'destination_connection_unavailable') return 'O envio pela conexão com o Facebook não está configurado no servidor de envio. Avise quem administra o Studio.';
   if (texto === 'destination_not_configured') return `Sem credencial de ${nome} neste ambiente. Configure-a em Destinos, nesta tela.`;
   if (texto === 'destination_event_name_missing') return `Falta o nome deste evento na configuração de ${nome}. Preencha em Destinos, nesta tela.`;
   if (texto === 'destination_user_agent_required') return 'O evento chegou sem o navegador de quem converteu, que esta plataforma exige.';
