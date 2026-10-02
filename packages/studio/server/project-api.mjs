@@ -63,6 +63,8 @@ function legacyPage(page, settings = {}) {
     deployment: null,
     domain: settings.domain ?? '',
     webhook: settings.webhook ?? '',
+    // Só o host do destino do projeto: o editor mostra que a página usa o dele, sem a URL.
+    projectWebhookHost: settings.projectWebhookHost ?? '',
   };
 }
 
@@ -391,6 +393,21 @@ export function createProjectApi({
         await sessionService.clearCurrentProject(projectId);
         return json(archived);
       }
+    }
+
+    // Para onde vai a cópia de cada lead do projeto. A página com destino próprio sobrescreve
+    // este (content-repository, no envio do lead).
+    const leadWebhookRoute = path.match(/^\/api\/projects\/([^/]+)\/lead-webhook$/);
+    if (leadWebhookRoute && (method === 'GET' || method === 'PUT')) {
+      const projectId = leadWebhookRoute[1];
+      await sessionService.authorize(context, 'integration.manage', projectId);
+      const scope = { companyId: context.companyId, projectId };
+      if (method === 'GET') return json(await content.leadWebhooks.get(scope));
+      const input = await body(req);
+      const url = typeof input.url === 'string' ? input.url.trim() : '';
+      if (input.remove === true || !url) return json(await content.leadWebhooks.remove(scope));
+      // A mesma proteção do webhook de página: o validador injetado é o do servidor.
+      return json(await content.leadWebhooks.save({ ...scope, url: await validateWebhook(url) }));
     }
 
     const trackingRoute = path.match(/^\/api\/projects\/([^/]+)\/tracking(?:\/(provision|status|retry|destinations)(?:\/([^/]+))?)?$/);

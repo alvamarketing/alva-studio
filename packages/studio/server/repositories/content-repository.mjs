@@ -5,6 +5,7 @@ import { allowedPublicationOrigin } from '../publication-cors.mjs';
 import { extractVslReferences } from '../publication-snapshot.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from '../vsl-reference.mjs';
 import { WebhookDeliveryRepository } from './webhook-repository.mjs';
+import { LeadWebhookRepository } from './lead-webhook-repository.mjs';
 import { extractPageCaptureSchema, normalizePageCaptureIds, validatePageCaptureAnswers } from '../page-capture-schema.mjs';
 import { capturasDoEstado, documentoDaPagina, ehEstadoAlva, normalizarEstadoAlva } from '../../public/pagina-alva.js';
 
@@ -283,6 +284,7 @@ export class ContentRepository {
     this.database = database;
     this.publicOrigin = publicOrigin;
     this.webhookDeliveries = new WebhookDeliveryRepository(database);
+    this.leadWebhooks = new LeadWebhookRepository(database);
     this.commercialOutbox = commercialOutbox;
     this.commercialConsentResolver = commercialConsentResolver;
   }
@@ -524,7 +526,10 @@ export class ContentRepository {
       ),
     ]);
     const settings = integrations.rows[0]?.configuration?.pageWebhooks ?? {};
-    return { domain: domains.rows[0]?.domain ?? '', webhook: typeof settings[pageId] === 'string' ? settings[pageId] : '' };
+    return {
+      domain: domains.rows[0]?.domain ?? '', webhook: typeof settings[pageId] === 'string' ? settings[pageId] : '',
+      projectWebhookHost: await this.leadWebhooks.host({ companyId, projectId }),
+    };
   }
 
   validatePageSettings({ domain: domainValue, webhook: webhookValue }) {
@@ -603,7 +608,10 @@ export class ContentRepository {
           ),
         ]);
         const pageWebhooks = integrations.rows[0]?.configuration?.pageWebhooks ?? {};
-        return { domain: domains.rows[0]?.domain ?? '', webhook: typeof pageWebhooks[pageId] === 'string' ? pageWebhooks[pageId] : '' };
+        return {
+          domain: domains.rows[0]?.domain ?? '', webhook: typeof pageWebhooks[pageId] === 'string' ? pageWebhooks[pageId] : '',
+          projectWebhookHost: await this.leadWebhooks.host({ companyId, projectId }, client),
+        };
       });
     } catch (error) {
       throw routeConflict(error);
@@ -694,7 +702,11 @@ export class ContentRepository {
           contexto: { sourceUrl: enderecoPublicado(origin, rows[0].published_path), contentId: pageId, contentName: rows[0].page_name },
         });
       }
-      if (!repeated && capture.webhook) await this.webhookDeliveries.enqueue(client, { companyId, projectId, pageId, pageSubmissionId: submission.id, url: capture.webhook, event: { eventId: submission.tracking_event_id, event: 'page.submitted', companyId, projectId, pageId, pageVersionId, captureId, submittedAt: submission.submitted_at, answers } });
+      // O destino da página (congelado na versão publicada) vale primeiro; sem ele, cai no do
+      // projeto, lido AGORA e não na publicação: quem configura o projeto depois de publicar
+      // não precisa republicar cada página. Um lead, uma entrega: nunca os dois.
+      const destino = repeated ? '' : (capture.webhook || (await this.leadWebhooks.get({ companyId, projectId }, client)).url);
+      if (destino) await this.webhookDeliveries.enqueue(client, { companyId, projectId, pageId, pageSubmissionId: submission.id, url: destino, event: { eventId: submission.tracking_event_id, event: 'page.submitted', companyId, projectId, pageId, pageVersionId, captureId, submittedAt: submission.submitted_at, answers } });
       return { id: submission.id, eventId: submission.tracking_event_id, answers: repeated ? submission.answers : answers, submittedAt: submission.submitted_at };
     });
   }
