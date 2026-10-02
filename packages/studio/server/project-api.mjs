@@ -120,6 +120,7 @@ export function createProjectApi({
   funnels = null,
     analytics,
   tracking,
+  publicosMeta = null,
   commercialOutbox,
   runtimeFlags,
   billing,
@@ -439,6 +440,30 @@ export function createProjectApi({
         const input = req.headers?.['content-type']?.startsWith('application/json') ? await body(req) : {};
         return json(await tracking.removeDestination({ companyId: context.companyId, projectId, provider, environment: input.environment || search.get('environment') }));
       }
+      throw fail('Não encontrado.', 404);
+    }
+
+    // Públicos automáticos na Meta: listar o catálogo com o estado do projeto, guardar a
+    // credencial de gerenciar anúncios, criar os públicos escolhidos e esquecer um deles.
+    // Tudo sob `integration.manage`, como os destinos de rastreamento: é a mesma conta de
+    // anúncios, e o token aqui pode criar coisa lá. O token entra e nunca sai.
+    const publicosMetaRoute = path.match(/^\/api\/projects\/([^/]+)\/meta-audiences(?:\/(credentials|sync|audiences)(?:\/([a-z0-9_]{1,40}))?)?$/);
+    if (publicosMetaRoute) {
+      const [, projectId, acao = 'estado', chave] = publicosMetaRoute;
+      await sessionService.authorize(context, 'integration.manage', projectId);
+      if (!publicosMeta) throw fail('Os públicos da Meta ainda não estão configurados neste ambiente.', 409);
+      const escopo = { companyId: context.companyId, projectId };
+      if (acao === 'estado' && method === 'GET') return json(await publicosMeta.estado(escopo));
+      if (acao === 'credentials' && !chave && method === 'PUT') {
+        const input = await body(req);
+        return json(await publicosMeta.salvarCredenciais({ ...escopo, adAccountId: input.adAccountId, token: input.token }));
+      }
+      if (acao === 'credentials' && !chave && method === 'DELETE') return json(await publicosMeta.removerCredenciais(escopo));
+      if (acao === 'sync' && !chave && method === 'POST') {
+        const input = await body(req);
+        return json(await publicosMeta.sincronizar({ ...escopo, chaves: input.chaves }));
+      }
+      if (acao === 'audiences' && chave && method === 'DELETE') return json(await publicosMeta.esquecer({ ...escopo, chave }));
       throw fail('Não encontrado.', 404);
     }
 

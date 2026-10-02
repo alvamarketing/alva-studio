@@ -43,7 +43,9 @@ const TEM_PAGINA = (evento) => Boolean(texto(evento.source_url));
 
 // A versão da Graph API em vigor. A v20.0 ficou no ar até 24/09/2026; cada versão dura
 // cerca de dois anos. https://developers.facebook.com/docs/graph-api/changelog
-const VERSAO_DA_GRAPH_API = 'v26.0';
+// Exportada porque o cliente de públicos (meta-publicos-cliente.mjs) fala com a mesma Graph
+// API: uma versão só, trocada num lugar só quando a Meta aposentar esta.
+export const VERSAO_DA_GRAPH_API = 'v26.0';
 
 const meta = {
   chave: 'meta',

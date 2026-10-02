@@ -1129,3 +1129,93 @@
   font-size: var(--text-md);
   color: var(--alva-muted);
 }
+
+/* Públicos automáticos na Meta (aba Rastreamento das configurações do projeto). O
+   interruptor segue o `.toggle` do wireframe (37×21, bolinha de 15, ligado em azul); só o
+   estado desligado usa a cor de linha, que já existe, em vez de uma cor nova. */
+.publicos-meta-falta {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--alva-line);
+}
+.publicos-meta-falta strong {
+  font-size: var(--text-md);
+}
+.publicos-meta-falta p {
+  margin: 4px 0 0;
+  max-width: 72ch;
+}
+.publicos-meta .publicos-meta-credenciais-bloco {
+  margin: 14px 0;
+}
+.publicos-meta .publicos-meta-credenciais {
+  max-width: 46ch;
+  margin-top: 6px;
+}
+.publicos-meta .publico-meta > div:first-child {
+  min-width: 0;
+}
+.publicos-meta .publico-meta small {
+  display: block;
+  margin-top: 3px;
+  color: var(--alva-muted);
+  font-size: var(--text-xs);
+}
+.publicos-meta .publico-meta .form-error {
+  margin: 6px 0 0;
+  color: var(--alva-danger);
+}
+.publico-meta-acao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+.publicos-meta .publico-meta .publico-meta-estado {
+  display: inline;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.publico-meta-estado.ok { color: var(--alva-positive); }
+.publico-meta-estado.error { color: var(--alva-negative); }
+.publicos-meta .publico-meta .publico-meta-estado.off { color: var(--alva-muted); font-weight: 500; }
+.publicos-meta input[role='switch'] {
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 37px;
+  height: 21px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--alva-line);
+  cursor: pointer;
+}
+.publicos-meta input[role='switch']::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: var(--radius-pill);
+  background: var(--alva-white);
+}
+.publicos-meta input[role='switch']:checked {
+  background: var(--alva-blue);
+}
+.publicos-meta input[role='switch']:checked::after {
+  left: auto;
+  right: 3px;
+}
+.publicos-meta input[role='switch']:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.publicos-meta input[role='switch']:focus-visible {
+  outline: 2px solid var(--alva-blue);
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  .publicos-meta .publico-meta { flex-wrap: wrap; }
+}
