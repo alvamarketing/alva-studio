@@ -217,3 +217,25 @@ test('o módulo só usa tokens: nenhuma cor, nem style em linha; o segredo nunca
   assert.match(fonte, /rotuloDoSegredo\(destino\)/);
   assert.match(fonte, /semTokenGuardado: true/);
 });
+
+// Só tokens no CSS novo (exceto o bloco --marca-*, testado em marcas.test.mjs): nenhuma cor
+// literal, raio/sombra/tamanho de fonte por token, peso entre 400 e 800.
+test('o CSS da grade e dos públicos só usa tokens existentes', async () => {
+  const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
+  const trechos = [
+    css.slice(css.indexOf('/* Cartão "Plataformas"'), css.indexOf('/* "Conta da Meta", F2')),
+    css.slice(css.indexOf('/* Cartão enxuto: quadrado com ícone'), css.indexOf('.publico-meta-acao {')),
+  ];
+  for (const trecho of trechos) {
+    assert.ok(trecho.length > 300, 'o trecho existe');
+    const regras = trecho.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.doesNotMatch(regras, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|font-family|style=/i);
+    for (const raio of regras.match(/border-radius:[^;]+/g) ?? []) assert.match(raio, /var\(--radius-/);
+    for (const sombra of regras.match(/box-shadow:[^;]+/g) ?? []) assert.match(sombra, /var\(--(?:shadow|ring)-/);
+    for (const tamanho of regras.match(/font-size:[^;]+/g) ?? []) assert.match(tamanho, /var\(--(?:text|icon)-/);
+    for (const peso of regras.match(/font-weight:[^;]+/g) ?? []) {
+      const valor = Number(peso.split(':')[1]);
+      assert.ok(valor >= 400 && valor <= 800, peso);
+    }
+  }
+});

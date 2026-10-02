@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { cartaoDaContaMeta, criarConexaoMetaUI } from '../public/conexao-meta-ui.js';
+import { pintarPlataformas } from '../public/plataformas-ui.js';
+import { destinosDeConversaoModel } from '../public/studio-dashboard.js';
 
 const conectado = (extra = {}) => ({
   conectado: true, nome: 'Pessoa na Meta', status: 'connected', precisaReconectar: false,
@@ -27,21 +29,39 @@ function montar(estado, acoes = {}) {
 
 const botao = (cartao, texto) => [...cartao.querySelectorAll('button')].find((item) => item.textContent.trim() === texto);
 
-test('o cartão veste a moldura do contrato visual (.surface + .surface-head)', async () => {
+test('o bloco da Meta é o bloco largo da grade "Plataformas": logo, nome e uma linha de status', async () => {
   const { cartao } = montar({ conectado: false });
   await cartao.recarregar();
-  assert.ok(cartao.classList.contains('surface'));
-  assert.equal(cartao.querySelector(':scope > .surface-head h2').textContent, 'Conta da Meta');
+  assert.ok(cartao.classList.contains('plataforma'));
+  assert.ok(cartao.classList.contains('plataforma-larga'));
+  assert.equal(cartao.dataset.provider, 'meta');
+  assert.equal(cartao.querySelector('.plataforma-cabeca .plataforma-nome').textContent, 'Meta');
+  assert.ok(cartao.querySelector('.plataforma-cabeca > .plataforma-logo svg path'), 'logo da Meta do simple-icons');
+  assert.equal(cartao.querySelectorAll('.plataforma-status').length, 1);
 });
 
-test('não conectado: Conectar com o Facebook e o caminho manual', async () => {
+test('não conectado: o botão oficial "Continuar com o Facebook" e o caminho manual', async () => {
   const { cartao, chamadas } = montar({ conectado: false });
   await cartao.recarregar();
-  const conectar = botao(cartao, 'Conectar com o Facebook');
+  const conectar = botao(cartao, 'Continuar com o Facebook');
   assert.ok(conectar);
-  assert.ok(conectar.classList.contains('primary'));
-  botao(cartao, 'Prefiro preencher manualmente').click();
+  assert.ok(conectar.classList.contains('botao-facebook'), 'o botão da marca, não o azul do Studio');
+  assert.equal(conectar.classList.contains('primary'), false);
+  const logo = conectar.querySelector('.botao-facebook-logo');
+  assert.equal(logo.getAttribute('aria-hidden'), 'true');
+  assert.ok(logo.querySelector('svg path'), 'o logo f do simple-icons');
+  assert.match(cartao.querySelector('.plataforma-status').textContent, /Conecte a conta do Facebook/);
+  botao(cartao, 'Preencher manualmente').click();
   assert.deepEqual(chamadas, [['manual']]);
+});
+
+test('não conectado, com a Meta preenchida à mão: a linha de status diz isso e o manual vira "Editar"', async () => {
+  const { cartao } = montar({ conectado: false });
+  await cartao.recarregar();
+  cartao.definirDestino({ provider: 'meta', configured: true, description: 'Pixel e Conversions API', publicValue: '99887766', stateLabel: 'Configurado', state: 'idle', pelaConexao: false });
+  assert.equal(cartao.querySelector('.plataforma-status').textContent, 'Pixel e Conversions API · 99887766 · preenchido à mão');
+  assert.ok(botao(cartao, 'Editar preenchimento manual'));
+  assert.ok(botao(cartao, 'Continuar com o Facebook'), 'conectar continua possível');
 });
 
 test('Conectar mostra "Abrindo o Facebook…" e navega na mesma aba para a URL devolvida', async () => {
@@ -64,7 +84,7 @@ test('falha ao iniciar volta ao estado anterior com a mensagem', async () => {
   const { cartao } = montar({ conectado: false }, { iniciar: async () => { throw new Error('A conexão com o Facebook não está configurada neste ambiente.'); } });
   await cartao.recarregar();
   await cartao.aoConectar();
-  assert.ok(botao(cartao, 'Conectar com o Facebook'));
+  assert.ok(botao(cartao, 'Continuar com o Facebook'));
   assert.match(cartao.querySelector('.form-error').textContent, /não está configurada/);
 });
 
@@ -72,20 +92,20 @@ test('conectado: nome, quem conectou e quando, e Desconectar', async () => {
   let estado = conectado();
   const { cartao, chamadas } = montar(() => estado);
   await cartao.recarregar();
-  assert.match(cartao.textContent, /Pessoa na Meta/);
-  assert.match(cartao.textContent, /Conectado por Taian em 02\/10/);
-  assert.equal(botao(cartao, 'Conectar com o Facebook'), undefined);
+  assert.equal(cartao.querySelector('.plataforma-status').textContent, 'Pessoa na Meta · conectado por Taian em 02/10');
+  assert.equal(botao(cartao, 'Continuar com o Facebook'), undefined);
   estado = { conectado: false };
   await cartao.aoDesconectar();
   assert.deepEqual(chamadas, [['desconectar']]);
-  assert.ok(botao(cartao, 'Conectar com o Facebook'));
+  assert.ok(botao(cartao, 'Continuar com o Facebook'));
   assert.match(cartao.querySelector('[role="status"]').textContent, /públicos já criados continuam/);
 });
 
 test('precisa reconectar: Reconectar navega de novo', async () => {
   const { cartao, chamadas } = montar(conectado({ status: 'needs_reconnect', precisaReconectar: true }));
   await cartao.recarregar();
-  assert.match(cartao.textContent, /Conecte de novo/);
+  assert.match(cartao.querySelector('.plataforma-status').textContent, /Conecte de novo/);
+  assert.ok(botao(cartao, 'Desconectar'), 'quem não quer reconectar pode desconectar');
   const reconectar = botao(cartao, 'Reconectar');
   assert.ok(reconectar.classList.contains('primary'));
   await cartao.aoConectar();
@@ -104,9 +124,11 @@ test('o cartão só usa tokens: nenhuma cor, raio ou sombra literal, nem style e
 });
 
 function painelDoProjeto({ ligado = true, pode = true } = {}) {
-  const janela = new JSDOM(`<section id="project-settings-panel-rastreamento"><section class="surface" id="destinos"></section>
-    <div id="tracking-destinations"><details data-provider="meta"><summary>Meta</summary><form><input name="pixel_id"></form></details></div></section>`).window;
+  const janela = new JSDOM(`<section id="project-settings-panel-rastreamento"><section class="surface" id="destinos">
+    <div id="tracking-destinations"></div></section></section>`).window;
   const doc = janela.document;
+  // A grade já pintada pelo app, como na tela de verdade.
+  pintarPlataformas(doc.querySelector('#tracking-destinations'), destinosDeConversaoModel([], [], true), { salvar: async () => {}, remover: async () => {} });
   const pedidos = [];
   const destinos = [];
   const api = async (caminho, metodo = 'GET', dados) => {
@@ -124,6 +146,8 @@ test('sem runtime.metaConexao o cartão não aparece e nada é pedido', async ()
   await ui.abrir();
   assert.equal(doc.querySelector('#conta-meta'), null);
   assert.equal(pedidos.length, 0);
+  // A Meta continua na grade, como bloco simples: o manual não depende do app da Meta.
+  assert.ok(doc.querySelector('#tracking-destinations > [data-provider="meta"] .plataforma-manual-botao'));
 });
 
 test('quem não gerencia integrações não vê o cartão', async () => {
@@ -132,28 +156,49 @@ test('quem não gerencia integrações não vê o cartão', async () => {
   assert.equal(doc.querySelector('#conta-meta'), null);
 });
 
-test('ligado: o cartão entra no topo da aba Rastreamento e fala com as rotas da empresa', async () => {
+test('ligado: o bloco da conexão entra no lugar do bloco da Meta, primeiro da grade, e fala com as rotas da empresa', async () => {
   const { doc, ui, pedidos, destinos } = painelDoProjeto();
   await ui.abrir();
   await ui.abrir();
-  const painel = doc.querySelector('#project-settings-panel-rastreamento');
-  assert.equal(painel.firstElementChild.id, 'conta-meta');
+  const grade = doc.querySelector('#tracking-destinations');
+  assert.equal(grade.querySelector(':scope > .plataforma').id, 'conta-meta');
   assert.equal(doc.querySelectorAll('#conta-meta').length, 1);
+  assert.equal(grade.querySelectorAll(':scope > [data-provider="meta"]').length, 1, 'não sobra o bloco simples da Meta');
   assert.deepEqual(pedidos[0], ['/companies/empresa-1/meta-connection', 'GET', undefined]);
   await doc.querySelector('#conta-meta').aoConectar();
   assert.deepEqual(pedidos.at(-1), ['/companies/empresa-1/meta-connection/start', 'POST', { projectId: 'projeto-1' }]);
   assert.deepEqual(destinos, ['https://www.facebook.com/v26.0/dialog/oauth?client_id=1']);
 });
 
-test('"Prefiro preencher manualmente" abre o destino da Meta que já existe', async () => {
+test('"Preencher manualmente" abre o formulário manual da Meta que já existe, dentro do bloco', async () => {
   const { doc, ui } = painelDoProjeto();
   await ui.abrir();
-  const meta = doc.querySelector('#tracking-destinations details[data-provider="meta"]');
-  meta.scrollIntoView = () => { meta.dataset.rolou = 'sim'; };
-  [...doc.querySelectorAll('#conta-meta button')].find((item) => item.textContent.trim() === 'Prefiro preencher manualmente').click();
-  assert.equal(meta.open, true);
-  assert.equal(meta.dataset.rolou, 'sim');
+  const formulario = doc.querySelector('#conta-meta > .plataforma-formulario');
+  assert.equal(formulario.hidden, true);
+  formulario.scrollIntoView = () => { formulario.dataset.rolou = 'sim'; };
+  const abrir = [...doc.querySelectorAll('#conta-meta button')].find((item) => item.textContent.trim() === 'Preencher manualmente');
+  assert.equal(abrir.getAttribute('aria-controls'), formulario.id);
+  abrir.click();
+  assert.equal(formulario.hidden, false);
+  assert.equal(abrir.getAttribute('aria-expanded'), 'true');
+  assert.equal(formulario.dataset.rolou, 'sim');
   assert.equal(doc.activeElement?.name, 'pixel_id');
+});
+
+test('quem perde a permissão ao trocar de projeto volta a ver a Meta como bloco simples', async () => {
+  let pode = true;
+  const janela = new JSDOM('<section id="project-settings-panel-rastreamento"><div id="tracking-destinations"></div></section>').window;
+  const doc = janela.document;
+  pintarPlataformas(doc.querySelector('#tracking-destinations'), destinosDeConversaoModel([{ provider: 'meta', configured: true, publicConfiguration: { pixel_id: '1' } }], [], true), { salvar: async () => {}, remover: async () => {} });
+  const shell = { state: () => ({ currentCompany: { id: 'e' }, currentProject: { id: 'p' } }), can: () => pode };
+  const ui = criarConexaoMetaUI({ api: async () => ({ conectado: false }), getShell: () => shell, ligado: () => true, doc, navegar: () => {} });
+  await ui.abrir();
+  assert.ok(doc.querySelector('#conta-meta'));
+  pode = false;
+  await ui.abrir();
+  assert.equal(doc.querySelector('#conta-meta'), null);
+  const meta = doc.querySelector('#tracking-destinations > [data-provider="meta"]');
+  assert.equal(meta.querySelector('.plataforma-acoes .role-chip').textContent, 'Configurado');
 });
 
 // Conferência de 02/10/2026: Desconectar revoga o acesso na Meta, e não pedia confirmação.

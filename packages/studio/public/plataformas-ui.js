@@ -122,9 +122,11 @@ function pintarBlocoSimples(doc, bloco, destino, opcoes) {
   const status = bloco.querySelector('.plataforma-status');
   if (emBreve) status.textContent = EM_BREVE;
   else status.textContent = destino.publicValue ? `${destino.description} · ${destino.publicValue}` : destino.description;
-  const acoes = bloco.querySelector('.plataforma-acoes');
-  if (emBreve) acoes.replaceChildren(chip(doc, 'Em breve', 'neutro'), botaoEmBreve(doc, destino.provider, plataforma.conectar));
-  else acoes.replaceChildren(chip(doc, destino.stateLabel, TOM[destino.state] ?? 'neutro'));
+  // O chip fica no canto do cabeçalho; o botão "Conectar com…" (em breve) logo abaixo, largo.
+  bloco.querySelector('.plataforma-acoes').replaceChildren(emBreve ? chip(doc, 'Em breve', 'neutro') : chip(doc, destino.stateLabel, TOM[destino.state] ?? 'neutro'));
+  const corpo = bloco.querySelector('.plataforma-corpo');
+  corpo.replaceChildren(...(emBreve ? [botaoEmBreve(doc, destino.provider, plataforma.conectar)] : []));
+  corpo.hidden = !emBreve;
   const manual = bloco.querySelector('.plataforma-manual-botao');
   manual.hidden = !destino.editable;
   manual.textContent = destino.configured ? 'Editar' : 'Preencher manualmente';

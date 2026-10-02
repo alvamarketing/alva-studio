@@ -149,3 +149,87 @@ test('o servidor entrega o módulo do cartão (arquivo estático registrado)', a
   const fonte = await readFile(new URL('../server/index.mjs', import.meta.url), 'utf8');
   assert.match(fonte, /'\/publicos-meta-ui\.js': \['public\/publicos-meta-ui\.js', 'text\/javascript'\]/);
 });
+
+// Cartão enxuto (02/10/2026): ícone, título, resumo e "Gerenciar públicos". Decisão: a lista
+// começa recolhida só quando já há público criado e nada pede atenção; sem nenhum criado,
+// com algo faltando ou com erro, ela começa aberta — é onde a pessoa tem de agir.
+const seis = (criados = [], extra = {}) => ['vsl_iniciou', 'vsl_50', 'vsl_75', 'vsl_completa', 'vsl_cta', 'lead'].map((chave) => publico({ chave, nome: chave, estado: criados.includes(chave) ? 'criado' : 'nao_criado', metaId: criados.includes(chave) ? '9001' : null, ...(extra[chave] ?? {}) }));
+
+test('resumo no cabeçalho: "1 de 6 públicos ligados", com ícone no quadrado e a ajuda só no ícone', async () => {
+  const { cartao, janela } = montar(estadoCompleto({ publicos: seis(['lead']) }));
+  await cartao.recarregar();
+  assert.equal(cartao.querySelector('.surface-head .publicos-meta-resumo').textContent, '1 de 6 públicos ligados');
+  assert.equal(cartao.querySelector('.surface-head .publicos-meta-icone').getAttribute('aria-hidden'), 'true');
+  const ajuda = cartao.querySelector('[data-guia="publicos-meta"]');
+  assert.equal(ajuda.getAttribute('aria-label'), 'Saiba como configurar o público da Meta');
+  assert.equal(ajuda.textContent.trim(), 'help', 'só o ícone à vista (o texto é o nome do ícone, trocado pelo SVG)');
+  janela.close();
+});
+
+test('com um público criado e nada faltando, a lista começa recolhida; "Gerenciar públicos" abre e fecha', async () => {
+  const { cartao, janela } = montar(estadoCompleto({ publicos: seis(['lead']) }));
+  await cartao.recarregar();
+  const alternar = cartao.querySelector('.publicos-meta-alternar');
+  const corpo = cartao.querySelector('#publicos-meta-corpo');
+  assert.equal(alternar.textContent, 'Gerenciar públicos');
+  assert.equal(alternar.getAttribute('aria-controls'), 'publicos-meta-corpo');
+  assert.equal(corpo.hidden, true);
+  assert.equal(alternar.getAttribute('aria-expanded'), 'false');
+  alternar.click();
+  assert.equal(corpo.hidden, false);
+  assert.equal(alternar.getAttribute('aria-expanded'), 'true');
+  assert.equal(corpo.querySelectorAll('.publico-meta').length, 6);
+  // Recarregar (ligar outro público, por exemplo) não fecha o que a pessoa abriu.
+  await cartao.recarregar();
+  assert.equal(corpo.hidden, false);
+  alternar.click();
+  assert.equal(corpo.hidden, true);
+  await cartao.recarregar();
+  assert.equal(corpo.hidden, true);
+  janela.close();
+});
+
+test('sem nenhum criado, com falta ou com erro, a lista começa aberta', async () => {
+  for (const estado of [
+    estadoCompleto({ publicos: seis([]) }),
+    estadoCompleto({ publicos: seis(['lead']), pixelId: null, faltando: [{ chave: 'pixel', titulo: 'Pixel da Meta', onde: 'x' }] }),
+    estadoCompleto({ publicos: seis(['lead'], { vsl_50: { estado: 'erro', erro: 'A Meta recusou.' } }) }),
+  ]) {
+    const { cartao, janela } = montar(estado);
+    await cartao.recarregar();
+    assert.equal(cartao.querySelector('#publicos-meta-corpo').hidden, false);
+    janela.close();
+  }
+  const comErro = montar(estadoCompleto({ publicos: seis(['lead'], { vsl_50: { estado: 'erro', erro: 'x' } }) }));
+  await comErro.cartao.recarregar();
+  assert.equal(comErro.cartao.querySelector('.publicos-meta-resumo').textContent, '1 de 6 públicos ligados · 1 com erro');
+  comErro.janela.close();
+});
+
+test('credenciais vindas da conexão não aparecem; coladas à mão (ou nenhuma) aparecem', async () => {
+  const conexao = montar(estadoCompleto({ credenciais: { configuradas: true, adAccountId: '555', origem: 'connection' } }));
+  await conexao.cartao.recarregar();
+  assert.equal(conexao.cartao.querySelector('.publicos-meta-credenciais-bloco'), null);
+  assert.equal(conexao.cartao.querySelectorAll('input[role="switch"]:not([disabled])').length, 2, 'os públicos continuam ligáveis');
+  conexao.janela.close();
+  const manual = montar(estadoCompleto({ credenciais: { configuradas: true, adAccountId: '555', origem: 'manual' } }));
+  await manual.cartao.recarregar();
+  assert.ok(manual.cartao.querySelector('.publicos-meta-credenciais-bloco'));
+  manual.janela.close();
+});
+
+test('linha compacta: nome com a janela, descrição numa segunda linha curta, ID só na dica do estado', async () => {
+  const { cartao, janela } = montar(estadoCompleto({ publicos: [publico({ estado: 'criado', metaId: '9001' })] }));
+  await cartao.recarregar();
+  const linha = cartao.querySelector('.publico-meta[data-chave="vsl_50"]');
+  assert.equal(linha.querySelector('.publico-meta-nome strong').textContent, 'Assistiu 50% da VSL');
+  assert.equal(linha.querySelector('.publico-meta-detalhe').textContent, '30 dias');
+  assert.equal(linha.querySelector('.publico-meta-descricao').title, 'Quem chegou à metade.');
+  assert.equal(linha.querySelector('.publico-meta-estado').title, 'ID na Meta 9001');
+  janela.close();
+});
+
+test('o cartão dos públicos só usa tokens: nenhuma cor, nem style em linha', async () => {
+  const fonte = await readFile(new URL('../public/publicos-meta-ui.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(fonte, /#[0-9a-f]{3,8}\b|rgba?\(|\.style\.|style=|font-weight/i);
+});

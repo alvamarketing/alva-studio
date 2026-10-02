@@ -42,7 +42,7 @@ test('as cores --marca-* de owner.css são as do simple-icons, num bloco só', a
   for (const [chave, marca] of Object.entries(MARCAS)) {
     assert.match(bloco, new RegExp(`--marca-${chave}: #${marca.hex};`, 'i'), `--marca-${chave}`);
   }
-  const resto = css.slice(0, inicio) + css.slice(fim);
+  const resto = (css.slice(0, inicio) + css.slice(fim)).replace(/\/\*[\s\S]*?\*\//g, '');
   assert.doesNotMatch(resto, /--marca-[a-z]+:/, 'nenhuma cor de marca declarada fora do bloco');
   // Quem usa cor de marca: só o logo da plataforma e o botão oficial do Facebook.
   for (const regra of resto.match(/[^{}]+\{[^}]*var\(--marca-[^}]*\}/g) ?? []) {

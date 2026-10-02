@@ -1164,14 +1164,78 @@
   max-width: 46ch;
   margin-top: 6px;
 }
+/* Cartão enxuto: quadrado com ícone (a "Opção visual" da "Biblioteca visual"), título,
+   resumo e "Gerenciar públicos"; a lista abre abaixo. */
+.publicos-meta-titulo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.publicos-meta-icone {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--icon-2xl);
+  height: var(--icon-2xl);
+  border-radius: var(--radius-sm);
+  background: var(--alva-highlight);
+  color: var(--alva-blue);
+  font-size: var(--icon-md);
+}
+.publicos-meta-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.publicos-meta-acoes button[hidden] {
+  display: none;
+}
+.publicos-meta .ajuda-icone {
+  padding: 8px;
+}
+.publicos-meta-alternar {
+  padding: 8px 12px;
+  font-size: var(--text-sm);
+}
+.project-settings-panel .publicos-meta .surface-head {
+  align-items: center;
+  margin-bottom: 0;
+}
+.publicos-meta-corpo {
+  margin-top: 16px;
+}
+.publicos-meta-corpo[hidden] {
+  display: none;
+}
+.publicos-meta-explicacao {
+  max-width: 72ch;
+}
+.publicos-meta .publico-meta {
+  padding: 10px 0;
+}
 .publicos-meta .publico-meta > div:first-child {
   min-width: 0;
 }
+.publicos-meta .publico-meta-nome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
 .publicos-meta .publico-meta small {
   display: block;
-  margin-top: 3px;
   color: var(--alva-muted);
   font-size: var(--text-xs);
+}
+.publicos-meta .publico-meta .publico-meta-descricao {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .publicos-meta .publico-meta .form-error {
   margin: 6px 0 0;
@@ -1231,6 +1295,8 @@
 }
 @media (max-width: 720px) {
   .publicos-meta .publico-meta { flex-wrap: wrap; }
+  .project-settings-panel .publicos-meta .surface-head { flex-wrap: wrap; }
+  .publicos-meta .publico-meta .publico-meta-descricao { white-space: normal; }
 }
 
 /* Guia dos públicos da Meta: pop-up do Studio. Passos em ordem como o essencial, o resto
@@ -1493,32 +1559,205 @@
   .project-leads-controls .ajuda-botao { margin-left: 0; }
 }
 
-/* "Conta da Meta": no celular a ação do cabeçalho desce para baixo do título, em vez de
-   espremer "Conectar com o Facebook" em três linhas ao lado do texto. */
-@media (max-width: 760px) {
-  .conta-meta .surface-head { flex-wrap: wrap; }
+/* Cartão "Plataformas" (aba Rastreamento das configurações do projeto, plataformas-ui.js e
+   conexao-meta-ui.js). O wireframe não desenha esta grade: cada bloco segue a "Opção visual"
+   da "Biblioteca visual" (quadrado com ícone + nome + linha curta, borda de linha, raio
+   médio) e o cartão segue "Empresa e equipe". 2 colunas a partir de 900 px, 1 no celular;
+   a Meta (bloco largo) ocupa as duas. Cor de marca só no quadrado do logo e no botão do
+   Facebook (bloco --marca-*, no topo deste arquivo). */
+.plataformas-grade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+@media (min-width: 900px) {
+  .plataformas-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .conta-meta-campos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.plataformas-grade > .plataformas-aviso,
+.plataformas-grade > .plataforma-larga {
+  grid-column: 1 / -1;
+}
+.plataformas-grade > .plataformas-aviso { margin: 0; }
+.plataforma {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--alva-line);
+  border-radius: var(--radius-md);
+  background: var(--alva-white);
+}
+.plataforma[hidden],
+.plataforma-corpo[hidden],
+.plataforma-rodape[hidden],
+.plataforma-formulario[hidden] {
+  display: none;
+}
+.plataforma-cabeca {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.plataforma-texto {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.plataforma-nome {
+  font-size: var(--text-lg);
+}
+.plataforma-status {
+  color: var(--alva-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.plataforma-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.plataforma-logo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--icon-2xl);
+  height: var(--icon-2xl);
+  border-radius: var(--radius-sm);
+  color: var(--alva-on-blue);
+  font-size: var(--icon-md);
+}
+.plataforma-logo.marca-meta { background: var(--marca-meta); }
+.plataforma-logo.marca-tiktok { background: var(--marca-tiktok); }
+.plataforma-logo.marca-googleads { background: var(--marca-googleads); }
+.plataforma-logo.sem-logo {
+  border: 1px solid var(--alva-line);
+  background: var(--alva-cloud);
+  color: var(--alva-muted);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+/* "Em breve": o logo e o botão "Conectar com…" meio transparentes (a mesma opacidade do
+   botão desativado do Studio); o nome, o status e o "Preencher manualmente" continuam
+   legíveis, porque o manual funciona. */
+.plataforma.em-breve .plataforma-cabeca > .plataforma-logo {
+  opacity: 0.5;
+}
+.plataforma-oficial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.plataforma-oficial .plataforma-logo {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border-radius: var(--radius-xs);
+  font-size: var(--icon-xs);
+}
+.plataforma-oficial .plataforma-logo.sem-logo {
+  font-size: var(--text-2xs);
+}
+.plataforma-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.plataforma-manual-botao {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--alva-blue-strong);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.plataforma-manual-botao:hover:not(:disabled) {
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+}
+.plataforma-rodape button.ghost {
+  padding: 6px 10px;
+  color: var(--alva-muted);
+  font-size: var(--text-sm);
+}
+.plataforma-formulario {
+  padding-top: 2px;
+  border-top: 1px solid var(--alva-line);
+}
+.plataforma-formulario .provider-form {
+  padding-bottom: 4px;
+}
+.plataforma-manual-botao:focus-visible,
+.plataforma-oficial:focus-visible,
+.botao-facebook:focus-visible,
+.publicos-meta-alternar:focus-visible {
+  outline: var(--ring-width) solid var(--ring-color);
+  outline-offset: var(--ring-offset);
+}
+/* O botão oficial da Meta ("Continue with Facebook"): azul da marca, logo f e texto brancos. */
+.botao-facebook {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-color: var(--marca-facebook);
+  background: var(--marca-facebook);
+  color: var(--alva-on-blue);
+  font-weight: 600;
+}
+.botao-facebook:hover:not(:disabled) {
+  border-color: var(--marca-facebook);
+  background: var(--marca-facebook);
+  box-shadow: var(--shadow-raised);
+}
+.botao-facebook-logo {
+  display: inline-grid;
+  font-size: var(--icon-sm);
+}
+.plataforma .role-chip.neutro { background: var(--alva-cloud); color: var(--alva-muted); }
+/* O bloco da Meta: o que é do projeto fica abaixo de uma divisória, como entre as linhas
+   da "Equipe". */
+.conta-meta > .plataforma-corpo {
+  padding-top: 12px;
+  border-top: 1px solid var(--alva-line);
+}
+.conta-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.conta-meta-campos {
+  display: grid;
+  gap: 12px;
+}
+@media (max-width: 560px) {
+  .plataforma-larga .plataforma-cabeca { grid-template-columns: auto minmax(0, 1fr); }
+  .plataforma-larga .plataforma-acoes { grid-column: 1 / -1; justify-content: flex-start; }
+  .plataforma-larga .plataforma-acoes > button { flex: 1 1 auto; justify-content: center; }
 }
 
-/* "Conta da Meta", F2: a conta de anúncios e o pixel deste projeto. Linhas como as da
-   "Equipe" (wireframe "Empresa e equipe"); seletores como os campos de "Dados da empresa".
-   O aviso de vencimento usa o mesmo par de tokens de alerta do guia dos públicos. */
+/* "Conta da Meta", F2: a conta de anúncios e o pixel deste projeto, hoje dentro do bloco
+   da Meta. Seletores como os campos de "Dados da empresa". O aviso de vencimento usa o
+   mesmo par de tokens de alerta do guia dos públicos. */
 /* Chips de estado: o azul padrão é "Conectado"; o resto usa os pares de tokens de status. */
-.conta-meta .role-chip.alerta { background: var(--alva-warning-bg); color: var(--alva-warning); }
-.conta-meta .role-chip.negativo { background: var(--alva-negative-bg); color: var(--alva-negative); }
-.conta-meta .role-chip.positivo { background: var(--alva-positive-bg); color: var(--alva-positive); }
-/* A divisória entre a conexão e as linhas do projeto, como entre as linhas da "Equipe". */
-.conta-meta-conexao.com-divisoria > .member-item:last-child { padding-bottom: 12px; border-bottom: 1px solid var(--alva-line); }
-.conta-meta .member-item span.conta-meta-vencimento {
-  color: var(--alva-muted);
-  font-size: var(--text-xs);
-}
+.plataforma .role-chip.alerta, .conta-meta .role-chip.alerta { background: var(--alva-warning-bg); color: var(--alva-warning); }
+.plataforma .role-chip.negativo, .conta-meta .role-chip.negativo { background: var(--alva-negative-bg); color: var(--alva-negative); }
+.plataforma .role-chip.positivo, .conta-meta .role-chip.positivo { background: var(--alva-positive-bg); color: var(--alva-positive); }
 .conta-meta-aviso {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 14px;
+  margin-bottom: 14px;
   padding: 12px 14px;
   border: 1px solid var(--alva-warning);
   border-radius: var(--radius-md);
@@ -1533,19 +1772,19 @@
   max-width: 64ch;
 }
 .conta-meta-projeto h3 {
-  margin: 18px 0 0;
+  margin: 16px 0 0;
   font-size: var(--text-md);
   color: var(--alva-muted);
 }
+.conta-meta-projeto > .help {
+  margin-top: 6px;
+}
 .conta-meta-termos {
-  display: grid;
-  justify-items: start;
-  gap: 8px;
+  margin-top: 8px;
 }
 .conta-meta-escolha {
   display: grid;
   gap: 12px;
-  max-width: 46ch;
   margin-top: 10px;
 }
 .conta-meta-campo {
@@ -1663,7 +1902,5 @@
   margin: 12px 0 0;
 }
 @media (max-width: 560px) {
-  .conta-meta-escolha { max-width: none; }
   .conta-meta-aviso button { width: 100%; }
-  .conta-meta .member-item { align-items: flex-start; }
 }
