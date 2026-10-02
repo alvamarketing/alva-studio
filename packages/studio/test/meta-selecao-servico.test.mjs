@@ -115,3 +115,66 @@ test('sem conexão: estado diz não conectado; listar é 409', async () => {
   assert.equal((await servico.estado(escopo)).conectado, false);
   await assert.rejects(() => servico.contasDeAnuncios(escopo), (erro) => erro.status === 409);
 });
+
+// Quem tem dezenas de portfólios espera 20 s pela lista de contas (fila, um portfólio por vez).
+// A lista vale por 5 minutos por conexão; pedidos simultâneos dividem a mesma busca; falha não fica guardada.
+function montarComRelogio() {
+  const chamadas = { contas: 0 };
+  let agora = AGORA;
+  let falhar = null;
+  let liberar = null;
+  const conexao = { id: 'conn-1', nome: 'Taian', status: 'connected', token: TOKEN, expiraEm: new Date(AGORA + 40 * DIA) };
+  const conexoes = {
+    async comToken() { return { ...conexao }; },
+    async publica() { const { token: _t, ...resto } = conexao; return resto; },
+    async marcarParaReconectar() {},
+  };
+  const cliente = {
+    async contasDeAnuncios() {
+      chamadas.contas += 1;
+      if (liberar) await liberar;
+      if (falhar) throw falhar;
+      return [{ id: '111', nome: 'Conta Alva', negocio: { id: '9', nome: 'Portfólio' } }];
+    },
+    async pixels() { return [{ id: '555', nome: 'Pixel Alva' }]; },
+  };
+  const servico = criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes: { async ler() { return null; } }, tracking: null, publicos: null, agora: () => agora });
+  return { servico, chamadas, avancar: (ms) => { agora += ms; }, falharCom: (erro) => { falhar = erro; }, segurar: () => { let solta; liberar = new Promise((r) => { solta = r; }); return () => { liberar = null; solta(); }; } };
+}
+
+test('lista de contas: a segunda chamada em até 5 min não vai à Meta; depois de 5 min, vai', async () => {
+  const { servico, chamadas, avancar } = montarComRelogio();
+  await servico.contasDeAnuncios(escopo);
+  await servico.contasDeAnuncios(escopo);
+  await servico.pixels({ ...escopo, adAccountId: '111' });
+  assert.equal(chamadas.contas, 1, 'listar, listar de novo e validar a conta de um pixel usam a mesma lista');
+  avancar(5 * 60_000 + 1);
+  await servico.contasDeAnuncios(escopo);
+  assert.equal(chamadas.contas, 2);
+});
+
+test('lista de contas: pedidos ao mesmo tempo dividem uma única busca', async () => {
+  const { servico, chamadas, segurar } = montarComRelogio();
+  const soltar = segurar();
+  const pedidos = [servico.contasDeAnuncios(escopo), servico.contasDeAnuncios(escopo), servico.pixels({ ...escopo, adAccountId: '111' })];
+  soltar();
+  await Promise.all(pedidos);
+  assert.equal(chamadas.contas, 1);
+});
+
+test('lista de contas: falha da Meta não fica guardada — a próxima tentativa vai de novo', async () => {
+  const { servico, chamadas, falharCom } = montarComRelogio();
+  falharCom(new Error('Meta fora do ar'));
+  await assert.rejects(() => servico.contasDeAnuncios(escopo));
+  falharCom(null);
+  const { contas } = await servico.contasDeAnuncios(escopo);
+  assert.equal(chamadas.contas, 2);
+  assert.equal(contas.length, 1);
+});
+
+test('lista de contas: outra conexão (reconectou com outra pessoa) não herda a lista da anterior', async () => {
+  const { servico, chamadas } = montarComRelogio();
+  await servico.contasDeAnuncios({ companyId: 'c1' });
+  await servico.contasDeAnuncios({ companyId: 'c2' });
+  assert.equal(chamadas.contas, 2, 'cada empresa tem a sua lista');
+});

@@ -43,6 +43,21 @@ function expiracao(corpo, agora) {
   return Number.isFinite(segundos) && segundos > 0 ? new Date(agora + segundos * 1000) : null;
 }
 
+// Roda `tarefa` sobre os itens com no máximo `limite` ao mesmo tempo; devolve os resultados na
+// ordem dos itens. Uma falha derruba o conjunto, como na busca em fila.
+async function emParalelo(itens, limite, tarefa) {
+  const resultados = new Array(itens.length);
+  let proximo = 0;
+  const trabalhadores = Array.from({ length: Math.min(limite, itens.length) }, async () => {
+    while (proximo < itens.length) {
+      const indice = proximo++;
+      resultados[indice] = await tarefa(itens[indice]);
+    }
+  });
+  await Promise.all(trabalhadores);
+  return resultados;
+}
+
 export function criarClienteDaConexao({ fetch: buscar = globalThis.fetch, configuracao, agora = () => Date.now() }) {
   if (!configuracao) throw new Error('Configuração da Meta obrigatória.');
   const { appId, appSecret, configId, tipoDeToken } = configuracao;
@@ -185,16 +200,21 @@ export function criarClienteDaConexao({ fetch: buscar = globalThis.fetch, config
       const negocios = (await paginar('me/businesses', token, { fields: 'id,name' }))
         .filter((item) => typeof item?.id === 'string' && ID_DA_META.test(item.id))
         .slice(0, PAGINACAO.maximoDeNegocios);
-      const porId = new Map();
-      for (const negocio of negocios) {
+      // Cada portfólio busca as suas duas arestas em sequência; os portfólios andam juntos, com teto.
+      // Juntar na ordem dos portfólios mantém o resultado igual ao da busca em fila.
+      const achadasPorNegocio = await emParalelo(negocios, PRAZOS.portfoliosEmParalelo, async (negocio) => {
         const dono = { id: negocio.id, nome: texto(negocio.name) };
+        const achadas = [];
         for (const aresta of ['owned_ad_accounts', 'client_ad_accounts']) {
           for (const item of await paginar(`${negocio.id}/${aresta}`, token, { fields: 'id,account_id,name' })) {
             const achada = conta(item, dono);
-            if (achada && !porId.has(achada.id)) porId.set(achada.id, achada);
+            if (achada) achadas.push(achada);
           }
         }
-      }
+        return achadas;
+      });
+      const porId = new Map();
+      for (const achadas of achadasPorNegocio) for (const achada of achadas) if (!porId.has(achada.id)) porId.set(achada.id, achada);
       return [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     },
 

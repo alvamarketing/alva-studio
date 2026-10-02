@@ -137,3 +137,25 @@ test('dias para vencer', () => {
   assert.equal(diasParaVencer(new Date(AGORA + 6.5 * 86_400_000), AGORA), 7);
   assert.equal(diasParaVencer(new Date(AGORA - 1000), AGORA), 0);
 });
+
+// Portfólios em paralelo: em fila, 25 portfólios × 2 arestas levavam 21 s. O resultado não muda
+// (mesma lista, mesma ordem, sem repetir); só a espera.
+test('contas de anúncios: portfólios são buscados ao mesmo tempo, e o resultado é o mesmo', async () => {
+  let ativas = 0;
+  let maximo = 0;
+  const fetch = async (url) => {
+    const rota = caminho(new URL(String(url)));
+    ativas += 1; maximo = Math.max(maximo, ativas);
+    await new Promise((resolver) => setTimeout(resolver, 5));
+    ativas -= 1;
+    const corpo = rota === 'me/businesses'
+      ? { data: ['1', '2', '3', '4', '5', '6', '7', '8'].map((id) => ({ id, name: `Portfólio ${id}` })) }
+      : { data: [{ id: `act_${rota.split('/')[0]}0${rota.includes('client') ? 2 : 1}`, name: `Conta ${rota}` }] };
+    return { ok: true, status: 200, json: async () => corpo };
+  };
+  const contas = await criarClienteDaConexao({ fetch, configuracao, agora: () => AGORA }).contasDeAnuncios(TOKEN);
+  assert.ok(maximo > 1, `esperava chamadas simultâneas, o máximo foi ${maximo}`);
+  assert.ok(maximo <= 8, 'mas com teto, para não estourar o limite de chamadas da Meta');
+  assert.equal(contas.length, 16);
+  assert.deepEqual(contas.map((item) => item.nome), [...contas.map((item) => item.nome)].sort((a, b) => a.localeCompare(b, 'pt-BR')));
+});

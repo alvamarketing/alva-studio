@@ -173,7 +173,11 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
   function formularioDeEscolha() {
     const bloco = elemento(doc, 'div', 'conta-meta-escolha');
     if (erroDeContas) { bloco.append(elemento(doc, 'p', 'form-error', `Não foi possível ler as contas de anúncios: ${erroDeContas}`)); return bloco; }
-    if (!contas) { bloco.append(elemento(doc, 'p', 'help', 'Carregando contas de anúncios…')); return bloco; }
+    if (!contas) {
+      const atual = doProjeto?.escolha?.adAccountNome;
+      bloco.append(elemento(doc, 'p', 'help', atual ? `Conta atual: ${atual}. Carregando as outras contas de anúncios…` : 'Carregando contas de anúncios…'));
+      return bloco;
+    }
     if (!contas.length) { bloco.append(elemento(doc, 'p', 'help', SEM_CONTAS)); return bloco; }
     bloco.append(seletor('Conta de anúncios', 'adAccountId', contas, contaEscolhida, 'Escolha a conta de anúncios', (valor) => cartao.aoTrocarConta(valor)));
     if (contaEscolhida) {
@@ -289,6 +293,8 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
       return;
     }
     if (doProjeto.precisaReconectar) { estado = { ...estado, precisaReconectar: true }; return; }
+    // A lista de contas leva segundos com dezenas de portfólios: o que já está salvo aparece antes dela.
+    desenhar();
     try {
       contas = (await projeto.contas()).contas ?? [];
     } catch (falha) {

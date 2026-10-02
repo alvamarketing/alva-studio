@@ -9,7 +9,7 @@
 // credencial dos públicos passa a usar a mesma conta pela conexão, e a escolha fica gravada.
 // Se havia pixel/token colados à mão, substituir exige confirmação explícita (D2).
 // Contrato: docs/specs/2026-10-02-conectar-com-facebook.md.
-import { AVISO_DE_VENCIMENTO_DIAS, diasParaVencer, linkDosTermos } from './meta-config.mjs';
+import { AVISO_DE_VENCIMENTO_DIAS, PRAZOS, diasParaVencer, linkDosTermos } from './meta-config.mjs';
 import { soDigitosDaConta } from './meta-conexao-cliente.mjs';
 
 const CONTA = /^\d{1,20}$/;
@@ -48,8 +48,20 @@ export function criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes, trackin
     }
   }
 
-  async function listarContas(companyId, conexao) {
-    return naMeta(companyId, () => cliente.contasDeAnuncios(conexao.token));
+  // Listar contas custa uma rodada por portfólio. A lista vale por 5 minutos por conexão (uma
+  // reconexão é outra conexão, então não herda), pedidos simultâneos dividem a mesma busca, e
+  // uma falha nunca fica guardada. A lista não leva o token.
+  const contasGuardadas = new Map();
+  function listarContas(companyId, conexao) {
+    const chave = `${companyId}:${conexao.id}`;
+    const guardada = contasGuardadas.get(chave);
+    if (guardada && guardada.expiraEm > agora()) return guardada.promessa;
+    const promessa = naMeta(companyId, () => cliente.contasDeAnuncios(conexao.token)).catch((erro) => {
+      if (contasGuardadas.get(chave)?.promessa === promessa) contasGuardadas.delete(chave);
+      throw erro;
+    });
+    contasGuardadas.set(chave, { promessa, expiraEm: agora() + PRAZOS.listaDeContasMs });
+    return promessa;
   }
 
   async function destinoMeta(escopo) {

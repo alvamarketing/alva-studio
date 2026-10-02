@@ -46,6 +46,10 @@ export const PRAZOS = Object.freeze({
   stateMs: 10 * 60_000,
   // O mesmo teto que o cliente de públicos usa para cada chamada à Graph API.
   chamadaMs: 15_000,
+  // A lista de contas de anúncios custa uma rodada por portfólio; vale por 5 minutos por conexão.
+  listaDeContasMs: 5 * 60_000,
+  // Portfólios buscados ao mesmo tempo (em fila, 25 portfólios levavam ~20 s).
+  portfoliosEmParalelo: 6,
 });
 
 // Token que só se resolve com novo login: 190 (com ou sem subcódigo 458/460/463/467) e 102.

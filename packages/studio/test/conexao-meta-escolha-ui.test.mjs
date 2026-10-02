@@ -16,7 +16,7 @@ const projetoVazio = (extra = {}) => ({
   perfil: { nome: 'Taian na Meta' }, paginas: [{ id: '77', nome: 'Página Alva' }], termos: null, precisaReconectar: false, ...extra,
 });
 
-function montar({ estado = conectado(), doProjeto = projetoVazio(), contas = [{ id: '111', nome: 'Conta Alva' }], pixels = { 111: [{ id: '555', nome: 'Pixel Alva' }] }, confirmar = true, falhaContas = null } = {}) {
+function montar({ estado = conectado(), doProjeto = projetoVazio(), contas = [{ id: '111', nome: 'Conta Alva' }], pixels = { 111: [{ id: '555', nome: 'Pixel Alva' }] }, confirmar = true, falhaContas = null, segurarContas = null } = {}) {
   const janela = new JSDOM('<div id="alvo"></div>').window;
   const doc = janela.document;
   const chamadas = [];
@@ -29,7 +29,7 @@ function montar({ estado = conectado(), doProjeto = projetoVazio(), contas = [{ 
     irParaManual: () => {},
     projeto: {
       carregar: async () => { chamadas.push(['estado']); return atual; },
-      contas: async () => { chamadas.push(['contas']); if (falhaContas) throw new Error(falhaContas); return { contas }; },
+      contas: async () => { chamadas.push(['contas']); if (segurarContas) await segurarContas; if (falhaContas) throw new Error(falhaContas); return { contas }; },
       pixels: async (conta) => { chamadas.push(['pixels', conta]); return { pixels: pixels[conta] ?? [] }; },
       escolher: async (dados) => {
         chamadas.push(['escolher', dados]);
@@ -263,4 +263,30 @@ test('enquanto o estado da empresa carrega, o cartão diz "Carregando…"', asyn
   liberar();
   await andamento;
   assert.doesNotMatch(cartao.textContent, /Carregando…/);
+});
+
+// Achado no uso real (02/10/2026): a lista de contas leva segundos com dezenas de portfólios, e o
+// cartão ficava em "Carregando a conta de anúncios deste projeto…" até ela chegar, escondendo
+// o que já estava salvo.
+test('a escolha salva aparece assim que chega; a lista de contas carrega depois', async () => {
+  let soltar;
+  const segurarContas = new Promise((resolver) => { soltar = resolver; });
+  const doProjeto = projetoVazio({
+    escolha: { adAccountId: '111', adAccountNome: 'Conta Alva', pixelId: '555', pixelNome: 'Pixel Alva' },
+    destino: { configurado: true, origem: 'connection', pixelId: '555' },
+    termos: { aceitos: true },
+  });
+  const { cartao } = montar({ doProjeto, segurarContas });
+  const andamento = cartao.recarregar();
+  await new Promise((resolver) => setTimeout(resolver, 0));
+  await new Promise((resolver) => setTimeout(resolver, 0));
+  assert.doesNotMatch(cartao.textContent, /Carregando a conta de anúncios deste projeto/);
+  assert.match(cartao.textContent, /Pixel Alva \(555\)/);
+  assert.match(cartao.textContent, /Conta atual: Conta Alva/);
+  assert.match(cartao.textContent, /Carregando as outras contas/);
+  assert.equal(cartao.querySelector('.escolha[data-nome="adAccountId"]'), null);
+  soltar();
+  await andamento;
+  assert.ok(cartao.querySelector('.escolha[data-nome="adAccountId"]'), 'com a lista pronta, a caixa de escolha aparece');
+  assert.doesNotMatch(cartao.textContent, /Carregando as outras contas/);
 });
