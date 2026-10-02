@@ -74,7 +74,11 @@ function pixelDaRegra(regra) {
   }
 }
 
-export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token, contaDeAnuncios }) {
+// `prova` ({appsecret_proof, appsecret_time}) só vem quando o token é o da conexão da empresa
+// (D8): vai em toda chamada, inclusive na página seguinte da listagem.
+// https://developers.facebook.com/documentation/facebook-login/security#proof
+export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token, contaDeAnuncios, prova = null }) {
+  const assinatura = prova?.appsecret_proof && prova?.appsecret_time ? { appsecret_proof: String(prova.appsecret_proof), appsecret_time: String(prova.appsecret_time) } : {};
   const segredo = typeof token === 'string' ? token.trim() : '';
   if (!segredo) throw Object.assign(new Error('Informe o token de acesso da Meta.'), { status: 400, statusCode: 400 });
   const conta = String(contaDeAnuncios ?? '').trim().replace(/^act_/i, '');
@@ -102,7 +106,7 @@ export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token
     // string JSON, e `prefill=1` traz a atividade de antes da criação (até 180 dias).
     // https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/guides/website-custom-audiences
     async criar({ nome, regra }) {
-      const corpo = new URLSearchParams({ name: nome, rule: JSON.stringify(regra), prefill: '1', access_token: segredo });
+      const corpo = new URLSearchParams({ name: nome, rule: JSON.stringify(regra), prefill: '1', access_token: segredo, ...assinatura });
       const resultado = await chamar(base, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: corpo.toString() });
       if (typeof resultado.id !== 'string' || !resultado.id) throw new MetaApiError('A Meta respondeu sem identificador do público criado.', { status: 502 });
       return { id: resultado.id };
@@ -115,7 +119,7 @@ export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token
     // https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/guides/website-custom-audiences
     async listar() {
       const achados = [];
-      let url = `${base}?${new URLSearchParams({ fields: 'id,name,rule', limit: '100', access_token: segredo })}`;
+      let url = `${base}?${new URLSearchParams({ fields: 'id,name,rule', limit: '100', access_token: segredo, ...assinatura })}`;
       for (let pagina = 0; url && pagina < LIMITE_DE_PAGINAS; pagina += 1) {
         const resultado = await chamar(url, { method: 'GET' });
         for (const item of Array.isArray(resultado.data) ? resultado.data : []) {
@@ -124,6 +128,11 @@ export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token
         const proxima = resultado.paging?.next;
         // O `next` traz o token. Só se segue o que aponta para a própria Graph API.
         url = typeof proxima === 'string' && proxima.startsWith(`${RAIZ}/`) ? proxima : null;
+        if (url && assinatura.appsecret_proof) {
+          const seguinte = new URL(url);
+          for (const [chave, valor] of Object.entries(assinatura)) seguinte.searchParams.set(chave, valor);
+          url = seguinte.toString();
+        }
       }
       return achados;
     },

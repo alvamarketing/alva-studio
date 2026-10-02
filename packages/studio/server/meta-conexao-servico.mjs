@@ -4,7 +4,7 @@
 // forjada, repetida ou de outra sessão não chega a gastar o código de ninguém.
 // Contrato: docs/specs/2026-10-02-conectar-com-facebook.md.
 import { randomBytes } from 'node:crypto';
-import { ESCOPOS, PRAZOS } from './meta-config.mjs';
+import { AVISO_DE_VENCIMENTO_DIAS, ESCOPOS, PRAZOS, diasParaVencer } from './meta-config.mjs';
 import { assinarState, lerState, segredoDoState, sha256 } from './meta-oauth-state.mjs';
 
 const CODIGO = /^[\x21-\x7e]{1,2048}$/;
@@ -22,10 +22,14 @@ export function criarServicoDeConexaoMeta({ repository, cliente, configuracao, c
   async function estado({ companyId }) {
     const conexao = await repository.publica(companyId);
     if (!conexao) return { conectado: false, tipoDeToken: configuracao.tipoDeToken };
+    // O token de usuário vence (≈60 dias) e não se renova: só novo login. A tela mostra
+    // quantos dias faltam e destaca os últimos AVISO_DE_VENCIMENTO_DIAS.
+    const dias = diasParaVencer(conexao.expiraEm, agora());
     return {
       conectado: true,
       ...conexao,
-      precisaReconectar: conexao.status === 'needs_reconnect',
+      vencimento: { dias, venceEmBreve: dias !== null && dias <= AVISO_DE_VENCIMENTO_DIAS },
+      precisaReconectar: conexao.status === 'needs_reconnect' || (dias !== null && dias <= 0),
       permissoesFaltando: ESCOPOS.filter((escopo) => !conexao.escopos.includes(escopo)),
     };
   }
