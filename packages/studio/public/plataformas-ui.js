@@ -35,9 +35,10 @@ function el(doc, tag, classe, texto) {
   return no;
 }
 
-// O tom do chip pelo estado do modelo: enviando/configurado em positivo; teste, token perto de
-// vencer e "precisa reconectar" em alerta; não configurado neutro.
-const TOM = { ok: 'positivo', idle: 'positivo', teste: 'alerta', off: 'neutro' };
+// O tom do chip pelo estado do modelo: "Enviando" em positivo; "Configurado" (credencial salva,
+// nada entregue ainda) no tom padrão do chip — são estados diferentes e não podem ter a mesma
+// cor; teste, token perto de vencer e "precisa reconectar" em alerta; não configurado neutro.
+const TOM = { ok: 'positivo', idle: '', teste: 'alerta', off: 'neutro' };
 export function chip(doc, texto, tom = '') {
   return el(doc, 'span', tom ? `role-chip ${tom}` : 'role-chip', texto);
 }
@@ -99,6 +100,14 @@ export function alternarManual(bloco, abrir) {
     formulario.querySelector('input:not([type="hidden"]), select, textarea')?.focus({ preventScroll: true });
   }
   return aberto;
+}
+
+// Gravou (salvar ou remover): o formulário fecha, como antes da grade, e o foco volta ao botão
+// que o abriu — o formulário em si foi redesenhado e não existe mais.
+function fecharDepoisDeGravar(bloco) {
+  if (!bloco) return;
+  alternarManual(bloco, false);
+  bloco.querySelector('.plataforma-manual-botao')?.focus({ preventScroll: true });
 }
 
 // "Conectar com o TikTok": desativado, mas focável e explicado (aria-disabled + o status).
@@ -272,7 +281,16 @@ export function formularioDeDestino(doc, destino, { salvar, remover } = {}) {
   if (destino.configured) {
     const botaoRemover = el(doc, 'button', 'button ghost', 'Remover');
     botaoRemover.type = 'button';
-    botaoRemover.onclick = () => remover?.(destino.provider);
+    botaoRemover.onclick = async () => {
+      const bloco = form.closest('.plataforma');
+      erro.textContent = '';
+      try {
+        await remover?.(destino.provider);
+        fecharDepoisDeGravar(bloco);
+      } catch (falha) {
+        erro.textContent = falha?.message || 'Não foi possível remover.';
+      }
+    };
     acoes.append(botaoRemover);
   }
   const erro = el(doc, 'p', 'form-error');
@@ -281,8 +299,10 @@ export function formularioDeDestino(doc, destino, { salvar, remover } = {}) {
   form.onsubmit = async (evento) => {
     evento.preventDefault();
     erro.textContent = '';
+    const bloco = form.closest('.plataforma');
     try {
       await salvar?.(destino, new doc.defaultView.FormData(form));
+      fecharDepoisDeGravar(bloco);
     } catch (falha) {
       // O erro fica ao lado do formulário que o causou: a mensagem do servidor costuma dizer
       // qual campo está fora de formato, e ela precisa continuar à vista enquanto a pessoa corrige.

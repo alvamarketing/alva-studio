@@ -101,7 +101,10 @@ test('configurada à mão: o bloco não fica transparente, diz o estado e oferec
   const estado = tiktok.querySelector('.plataforma-acoes .role-chip');
   assert.equal(estado.textContent, 'Enviando');
   assert.ok(estado.classList.contains('positivo'));
-  assert.equal(bloco(raiz, 'taboola').querySelector('.plataforma-acoes .role-chip').textContent, 'Configurado');
+  const configurado = bloco(raiz, 'taboola').querySelector('.plataforma-acoes .role-chip');
+  assert.equal(configurado.textContent, 'Configurado');
+  // Conferência A7: "Enviando" e "Configurado" não podem ter a mesma cor (antes: ok × set).
+  assert.deepEqual([...configurado.classList], ['role-chip'], 'Configurado no tom padrão do chip, não no verde de "Enviando"');
   const editar = tiktok.querySelector('.plataforma-manual-botao');
   assert.equal(editar.textContent, 'Editar');
   editar.click();
@@ -113,8 +116,26 @@ test('configurada à mão: o bloco não fica transparente, diz o estado e oferec
   form.dispatchEvent(new janela.window.Event('submit', { cancelable: true }));
   await new Promise((resolver) => setTimeout(resolver, 0));
   assert.deepEqual(chamadas[0], ['salvar', 'tiktok', { pixel_code: 'C4XYZ', access_token: '', test_event_code: '' }]);
+  // Conferência A7: salvo com sucesso, o formulário fecha (como antes) e o foco volta ao "Editar".
+  assert.equal(tiktok.querySelector('.plataforma-formulario').hidden, true);
+  assert.equal(editar.getAttribute('aria-expanded'), 'false');
+  assert.equal(janela.window.document.activeElement, editar);
+  editar.click();
   botaoComTexto(tiktok, 'Remover').click();
+  await new Promise((resolver) => setTimeout(resolver, 0));
   assert.deepEqual(chamadas[1], ['remover', 'tiktok']);
+  assert.equal(tiktok.querySelector('.plataforma-formulario').hidden, true, 'removido, o formulário fecha');
+  janela.window.close();
+});
+
+test('falha ao remover fica ao lado do formulário, que continua aberto', async () => {
+  const { raiz, janela } = montar([{ provider: 'tiktok', configured: true, publicConfiguration: { pixel_code: 'C4' } }], { remover: async () => { throw new Error('Sem permissão.'); } });
+  const tiktok = bloco(raiz, 'tiktok');
+  tiktok.querySelector('.plataforma-manual-botao').click();
+  botaoComTexto(tiktok, 'Remover').click();
+  await new Promise((resolver) => setTimeout(resolver, 0));
+  assert.equal(tiktok.querySelector('.plataforma-formulario').hidden, false);
+  assert.match(tiktok.querySelector('.form-error').textContent, /Sem permissão/);
   janela.window.close();
 });
 
@@ -141,6 +162,7 @@ test('erro ao salvar fica ao lado do formulário', async () => {
   tiktok.querySelector('form').dispatchEvent(new janela.window.Event('submit', { cancelable: true }));
   await new Promise((resolver) => setTimeout(resolver, 0));
   assert.match(tiktok.querySelector('.form-error').textContent, /fora de formato/);
+  assert.equal(tiktok.querySelector('.plataforma-formulario').hidden, false, 'com erro, o formulário continua aberto');
   janela.window.close();
 });
 

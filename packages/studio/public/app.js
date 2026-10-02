@@ -1803,7 +1803,8 @@ function pintarDestinos(entregas) {
     erro: trackingDestinosErro,
     aviso: conversoesHabilitadas === false ? 'A entrega de conversões está desligada neste ambiente. As credenciais abaixo ficam guardadas, mas nada é enviado às plataformas até ela ser ligada.' : '',
     salvar: salvarDestino,
-    remover: action((provider) => removerDestino(provider)),
+    // O erro de salvar ou remover fica ao lado do formulário (plataformas-ui.js), não num aviso passageiro.
+    remover: removerDestino,
   });
 }
 
