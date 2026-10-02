@@ -167,6 +167,9 @@ export function criarSinaisDeBloco({
   };
 
   const enviar = () => {
+    // O quadro de animação que mediria a última rolagem pode não ter rodado (a aba está
+    // sumindo): mede de novo aqui, para o ponto mais fundo não se perder.
+    medirRolagem();
     const agora = now();
     const itens = [];
     for (const bloco of lista) {

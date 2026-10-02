@@ -204,6 +204,14 @@ test('a profundidade é o ponto mais fundo alcançado, em 25/50/75/100', () => {
   assert.deepEqual(t.lotes[0].dados.rolagem, [25, 50]);
 });
 
+test('a última rolagem não se perde se o quadro de animação não chegou a rodar antes de a aba sumir', () => {
+  const t = montar({ altura: 4000, tela: 800 });
+  t.window.requestAnimationFrame = () => {}; // aba em segundo plano: o quadro nunca vem
+  t.rolarPara(3200);
+  t.esconderAba();
+  assert.deepEqual(t.lotes[0].dados.rolagem, [25, 50, 75, 100]);
+});
+
 test('uma página que cabe na tela já foi vista até o fim', () => {
   const t = montar({ altura: 700, tela: 800 });
   t.esconderAba();
