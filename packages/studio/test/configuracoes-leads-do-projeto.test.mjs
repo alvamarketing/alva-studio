@@ -33,8 +33,10 @@ test('a aba é um cartão só do contrato visual: .surface com .surface-head, ca
   assert.match(ajuda, /JSON/);
   assert.match(ajuda, /CRM/);
   assert.match(ajuda, /sobrescrev/, 'diz que a página com destino próprio sobrescreve');
-  const botoes = [...cartoes[0].querySelectorAll('button')].map((b) => b.textContent.trim());
+  // As ações do cartão são Remover e Salvar; o botão de ajuda ao lado do título abre o guia.
+  const botoes = [...cartoes[0].querySelectorAll('button:not(.ajuda-botao)')].map((b) => b.textContent.trim());
   assert.deepEqual(botoes, ['Remover', 'Salvar']);
+  assert.equal(cartoes[0].querySelectorAll('.surface-head .ajuda-botao[data-guia="publicos-meta"]').length, 1, 'a ajuda mora no cabeçalho do cartão');
   window.close();
 });
 

@@ -30,13 +30,15 @@ export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, remover
     elemento(doc, 'h2', '', 'Públicos automáticos na Meta'),
     elemento(doc, 'p', 'helper', 'O Studio cria, na sua conta de anúncios, públicos de remarketing a partir do que as suas páginas e VSLs já medem. Ligue os que quiser usar. Para quem já virou lead não ver mais o anúncio, escolha "Virou lead" em "Excluir" no conjunto de anúncios.'),
   );
-  // O guia explica o que cada público faz, o que a Meta exige antes e o passo a passo.
-  const guia = elemento(doc, 'a', 'ajuda-link', 'Saiba como configurar o público da Meta');
-  guia.href = '/ajuda/publicos-meta';
-  guia.target = '_blank';
-  guia.rel = 'noopener noreferrer';
-  titulos.append(guia);
-  cabecalho.append(titulos);
+  // O guia (pop-up) explica o que cada público faz, o que a Meta exige e o passo a passo.
+  // Fica no canto do cabeçalho, junto das ações do cartão, e não solto no meio do texto.
+  const guia = elemento(doc, 'button', 'ajuda-botao');
+  guia.type = 'button';
+  guia.dataset.guia = 'publicos-meta';
+  const iconeDeAjuda = elemento(doc, 'span', 'material-symbols-outlined', 'help');
+  iconeDeAjuda.setAttribute('aria-hidden', 'true');
+  guia.append(iconeDeAjuda, elemento(doc, 'span', '', 'Saiba como configurar o público da Meta'));
+  cabecalho.append(titulos, guia);
   const aviso = elemento(doc, 'p', 'help');
   aviso.setAttribute('role', 'status');
   const erro = elemento(doc, 'p', 'form-error');

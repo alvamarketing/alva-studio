@@ -9,6 +9,7 @@ import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
 import { estadoDoPublicar } from './publicacao-pendente.js';
+import { abrirGuiaPublicosMeta } from './guia-publicos-meta.js';
 import { abaDoAssunto, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto, ocultarAbaDeLeads } from './projeto-configuracoes.js';
 import { criarPublicosMetaUI } from './publicos-meta-ui.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
@@ -2405,3 +2406,13 @@ try {
   $('#startup').textContent = 'Não foi possível abrir o Studio. Recarregue a página para tentar novamente.';
   toast(error.message);
 }
+
+// O guia dos públicos da Meta é um pop-up: qualquer botão marcado com data-guia abre. Os
+// passos que mandam a pessoa de volta ao Studio avisam por evento, e a tela de configurações
+// do projeto abre na aba certa.
+document.addEventListener('click', (evento) => {
+  if (evento.target.closest('[data-guia="publicos-meta"]')) abrirGuiaPublicosMeta(document);
+});
+document.addEventListener('alva:abrir-config', (evento) => {
+  action(() => abrirConfiguracoesDoProjeto({ assunto: evento.detail?.assunto || '' }))();
+});

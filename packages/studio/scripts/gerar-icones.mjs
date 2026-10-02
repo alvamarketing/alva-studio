@@ -13,6 +13,7 @@ const MAPA = {
   folder_special: 'FolderOpen', add: 'Plus', history: 'History', web: 'AppWindow', dynamic_form: 'ListChecks', check_circle: 'CircleCheck',
   key: 'Key', arrow_forward: 'ArrowRight', edit: 'Pencil', content_copy: 'Copy', delete: 'Trash2', tune: 'SlidersHorizontal',
   person: 'User', link: 'Link', movie: 'Clapperboard', arrow_back: 'ArrowLeft',
+  open_in_new: 'ExternalLink', close: 'X', help: 'CircleHelp',
   corporate_fare: 'Building2', group: 'Users', credit_card: 'CreditCard', cloud: 'Cloud', language: 'Globe', light_mode: 'Sun', dark_mode: 'Moon', search: 'Search', inbox: 'Inbox',
 };
 

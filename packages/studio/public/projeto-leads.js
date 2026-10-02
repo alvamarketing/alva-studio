@@ -10,13 +10,13 @@ export function criarCartaoDeLeads(doc, { api, toast = () => {} }) {
   cartao.id = 'project-leads-card';
   cartao.className = 'surface';
   cartao.innerHTML = '<div class="surface-head"><div><h2>Destino dos leads</h2>'
-    + '<p class="helper">Todo lead capturado numa página ou quiz deste projeto vai também para o seu CRM.</p></div></div>'
+    + '<p class="helper">Todo lead capturado numa página ou quiz deste projeto vai também para o seu CRM.</p></div>'
+    + '<button type="button" class="ajuda-botao" data-guia="publicos-meta"><span class="material-symbols-outlined" aria-hidden="true">help</span><span>Saiba como configurar o público da Meta</span></button></div>'
     + '<form class="project-leads-form">'
     + '<label>Endereço do webhook (HTTPS)<input type="url" name="url" maxlength="2000" autocomplete="off" placeholder="https://seu-crm.com.br/webhook/leads"></label>'
     + '<p class="help">Enviamos uma cópia em JSON de cada lead para este endereço, para o seu CRM. '
     + 'Uma página ou quiz com destino próprio, definido no botão Leads do editor, sobrescreve este.</p>'
-    + '<p class="help">Quer anunciar de novo para quem assistiu à VSL ou já virou lead? '
-    + '<a class="ajuda-link" href="/ajuda/publicos-meta" target="_blank" rel="noopener noreferrer">Saiba como configurar o público da Meta</a></p>'
+
     + '<p class="form-error" role="alert"></p>'
     + '<div class="owner-form-actions"><button type="button" id="project-leads-remove">Remover</button>'
     + '<button type="submit" class="primary" id="project-leads-save">Salvar</button></div>'
