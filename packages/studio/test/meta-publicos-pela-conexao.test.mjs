@@ -66,7 +66,7 @@ test('pela conexão, a Meta recusa o token (190 ou 102): a conexão é marcada e
     const servico = criarServicoDePublicos({ repository: repositorioFalso({ adAccountId: '111', origem: 'connection', token: null }), tracking, fetch: meta.fetch, tokenDaConexao });
     const { resultados } = await servico.sincronizar({ ...escopo, chaves: ['lead'] });
     assert.equal(resultados[0].estado, 'erro');
-    assert.match(resultados[0].erro, /Reconecte a conta da Meta/);
+    assert.match(resultados[0].erro, /Clique em "Reconectar" no bloco da Meta, em "Plataformas"/);
     assert.deepEqual(tokenDaConexao.marcadas, [{ companyId: 'c1', motivo: 'publicos_token_recusado' }]);
   }
 });

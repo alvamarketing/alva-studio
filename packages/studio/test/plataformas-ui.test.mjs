@@ -239,3 +239,17 @@ test('o CSS da grade e dos públicos só usa tokens existentes', async () => {
     }
   }
 });
+
+// Conferência A2: depois do cartão "Plataformas", nenhuma frase mostrada à pessoa aponta para o
+// cartão "Conta da Meta" ou para a seção "Destinos", que não existem mais.
+test('nenhum texto da tela ou do servidor aponta para "Conta da Meta" ou "Destinos"', async () => {
+  const arquivos = ['../server/meta-publicos-servico.mjs', '../server/meta-publicos-cliente.mjs', '../server/repositories/tracking-repository.mjs', '../public/studio-dashboard.js', '../public/app.js', '../public/plataformas-ui.js', '../public/conexao-meta-ui.js', '../public/publicos-meta-ui.js', '../public/index.html'];
+  for (const arquivo of arquivos) {
+    const fonte = (await readFile(new URL(arquivo, import.meta.url), 'utf8')).replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(fonte, /cartão "Conta da Meta"|cartão \\"Conta da Meta\\"|em Destinos|"Destinos"|seção "Destinos"/, arquivo);
+  }
+  const { motivoDaFalha } = await import('../public/studio-dashboard.js');
+  for (const codigo of ['destination_credential_rejected', 'destination_rejected_401', 'destination_rejected_404', 'destination_connection_needs_reconnect', 'destination_not_configured', 'destination_event_name_missing']) {
+    assert.doesNotMatch(motivoDaFalha(codigo, 'Meta'), /Destinos|Conta da Meta/, codigo);
+  }
+});

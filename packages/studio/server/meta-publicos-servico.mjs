@@ -47,7 +47,7 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
       if (credenciais?.origem === 'connection' && !(await tokenDaConexao?.resolver(escopo.companyId).catch(() => null))) faltando.push({
         chave: 'conexao',
         titulo: 'Conta da Meta conectada',
-        onde: 'A conta de anúncios deste projeto foi escolhida pela conexão com o Facebook, e a conexão precisa ser refeita. Clique em "Reconectar" no cartão "Conta da Meta", acima.',
+        onde: 'A conta de anúncios deste projeto foi escolhida pela conexão com o Facebook, e a conexão precisa ser refeita. Clique em "Reconectar" no bloco da Meta, em "Plataformas", acima.',
       });
       if (!credenciais) faltando.push({
         chave: 'credenciais',
@@ -104,7 +104,7 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
         let acesso = { token: credenciais.token, prova: null };
         if (pelaConexao) {
           const resolvido = await tokenDaConexao?.resolver(companyId);
-          if (!resolvido) throw recusa('A conta da Meta conectada precisa ser conectada de novo. Clique em "Reconectar" no cartão "Conta da Meta".', 409);
+          if (!resolvido) throw recusa('A conta da Meta conectada precisa ser conectada de novo. Clique em "Reconectar" no bloco da Meta, em "Plataformas".', 409);
           acesso = { token: resolvido.token, prova: resolvido.assinar ?? resolvido };
         }
         const cliente = criarClienteDePublicos({ fetch: buscar, token: acesso.token, contaDeAnuncios: credenciais.adAccountId, prova: acesso.prova, pelaConexao });
