@@ -6,17 +6,20 @@
 // Os blocos não são recriados: são os mesmos nós, movidos para cá. Assim tudo que já
 // funciona — formulários, botões, os handlers de app.js — continua valendo, e não existem
 // duas telas com o mesmo formulário para divergir uma da outra.
+import { criarCartaoDeLeads } from './projeto-leads.js';
+
 export const ABAS_DO_PROJETO = [
   ['geral', 'Geral', 'tune'],
   ['publicacao', 'Publicação', 'cloud_upload'],
   ['rastreamento', 'Rastreamento', 'conversion_path'],
+  ['leads', 'Leads', 'inbox'],
 ];
 
-const ASSUNTOS = { dominio: 'publicacao', vercel: 'publicacao', publicacao: 'publicacao', pixel: 'rastreamento', rastreamento: 'rastreamento' };
+const ASSUNTOS = { dominio: 'publicacao', vercel: 'publicacao', publicacao: 'publicacao', pixel: 'rastreamento', rastreamento: 'rastreamento', leads: 'leads', webhook: 'leads' };
 export const abaDoAssunto = (assunto) => ASSUNTOS[String(assunto ?? '')] ?? 'geral';
 
 // A explicação da aba só existe onde os cartões não a trazem: repetida, vira ruído.
-const AJUDA = { geral: '', publicacao: '', rastreamento: '' };
+const AJUDA = { geral: '', publicacao: '', rastreamento: '', leads: '' };
 
 function painel(doc, chave) {
   const secao = doc.createElement('section');
@@ -60,7 +63,8 @@ function abrirDetails(doc, no) {
   return secao;
 }
 
-export function montarConfiguracoesDoProjeto(doc = document) {
+// `api` e `toast` são do app.js: o cartão de Leads fala com o servidor por eles.
+export function montarConfiguracoesDoProjeto(doc = document, { api, toast } = {}) {
   const tela = doc.querySelector('#project-settings-view');
   if (!tela) return null;
   const antiga = tela.querySelector('.project-settings-tabs');
@@ -107,8 +111,15 @@ export function montarConfiguracoesDoProjeto(doc = document) {
   const destinos = doc.querySelector('#tracking-view #tracking-destinations');
   const blocoDeDestinos = destinos?.closest('.page-block') ?? destinos;
   if (blocoDeDestinos) paineis.get('rastreamento').append(cartao(doc, blocoDeDestinos));
+  // Leads: o destino padrão dos leads do projeto. Só o cartão é montado aqui; os dados
+  // vêm quando a tela abre (carregarLeadsDoProjeto), porque dependem do projeto escolhido.
+  if (api && !doc.querySelector('#project-leads-card')) paineis.get('leads').append(criarCartaoDeLeads(doc, { api, toast }));
   abrirAbaDoProjeto(tela.dataset.abaAtual || 'geral', doc);
   return tela;
+}
+
+export async function carregarLeadsDoProjeto(doc, projectId) {
+  await doc.querySelector('#project-leads-card')?.carregar?.(projectId);
 }
 
 export function abrirAbaDoProjeto(aba, doc = document) {

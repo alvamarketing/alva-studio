@@ -375,6 +375,7 @@ export function createApp({
     '/convite.html': ['public/convite.html', 'text/html'],
     '/equipe-ui.js': ['public/equipe-ui.js', 'text/javascript'],
     '/projeto-configuracoes.js': ['public/projeto-configuracoes.js', 'text/javascript'],
+    '/projeto-leads.js': ['public/projeto-leads.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
     '/vsl-ui.js': ['public/vsl-ui.js', 'text/javascript'],
     '/leads-ui.js': ['public/leads-ui.js', 'text/javascript'],
