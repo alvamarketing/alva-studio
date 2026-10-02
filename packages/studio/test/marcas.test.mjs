@@ -39,8 +39,11 @@ test('as cores --marca-* de owner.css são as do simple-icons, num bloco só', a
   const fim = css.indexOf('/* Fim das marcas */');
   assert.ok(inicio >= 0 && fim > inicio, 'o bloco das marcas existe e está delimitado');
   const bloco = css.slice(inicio, fim);
+  // Exceção documentada: o botão do Facebook usa o azul da documentação do Login do Facebook
+  // (#1877F2), não o do logo no simple-icons (#0866FF).
+  const COR_DO_BOTAO = { facebook: '1877F2' };
   for (const [chave, marca] of Object.entries(MARCAS)) {
-    assert.match(bloco, new RegExp(`--marca-${chave}: #${marca.hex};`, 'i'), `--marca-${chave}`);
+    assert.match(bloco, new RegExp(`--marca-${chave}: #${COR_DO_BOTAO[chave] ?? marca.hex};`, 'i'), `--marca-${chave}`);
   }
   const resto = (css.slice(0, inicio) + css.slice(fim)).replace(/\/\*[\s\S]*?\*\//g, '');
   assert.doesNotMatch(resto, /--marca-[a-z]+:/, 'nenhuma cor de marca declarada fora do bloco');
