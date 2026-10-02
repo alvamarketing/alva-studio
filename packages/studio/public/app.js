@@ -8,7 +8,7 @@ import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
-import { abaDoAssunto, abrirAbaDoProjeto, montarConfiguracoesDoProjeto } from './projeto-configuracoes.js';
+import { abaDoAssunto, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto } from './projeto-configuracoes.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { renderFunis } from './funis-view.js';
 import { observarIcones } from './icones.js';
@@ -2235,7 +2235,7 @@ $('#project-settings-action').onclick = action(async () => abrirConfiguracoesDoP
 async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
   const projeto = dashboardState().currentProject;
   if (!projeto?.id) throw new Error('Escolha um projeto para configurar.');
-  montarConfiguracoesDoProjeto(document);
+  montarConfiguracoesDoProjeto(document, { api, toast });
   const form = $('#project-settings-form');
   if (form) {
     form.elements.name.value = projeto.name || '';
@@ -2246,7 +2246,7 @@ async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
   setDashboardView('projectSettings');
   abrirAbaDoProjeto(abaDoAssunto(assunto), document);
   // Os blocos movidos para cá continuam sendo pintados por quem sempre os pintou.
-  await Promise.all([renderProject().catch(() => {}), recarregarDestinos().catch(() => {})]);
+  await Promise.all([renderProject().catch(() => {}), recarregarDestinos().catch(() => {}), carregarLeadsDoProjeto(document, projeto.id)]);
 }
 $('#project-settings-form').onsubmit = action(async (event) => {
   event.preventDefault();

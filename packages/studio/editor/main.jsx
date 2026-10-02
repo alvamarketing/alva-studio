@@ -57,8 +57,8 @@ function IframeComFolhas({ children, document: doc }) {
 }
 
 // Para onde vão os leads desta página: sempre para o Studio (aba Leads) e, se a pessoa
-// quiser, uma cópia em JSON para um webhook (CRM, automação). Era o diálogo de
-// configurações do editor antigo; o servidor já guardava e validava o endereço.
+// quiser, uma cópia em JSON para um webhook (CRM, automação). O padrão é o do projeto
+// (Configurações do projeto > Leads); o campo daqui só serve para sobrescrevê-lo nesta página.
 function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
   const [aberto, setAberto] = useState(false);
   const botao = useRef(null);
@@ -72,6 +72,9 @@ function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
   };
   const [valor, setValor] = useState(pagina.webhook ?? '');
   const [estado, setEstado] = useState('');
+  // O destino do projeto vale para toda página sem destino próprio. Mostra-se só o host: a
+  // URL inteira costuma levar o token do CRM, e quem edita a página não gerencia integrações.
+  const usaODoProjeto = !valor.trim() && Boolean(pagina.projectWebhookHost);
   return (
     <div className="alva-menu">
       <button type="button" ref={botao} className="alva-acao" aria-expanded={aberto} onClick={alternar}>
@@ -88,6 +91,7 @@ function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
           <label>Opcionalmente, envie uma cópia em JSON para seu CRM ou automação
             <input type="url" placeholder="https://" value={valor} onChange={(evento) => setValor(evento.target.value)} />
           </label>
+          {usaODoProjeto ? <p role="note">Esta página usa o destino do projeto ({pagina.projectWebhookHost}). Preencha o campo só se quiser outro para ela.</p> : null}
           <button type="submit" className="alva-acao alva-acao-principal">Salvar destino</button>
           {estado ? <small role="status">{estado}</small> : null}
           <button type="button" className="alva-acao" onClick={() => setAberto(false)}>Fechar</button>

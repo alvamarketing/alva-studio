@@ -9,7 +9,7 @@ import { JSDOM } from 'jsdom';
 import { ABAS_DO_PROJETO, montarConfiguracoesDoProjeto, abaDoAssunto } from '../public/projeto-configuracoes.js';
 
 test('as configurações do projeto cobrem publicação, rastreamento e o projeto em si', () => {
-  assert.deepEqual(ABAS_DO_PROJETO.map(([chave]) => chave), ['geral', 'publicacao', 'rastreamento']);
+  assert.deepEqual(ABAS_DO_PROJETO.map(([chave]) => chave), ['geral', 'publicacao', 'rastreamento', 'leads']);
 });
 
 test('cada assunto sabe a aba onde mora, para quem chega de outra tela', () => {
@@ -40,7 +40,7 @@ test('a tela reúne os blocos que já existem, sem duplicá-los', () => {
   // Montar duas vezes não duplica nada.
   montarConfiguracoesDoProjeto(doc);
   assert.equal(doc.querySelectorAll('#project-settings-form').length, 1);
-  assert.equal(tela.querySelectorAll('[role="tab"]').length, 3);
+  assert.equal(tela.querySelectorAll('[role="tab"]').length, 4);
   window.close();
 });
 
