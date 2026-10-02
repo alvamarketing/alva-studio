@@ -1,3 +1,16 @@
+/* Marcas das plataformas (aba Rastreamento, cartão "Plataformas"). Única exceção à regra
+   "nenhuma cor nova", autorizada pelo dono em 02/10/2026: a cor oficial de cada marca, usada
+   só no quadrado do logo e no botão "Continuar com o Facebook". Fonte: pacote simple-icons
+   16.33.0 (CC0), o mesmo de public/marcas.js — test/marcas.test.mjs confere que batem.
+   LinkedIn e Taboola não estão no pacote: ficam com a inicial em tom neutro, sem cor. */
+:root {
+  --marca-meta: #0467DF; /* simple-icons "Meta" — www.meta.com */
+  --marca-facebook: #0866FF; /* simple-icons "Facebook" — about.meta.com/brand/resources/facebook/logo */
+  --marca-tiktok: #000000; /* simple-icons "TikTok" — tiktok.com */
+  --marca-googleads: #4285F4; /* simple-icons "Google Ads" — ads.google.com */
+}
+/* Fim das marcas */
+
 .access-locked {
   overflow: hidden;
 }
