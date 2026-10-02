@@ -71,3 +71,11 @@ test('a aba Equipe monta o convite e some o aviso que prometia convites para dep
   assert.match(owner, /\/companies\/\$\{empresaAtual\(\)\}\/invitations/);
   assert.match(owner, /session\?\.currentCompanyId/, 'a empresa vem do que a sessão devolve');
 });
+
+test('a página do convite não usa <main>: o app empurra todo <main> 226px para a direita', async () => {
+  // styles.css tem `main { margin-left: 226px }` para abrir espaço da barra lateral do Studio. A
+  // página de convite não tem barra lateral; com <main> o painel saía deslocado e cortado.
+  const html = await readFile(new URL('../public/convite.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /<main\b/);
+  assert.match(html, /<section class="access-gate"/);
+});
