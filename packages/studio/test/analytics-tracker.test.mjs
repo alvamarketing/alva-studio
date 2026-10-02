@@ -57,9 +57,15 @@ test('captura o domínio de referência quando document.referrer existe, sem o c
 
 test('nunca acessa DOM de formulário: o arquivo não referencia value, elements nem FormData', () => {
   const source = readFileSync(trackerSourcePath, 'utf8');
-  for (const forbidden of ['.value', '.elements', 'FormData', 'querySelectorAll', 'localStorage']) {
+  for (const forbidden of ['.value', '.elements', 'FormData', 'localStorage']) {
     assert.equal(source.includes(forbidden), false, `tracker.js não deve conter "${forbidden}"`);
   }
+  // Os sinais de bloco (etapa 7) precisam listar os blocos da página, então a proibição de
+  // querySelectorAll virou uma regra mais estreita: a única consulta em massa ao DOM é a dos
+  // blocos marcados (`[data-alva-bloco]`) — campo, rótulo e texto continuam fora de alcance.
+  const consultas = [...source.matchAll(/querySelectorAll\(([^)]*)\)/g)].map((match) => match[1]);
+  assert.deepEqual(consultas, ['SELETOR_DE_BLOCO']);
+  assert.match(source, /const SELETOR_DE_BLOCO = '\[data-alva-bloco\]';/);
 });
 
 test('usa navigator.sendBeacon quando disponível e não cai para fetch', () => {
