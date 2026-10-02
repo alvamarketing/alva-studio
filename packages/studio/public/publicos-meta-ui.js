@@ -67,6 +67,8 @@ export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, remover
     corpo.hidden = !aberto;
     alternar.setAttribute('aria-expanded', String(aberto));
   }
+  // Outro projeto: a escolha do anterior não vale, volta a abertura padrão.
+  cartao.esquecerEscolha = () => { escolhaDaPessoa = null; };
   cartao.alternar = (aberto = corpo.hidden) => {
     escolhaDaPessoa = aberto;
     abrirOuFechar(aberto);
@@ -237,6 +239,7 @@ export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, remover
 // rotas exigem essa permissão.
 export function criarPublicosMetaUI({ api, getShell, doc = document }) {
   let cartao = null;
+  let projetoDoCartao = null;
   const projeto = () => getShell().state().currentProject?.id;
   const base = () => `/projects/${projeto()}/meta-audiences`;
   return {
@@ -254,6 +257,7 @@ export function criarPublicosMetaUI({ api, getShell, doc = document }) {
         });
       }
       if (!painel.contains(cartao)) painel.append(cartao);
+      if (projetoDoCartao !== projeto()) { cartao.esquecerEscolha(); projetoDoCartao = projeto(); }
       await cartao.recarregar();
     },
   };

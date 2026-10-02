@@ -229,6 +229,29 @@ test('linha compacta: nome com a janela, descrição numa segunda linha curta, I
   janela.close();
 });
 
+// Conferência A4: o "aberto/recolhido" escolhido num projeto não pode valer para o outro —
+// trocar de projeto volta à abertura padrão do projeto novo.
+test('trocar de projeto esquece o aberto/recolhido escolhido no projeto anterior', async () => {
+  const { criarPublicosMetaUI } = await import('../public/publicos-meta-ui.js');
+  const janela = new JSDOM('<section id="project-settings-panel-rastreamento"></section>').window;
+  let projeto = 'p1';
+  const estados = { p1: estadoCompleto({ publicos: seis(['lead']) }), p2: estadoCompleto({ publicos: seis(['lead', 'vsl_50']) }) };
+  const api = async (caminho) => estados[caminho.split('/')[2]];
+  const shell = { state: () => ({ currentProject: { id: projeto } }), can: () => true };
+  const ui = criarPublicosMetaUI({ api, getShell: () => shell, doc: janela.document });
+  await ui.abrir();
+  const corpo = () => janela.document.querySelector('#publicos-meta-corpo');
+  assert.equal(corpo().hidden, true, 'p1 começa recolhido');
+  janela.document.querySelector('.publicos-meta-alternar').click();
+  assert.equal(corpo().hidden, false, 'a pessoa abriu em p1');
+  await ui.abrir();
+  assert.equal(corpo().hidden, false, 'no mesmo projeto, a escolha fica');
+  projeto = 'p2';
+  await ui.abrir();
+  assert.equal(corpo().hidden, true, 'em p2 vale a abertura padrão, não a escolha de p1');
+  janela.close();
+});
+
 test('o cartão dos públicos só usa tokens: nenhuma cor, nem style em linha', async () => {
   const fonte = await readFile(new URL('../public/publicos-meta-ui.js', import.meta.url), 'utf8');
   assert.doesNotMatch(fonte, /#[0-9a-f]{3,8}\b|rgba?\(|\.style\.|style=|font-weight/i);
