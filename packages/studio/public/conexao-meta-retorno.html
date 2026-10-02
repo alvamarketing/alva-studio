@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR" data-pagina="conexao-meta-retorno">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Conta da Meta · Alva Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/owner.css">
+<link rel="stylesheet" href="/material-symbols.css">
+</head>
+<body>
+<!-- A volta do Facebook. O código de autorização chega na URL; o script limpa a barra antes de
+     qualquer outra coisa e conclui por POST na mesma origem. Nada da URL é escrito aqui. -->
+<main class="access-gate" aria-label="Conta da Meta">
+  <div class="access-story">
+    <a class="brand" href="/" aria-label="Alva Studio"><strong>ALVA</strong><span>Studio</span></a>
+    <div>
+      <span class="eyebrow">CONTA DA META</span>
+      <h1 id="retorno-titulo">Concluindo a conexão…</h1>
+      <p id="retorno-texto" role="status">Um instante.</p>
+    </div>
+    <small>ALVA MARKETING / STUDIO</small>
+  </div>
+  <div class="access-panel">
+    <form id="retorno-acoes" hidden>
+      <span class="eyebrow">PRÓXIMO PASSO</span>
+      <h2>Volte ao Studio.</h2>
+      <p>A conta da Meta fica nas configurações do projeto, aba Rastreamento.</p>
+      <button class="primary" id="retorno-voltar" type="button">Voltar ao Studio</button>
+    </form>
+  </div>
+</main>
+<script type="module" src="/conexao-meta-retorno.js"></script>
+</body>
+</html>

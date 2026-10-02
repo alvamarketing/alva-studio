@@ -110,3 +110,19 @@ test('a tela de quizzes tem endereço próprio e ainda atende o antigo', () => {
   assert.equal(hashToView('#/quizzes').view, 'forms');
   assert.equal(hashToView('#/formularios').view, 'forms');
 });
+
+// A volta do Facebook (conectar a conta da Meta) precisa cair na aba Rastreamento das
+// configurações do projeto: a tela ganha endereço, com a aba no fim.
+test('configurações do projeto têm endereço, com a aba, e só abrem com projeto atual', () => {
+  assert.deepEqual(hashToView('#/configuracoes-do-projeto/rastreamento'), { view: 'projectSettings', settingsTab: 'rastreamento' });
+  assert.equal(hashToView(viewToHash('projectSettings')).view, 'projectSettings');
+  assert.equal(viewToHash('projectSettings', { settingsTab: 'rastreamento' }), '#/configuracoes-do-projeto/rastreamento');
+  assert.equal(viewToRestore({ view: 'projectSettings' }, { hasProject: true }), 'projectSettings');
+  assert.equal(viewToRestore({ view: 'projectSettings' }, { hasProject: false }), 'home');
+});
+
+test('ao restaurar as configurações do projeto, a aba do endereço vira o assunto', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /view === 'projectSettings'\) return void action\(\(\) => abrirConfiguracoesDoProjeto\(\{ assunto: options\.assunto \?\? options\.settingsTab \}\)\)\(\)/);
+});

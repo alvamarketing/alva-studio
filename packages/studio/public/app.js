@@ -103,7 +103,7 @@ function abrirView(view, options = {}) {
   if (view === 'funnels') return void action(abrirFunis)();
   if (view === 'agents') return void action(abrirAgentes)();
   if (view === 'publication') return void action(abrirPublicacao)();
-  if (view === 'projectSettings') return void action(() => abrirConfiguracoesDoProjeto(options))();
+  if (view === 'projectSettings') return void action(() => abrirConfiguracoesDoProjeto({ assunto: options.assunto ?? options.settingsTab }))();
   return setDashboardView(view, options);
 }
 // Ao recarregar em #/vsl, a tela ainda não sabe se o envio de vídeo está ligado (isso vem

@@ -31,6 +31,10 @@ import { AuditRepository, DeploymentRepository, ProjectDomainRepository, Project
 import { TrackingRepository } from './repositories/tracking-repository.mjs';
 import { MetaAudiencesRepository } from './repositories/meta-audiences-repository.mjs';
 import { criarServicoDePublicos } from './meta-publicos-servico.mjs';
+import { CAMINHO_DO_RETORNO, lerConfiguracaoDaMeta } from './meta-config.mjs';
+import { criarClienteDaConexao } from './meta-conexao-cliente.mjs';
+import { criarServicoDeConexaoMeta } from './meta-conexao-servico.mjs';
+import { MetaConnectionsRepository } from './repositories/meta-connections-repository.mjs';
 import { ConversionsOutboxRepository } from './repositories/conversions-outbox-repository.mjs';
 import { PublicationRuntimeRepository } from './repositories/publication-runtime-repository.mjs';
 import { RuntimeConsentGateway } from './runtime-consent-gateway.mjs';
@@ -226,6 +230,9 @@ export function createApp({
   runtimeFlags = readRuntimeFlags(),
   runtimeHmacSecret = process.env.PUBLICATION_RUNTIME_HMAC_SECRET,
   billingOptions = {},
+  // `env` e `fetch` da conexão com a Meta: os testes passam os seus, sem tocar o ambiente
+  // nem a rede.
+  metaOptions = {},
 } = {}) {
   if (publicOrigin) {
     const url = new URL(publicOrigin);
@@ -274,6 +281,18 @@ export function createApp({
   // Os públicos da Meta guardam o token no mesmo cofre dos destinos (mesma chave-mestra) e
   // leem o pixel dos destinos: sem rastreamento configurado, não há o que montar.
   const publicosMeta = tracking ? criarServicoDePublicos({ repository: new MetaAudiencesRepository(database), tracking }) : null;
+  // Conectar com o Facebook: só existe com banco, chave-mestra (cofre do token e segredo do
+  // state) e o app da Meta configurado. Sem META_APP_ID/META_APP_SECRET, fica desligado e o
+  // preenchimento manual continua sendo o caminho.
+  const configuracaoDaMeta = lerConfiguracaoDaMeta(metaOptions.env ?? process.env, { publicOrigin });
+  const metaConexao = database && process.env.TRACKING_MASTER_KEY && configuracaoDaMeta
+    ? criarServicoDeConexaoMeta({
+      repository: new MetaConnectionsRepository(database),
+      cliente: criarClienteDaConexao({ fetch: metaOptions.fetch ?? globalThis.fetch, configuracao: configuracaoDaMeta }),
+      configuracao: configuracaoDaMeta,
+      chaveMestra: process.env.TRACKING_MASTER_KEY,
+    })
+    : null;
   const images = database ? new ImageRepository(database, { publicOrigin }) : null;
   const commercialOutbox = runtimeFlags.conversions && database && process.env.TRACKING_MASTER_KEY
     ? new ConversionsOutboxRepository(database) : null;
@@ -341,6 +360,7 @@ export function createApp({
       analytics,
       tracking,
       publicosMeta,
+      metaConexao,
       commercialOutbox,
       body,
       secure: Boolean(publicOrigin),
@@ -389,6 +409,9 @@ export function createApp({
     '/convite.html': ['public/convite.html', 'text/html'],
     '/equipe-ui.js': ['public/equipe-ui.js', 'text/javascript'],
     '/publicos-meta-ui.js': ['public/publicos-meta-ui.js', 'text/javascript'],
+    '/conexao-meta-ui.js': ['public/conexao-meta-ui.js', 'text/javascript'],
+    [CAMINHO_DO_RETORNO]: ['public/conexao-meta-retorno.html', 'text/html'],
+    '/conexao-meta-retorno.js': ['public/conexao-meta-retorno.js', 'text/javascript'],
     '/projeto-configuracoes.js': ['public/projeto-configuracoes.js', 'text/javascript'],
     '/projeto-leads.js': ['public/projeto-leads.js', 'text/javascript'],
     '/tracker.js': ['public/tracker.js', 'text/javascript'],
@@ -775,6 +798,13 @@ export function createApp({
         res.setHeader('Content-Type', type.startsWith('font/') ? type : type + '; charset=utf-8');
         if (publicFontAsset) res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 'no-cache');
+        // A volta do Facebook traz o código de autorização na URL. A página não guarda nada
+        // em cache e só roda o próprio script, sem nada em linha; o JS limpa a barra antes de
+        // tudo e conclui por POST na mesma origem.
+        if (path === CAMINHO_DO_RETORNO) {
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+        }
         let content = await readFile(join(root, file));
         // O tracker é módulo (os testes o importam), mas a página o inclui como script comum,
         // e `export` ali derruba o arquivo inteiro. Entregue sem os `export`, num escopo próprio.
