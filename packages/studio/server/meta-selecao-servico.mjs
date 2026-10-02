@@ -173,7 +173,7 @@ export function criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes, trackin
       return servico.estado(escopo);
     },
 
-    // Se a conexão do destino precisa de novo login — para a lista de Destinos mostrar.
+    // Se a conexão do destino precisa de novo login — para o bloco da Meta, em "Plataformas", mostrar.
     async precisaReconectar({ companyId }) {
       const publica = await conexoes.publica(companyId);
       if (!publica) return true;

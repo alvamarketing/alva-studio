@@ -452,6 +452,8 @@ export function createApp({
     '/funis-modelos.js': ['public/funis-modelos.js', 'text/javascript'],
     '/funis-view.js': ['public/funis-view.js', 'text/javascript'],
     '/icones.js': ['public/icones.js', 'text/javascript'],
+    '/marcas.js': ['public/marcas.js', 'text/javascript'],
+    '/plataformas-ui.js': ['public/plataformas-ui.js', 'text/javascript'],
     '/modelos-alva.js': ['public/modelos-alva.js', 'text/javascript'],
     '/page-schema.js': ['public/page-schema.js', 'text/javascript'],
     '/build/editor.js': ['public/build/editor.js', 'text/javascript'],

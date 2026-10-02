@@ -240,7 +240,7 @@ export class TrackingRepository {
         // seguiria com o token da empresa.
         const trocaPixelDaConexao = configuracaoAtual.token_source === 'connection' && tokenSource !== 'connection'
           && !configuration.access_token && configuration.pixel_id !== undefined && configuration.pixel_id !== configuracaoAtual.pixel_id;
-        if (trocaPixelDaConexao) throw fail('Este pixel foi escolhido pela conexão com o Facebook. Para trocar o pixel pela conexão, escolha no cartão "Conta da Meta"; para digitar manualmente, informe também o token de acesso.');
+        if (trocaPixelDaConexao) throw fail('Este pixel foi escolhido pela conexão com o Facebook. Para trocar o pixel pela conexão, escolha em "Neste projeto", no bloco da Meta; para digitar manualmente, informe também o token de acesso.');
         if (tokenSource === 'connection') {
           configuracaoEfetiva.token_source = 'connection';
           delete configuracaoEfetiva.access_token;

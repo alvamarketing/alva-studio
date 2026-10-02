@@ -230,21 +230,21 @@ const ESTADO_ENTREGA = { delivered: 'Entregue', dead: 'Falhou' };
 export function motivoDaFalha(codigo, nome = 'este destino') {
   const texto = String(codigo ?? '').trim();
   if (!texto) return '';
-  if (texto === 'destination_credential_rejected') return `A plataforma recusou a credencial. Confira a credencial de ${nome} em Destinos, nesta tela.`;
+  if (texto === 'destination_credential_rejected') return `A plataforma recusou a credencial. Confira a credencial de ${nome} em Plataformas, na aba Rastreamento das Configurações do projeto.`;
   if (texto === 'destination_permission_denied') return `A credencial não tem permissão para enviar eventos a esta conta. Confira as permissões do token em ${nome}.`;
   if (texto === 'destination_rate_limited') return 'A plataforma pediu para esperar. O envio tenta de novo sozinho.';
   if (texto === 'destination_invalid_payload') return 'A plataforma recusou o formato do evento. É defeito do Studio, não da sua configuração.';
-  if (/^destination_rejected_(401|403)$/.test(texto)) return `A plataforma recusou a credencial. Confira a credencial de ${nome} em Destinos, nesta tela.`;
-  if (texto === 'destination_rejected_404') return `A plataforma não encontrou a conta informada. Confira os dados de ${nome} em Destinos, nesta tela.`;
+  if (/^destination_rejected_(401|403)$/.test(texto)) return `A plataforma recusou a credencial. Confira a credencial de ${nome} em Plataformas, na aba Rastreamento das Configurações do projeto.`;
+  if (texto === 'destination_rejected_404') return `A plataforma não encontrou a conta informada. Confira os dados de ${nome} em Plataformas, na aba Rastreamento das Configurações do projeto.`;
   const recusado = texto.match(/^destination_rejected_(\d+)$/);
   if (recusado) return `A plataforma recusou o evento (código ${recusado[1]}).`;
   const fora = texto.match(/^destination_unavailable_(\d+)$/);
   if (fora) return `A plataforma estava indisponível (código ${fora[1]}). O envio tenta de novo sozinho.`;
   if (texto === 'transport_error') return 'Não foi possível falar com a plataforma. O envio tenta de novo sozinho.';
-  if (texto === 'destination_connection_needs_reconnect') return `A conta da Meta conectada precisa ser conectada de novo (o acesso venceu ou foi recusado). Clique em "Reconectar" no cartão "Conta da Meta" das Configurações do projeto.`;
+  if (texto === 'destination_connection_needs_reconnect') return `A conta da Meta conectada precisa ser conectada de novo (o acesso venceu ou foi recusado). Clique em "Reconectar" no bloco da Meta, em Plataformas, na aba Rastreamento das Configurações do projeto.`;
   if (texto === 'destination_connection_unavailable') return 'O envio pela conexão com o Facebook não está configurado no servidor de envio. Avise quem administra o Studio.';
-  if (texto === 'destination_not_configured') return `Sem credencial de ${nome} neste ambiente. Configure-a em Destinos, nesta tela.`;
-  if (texto === 'destination_event_name_missing') return `Falta o nome deste evento na configuração de ${nome}. Preencha em Destinos, nesta tela.`;
+  if (texto === 'destination_not_configured') return `Sem credencial de ${nome} neste ambiente. Configure-a em Plataformas, na aba Rastreamento das Configurações do projeto.`;
+  if (texto === 'destination_event_name_missing') return `Falta o nome deste evento na configuração de ${nome}. Preencha em Plataformas, na aba Rastreamento das Configurações do projeto.`;
   if (texto === 'destination_user_agent_required') return 'O evento chegou sem o navegador de quem converteu, que esta plataforma exige.';
   if (texto === 'destination_page_url_required') return 'O evento chegou sem o endereço da página, que esta plataforma exige.';
   if (texto === 'destination_identifier_required') return 'Esta plataforma não tinha como atribuir o evento.';
@@ -482,7 +482,7 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
       description,
       configured,
       state,
-      stateLabel: !configured ? 'Não configurado' : reconectar ? 'Precisa reconectar' : vencimento ?? (testCode ? 'Modo de teste' : pelaConexao ? 'Configurado pela conexão' : entregando.has(provider) ? 'Enviando' : 'Configurado'),
+      stateLabel: !configured ? 'Não configurado' : reconectar ? 'Precisa reconectar' : vencimento ?? (testCode ? 'Modo de teste' : entregando.has(provider) ? 'Enviando' : pelaConexao ? 'Configurado pela conexão' : 'Configurado'),
       pelaConexao,
       precisaReconectar: reconectar,
       camposManuais,

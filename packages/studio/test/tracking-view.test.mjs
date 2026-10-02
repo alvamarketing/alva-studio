@@ -57,7 +57,7 @@ test('a tela de rastreamento reúne tudo numa página só', () => {
   const tela = markup.slice(markup.indexOf('id="tracking-view"'), markup.indexOf('id="agents-view"'));
   assert.match(tela, /id="tracking-view-title">Rastreamento</);
   assert.match(tela, /Eventos recentes/);
-  for (const secao of ['Entregas por destino', 'Destinos', 'Consentimento']) assert.match(tela, new RegExp(secao), `faltou a seção ${secao}`);
+  for (const secao of ['Entregas por destino', 'Plataformas', 'Consentimento']) assert.match(tela, new RegExp(secao), `faltou a seção ${secao}`);
   assert.match(tela, /id="tracking-metrics"/);
   assert.match(tela, /id="tracking-events"/);
   assert.match(tela, /id="tracking-journey"/);

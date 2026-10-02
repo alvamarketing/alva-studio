@@ -141,7 +141,7 @@ test('escolha da Meta por projeto (Postgres, migração 035)', async (t) => {
     await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '555' }, tokenSource: 'connection' });
     await assert.rejects(
       () => tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '999999' } }),
-      (erro) => erro.status === 400 && /cartão .Conta da Meta./.test(erro.message) && /informe também o token/.test(erro.message),
+      (erro) => erro.status === 400 && /"Neste projeto", no bloco da Meta/.test(erro.message) && /informe também o token/.test(erro.message),
     );
     assert.deepEqual((await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta, { pixel_id: '555', token_source: 'connection' });
     // Reenviar o mesmo pixel (ou só o código de teste) não muda nada e é aceito.

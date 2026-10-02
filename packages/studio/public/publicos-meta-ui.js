@@ -1,7 +1,8 @@
 // O cartão "Públicos automáticos na Meta", na aba Rastreamento das configurações do projeto.
 // Contrato visual: wireframe "Empresa e equipe" — cartão `.surface` com `.surface-head`, como
-// os outros cartões de configuração. Sem cor, raio ou sombra próprios: as classes vêm de
-// styles.css e owner.css.
+// os outros cartões de configuração; o quadrado do ícone segue a "Opção visual" da
+// "Biblioteca visual" e o interruptor, o `.toggle` de "Campos". Sem cor, raio ou sombra
+// próprios: as classes vêm de styles.css e owner.css.
 //
 // Cada público é um interruptor que age na hora: ligar cria o público na Meta, desligar só
 // esquece o registro (o público continua na conta de anúncios; apagar lá é decisão do dono).
@@ -24,27 +25,57 @@ function elemento(doc, tag, classe, texto) {
 export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, removerCredenciais, sincronizar, esquecer }) {
   const cartao = elemento(doc, 'section', 'surface publicos-meta');
   cartao.id = 'publicos-meta';
+  // Cartão enxuto (02/10/2026, pedido do dono): quadrado com ícone, título, um resumo
+  // ("1 de 6 públicos ligados") e "Gerenciar públicos", que abre a lista.
   const cabecalho = elemento(doc, 'div', 'surface-head');
-  const titulos = elemento(doc, 'div');
-  titulos.append(
-    elemento(doc, 'h2', '', 'Públicos automáticos na Meta'),
-    elemento(doc, 'p', 'helper', 'O Studio cria, na sua conta de anúncios, públicos de remarketing a partir do que as suas páginas e VSLs já medem. Ligue os que quiser usar. Para quem já virou lead não ver mais o anúncio, escolha "Virou lead" em "Excluir" no conjunto de anúncios.'),
-  );
+  const titulos = elemento(doc, 'div', 'publicos-meta-titulo');
+  const icone = elemento(doc, 'span', 'publicos-meta-icone material-symbols-outlined', 'group');
+  icone.setAttribute('aria-hidden', 'true');
+  const textos = elemento(doc, 'div');
+  const resumo = elemento(doc, 'p', 'helper publicos-meta-resumo', '');
+  textos.append(elemento(doc, 'h2', '', 'Públicos automáticos na Meta'), resumo);
+  titulos.append(icone, textos);
   // O guia (pop-up) explica o que cada público faz, o que a Meta exige e o passo a passo.
-  // Fica no canto do cabeçalho, junto das ações do cartão, e não solto no meio do texto.
-  const guia = elemento(doc, 'button', 'ajuda-botao');
+  // No canto do cabeçalho, só o ícone: o nome vai no rótulo acessível e na dica.
+  const guia = elemento(doc, 'button', 'ajuda-botao ajuda-icone');
   guia.type = 'button';
   guia.dataset.guia = 'publicos-meta';
+  guia.setAttribute('aria-label', 'Saiba como configurar o público da Meta');
+  guia.title = 'Saiba como configurar o público da Meta';
   const iconeDeAjuda = elemento(doc, 'span', 'material-symbols-outlined', 'help');
   iconeDeAjuda.setAttribute('aria-hidden', 'true');
-  guia.append(iconeDeAjuda, elemento(doc, 'span', '', 'Saiba como configurar o público da Meta'));
-  cabecalho.append(titulos, guia);
+  guia.append(iconeDeAjuda);
+  const alternar = elemento(doc, 'button', 'publicos-meta-alternar', 'Gerenciar públicos');
+  alternar.type = 'button';
+  alternar.setAttribute('aria-expanded', 'false');
+  alternar.setAttribute('aria-controls', 'publicos-meta-corpo');
+  alternar.onclick = () => cartao.alternar();
+  const acoesDoTopo = elemento(doc, 'div', 'publicos-meta-acoes');
+  acoesDoTopo.append(guia, alternar);
+  cabecalho.append(titulos, acoesDoTopo);
   const aviso = elemento(doc, 'p', 'help');
   aviso.setAttribute('role', 'status');
   const erro = elemento(doc, 'p', 'form-error');
   erro.setAttribute('role', 'alert');
   const corpo = elemento(doc, 'div', 'publicos-meta-corpo');
+  corpo.id = 'publicos-meta-corpo';
   cartao.append(cabecalho, corpo, aviso, erro);
+
+  // Aberto ou recolhido: quem escolhe é a pessoa; até ela escolher, vale aberturaPadrao().
+  let escolhaDaPessoa = null;
+  function abrirOuFechar(aberto) {
+    corpo.hidden = !aberto;
+    alternar.setAttribute('aria-expanded', String(aberto));
+  }
+  // Outro projeto: a escolha do anterior não vale, volta a abertura padrão.
+  cartao.esquecerEscolha = () => { escolhaDaPessoa = null; };
+  cartao.alternar = (aberto = corpo.hidden) => {
+    escolhaDaPessoa = aberto;
+    abrirOuFechar(aberto);
+    return aberto;
+  };
+  abrirOuFechar(false);
+  alternar.hidden = true;
 
   let ocupado = false;
 
@@ -92,16 +123,19 @@ export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, remover
   function linhaDoPublico(item, pode) {
     const linha = elemento(doc, 'div', 'publico-meta member-item');
     linha.dataset.chave = item.chave;
-    const texto = elemento(doc, 'div');
-    const nome = elemento(doc, 'strong', '', item.nome);
-    texto.append(nome, elemento(doc, 'span', '', item.descricao));
-    const detalhe = [`Janela de ${item.retencaoDias} dias`];
-    if (item.uso === 'exclusao') detalhe.push('Use em "Excluir" nos conjuntos de anúncio');
-    if (item.estado === 'criado' && item.metaId) detalhe.push(`ID na Meta ${item.metaId}`);
-    texto.append(elemento(doc, 'small', 'publico-meta-detalhe', detalhe.join(' · ')));
+    const texto = elemento(doc, 'div', 'publico-meta-texto');
+    const nome = elemento(doc, 'div', 'publico-meta-nome');
+    const janela = [`${item.retencaoDias} dias`];
+    if (item.uso === 'exclusao') janela.push('use em "Excluir" nos conjuntos de anúncio');
+    nome.append(elemento(doc, 'strong', '', item.nome), elemento(doc, 'small', 'publico-meta-detalhe', janela.join(' · ')));
+    // A descrição numa segunda linha curta; inteira na dica, se não couber.
+    const descricao = elemento(doc, 'small', 'publico-meta-descricao', item.descricao);
+    descricao.title = item.descricao;
+    texto.append(nome, descricao);
     if (item.estado === 'erro' && item.erro) texto.append(elemento(doc, 'p', 'form-error', item.erro));
     const [rotulo, classe] = ESTADOS[item.estado] ?? ESTADOS.nao_criado;
     const estado = elemento(doc, 'span', `publico-meta-estado ${classe}`, rotulo);
+    if (item.estado === 'criado' && item.metaId) estado.title = `ID na Meta ${item.metaId}`;
     const chave = doc.createElement('input');
     chave.type = 'checkbox';
     chave.setAttribute('role', 'switch');
@@ -115,15 +149,36 @@ export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, remover
     return linha;
   }
 
+  // Recolhido por padrão só quando já há público criado e nada pede atenção (falta, erro).
+  // Sem nenhum criado, a lista é o que a pessoa veio ver; com falta ou erro, ela precisa agir.
+  function aberturaPadrao(estado) {
+    const criados = estado.publicos.filter((item) => item.estado === 'criado').length;
+    return criados === 0 || estado.faltando.length > 0 || estado.publicos.some((item) => item.estado === 'erro');
+  }
+
+  function textoDoResumo(estado) {
+    const total = estado.publicos.length;
+    const criados = estado.publicos.filter((item) => item.estado === 'criado').length;
+    const partes = [`${criados} de ${total} ${total === 1 ? 'público ligado' : 'públicos ligados'}`];
+    const comErro = estado.publicos.filter((item) => item.estado === 'erro').length;
+    if (comErro) partes.push(`${comErro} com erro`);
+    if (estado.faltando.length) partes.push(`falta: ${estado.faltando.map((item) => item.titulo).join(', ')}`);
+    return partes.join(' · ');
+  }
+
   function desenhar(estado) {
     const pode = estado.credenciais.configuradas && Boolean(estado.pixelId);
-    const novo = [];
+    const novo = [elemento(doc, 'p', 'help publicos-meta-explicacao', 'O Studio cria, na sua conta de anúncios, públicos de remarketing a partir do que as suas páginas e VSLs já medem. Ligue os que quiser usar.')];
     if (estado.faltando.length) novo.push(faltas(estado));
-    novo.push(formularioDeCredenciais(estado));
+    // A credencial colada à mão só aparece quando é ela que vale: vinda da conexão, é ruído.
+    if (estado.credenciais.origem !== 'connection') novo.push(formularioDeCredenciais(estado));
     const lista = elemento(doc, 'div', 'member-list publicos-meta-lista');
     for (const item of estado.publicos) lista.append(linhaDoPublico(item, pode));
     novo.push(lista);
     corpo.replaceChildren(...novo);
+    resumo.textContent = textoDoResumo(estado);
+    alternar.hidden = false;
+    abrirOuFechar(escolhaDaPessoa ?? aberturaPadrao(estado));
   }
 
   cartao.recarregar = async () => {
@@ -134,6 +189,9 @@ export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, remover
       // Não conseguir ler é diferente de não haver nada: desenhar todos como "desligado"
       // diria ao dono que os públicos sumiram.
       corpo.replaceChildren(elemento(doc, 'p', 'help', `Não foi possível ler os públicos deste projeto: ${falha?.message || 'erro desconhecido'}`));
+      resumo.textContent = '';
+      alternar.hidden = true;
+      abrirOuFechar(true);
     }
   };
 
@@ -181,6 +239,7 @@ export function cartaoDePublicosMeta(doc, { carregar, salvarCredenciais, remover
 // rotas exigem essa permissão.
 export function criarPublicosMetaUI({ api, getShell, doc = document }) {
   let cartao = null;
+  let projetoDoCartao = null;
   const projeto = () => getShell().state().currentProject?.id;
   const base = () => `/projects/${projeto()}/meta-audiences`;
   return {
@@ -198,6 +257,7 @@ export function criarPublicosMetaUI({ api, getShell, doc = document }) {
         });
       }
       if (!painel.contains(cartao)) painel.append(cartao);
+      if (projetoDoCartao !== projeto()) { cartao.esquecerEscolha(); projetoDoCartao = projeto(); }
       await cartao.recarregar();
     },
   };

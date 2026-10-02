@@ -5,3 +5,8 @@ terceiro. Os avisos das demais dependências permanecem nos arquivos distribuíd
 
 MATERIAL SYMBOLS OUTLINED
 O aviso e a licença Apache-2.0 permanecem em public/material-symbols-outlined.LICENSE.
+
+LOGOS DAS PLATAFORMAS DE ANÚNCIO
+Os desenhos e as cores dos logos da Meta, do Facebook, do TikTok e do Google Ads (public/marcas.js)
+vêm do pacote simple-icons, sob CC0-1.0. As marcas pertencem às respectivas empresas e aparecem
+só para identificar a integração.

@@ -134,7 +134,7 @@ export function createProjectApi({
     // A sessão já diz se o envio de vídeo (VSL) está ligado: o menu precisa saber disso em
     // qualquer tela, não só depois que a Visão geral carrega.
     // `metaConexao` só existe quando META_APP_ID e META_APP_SECRET estão no ambiente: sem
-    // eles a tela nem mostra o cartão "Conta da Meta".
+    // eles a tela nem mostra o bloco da conexão com a Meta.
     if (method === 'GET' && path === '/api/session') return json({ ...(await sessionService.state(req)), runtime: { media: runtimeFlags?.mediaPipeline === true, metaConexao: Boolean(metaConexao) } });
     if (method === 'POST' && path === '/api/setup') {
       limit?.(ipDoVisitante(req));

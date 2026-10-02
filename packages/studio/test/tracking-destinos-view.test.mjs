@@ -137,7 +137,10 @@ const markup = await readFile(new URL('../public/index.html', import.meta.url), 
 const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
 
-test('a tela fala com as três rotas de destino, e o segredo só sobe — nunca é pedido de volta', () => {
+test('a tela fala com as três rotas de destino, e o segredo só sobe — nunca é pedido de volta', async () => {
+  const modulo = await readFile(new URL('../public/plataformas-ui.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(modulo, /entrada\.value = .*(access_token|oauth_access_token|secret)/);
+  assert.match(app, /pintarPlataformas\(\$\('#tracking-destinations'\)/);
   assert.match(app, /tracking\/destinations\?environment=/);
   assert.match(app, /tracking\/destinations\/\$\{destino\.provider\}`, 'PUT'/);
   assert.match(app, /tracking\/destinations\/\$\{provider\}`, 'DELETE'/);
@@ -146,8 +149,9 @@ test('a tela fala com as três rotas de destino, e o segredo só sobe — nunca 
   assert.doesNotMatch(app, /entrada\.value = .*(access_token|oauth_access_token|secret)/);
 });
 
-test('o bloco de destinos explica que prévia e produção têm credenciais separadas', () => {
-  assert.match(markup, /id="tracking-destinations-title">Destinos<\/h2>/);
+test('o cartão "Plataformas" explica que prévia e produção têm credenciais separadas', () => {
+  assert.match(markup, /id="tracking-destinations-title">Plataformas<\/h2>/);
+  assert.match(markup, /id="tracking-destinations" class="plataformas-grade"/);
   assert.match(markup, /Prévia e produção guardam credenciais separadas/);
 });
 
