@@ -53,7 +53,7 @@ test('debug_token: erro não leva token nem segredo', async () => {
   });
 });
 
-function servico({ expiraNaTroca, inspecao }) {
+function servico({ expiraNaTroca, inspecao, expiraNoCodigo = null }) {
   const salvos = [];
   const inspecoes = [];
   const repository = {
@@ -63,7 +63,7 @@ function servico({ expiraNaTroca, inspecao }) {
   };
   const cliente = {
     urlDeAutorizacao: ({ state }) => `https://www.facebook.com/x?state=${encodeURIComponent(state)}`,
-    trocarCodigo: async () => ({ token: 'curto', expiraEm: null }),
+    trocarCodigo: async () => ({ token: 'curto', expiraEm: expiraNoCodigo }),
     estenderToken: async () => ({ token: TOKEN, expiraEm: expiraNaTroca }),
     quemSou: async () => ({ id: '10203040', nome: 'Pessoa', clientBusinessId: null }),
     permissoes: async () => ({ concedidas: [], recusadas: [] }),
@@ -94,4 +94,16 @@ test('com expires_in, debug_token não é chamado; falha do debug_token não imp
   const resultado = await conectar(falhou);
   assert.equal(resultado.estado, 'conectado');
   assert.equal(falhou.salvos[0].expiraEm, null);
+});
+
+// Conferência F2 (N1): o `expires_in` da troca do código é o do token CURTO (≈1–2 h). Usá-lo como
+// plano B gravava um prazo falso e, duas horas depois, a CAPI parava em todos os projetos.
+test('o prazo do token curto nunca vale como prazo do token longo', async () => {
+  const duasHoras = new Date(AGORA + 2 * 3_600_000);
+  const comDebug = servico({ expiraNaTroca: null, expiraNoCodigo: duasHoras, inspecao: { expiraEm: new Date(AGORA + 55 * 86_400_000) } });
+  await conectar(comDebug);
+  assert.equal(comDebug.salvos[0].expiraEm.getTime(), AGORA + 55 * 86_400_000);
+  const semDebug = servico({ expiraNaTroca: null, expiraNoCodigo: duasHoras, inspecao: new Error('fora do ar') });
+  await conectar(semDebug);
+  assert.equal(semDebug.salvos[0].expiraEm, null, 'sem prazo do token longo, melhor sem prazo do que um prazo falso');
 });

@@ -83,7 +83,8 @@ export function criarServicoDeConexaoMeta({ repository, cliente, configuracao, c
       const final = configuracao.tipoDeToken === 'user' ? await cliente.estenderToken(trocado.token) : trocado;
       // Sem `expires_in` na troca, o prazo vem do debug_token. Falhar aqui não impede
       // conectar: o cartão só não mostra o prazo.
-      let expiraEm = final.expiraEm ?? trocado.expiraEm ?? null;
+      // Nunca `trocado.expiraEm`: é o prazo do token curto (≈2 h), e gravá-lo derrubaria a CAPI.
+      let expiraEm = final.expiraEm ?? null;
       if (!expiraEm && configuracao.tipoDeToken === 'user' && cliente.inspecionarToken) {
         expiraEm = await cliente.inspecionarToken(final.token).then((inspecao) => inspecao.expiraEm).catch(() => null);
       }
