@@ -59,7 +59,7 @@ export function erroDaMeta(corpo, token, { pelaConexao = false } = {}) {
   const detalhe = limpar(erro.error_user_msg || erro.message, token);
   if (code === 190 || code === 102) {
     const mensagem = pelaConexao
-      ? 'A Meta não aceita mais a conta conectada. Clique em "Reconectar" no bloco da Meta, em "Plataformas", e tente de novo.'
+      ? 'A Meta não aceita mais a conta conectada. Reconecte a conta da Meta: clique em "Reconectar" no bloco da Meta, em "Plataformas", e tente de novo.'
       : 'A Meta recusou o token (inválido ou expirado). Gere outro token e salve de novo.';
     return new MetaApiError(mensagem, { code, subcode, fatal: true, status: 502 });
   }
