@@ -3,7 +3,7 @@ import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { correspondenciaModel, configuracaoParaSalvar, estadoDaEntrega, passosDaJornada, destinosDeConversaoModel, nomeDoDestino, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { correspondenciaModel, configuracaoParaSalvar, estadoDaEntrega, passosDaJornada, destinosDeConversaoModel, nomeDoDestino, rotuloDoSegredo, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
@@ -1869,7 +1869,7 @@ function formularioDeDestino(destino) {
     manual.type = 'button';
     manual.className = 'button ghost';
     manual.textContent = 'Prefiro preencher manualmente';
-    manual.onclick = () => form.replaceWith(formularioDeDestino({ ...destino, pelaConexao: false, publicValue: '', fields: destino.camposManuais }));
+    manual.onclick = () => form.replaceWith(formularioDeDestino({ ...destino, pelaConexao: false, semTokenGuardado: true, publicValue: '', fields: destino.camposManuais }));
     form.append(aviso, manual);
   }
 
@@ -1893,7 +1893,9 @@ function formularioDeDestino(destino) {
     entrada.autocomplete = 'off';
     if (campo.secret) {
       entrada.type = 'password';
-      entrada.placeholder = destino.configured ? 'Guardado — deixe em branco para manter' : '';
+      const { placeholder, exigido } = rotuloDoSegredo(destino);
+      entrada.placeholder = placeholder;
+      entrada.required = exigido;
     } else {
       entrada.type = 'text';
       if (campo.public && destino.publicValue) entrada.value = destino.publicValue;

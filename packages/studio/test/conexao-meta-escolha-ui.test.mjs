@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { cartaoDaContaMeta, criarConexaoMetaUI, textoDoVencimento } from '../public/conexao-meta-ui.js';
-import { destinosDeConversaoModel } from '../public/studio-dashboard.js';
+import { destinosDeConversaoModel, rotuloDoSegredo } from '../public/studio-dashboard.js';
 
 // F2 na tela: perfil e Páginas, seletores conta → pixel, escolha automática quando só há
 // uma opção, "configurado pela conexão", vencimento e termos.
@@ -198,4 +198,21 @@ test('fidelidade: o módulo e o CSS novo só usam tokens, sem style em linha', a
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   assert.match(app, /confirmarSubstituicao: \(\) => confirmarAcao\(/);
   assert.match(app, /Prefiro preencher manualmente/);
+});
+
+test('modo manual vindo da conexão: o token não diz "Guardado" e é exigido', () => {
+  const pelaConexao = destinosDeConversaoModel([{ provider: 'meta', configured: true, publicConfiguration: { pixel_id: '555', token_source: 'connection' } }], [], true).find((item) => item.provider === 'meta');
+  const manual = { ...pelaConexao, pelaConexao: false, semTokenGuardado: true, fields: pelaConexao.camposManuais };
+  assert.deepEqual(rotuloDoSegredo(manual), { placeholder: 'Configurado pela conexão — informe o token para preencher à mão', exigido: true });
+  const colado = destinosDeConversaoModel([{ provider: 'meta', configured: true, publicConfiguration: { pixel_id: '1' } }], [], true).find((item) => item.provider === 'meta');
+  assert.deepEqual(rotuloDoSegredo(colado), { placeholder: 'Guardado — deixe em branco para manter', exigido: false });
+  const novo = destinosDeConversaoModel([], [], true).find((item) => item.provider === 'meta');
+  assert.deepEqual(rotuloDoSegredo(novo), { placeholder: '', exigido: false });
+});
+
+test('app.js usa o rótulo do segredo do modelo e abre o manual sem token guardado', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /rotuloDoSegredo\(destino\)/);
+  assert.match(app, /semTokenGuardado: true/);
+  assert.doesNotMatch(app, /entrada\.placeholder = destino\.configured \? 'Guardado/);
 });

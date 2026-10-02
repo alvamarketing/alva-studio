@@ -433,6 +433,13 @@ export function configuracaoParaSalvar(destino, valores = {}) {
   return configuration;
 }
 
+// O que o campo de token diz. Destino vindo da conexão não tem token guardado: no modo
+// manual o campo não pode prometer "Guardado" e passa a ser exigido.
+export function rotuloDoSegredo(destino) {
+  if (destino?.semTokenGuardado) return { placeholder: 'Configurado pela conexão — informe o token para preencher à mão', exigido: true };
+  return { placeholder: destino?.configured ? 'Guardado — deixe em branco para manter' : '', exigido: false };
+}
+
 export function nomeDoDestino(chave) {
   return NOME_DO_DESTINO[chave]?.[0] ?? String(chave ?? '');
 }

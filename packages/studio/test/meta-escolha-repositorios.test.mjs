@@ -7,6 +7,7 @@ import { MetaAudiencesRepository } from '../server/repositories/meta-audiences-r
 import { TrackingRepository } from '../server/repositories/tracking-repository.mjs';
 import { SecretVault } from '../server/repositories/publication-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
+import { createProjectApi } from '../server/project-api.mjs';
 
 // F2 no Postgres de verdade (descartável): migração 035, a escolha por projeto, o destino da
 // Meta com `token_source` e a credencial dos públicos pela conexão.
@@ -129,5 +130,38 @@ test('escolha da Meta por projeto (Postgres, migração 035)', async (t) => {
     const publico = (await tracking.destinationsFor({ ...escopo, environment: 'production' })).find((item) => item.provider === 'meta');
     assert.equal(publico.publicConfiguration.token_source, undefined);
     await assert.rejects(() => tracking.saveDestination({ ...escopo, environment: 'production', provider: 'tiktok', configuration: { pixel_code: 'x' }, tokenSource: 'connection' }), (erro) => erro.status === 400);
+  });
+
+  // Conferência de 02/10/2026 (bloqueante): com a origem na conexão, trocar só o pixel pela
+  // rota manual mantinha token_source 'connection' com um pixel que a Meta nunca validou.
+  await t.test('origem connection: trocar o pixel sem token novo é recusado; com token vira manual', async () => {
+    const escopo = await empresa();
+    await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '555' }, tokenSource: 'connection' });
+    await assert.rejects(
+      () => tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '999999' } }),
+      (erro) => erro.status === 400 && /cartão .Conta da Meta./.test(erro.message) && /informe também o token/.test(erro.message),
+    );
+    assert.deepEqual((await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta, { pixel_id: '555', token_source: 'connection' });
+    // Reenviar o mesmo pixel (ou só o código de teste) não muda nada e é aceito.
+    await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '555', test_event_code: 'T1' } });
+    assert.equal((await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta.token_source, 'connection');
+    await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '999999', access_token: 'colado' } });
+    const manual = (await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta;
+    assert.equal(manual.token_source, undefined);
+    assert.equal(manual.pixel_id, '999999');
+  });
+
+  await t.test('a rota PUT de destinos também recusa trocar o pixel da conexão sem token', async () => {
+    const escopo = await empresa();
+    await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '555' }, tokenSource: 'connection' });
+    const context = { sessionId: 's', companyId: escopo.companyId, user: { id: escopo.userId }, role: 'owner' };
+    const sessionService = { require: async () => context, state: async () => ({}), authorize: async () => {} };
+    const api = createProjectApi({ sessionService, tracking, body: async (req) => req.bodyValue, runtimeFlags: {} });
+    const path = `/api/projects/${escopo.projectId}/tracking/destinations/meta`;
+    const chamar = (bodyValue) => api({ req: { bodyValue, url: path, headers: {} }, res: {}, path, method: 'PUT', json: () => {} });
+    await assert.rejects(() => chamar({ environment: 'production', configuration: { pixel_id: '999999' } }), (erro) => erro.status === 400);
+    // E a rota não deixa o corpo escolher a origem.
+    await assert.rejects(() => chamar({ environment: 'production', configuration: { pixel_id: '999999', token_source: 'connection' } }), (erro) => erro.status === 400);
+    assert.equal((await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta.pixel_id, '555');
   });
 });

@@ -233,6 +233,12 @@ export class TrackingRepository {
       const configuracaoEfetiva = { ...configuracaoAtual, ...configuration };
       if (configuracaoEfetiva.test_event_code === '') delete configuracaoEfetiva.test_event_code;
       if (provider === 'meta') {
+        // Pixel escolhido pela conexão só muda pela conexão (que confere a lista da Meta) ou
+        // virando manual, com um token colado junto. Sem isso, um pixel nunca validado
+        // seguiria com o token da empresa.
+        const trocaPixelDaConexao = configuracaoAtual.token_source === 'connection' && tokenSource !== 'connection'
+          && !configuration.access_token && configuration.pixel_id !== undefined && configuration.pixel_id !== configuracaoAtual.pixel_id;
+        if (trocaPixelDaConexao) throw fail('Este pixel foi escolhido pela conexão com o Facebook. Para trocar o pixel pela conexão, escolha no cartão "Conta da Meta"; para digitar manualmente, informe também o token de acesso.');
         if (tokenSource === 'connection') {
           configuracaoEfetiva.token_source = 'connection';
           delete configuracaoEfetiva.access_token;
