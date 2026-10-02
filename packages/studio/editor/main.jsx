@@ -91,6 +91,7 @@ function DestinoDosLeads({ pagina, aoSalvarWebhook }) {
           <label>Opcionalmente, envie uma cópia em JSON para seu CRM ou automação
             <input type="url" placeholder="https://" value={valor} onChange={(evento) => setValor(evento.target.value)} />
           </label>
+          <small>O destino desta página passa a valer na próxima publicação.</small>
           {usaODoProjeto ? <p role="note">Esta página usa o destino do projeto ({pagina.projectWebhookHost}). Preencha o campo só se quiser outro para ela.</p> : null}
           <button type="submit" className="alva-acao alva-acao-principal">Salvar destino</button>
           {estado ? <small role="status">{estado}</small> : null}

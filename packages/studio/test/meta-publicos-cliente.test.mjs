@@ -126,3 +126,13 @@ test('o catálogo inteiro vira regras que cabem nos limites da Meta (até 10 reg
     assert.ok(regra.inclusions.rules.length <= 10);
   }
 });
+
+test('recusa de dados diz em português o que costuma faltar: aceitar os Termos de Públicos Personalizados', async () => {
+  // A documentação da Meta não lista um código próprio para "termos não aceitos": o erro chega
+  // como recusa genérica. Em vez de adivinhar um código, a mensagem aponta a causa mais comum.
+  const falso = respostas({ status: 400, corpo: { error: { code: 100, message: 'Invalid parameter' } } });
+  await assert.rejects(
+    () => cliente(falso).criar({ nome: 'Alva · X', regra: regraDoPublico(publicoPorChave('vsl_50'), PIXEL) }),
+    (erro) => /Termos de Públicos Personalizados/.test(erro.message) && /Gerenciador de Anúncios/.test(erro.message) && !erro.fatal,
+  );
+});

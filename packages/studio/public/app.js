@@ -8,7 +8,7 @@ import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
 import { confirmarAcao } from './confirm-dialog.js';
-import { abaDoAssunto, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto } from './projeto-configuracoes.js';
+import { abaDoAssunto, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto, ocultarAbaDeLeads } from './projeto-configuracoes.js';
 import { criarPublicosMetaUI } from './publicos-meta-ui.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { renderFunis } from './funis-view.js';
@@ -2251,7 +2251,7 @@ async function abrirConfiguracoesDoProjeto({ assunto = '' } = {}) {
   await Promise.all([
     renderProject().catch(() => {}),
     recarregarDestinos().catch(() => {}),
-    carregarLeadsDoProjeto(document, projeto.id),
+    studioShell.can('integration.manage') ? carregarLeadsDoProjeto(document, projeto.id) : ocultarAbaDeLeads(document),
     publicosMetaUI.abrir().catch(() => {}),
   ]);
 }

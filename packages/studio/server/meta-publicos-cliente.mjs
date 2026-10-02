@@ -58,7 +58,9 @@ function erroDaMeta(corpo, token) {
   if (code === 200) return new MetaApiError('O token não tem permissão para criar públicos nesta conta de anúncios. Ele precisa da permissão ads_management e de acesso à conta.', { code, subcode, fatal: true, status: 502 });
   if (code !== null && LIMITE_DE_CHAMADAS.has(code)) return new MetaApiError('A Meta recebeu muitas chamadas desta conta. Espere alguns minutos e tente de novo.', { code, subcode, status: 429 });
   if (subcode !== null && BLOQUEIO_DE_INTEGRIDADE.has(subcode)) return new MetaApiError('A Meta bloqueou este público por política de integridade. Revise o público no Gerenciador de Anúncios.', { code, subcode, status: 502 });
-  if (code === 100) return new MetaApiError(`A Meta recusou os dados do público${detalhe ? `: ${detalhe}` : '.'}`, { code, subcode, status: 502 });
+  // A documentação da Meta não lista um código para "termos não aceitos": chega como recusa
+  // genérica. Em vez de adivinhar um código, a mensagem aponta a causa mais comum.
+  if (code === 100) return new MetaApiError(`A Meta recusou os dados do público${detalhe ? ` (${detalhe})` : ''}. Se esta é a primeira vez nesta conta de anúncios, aceite os Termos de Públicos Personalizados no Gerenciador de Anúncios e tente de novo.`, { code, subcode, status: 502 });
   return new MetaApiError(`A Meta devolveu um erro${code !== null ? ` (código ${code})` : ''}${detalhe ? `: ${detalhe}` : '.'}`, { code, subcode, status: 502 });
 }
 
@@ -108,6 +110,8 @@ export function criarClienteDePublicos({ fetch: buscar = globalThis.fetch, token
 
     // Lista os públicos da conta (id, nome e a regra, de onde sai o pixel) para não criar o
     // mesmo público duas vezes. A leitura usa o token na query, como o exemplo da página.
+    // Um cabeçalho `Authorization: Bearer` seria melhor, mas não achei isso nas páginas oficiais
+    // da Meta (conferido em 02/10/2026) e a regra do projeto é não adivinhar integração.
     // https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/guides/website-custom-audiences
     async listar() {
       const achados = [];

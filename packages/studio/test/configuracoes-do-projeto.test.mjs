@@ -114,3 +114,23 @@ test('o cartão de configuração tem medida de leitura, não a largura da tela'
   const painel = css.slice(css.indexOf('.project-settings-panel {'));
   assert.match(painel.slice(0, painel.indexOf('}')), /max-width/);
 });
+
+import { ocultarAbaDeLeads } from '../public/projeto-configuracoes.js';
+
+test('quem não pode mexer em integrações não vê a aba Leads, em vez de levar o erro só ao salvar', () => {
+  const { window } = new JSDOM(`<body><section id="project-settings-view" hidden></section></body>`);
+  const doc = window.document;
+  montarConfiguracoesDoProjeto(doc, { api: async () => ({}), toast: () => {} });
+  assert.ok(doc.querySelector('#project-settings-tab-leads'), 'a aba existe para quem pode');
+  ocultarAbaDeLeads(doc);
+  assert.equal(doc.querySelector('#project-settings-tab-leads').hidden, true);
+  assert.equal(doc.querySelector('#project-settings-panel-leads').hidden, true);
+  // Se a aba escondida estava aberta, a tela volta para a primeira, não fica vazia.
+  assert.equal(doc.querySelector('#project-settings-view').dataset.abaAtual === 'leads', false);
+  window.close();
+});
+
+test('o editor avisa que o destino da página só vale na próxima publicação', async () => {
+  const fonte = await readFile(new URL('../editor/main.jsx', import.meta.url), 'utf8');
+  assert.match(fonte, /passa a valer na próxima publicação/);
+});

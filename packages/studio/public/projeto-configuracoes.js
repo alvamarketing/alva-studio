@@ -122,10 +122,23 @@ export async function carregarLeadsDoProjeto(doc, projectId) {
   await doc.querySelector('#project-leads-card')?.carregar?.(projectId);
 }
 
+// O destino dos leads é uma integração: sem `integration.manage` a aba só levaria um erro ao
+// salvar. Quem não pode não a vê (Publicação e Rastreamento já ficam fora do alcance dessa
+// pessoa pelo menu).
+export function ocultarAbaDeLeads(doc = document) {
+  const botao = doc.querySelector('#project-settings-tab-leads');
+  const painelDeLeads = doc.querySelector('#project-settings-panel-leads');
+  if (botao) botao.hidden = true;
+  if (painelDeLeads) painelDeLeads.hidden = true;
+  const tela = doc.querySelector('#project-settings-view');
+  if (tela?.dataset.abaAtual === 'leads') abrirAbaDoProjeto('geral', doc);
+}
+
 export function abrirAbaDoProjeto(aba, doc = document) {
   const tela = doc.querySelector('#project-settings-view');
   if (!tela) return 'geral';
-  const escolhida = ABAS_DO_PROJETO.some(([chave]) => chave === aba) ? aba : 'geral';
+  const escondida = doc.querySelector(`#project-settings-tab-${aba}`)?.hidden === true;
+  const escolhida = ABAS_DO_PROJETO.some(([chave]) => chave === aba) && !escondida ? aba : 'geral';
   tela.dataset.abaAtual = escolhida;
   for (const [chave] of ABAS_DO_PROJETO) {
     const botao = doc.querySelector(`#project-settings-tab-${chave}`);
