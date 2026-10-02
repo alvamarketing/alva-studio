@@ -187,6 +187,8 @@ test('Destinos → Meta pela conexão: "Configurado pela conexão", sem campos d
   const meta = destinosDeConversaoModel(destinos, [], true).find((item) => item.provider === 'meta');
   assert.equal(meta.stateLabel, 'Configurado pela conexão');
   assert.equal(meta.pelaConexao, true);
+  // Entregando pela conexão diz "Enviando", como o manual (conferência A1).
+  assert.equal(destinosDeConversaoModel(destinos, [{ destination: 'meta' }], true).find((item) => item.provider === 'meta').stateLabel, 'Enviando');
   assert.deepEqual(meta.fields.map((campo) => campo.name), ['test_event_code']);
   assert.deepEqual(meta.camposManuais.map((campo) => campo.name), ['pixel_id', 'access_token', 'test_event_code']);
   const reconectar = destinosDeConversaoModel([{ ...destinos[0], conexao: { precisaReconectar: true } }], [], true).find((item) => item.provider === 'meta');
@@ -320,4 +322,33 @@ test('a escolha salva aparece assim que chega; a lista de contas carrega depois'
   await andamento;
   assert.ok(cartao.querySelector('.escolha[data-nome="adAccountId"]'), 'com a lista pronta, a caixa de escolha aparece');
   assert.doesNotMatch(cartao.textContent, /Carregando as outras contas/);
+});
+
+// Conferência A1 (02/10/2026): conectada, o bloco da Meta só mostrava "Conectado" e o estado
+// do destino sumia — "Modo de teste", "Enviando" e "Precisa reconectar" têm de aparecer,
+// como a linha antiga de "Destinos" mostrava. Cada um vem do modelo (destinosDeConversaoModel).
+test('conectada: o estado do destino "Meta" aparece como chip no cabeçalho do bloco', async () => {
+  const chipsDoTopo = (cartao) => [...cartao.querySelectorAll('.plataforma-acoes .role-chip')];
+  const casos = [
+    [{ pixel_id: '555', token_source: 'connection', test_event_code: 'TEST1' }, {}, [], 'Modo de teste', 'alerta'],
+    [{ pixel_id: '555', token_source: 'connection' }, {}, [{ destination: 'meta' }], 'Enviando', 'positivo'],
+    [{ pixel_id: '555', token_source: 'connection' }, { precisaReconectar: true }, [], 'Precisa reconectar', 'negativo'],
+    [{ pixel_id: '1', test_event_code: 'TEST2' }, null, [], 'Modo de teste', 'alerta'],
+  ];
+  for (const [publicConfiguration, conexao, entregas, rotulo, tom] of casos) {
+    const { cartao } = montar();
+    await cartao.recarregar();
+    const [meta] = destinosDeConversaoModel([{ provider: 'meta', configured: true, publicConfiguration, ...(conexao ? { conexao } : {}) }], entregas, true);
+    cartao.definirDestino(meta);
+    const estado = chipsDoTopo(cartao).find((item) => item.textContent === rotulo);
+    assert.ok(estado, `${rotulo}: chip no cabeçalho`);
+    assert.ok(estado.classList.contains(tom), `${rotulo}: tom ${tom}`);
+    assert.ok(chipsDoTopo(cartao).some((item) => item.textContent === 'Conectado'), 'a conexão continua dita');
+  }
+  // "Configurado pela conexão" sem entrega nem teste não repete o chip "Pixel e Conversions API ativos".
+  const { cartao } = montar();
+  await cartao.recarregar();
+  const [quieto] = destinosDeConversaoModel([{ provider: 'meta', configured: true, publicConfiguration: { pixel_id: '555', token_source: 'connection' } }], [], true);
+  cartao.definirDestino(quieto);
+  assert.deepEqual(chipsDoTopo(cartao).map((item) => item.textContent), ['Conectado']);
 });

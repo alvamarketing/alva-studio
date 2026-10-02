@@ -159,6 +159,17 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     return fileira;
   }
 
+  // O estado do destino "Meta" (o mesmo da grade): "Enviando", "Modo de teste", "Precisa
+  // reconectar", token perto de vencer. "Configurado" sem mais nada só aparece quando não há
+  // outro lugar que o diga (desconectada); conectada, o chip do projeto já diz.
+  function chipDoDestino({ tambemConfigurado = false } = {}) {
+    if (!destino?.configured) return null;
+    if (destino.precisaReconectar) return chip(destino.stateLabel, 'negativo');
+    if (destino.state === 'teste') return chip(destino.stateLabel, 'alerta');
+    if (destino.state === 'ok') return chip(destino.stateLabel, 'positivo');
+    return tambemConfigurado ? chip(destino.stateLabel) : null;
+  }
+
   // Sem os termos a Meta não deixa criar públicos: quando faltam, diz quem resolve.
   function explicacaoDosTermos() {
     const termos = doProjeto?.termos;
@@ -243,7 +254,8 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
       status.textContent = destino?.configured
         ? `${destino.description}${destino.publicValue ? ` · ${destino.publicValue}` : ''} · preenchido à mão`
         : AJUDA.desconectado;
-      if (destino?.configured) topo.push(chip(destino.stateLabel, destino.state === 'teste' ? 'alerta' : 'positivo'));
+      const doDestino = chipDoDestino({ tambemConfigurado: true });
+      if (doDestino) topo.push(doDestino);
       const conectar = botaoDoFacebook(doc, abrindo ? 'Abrindo o Facebook…' : 'Continuar com o Facebook', abrindo);
       conectar.onclick = () => cartao.aoConectar();
       topo.push(conectar);
@@ -256,6 +268,8 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     } else {
       status.textContent = linhaDaConexao(estado);
       topo.push(chip('Conectado'));
+      const doDestino = chipDoDestino();
+      if (doDestino) topo.push(doDestino);
       if (estado.vencimento?.venceEmBreve) novo.push(avisoDeVencimento(estado));
       if (projeto) novo.push(secaoDoProjeto());
       sair = botao(doc, 'Desconectar', { classe: 'ghost' });

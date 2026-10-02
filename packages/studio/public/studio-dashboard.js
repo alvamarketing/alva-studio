@@ -482,7 +482,7 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
       description,
       configured,
       state,
-      stateLabel: !configured ? 'Não configurado' : reconectar ? 'Precisa reconectar' : vencimento ?? (testCode ? 'Modo de teste' : pelaConexao ? 'Configurado pela conexão' : entregando.has(provider) ? 'Enviando' : 'Configurado'),
+      stateLabel: !configured ? 'Não configurado' : reconectar ? 'Precisa reconectar' : vencimento ?? (testCode ? 'Modo de teste' : entregando.has(provider) ? 'Enviando' : pelaConexao ? 'Configurado pela conexão' : 'Configurado'),
       pelaConexao,
       precisaReconectar: reconectar,
       camposManuais,
