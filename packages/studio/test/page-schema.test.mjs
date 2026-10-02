@@ -69,8 +69,9 @@ test('tipo desconhecido é recusado, não ignorado em silêncio', () => {
 });
 
 test('todo tipo declarado sabe se desenhar', () => {
+  // A imagem precisa de endereço para existir (sem ele, some: imagem-sem-endereco.test.mjs).
   for (const type of PAGE_NODE_TYPES) {
-    const html = renderNode({ type, props: {} });
+    const html = renderNode({ type, props: type === 'image' ? { src: 'https://cdn.exemplo/a.png' } : {} });
     assert.equal(typeof html, 'string', `${type} não devolveu HTML`);
     assert.ok(html.length > 0, `${type} devolveu vazio`);
   }

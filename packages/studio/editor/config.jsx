@@ -7,18 +7,34 @@
 //
 // As escolhas de interface seguem docs/specs/2026-09-27-ux-do-editor.md: seções prontas
 // primeiro, colunas por desenho, espaçamento em escala, ajuste fino recolhido.
-import { AVISO_DE_PRIVACIDADE, avisoDePrivacidade, classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
+import { useSyncExternalStore } from 'react';
+import { AVISO_DE_PRIVACIDADE, avisoDePrivacidade, classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, enderecoDaImagem, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
 import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
 import { secoesProntas } from '../public/secoes-prontas.js';
 import { campoDeCor, campoDeDestino, campoDeIcone, campoDeImagem, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
-import { SlidersHorizontal } from 'lucide-react';
+import { CircleAlert, ImagePlus, LoaderCircle, SlidersHorizontal } from 'lucide-react';
 import { ICONE_DO_CAMPO } from './icones.jsx';
+import { chaveDoEnvio, estadoDoEnvio, ouvirEnvios, rotuloDoEnvio } from './envios-de-imagem.js';
 
 const Miolo = ({ type, props }) => {
   let html;
   try { html = renderConteudo({ type, props }); } catch (erro) { html = `<p style="color:var(--alva-danger)">${erro.message}</p>`; }
   return <div style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: html }} />;
 };
+
+// O lugar da imagem que ainda não tem endereço (só no editor; folha em imagem-vazia.js).
+const ICONE_DO_ENVIO = { vazia: ImagePlus, enviando: LoaderCircle, erro: CircleAlert };
+function ImagemVazia({ chave }) {
+  const { fase, texto, dica } = rotuloDoEnvio(useSyncExternalStore(ouvirEnvios, () => estadoDoEnvio(chave)));
+  const Icone = ICONE_DO_ENVIO[fase];
+  return (
+    <div className={`alva-imagem-vazia alva-imagem-vazia-${fase}`} role="status">
+      <Icone size={32} aria-hidden="true" />
+      <span>{texto}</span>
+      {dica ? <small>{dica}</small> : null}
+    </div>
+  );
+}
 
 const simNao = [{ label: 'Sim', value: true }, { label: 'Não', value: false }];
 const escala = (rotulo) => ({ type: 'radio', label: rotulo, labelIcon: ICONE_DO_CAMPO.espaco, options: [{ label: 'P', value: 'p' }, { label: 'M', value: 'm' }, { label: 'G', value: 'g' }] });
@@ -210,7 +226,17 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
         corDoTextoDoBotao: campoDeCor('Cor do texto do botão'),
       }, { text: 'Quero saber mais', href: '#contato', newTab: false, corDoBotao: '', corDoBotao2: '', corDoTextoDoBotao: '' }),
       icon: bloco('icon', 'Ícone', { name: campoDeIcone('Ícone') }, { name: 'star' }),
-      image: bloco('image', 'Imagem', { src: campoDeImagem('Imagem', enviarImagem), alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
+      image: {
+        ...bloco('image', 'Imagem', { src: campoDeImagem('Imagem', enviarImagem), alt: { type: 'text', label: 'Descrição para quem não vê a imagem' } }, { src: '', alt: '' }),
+        // Sem endereço, a página publicada omite a imagem; aqui ela vira um lugar visível e
+        // clicável, que acompanha o envio (Enviando…, erro). Sem isso, a imagem vazia tinha
+        // altura zero e, desmarcada, não havia onde clicar para achá-la de novo.
+        render: ({ puck, id, ...props }) => (
+          <div ref={puck.dragRef} className={classesDoBloco(props)}>
+            {enderecoDaImagem(props.src) ? <Miolo type="image" props={props} /> : <ImagemVazia chave={chaveDoEnvio(id, 'src')} />}
+          </div>
+        ),
+      },
       video: bloco('video', 'Vídeo (YouTube ou Vimeo)', { url: { type: 'text', label: 'Link do vídeo no YouTube ou no Vimeo' }, title: { type: 'text', label: 'Título do vídeo (para leitores de tela)' } }, { url: '', title: '' }),
       vsl: {
         ...bloco('vsl', 'VSL do Studio', { publicId: { type: 'select', label: 'VSL publicada', options: opcoesDeVsl } }, { publicId: '' }),

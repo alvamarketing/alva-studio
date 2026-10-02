@@ -49,6 +49,14 @@ function endereco(valor) {
   return limpo && ESQUEMA_SEGURO.test(limpo) ? limpo : '#';
 }
 
+// O endereço de uma imagem: http(s) ou caminho do próprio domínio (/i/... é a imagem
+// anexada no Studio). Vazio quando não há o que carregar — "#", mailto: e tel: passam como
+// link, mas viravam `<img src="#">`, uma imagem sem tamanho.
+export function enderecoDaImagem(valor) {
+  const limpo = String(valor ?? '').trim();
+  return /^(?:https?:\/\/|\/)\S/i.test(limpo) ? limpo : '';
+}
+
 function nomeDeCampo(valor) {
   const limpo = String(valor ?? '').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
   return limpo.slice(0, 60) || 'campo';
@@ -180,10 +188,12 @@ const ELEMENTOS = {
   icon: {
     render: (node) => `<span class="material-symbols-outlined" aria-hidden="true">${escapeHtml(texto(node.props.name, 60) || 'star')}</span>`,
   },
+  // Sem endereço, a imagem não sai: no editor ela é o lugar de escolher a imagem, na página
+  // publicada não há o que mostrar (renderNode omite também a caixa).
   image: {
     render: (node) => {
-      const src = escapeHtml(endereco(node.props.src));
-      return `<img class="alva-imagem" src="${src}" alt="${escapeHtml(texto(node.props.alt, 300))}">`;
+      const src = enderecoDaImagem(node.props.src);
+      return src ? `<img class="alva-imagem" src="${escapeHtml(src)}" alt="${escapeHtml(texto(node.props.alt, 300))}">` : '';
     },
   },
   video: {
@@ -300,6 +310,7 @@ export function renderConteudo(node, profundidade = 0) {
 export function renderNode(node, profundidade = 0) {
   const miolo = renderConteudo(node, profundidade);
   if (SEM_CAIXA.has(node?.type)) return miolo;
+  if (node?.type === 'image' && !miolo) return '';
   const props = node?.props ?? {};
   return `<div class="${classesDoBloco(props)}"${atributoDeBloco(node)}${atributoDeMovimento(props)}>${miolo}</div>`;
 }
