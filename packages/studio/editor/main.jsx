@@ -3,16 +3,18 @@
 // Abre a página pela API, edita o esquema e salva o esquema — o HTML publicado quem
 // desenha é o servidor. React mora só aqui: a página publicada é HTML puro.
 import { estadoDoPublicar } from '../public/publicacao-pendente.js';
-import { StrictMode, useEffect, useRef, useState } from 'react';
+import { StrictMode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import { Puck, createUsePuck } from '@puckeditor/core';
+import { Puck, createUsePuck, useGetPuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
 import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
 import { ArrowLeft, CircleCheck, CircleDot, Eye, Inbox, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
 import { Estrutura } from './estrutura.jsx';
 import { ZONAS_DO_CANVAS } from './zonas-do-canvas.js';
+import { IMAGEM_VAZIA_CSS } from './imagem-vazia.js';
+import { aceitarArquivosSoltos } from './envios-de-imagem.js';
 import { FONTE_DO_CONTRATO, documentoDaPagina, ehQuiz, normalizarEstadoAlva } from '../public/pagina-alva.js';
 import { quizRuntimeCss } from '../public/quiz-runtime.js';
 import { alvaParaPuck, puckParaAlva } from '../public/puck-conversao.js';
@@ -43,17 +45,26 @@ const ROTULOS_DAS_ETAPAS = `.alva-quiz-no-editor{counter-reset:etapa}
 .alva-quiz-no-editor .alva-etapa::before{content:'Etapa ' counter(etapa);position:absolute;top:10px;left:14px;font:600 12px/1 Inter,system-ui,sans-serif;color:#667085;letter-spacing:.02em}
 .alva-quiz-no-editor .alva-etapa:last-of-type::before{content:'Tela final'}
 .alva-quiz-no-editor .alva-etapa .alva-conteudo>*:has(.answer-wrap){flex:0 0 100%}`;
-const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + FONTE_DO_CONTRATO + elementosCss + escolhaCss + quizRuntimeCss + ROTULOS_DAS_ETAPAS + ZONAS_DO_CANVAS;
+const FOLHAS = materialSymbolsFontCss(location.origin) + runtimeCss + templateCss + FONTE_DO_CONTRATO + elementosCss + escolhaCss + quizRuntimeCss + ROTULOS_DAS_ETAPAS + ZONAS_DO_CANVAS + IMAGEM_VAZIA_CSS;
+// O envio de imagem e o aviso, para o que roda dentro do Puck (o canvas recebe arquivo solto).
+const ContextoDoEditor = createContext({ enviarImagem: null, aviso: () => {} });
 function IframeComFolhas({ children, document: doc }) {
+  const getPuck = useGetPuck();
+  const { enviarImagem, aviso } = useContext(ContextoDoEditor);
+  useEffect(() => (doc && enviarImagem ? aceitarArquivosSoltos(doc, { getPuck, enviarImagem, aviso }) : undefined), [doc, getPuck, enviarImagem, aviso]);
   useEffect(() => {
     if (!doc || doc.getElementById('alva-folhas')) return;
+    // Os tokens do Studio, para o que só o editor desenha no canvas (o lugar da imagem vazia).
+    const tokens = doc.createElement('link');
+    tokens.rel = 'stylesheet';
+    tokens.href = '/tokens.css';
     const fonte = doc.createElement('link');
     fonte.rel = 'stylesheet';
     fonte.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
     const estilo = doc.createElement('style');
     estilo.id = 'alva-folhas';
     estilo.textContent = FOLHAS;
-    doc.head.append(fonte, estilo);
+    doc.head.append(tokens, fonte, estilo);
   }, [doc]);
   return <>{children}</>;
 }
@@ -160,6 +171,7 @@ function Acoes({ pagina, aoSalvar, aoPublicar, aoSalvarWebhook, aviso, pendente,
 function Editor() {
   const [pagina, setPagina] = useState(null);
   const [config, setConfig] = useState(null);
+  const [enviarImagem, setEnviarImagem] = useState(null);
   const [erro, setErro] = useState('');
   const [mensagem, setMensagem] = useState('');
   // O que está salvo, para saber se há alteração a perder ao sair.
@@ -185,12 +197,17 @@ function Editor() {
         leitor.onerror = () => rejeitar(new Error('Não foi possível ler o arquivo.'));
         leitor.readAsDataURL(arquivo);
       });
+      setEnviarImagem(() => enviarImagem);
       setConfig(criarConfig({ vsls: (Array.isArray(videos) ? videos : []).filter((video) => video.publishedVersionId), enviarImagem, quiz: ehQuiz(aberta.editorState) }));
       salvo.current = JSON.stringify(puckParaAlva(alvaParaPuck(aberta.editorState)));
       setPagina(aberta);
     })().catch((falha) => setErro(falha.message));
   }, []);
-  const aviso = (texto) => { setMensagem(texto); setTimeout(() => setMensagem(''), 4000); };
+  const aviso = useCallback((texto) => { setMensagem(texto); setTimeout(() => setMensagem(''), 4000); }, []);
+  const contexto = useMemo(() => ({ enviarImagem, aviso }), [enviarImagem, aviso]);
+  // Fora do canvas não há bloco Imagem: arquivo solto ali só ganha o aviso de onde soltar,
+  // em vez de o navegador abri-lo numa aba nova.
+  useEffect(() => aceitarArquivosSoltos(document, { getPuck: () => ({ getItemById: () => undefined }), enviarImagem: async () => '', aviso }), [aviso]);
   const aoSalvarWebhook = async (dados, webhook) => {
     const salva = await api(`/pages/${pagina.id}`, 'PUT', { revision: pagina.revision, editorState: puckParaAlva(dados), webhook });
     salvo.current = JSON.stringify(puckParaAlva(dados));
@@ -218,7 +235,7 @@ function Editor() {
   if (erro) return <p className="alva-erro">{erro}</p>;
   if (!pagina || !config) return <p className="alva-carregando">Abrindo a página…</p>;
   return (
-    <>
+    <ContextoDoEditor.Provider value={contexto}>
       <Puck
         config={config}
         data={alvaParaPuck(pagina.editorState)}
@@ -235,7 +252,7 @@ function Editor() {
         }}
       />
       {mensagem && <div className="alva-aviso" role="status">{mensagem}</div>}
-    </>
+    </ContextoDoEditor.Provider>
   );
 }
 

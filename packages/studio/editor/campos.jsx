@@ -1,7 +1,10 @@
 // Campos próprios do editor: imagem (endereço ou anexo do computador) e cor.
-import { useRef, useState } from 'react';
-import { AutoField, FieldLabel, createUsePuck } from '@puckeditor/core';
+import { useRef, useState, useSyncExternalStore } from 'react';
+import { AutoField, FieldLabel, createUsePuck, useGetPuck } from '@puckeditor/core';
 import { ICONE_DO_CAMPO } from './icones.jsx';
+import { chaveDoEnvio, enviarImagemPara, estadoDoEnvio, ouvirEnvios } from './envios-de-imagem.js';
+
+const usePuckDoCampo = createUsePuck();
 
 const estiloDoCampo = { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 14, padding: '8px 10px', border: '1px solid var(--alva-line)', borderRadius: 8 };
 const estiloDoBotao = { font: 'inherit', fontSize: 13, fontWeight: 600, padding: '8px 12px', border: '1px solid var(--alva-line)', borderRadius: 8, background: 'var(--alva-white)', cursor: 'pointer' };
@@ -10,24 +13,23 @@ export function campoDeImagem(rotulo, enviarImagem) {
   return {
     type: 'custom',
     label: rotulo,
-    render: ({ value, onChange, readOnly }) => <CampoDeImagem rotulo={rotulo} valor={value} aoMudar={onChange} somenteLeitura={readOnly} enviarImagem={enviarImagem} />,
+    render: ({ name, value, onChange, readOnly }) => <CampoDeImagem rotulo={rotulo} nome={name} valor={value} aoMudar={onChange} somenteLeitura={readOnly} enviarImagem={enviarImagem} />,
   };
 }
 
-function CampoDeImagem({ rotulo, valor, aoMudar, somenteLeitura, enviarImagem }) {
+// O envio grava no bloco que estava selecionado quando ele começou (envios-de-imagem.js), e
+// o estado dele é o mesmo que o canvas mostra no lugar da imagem.
+function CampoDeImagem({ rotulo, nome, valor, aoMudar, somenteLeitura, enviarImagem }) {
   const arquivo = useRef(null);
-  const [estado, setEstado] = useState('');
-  const escolher = async (evento) => {
+  const getPuck = useGetPuck();
+  const dono = usePuckDoCampo((estado) => estado.selectedItem?.props?.id ?? null);
+  const envio = useSyncExternalStore(ouvirEnvios, () => estadoDoEnvio(chaveDoEnvio(dono, nome)));
+  const estado = envio?.fase === 'enviando' ? 'Enviando…' : envio?.fase === 'erro' ? envio.mensagem : '';
+  const escolher = (evento) => {
     const escolhido = evento.target.files?.[0];
     evento.target.value = '';
     if (!escolhido) return;
-    setEstado('Enviando…');
-    try {
-      aoMudar(await enviarImagem(escolhido));
-      setEstado('');
-    } catch (erro) {
-      setEstado(erro.message);
-    }
+    enviarImagemPara({ getPuck, id: dono, nome, arquivo: escolhido, enviarImagem, aoMudar });
   };
   return (
     <FieldLabel label={rotulo} icon={ICONE_DO_CAMPO.imagem} readOnly={somenteLeitura}>
@@ -173,7 +175,6 @@ function SeletorDeIcone({ rotulo, valor, aoMudar, somenteLeitura }) {
 
 // Para onde a opção leva: "a próxima etapa" ou uma etapa escolhida pelo nome dela (o
 // primeiro título). A lista vem do que está no editor agora, então acompanha etapas novas.
-const usePuckDoCampo = createUsePuck();
 const primeiroTitulo = (item) => {
   for (const filho of Array.isArray(item?.props?.itens) ? item.props.itens : []) {
     if (filho.type === 'heading' && filho.props?.text) return String(filho.props.text);
