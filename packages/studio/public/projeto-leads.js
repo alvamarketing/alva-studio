@@ -15,6 +15,8 @@ export function criarCartaoDeLeads(doc, { api, toast = () => {} }) {
     + '<label>Endereço do webhook (HTTPS)<input type="url" name="url" maxlength="2000" autocomplete="off" placeholder="https://seu-crm.com.br/webhook/leads"></label>'
     + '<p class="help">Enviamos uma cópia em JSON de cada lead para este endereço, para o seu CRM. '
     + 'Uma página ou quiz com destino próprio, definido no botão Leads do editor, sobrescreve este.</p>'
+    + '<p class="help">Quer anunciar de novo para quem assistiu à VSL ou já virou lead? '
+    + '<a class="ajuda-link" href="/ajuda/publicos-meta" target="_blank" rel="noopener noreferrer">Saiba como configurar o público da Meta</a></p>'
     + '<p class="form-error" role="alert"></p>'
     + '<div class="owner-form-actions"><button type="button" id="project-leads-remove">Remover</button>'
     + '<button type="submit" class="primary" id="project-leads-save">Salvar</button></div>'

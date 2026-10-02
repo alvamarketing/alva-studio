@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Como configurar os públicos da Meta · Alva Studio</title>
+<link rel="stylesheet" href="/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--alva-cloud); color: var(--alva-ink); font-family: var(--font-sans); font-size: var(--text-md); line-height: 1.65; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 20px 72px; }
+  .topo { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; font-size: var(--text-sm); }
+  .topo a { color: var(--alva-blue-strong); text-decoration: none; font-weight: 600; }
+  .marca { color: var(--alva-ink) !important; letter-spacing: 2px; }
+  h1 { margin: 0 0 8px; font-size: var(--text-6xl); line-height: 1.08; letter-spacing: -0.03em; }
+  h2 { margin: 0 0 6px; font-size: var(--text-2xl); letter-spacing: -0.02em; }
+  h3 { margin: 18px 0 4px; font-size: var(--text-lg); }
+  p { margin: 8px 0; }
+  .resumo { color: var(--alva-muted); font-size: var(--text-lg); margin-bottom: 28px; }
+  section { margin-top: 16px; padding: 26px; background: var(--alva-white); border: 1px solid var(--alva-line); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); }
+  ol, ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 6px 0; }
+  .passo { display: grid; grid-template-columns: 34px 1fr; gap: 14px; padding: 16px 0; border-top: 1px solid var(--alva-line); }
+  .passo:first-of-type { border-top: 0; padding-top: 6px; }
+  .passo > b { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius-pill); background: var(--alva-highlight); color: var(--alva-blue-strong); font-size: var(--text-md); }
+  .passo h3 { margin: 4px 0 2px; }
+  .passo p { margin: 4px 0; color: var(--alva-muted); }
+  .passo p strong, .passo li strong { color: var(--alva-ink); }
+  .publicos { display: grid; gap: 10px; margin-top: 12px; }
+  .publico { padding: 14px 16px; border: 1px solid var(--alva-line); border-radius: var(--radius-md); background: var(--alva-cloud); }
+  .publico strong { display: block; }
+  .publico span { color: var(--alva-muted); font-size: var(--text-sm); }
+  .aviso { margin-top: 12px; padding: 14px 16px; border: 1px solid var(--alva-warning); border-radius: var(--radius-md); background: var(--alva-warning-bg); color: var(--alva-warning); font-size: var(--text-sm); line-height: 1.55; }
+  .aviso b { color: inherit; }
+  code { padding: 1px 6px; border-radius: var(--radius-xs); background: var(--alva-highlight); font-size: .92em; }
+  a { color: var(--alva-blue-strong); }
+  .oficiais li { color: var(--alva-muted); }
+  :focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
+  @media (max-width: 560px) { main { padding-top: 24px; } h1 { font-size: var(--text-4xl); } section { padding: 20px; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="topo"><a class="marca" href="/" aria-label="Voltar ao Alva Studio">ALVA Studio</a><a href="/" >← Voltar ao Studio</a></div>
+
+  <h1>Como configurar os públicos da Meta</h1>
+  <p class="resumo">O Studio cria, na sua conta de anúncios, listas de pessoas a partir do que elas fizeram no vídeo e na página. Você usa essas listas nos anúncios: mostra para quem quase comprou e esconde de quem já virou lead.</p>
+
+  <section>
+    <h2>O que isso faz por você</h2>
+    <p>Sem esses públicos, o mesmo anúncio aparece para todo mundo. Com eles, você consegue <strong>voltar a anunciar</strong> (remarketing) só para quem já mostrou interesse, e <strong>parar de gastar</strong> com quem já virou lead.</p>
+    <p>São seis públicos. O Studio cria só os que você ligar:</p>
+    <div class="publicos">
+      <div class="publico"><strong>Começou a assistir a VSL</strong><span>Quem apertou o play. Serve para remarketing, em até 30 dias.</span></div>
+      <div class="publico"><strong>Assistiu 50% da VSL</strong><span>Quem passou da metade do vídeo. Remarketing, em até 30 dias.</span></div>
+      <div class="publico"><strong>Assistiu 75% da VSL</strong><span>Quem chegou perto do fim. Costuma ser o mais quente. Remarketing, em até 30 dias.</span></div>
+      <div class="publico"><strong>Assistiu a VSL toda</strong><span>Quem viu até o final. Remarketing, em até 30 dias.</span></div>
+      <div class="publico"><strong>Clicou no botão da VSL</strong><span>Quem clicou no botão que aparece sobre o vídeo. Remarketing, em até 30 dias.</span></div>
+      <div class="publico"><strong>Virou lead</strong><span>Quem deixou os dados em um formulário. Este é para <b>excluir</b>: use para não mostrar anúncio de captação a quem já é lead. Vale por 180 dias.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Antes de começar: o que você precisa ter</h2>
+    <ul>
+      <li><strong>O pixel da Meta salvo no Studio.</strong> Em <em>Configurações do projeto → Rastreamento</em>, no destino Meta, em produção. Os públicos nascem dos eventos que esse pixel recebe.</li>
+      <li><strong>O número da conta de anúncios</strong> onde os públicos vão aparecer.</li>
+      <li><strong>Uma chave de acesso com a permissão <code>ads_management</code></strong>, que é a que autoriza criar públicos na conta de anúncios.</li>
+      <li><strong>Os Termos de Públicos Personalizados aceitos</strong> na sua conta de anúncios.</li>
+    </ul>
+    <div class="aviso"><b>Atenção:</b> a chave que o Studio já guarda para enviar conversões (Conversions API) <b>não serve</b> para isto. Ela nasce no Gerenciador de Eventos, presa ao pixel, e não tem permissão de mexer na conta de anúncios. Aqui é <b>outra chave</b>, com a permissão <code>ads_management</code>.</div>
+  </section>
+
+  <section>
+    <h2>Passo a passo</h2>
+
+    <div class="passo"><b>1</b><div>
+      <h3>Confira o pixel</h3>
+      <p>No Studio, abra <strong>Configurações do projeto → Rastreamento</strong> e veja se o destino Meta tem o ID do pixel, no ambiente de produção. Se já configurou o rastreamento, está feito.</p>
+    </div></div>
+
+    <div class="passo"><b>2</b><div>
+      <h3>Pegue o número da conta de anúncios</h3>
+      <p>Abra o Gerenciador de Anúncios da Meta, na conta que você usa para anunciar. O endereço da página traz <code>act=</code> seguido de um número: esse número é o da conta. Copie só os dígitos.</p>
+    </div></div>
+
+    <div class="passo"><b>3</b><div>
+      <h3>Aceite os Termos de Públicos Personalizados</h3>
+      <p>A Meta não deixa criar público por programa enquanto uma pessoa com papel na conta de anúncios não aceitar esses termos. Abra o endereço abaixo, trocando <code>SEU_NUMERO</code> pelo número do passo 2:</p>
+      <p><code>https://business.facebook.com/ads/manage/customaudiences/tos/?act=SEU_NUMERO</code></p>
+      <p>Quem aceita precisa ser uma pessoa de verdade, não um usuário do sistema. Cada pessoa aceita uma vez por empresa.</p>
+    </div></div>
+
+    <div class="passo"><b>4</b><div>
+      <h3>Crie a chave de acesso</h3>
+      <p>No Gerenciador de Negócios da Meta, crie um <strong>usuário do sistema</strong>, dê a ele acesso à conta de anúncios e gere a chave (token) com a permissão <code>ads_management</code>. Guarde a chave: ela só aparece uma vez.</p>
+      <p>Os nomes dos menus da Meta mudam de tempos em tempos. Se algo não bater com o que você vê na tela, siga o guia oficial de usuários do sistema, no fim desta página.</p>
+    </div></div>
+
+    <div class="passo"><b>5</b><div>
+      <h3>Cole no Studio e ligue os públicos</h3>
+      <p>Em <strong>Configurações do projeto → Rastreamento</strong>, no cartão de públicos automáticos, cole o número da conta e a chave e salve. Depois ligue os públicos que quiser. Cada um que você liga é criado na Meta na hora. A chave fica guardada com segurança e não volta a aparecer na tela.</p>
+    </div></div>
+  </section>
+
+  <section>
+    <h2>Como usar nos anúncios</h2>
+    <ul>
+      <li><strong>Para voltar a anunciar:</strong> ao montar o conjunto de anúncios, escolha <em>públicos personalizados</em> e procure os que começam com <code>Alva ·</code>. Anuncie, por exemplo, uma oferta para quem assistiu 75% da VSL.</li>
+      <li><strong>Para não gastar com quem já é lead:</strong> no conjunto de anúncios de captação, use o público <code>Alva · Virou lead</code> na parte de <strong>excluir</strong>.</li>
+      <li>O público pode demorar um pouco para mostrar o tamanho. Ele vai enchendo conforme as pessoas assistem.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Por que o público pode ficar pequeno</h2>
+    <ul>
+      <li>Os eventos só saem de <strong>página publicada</strong> (em produção). Prévia e editor não contam.</li>
+      <li>E só de quem <strong>aceitou a medição</strong> no aviso que aparece na página.</li>
+      <li>Se você mudou o pixel no Studio, é preciso <strong>publicar de novo</strong> para valer. O botão fica amarelo quando há algo a publicar.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Se algo der errado</h2>
+    <ul>
+      <li><strong>"A Meta recusou o token":</strong> a chave está errada ou venceu. Gere outra e salve de novo.</li>
+      <li><strong>"O token não tem permissão":</strong> a chave não tem <code>ads_management</code>, ou o usuário do sistema não recebeu acesso à conta de anúncios. Reveja o passo 4.</li>
+      <li><strong>A Meta recusou os dados do público:</strong> o motivo mais comum é não ter aceitado os Termos de Públicos Personalizados. Reveja o passo 3.</li>
+      <li><strong>O público criou, mas os de 50% e 75% ficam vazios:</strong> estes dois dependem da Meta aceitar o filtro de porcentagem do vídeo, e isso só se confirma com uma conta real. Se acontecer, avise a equipe do Studio: existe um jeito alternativo, que não depende desse filtro.</li>
+      <li><strong>Desliguei um público e ele continua na Meta:</strong> é de propósito. Desligar no Studio só esquece o público aqui; não apaga na Meta, para não derrubar anúncios que já usam ele. Para apagar, use o Gerenciador de Anúncios.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Um teste de 5 minutos</h2>
+    <ol>
+      <li>No Gerenciador de Eventos da Meta, abra <em>Testar eventos</em>.</li>
+      <li>Abra uma página sua com VSL numa aba anônima, aceite a medição e assista até passar da metade.</li>
+      <li>Confira se os eventos <code>vsl_start</code> e <code>vsl_progress</code> chegam na tela de teste.</li>
+      <li>No Studio, ligue só <strong>Assistiu 50% da VSL</strong> e veja se o cartão mostra "criado". Depois confira o público no Gerenciador de Anúncios.</li>
+    </ol>
+  </section>
+
+  <section class="oficiais">
+    <h2>Guias oficiais da Meta</h2>
+    <ul>
+      <li><a href="https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/guides/website-custom-audiences" target="_blank" rel="noopener noreferrer">Públicos personalizados de site</a></li>
+      <li><a href="https://developers.facebook.com/docs/marketing-api/system-users" target="_blank" rel="noopener noreferrer">Usuários do sistema</a></li>
+      <li><a href="https://developers.facebook.com/documentation/ads-commerce/marketing-api/audiences/reference/custom-audience-terms-of-service" target="_blank" rel="noopener noreferrer">Termos dos públicos personalizados</a></li>
+      <li><a href="https://developers.facebook.com/documentation/ads-commerce/marketing-api/get-started/authorization" target="_blank" rel="noopener noreferrer">Autorização e permissões da Marketing API</a></li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

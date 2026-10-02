@@ -2144,3 +2144,9 @@ main { margin-left:224px; width:calc(100% - 224px); padding:44px 50px; }
 .funil-excluir .material-symbols-outlined { font-size: var(--icon-sm); }
 
 /* Prévia da VSL: o vídeo toca de verdade acima do resumo. */
+
+/* Link de ajuda que leva a um guia (ex.: públicos da Meta): discreto, mas inconfundível. */
+.ajuda-link { color: var(--alva-blue-strong); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.ajuda-link:hover { text-decoration-thickness: 2px; }
+.surface-head .ajuda-link { display: inline-block; margin-top: 6px; font-size: var(--text-sm); }
+.project-leads-ajuda { margin: 4px 0 14px; }
