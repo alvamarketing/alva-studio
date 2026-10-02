@@ -1485,3 +1485,67 @@
 @media (max-width: 760px) {
   .conta-meta .surface-head { flex-wrap: wrap; }
 }
+
+/* "Conta da Meta", F2: a conta de anúncios e o pixel deste projeto. Linhas como as da
+   "Equipe" (wireframe "Empresa e equipe"); seletores como os campos de "Dados da empresa".
+   O aviso de vencimento usa o mesmo par de tokens de alerta do guia dos públicos. */
+.conta-meta .member-item span.conta-meta-vencimento {
+  color: var(--alva-muted);
+  font-size: var(--text-xs);
+}
+.conta-meta-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--alva-warning);
+  border-radius: var(--radius-md);
+  background: var(--alva-warning-bg);
+}
+.conta-meta-aviso strong {
+  color: var(--alva-warning);
+  font-size: var(--text-md);
+}
+.conta-meta-aviso p {
+  margin: 4px 0 0;
+  max-width: 64ch;
+}
+.conta-meta-projeto h3 {
+  margin: 18px 0 0;
+  font-size: var(--text-md);
+  color: var(--alva-muted);
+}
+.conta-meta-termos {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+.conta-meta-escolha {
+  display: grid;
+  gap: 12px;
+  max-width: 46ch;
+  margin-top: 10px;
+}
+.conta-meta-escolha label {
+  display: grid;
+  gap: 6px;
+  color: var(--alva-muted);
+  font-size: var(--text-sm);
+}
+.conta-meta-escolha select {
+  width: 100%;
+}
+.conta-meta-escolha .provider-actions {
+  margin-top: 2px;
+}
+.conta-meta-automatico {
+  margin: 12px 0 0;
+}
+@media (max-width: 560px) {
+  .conta-meta-escolha { max-width: none; }
+  .conta-meta-aviso button { width: 100%; }
+  .conta-meta .member-item { align-items: flex-start; }
+}

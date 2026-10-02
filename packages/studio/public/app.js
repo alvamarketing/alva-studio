@@ -1314,6 +1314,10 @@ const conexaoMetaUI = criarConexaoMetaUI({
   getShell: () => studioShell,
   ligado: () => metaConexaoLigada,
   confirmar: () => confirmarAcao({ titulo: 'Desconectar a conta da Meta?', descricao: 'O Studio perde o acesso a esta conta do Facebook, e o acesso também é retirado na Meta. Os públicos já criados continuam na sua conta de anúncios.', confirmar: 'Desconectar', perigo: true }),
+  // D2: escolher pela conexão apaga o pixel/token colados à mão neste projeto.
+  confirmarSubstituicao: () => confirmarAcao({ titulo: 'Trocar o preenchimento manual pela conexão?', descricao: 'Este projeto tem pixel ou token colados à mão. Eles serão substituídos pelo pixel escolhido e pelo token da conta conectada. Dá para voltar ao manual depois, em "Destinos".', confirmar: 'Usar a conexão' }),
+  // O destino "Meta" e os públicos mudaram: as duas seções desta aba se redesenham.
+  depoisDeEscolher: async () => { await Promise.all([recarregarDestinos().catch(() => {}), publicosMetaUI.abrir().catch(() => {})]); },
 });
 contextBoundary = createStudioContextBoundary({
   // O editor abre em outra página (/editor.html): não há editor aberto aqui para salvar.
@@ -1851,6 +1855,23 @@ function semPermissao() {
 function formularioDeDestino(destino) {
   const form = document.createElement('form');
   form.className = 'provider-form';
+
+  // Meta pela conexão: sem campo de token nem de pixel. "Prefiro preencher manualmente"
+  // troca este formulário pelo completo; salvar com um token colado volta a origem para o
+  // manual (D2), e o servidor apaga a referência à conexão.
+  if (destino.pelaConexao) {
+    const aviso = document.createElement('p');
+    aviso.className = 'help';
+    aviso.textContent = destino.precisaReconectar
+      ? `A conta da Meta conectada precisa ser conectada de novo: sem isso o pixel ${destino.publicValue} não recebe pela Conversions API. Use "Reconectar" no cartão "Conta da Meta", acima.`
+      : `Configurado pela conexão com o Facebook: pixel ${destino.publicValue}, com o token da conta conectada. Para trocar, use o cartão "Conta da Meta", acima.`;
+    const manual = document.createElement('button');
+    manual.type = 'button';
+    manual.className = 'button ghost';
+    manual.textContent = 'Prefiro preencher manualmente';
+    manual.onclick = () => form.replaceWith(formularioDeDestino({ ...destino, pelaConexao: false, publicValue: '', fields: destino.camposManuais }));
+    form.append(aviso, manual);
+  }
 
   if (destino.aviso) {
     const aviso = document.createElement('p');

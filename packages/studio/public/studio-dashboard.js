@@ -462,14 +462,23 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
     const configured = salvo?.configured === true;
     const testCode = configured ? salvo?.publicConfiguration?.test_event_code ?? '' : '';
     const vencimento = configured && provider === 'linkedin' ? vencimentoDoLinkedin(salvo, agora) : null;
-    const state = configured ? (testCode || vencimento ? 'teste' : entregando.has(provider) ? 'ok' : 'idle') : 'off';
+    // Meta pela conexão com o Facebook (F2): o pixel veio da escolha no cartão "Conta da
+    // Meta" e o token é o da conexão — não há campo de token nem de pixel a mostrar, e a
+    // conexão que precisa de novo login aparece aqui também, não só no cartão.
+    const pelaConexao = configured && provider === 'meta' && salvo?.publicConfiguration?.token_source === 'connection';
+    const reconectar = pelaConexao && salvo?.conexao?.precisaReconectar === true;
+    const state = configured ? (testCode || vencimento || reconectar ? 'teste' : entregando.has(provider) ? 'ok' : 'idle') : 'off';
+    const camposManuais = podeConfigurar === true ? CAMPOS_DE_DESTINO[provider] : [];
     return {
       provider,
       name,
       description,
       configured,
       state,
-      stateLabel: !configured ? 'Não configurado' : vencimento ?? (testCode ? 'Modo de teste' : entregando.has(provider) ? 'Enviando' : 'Configurado'),
+      stateLabel: !configured ? 'Não configurado' : reconectar ? 'Precisa reconectar' : vencimento ?? (testCode ? 'Modo de teste' : pelaConexao ? 'Configurado pela conexão' : entregando.has(provider) ? 'Enviando' : 'Configurado'),
+      pelaConexao,
+      precisaReconectar: reconectar,
+      camposManuais,
       aviso: AVISO_DO_DESTINO[provider] ?? '',
       testCode,
       publicValue: salvo?.publicConfiguration?.[CAMPO_PUBLICO[provider]] ?? '',
@@ -477,7 +486,7 @@ export function destinosDeConversaoModel(destinos, entregas, podeConfigurar = tr
       // A tela abre com permissão de leitura, mas salvar credencial é `integration.manage`.
       // Mostrar o formulário a quem não pode enviá-lo seria convidar ao erro.
       editable: podeConfigurar === true,
-      fields: podeConfigurar === true ? CAMPOS_DE_DESTINO[provider] : [],
+      fields: pelaConexao ? camposManuais.filter((campo) => campo.teste) : camposManuais,
       semCredencial: CAMPOS_DE_DESTINO[provider].length === 0,
     };
   });
