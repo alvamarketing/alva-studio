@@ -216,3 +216,45 @@ test('app.js usa o rótulo do segredo do modelo e abre o manual sem token guarda
   assert.match(app, /semTokenGuardado: true/);
   assert.doesNotMatch(app, /entrada\.placeholder = destino\.configured \? 'Guardado/);
 });
+
+// Conferência F2: os chips de alerta tinham o mesmo azul de "Conectado"; faltava a linha
+// entre a conexão e as Páginas; o cartão ficava vazio enquanto carregava.
+const chip = (cartao, texto) => [...cartao.querySelectorAll('.role-chip')].find((item) => item.textContent === texto);
+
+test('chips: Pendente em alerta, Sem acesso em negativo, Ativo/Aceitos em positivo, Conectado no padrão', async () => {
+  const doProjeto = projetoVazio({ escolha: { adAccountId: '111', pixelId: '555' }, destino: { configurado: true, origem: 'connection', pixelId: '555' }, termos: { aceitos: false, link: 'https://business.facebook.com/x' } });
+  const { cartao } = montar({ doProjeto });
+  await cartao.recarregar();
+  assert.ok(chip(cartao, 'Pendente').classList.contains('alerta'));
+  assert.ok(chip(cartao, 'Ativo').classList.contains('positivo'));
+  assert.deepEqual([...chip(cartao, 'Conectado').classList], ['role-chip']);
+  const semAcesso = montar({ estado: conectado({ status: 'needs_reconnect', precisaReconectar: true }) });
+  await semAcesso.cartao.recarregar();
+  assert.ok(chip(semAcesso.cartao, 'Sem acesso').classList.contains('negativo'));
+  const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
+  assert.match(css, /\.conta-meta \.role-chip\.alerta \{[^}]*var\(--alva-warning-bg\)[^}]*var\(--alva-warning\)/);
+  assert.match(css, /\.conta-meta \.role-chip\.negativo \{[^}]*var\(--alva-negative-bg\)[^}]*var\(--alva-negative\)/);
+  assert.match(css, /\.conta-meta \.role-chip\.positivo \{[^}]*var\(--alva-positive-bg\)[^}]*var\(--alva-positive\)/);
+});
+
+test('linha divisória entre a conexão e as linhas do projeto, como na "Equipe"', async () => {
+  const { cartao } = montar();
+  await cartao.recarregar();
+  assert.ok(cartao.querySelector('.member-list.conta-meta-conexao.com-divisoria'));
+  const css = await readFile(new URL('../public/owner.css', import.meta.url), 'utf8');
+  assert.match(css, /\.conta-meta-conexao\.com-divisoria > \.member-item:last-child \{[^}]*border-bottom: 1px solid var\(--alva-line\)/);
+});
+
+test('enquanto o estado da empresa carrega, o cartão diz "Carregando…"', async () => {
+  let liberar;
+  const janela = new JSDOM('<div id="alvo"></div>').window;
+  const cartao = cartaoDaContaMeta(janela.document, {
+    carregar: () => new Promise((resolver) => { liberar = () => resolver({ conectado: false }); }),
+    iniciar: async () => ({}), desconectar: async () => ({}), navegar: () => {}, irParaManual: () => {},
+  });
+  const andamento = cartao.recarregar();
+  assert.match(cartao.querySelector('.conta-meta-corpo').textContent, /Carregando…/);
+  liberar();
+  await andamento;
+  assert.doesNotMatch(cartao.textContent, /Carregando…/);
+});

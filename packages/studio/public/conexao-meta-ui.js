@@ -83,8 +83,15 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
   let gravando = false;
   let avisoAutomatico = '';
 
+  // O tom do chip: o padrão (azul) é "Conectado"; alerta, negativo e positivo usam os tokens
+  // de status que já existem (owner.css).
+  function chip(texto, tom = '') {
+    return elemento(doc, 'span', tom ? `role-chip ${tom}` : 'role-chip', texto);
+  }
+
   function linhaDaConexao(conexao) {
-    const lista = elemento(doc, 'div', 'member-list');
+    // Com as linhas do projeto abaixo, a conexão ganha a mesma divisória das linhas da "Equipe".
+    const lista = elemento(doc, 'div', projeto && !conexao.precisaReconectar ? 'member-list conta-meta-conexao com-divisoria' : 'member-list conta-meta-conexao');
     const linha = elemento(doc, 'div', 'member-item');
     const texto = elemento(doc, 'div');
     const quem = conexao.conectadoPor?.nome ? `Conectado por ${conexao.conectadoPor.nome}` : 'Conectado';
@@ -92,7 +99,7 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     texto.append(elemento(doc, 'strong', '', conexao.nome || 'Conta do Facebook'), elemento(doc, 'span', '', quando ? `${quem} em ${quando}` : quem));
     const vence = textoDoVencimento(conexao.vencimento);
     if (vence && !conexao.vencimento?.venceEmBreve) texto.append(elemento(doc, 'span', 'conta-meta-vencimento', vence));
-    linha.append(texto, elemento(doc, 'span', 'role-chip', conexao.precisaReconectar ? 'Sem acesso' : 'Conectado'));
+    linha.append(texto, conexao.precisaReconectar ? chip('Sem acesso', 'negativo') : chip('Conectado'));
     lista.append(linha);
     return lista;
   }
@@ -112,13 +119,13 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     return bloco;
   }
 
-  function linha(titulo, detalhe, chip) {
+  function linha(titulo, detalhe, rotulo, tom = '') {
     const item = elemento(doc, 'div', 'member-item');
     const texto = elemento(doc, 'div');
     texto.append(elemento(doc, 'strong', '', titulo));
     if (typeof detalhe === 'string') { if (detalhe) texto.append(elemento(doc, 'span', '', detalhe)); } else if (detalhe) texto.append(detalhe);
     item.append(texto);
-    if (chip) item.append(elemento(doc, 'span', 'role-chip', chip));
+    if (rotulo) item.append(chip(rotulo, tom));
     return item;
   }
 
@@ -134,7 +141,7 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     const escolha = doProjeto?.escolha;
     if (destino?.origem === 'connection') {
       const pixel = escolha?.pixelId === destino.pixelId && escolha?.pixelNome ? `${escolha.pixelNome} (${destino.pixelId})` : `Pixel ${destino.pixelId}`;
-      return linha('Pixel e Conversions API configurados pela conexão', `${pixel}. O token é o da conta conectada; nada foi colado.`, 'Ativo');
+      return linha('Pixel e Conversions API configurados pela conexão', `${pixel}. O token é o da conta conectada; nada foi colado.`, 'Ativo', 'positivo');
     }
     if (destino?.origem === 'manual') return linha('Pixel e Conversions API preenchidos à mão', `Pixel ${destino.pixelId ?? ''} em "Destinos". Escolha abaixo para passar a usar a conexão.`, 'Manual');
     return linha('Pixel e Conversions API', 'Ainda não configurados neste projeto. Escolha a conta e o pixel abaixo.');
@@ -143,7 +150,7 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
   function linhaDosTermos() {
     const termos = doProjeto?.termos;
     if (!termos) return null;
-    if (termos.aceitos === true) return linha('Termos de Públicos Personalizados', 'Aceitos nesta conta de anúncios.', 'Aceitos');
+    if (termos.aceitos === true) return linha('Termos de Públicos Personalizados', 'Aceitos nesta conta de anúncios.', 'Aceitos', 'positivo');
     const detalhe = elemento(doc, 'div', 'conta-meta-termos');
     detalhe.append(elemento(doc, 'span', '', termos.aceitos === false
       ? 'Ainda não aceitos. Sem eles a Meta não deixa criar públicos. Quem aceita é uma pessoa com acesso à conta, no link abaixo.'
@@ -158,7 +165,7 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
       link.append(elemento(doc, 'span', '', 'Aceitar os termos na Meta'), icone);
       detalhe.append(link);
     }
-    return linha('Termos de Públicos Personalizados', detalhe, termos.aceitos === false ? 'Pendente' : undefined);
+    return linha('Termos de Públicos Personalizados', detalhe, termos.aceitos === false ? 'Pendente' : undefined, 'alerta');
   }
 
   function seletor(rotulo, nome, opcoes, valor, vazio) {
@@ -341,6 +348,8 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
   };
 
   cartao.recarregar = async () => {
+    // Primeira leitura: o cartão diz que está carregando em vez de aparecer vazio.
+    if (!estado) corpo.replaceChildren(elemento(doc, 'p', 'help', 'Carregando…'));
     try {
       estado = await carregar();
       erro.textContent = '';

@@ -1489,6 +1489,12 @@
 /* "Conta da Meta", F2: a conta de anúncios e o pixel deste projeto. Linhas como as da
    "Equipe" (wireframe "Empresa e equipe"); seletores como os campos de "Dados da empresa".
    O aviso de vencimento usa o mesmo par de tokens de alerta do guia dos públicos. */
+/* Chips de estado: o azul padrão é "Conectado"; o resto usa os pares de tokens de status. */
+.conta-meta .role-chip.alerta { background: var(--alva-warning-bg); color: var(--alva-warning); }
+.conta-meta .role-chip.negativo { background: var(--alva-negative-bg); color: var(--alva-negative); }
+.conta-meta .role-chip.positivo { background: var(--alva-positive-bg); color: var(--alva-positive); }
+/* A divisória entre a conexão e as linhas do projeto, como entre as linhas da "Equipe". */
+.conta-meta-conexao.com-divisoria > .member-item:last-child { padding-bottom: 12px; border-bottom: 1px solid var(--alva-line); }
 .conta-meta .member-item span.conta-meta-vencimento {
   color: var(--alva-muted);
   font-size: var(--text-xs);
