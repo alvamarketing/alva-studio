@@ -58,8 +58,8 @@ test('sem credencial, o cartão diz exatamente o que falta e onde obter, e não 
   janela.close();
 });
 
-test('sem pixel, o aviso aponta para os Destinos e nada pode ser ligado', async () => {
-  const { cartao, janela } = montar(estadoCompleto({ pixelId: null, faltando: [{ chave: 'pixel', titulo: 'Pixel da Meta', onde: 'Configure o pixel da Meta na seção "Destinos" desta aba.' }] }));
+test('sem pixel, o aviso aponta para o bloco da Meta em Plataformas e nada pode ser ligado', async () => {
+  const { cartao, janela } = montar(estadoCompleto({ pixelId: null, faltando: [{ chave: 'pixel', titulo: 'Pixel da Meta', onde: 'Configure o pixel da Meta no bloco "Meta", em "Plataformas", nesta aba.' }] }));
   await cartao.recarregar();
   assert.match(cartao.textContent, /Pixel da Meta/);
   assert.equal(cartao.querySelectorAll('input[role="switch"]:not([disabled])').length, 0);

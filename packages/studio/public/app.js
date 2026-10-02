@@ -3,7 +3,7 @@ import { createUIPreferences } from './ui-preferences.js';
 import { createStudioShell } from './studio-shell.js';
 import { createStudioContextBoundary } from './studio-context-boundary.js';
 import { createContextList } from './context-list.js';
-import { correspondenciaModel, configuracaoParaSalvar, estadoDaEntrega, passosDaJornada, destinosDeConversaoModel, nomeDoDestino, rotuloDoSegredo, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
+import { correspondenciaModel, configuracaoParaSalvar, estadoDaEntrega, passosDaJornada, destinosDeConversaoModel, nomeDoDestino, analyticsMetricsModel, analyticsPanelModel, analyticsRangeParams, analyticsRankModel, journeyConnected, journeyLayout, trackingEventsModel, trackingHealthModel, trackingMetricsModel, trackingPageModel, applyDashboardNavigation, canCreateProject, createAuthenticatedApi, createDashboardProjectFlow, createLatestRequestGuard, createMobileDrawerController, createProjectSubmission, dashboardModel, filterProjectContent, secoesEscondidas, isProjectSlug, previewProjectContent, projectCardCounts, projectContentAction, projectOverviewModel, publicationModel, roleLabel } from './studio-dashboard.js';
 import { createVslUI } from './vsl-ui.js';
 import { leadsCsvUrl, leadsListModel, normalizeLeadRow } from './leads-ui.js';
 import { createViewRouter, viewToRestore } from './view-route.js';
@@ -13,6 +13,7 @@ import { abrirGuiaPublicosMeta } from './guia-publicos-meta.js';
 import { abaDoAssunto, abaParaOEndereco, abrirAbaDoProjeto, carregarLeadsDoProjeto, montarConfiguracoesDoProjeto, ocultarAbaDeLeads } from './projeto-configuracoes.js';
 import { criarPublicosMetaUI } from './publicos-meta-ui.js';
 import { criarConexaoMetaUI } from './conexao-meta-ui.js';
+import { pintarPlataformas } from './plataformas-ui.js';
 import { FORMATO_ALVA, documentoDaPagina, estadoDoQuiz, normalizarEstadoAlva } from './pagina-alva.js';
 import { carregarSinaisDeBloco } from './sinais-de-bloco-ui.js';
 import { renderFunis } from './funis-view.js';
@@ -1315,7 +1316,7 @@ const conexaoMetaUI = criarConexaoMetaUI({
   ligado: () => metaConexaoLigada,
   confirmar: () => confirmarAcao({ titulo: 'Desconectar a conta da Meta?', descricao: 'O Studio perde o acesso a esta conta do Facebook, e o acesso também é retirado na Meta. Os públicos já criados continuam na sua conta de anúncios.', confirmar: 'Desconectar', perigo: true }),
   // D2: escolher pela conexão apaga o pixel/token colados à mão neste projeto.
-  confirmarSubstituicao: () => confirmarAcao({ titulo: 'Trocar o preenchimento manual pela conexão?', descricao: 'Este projeto tem pixel ou token colados à mão. Eles serão substituídos pelo pixel escolhido e pelo token da conta conectada. Dá para voltar ao manual depois, em "Destinos".', confirmar: 'Usar a conexão' }),
+  confirmarSubstituicao: () => confirmarAcao({ titulo: 'Trocar o preenchimento manual pela conexão?', descricao: 'Este projeto tem pixel ou token colados à mão. Eles serão substituídos pelo pixel escolhido e pelo token da conta conectada. Dá para voltar ao manual depois, em "Preencher manualmente", no bloco da Meta.', confirmar: 'Usar a conexão' }),
   // O destino "Meta" e os públicos mudaram: as duas seções desta aba se redesenham.
   depoisDeEscolher: async () => { await Promise.all([recarregarDestinos().catch(() => {}), publicosMetaUI.abrir().catch(() => {})]); },
 });
@@ -1790,155 +1791,20 @@ function pintarJornada(evento) {
   alvo.append(titulo, linhaDoTempo);
 }
 
-// A tela onde o pixel do projeto é configurado.
-//
-// O segredo entra e não volta: o servidor guarda cifrado e nunca o devolve, então o campo
-// de token aparece sempre vazio, mesmo num destino já configurado. Deixá-lo em branco ao
-// salvar mantém o que está lá — é a diferença entre corrigir o ID do pixel e ser obrigado
-// a redigitar um token que a pessoa talvez não tenha mais à mão.
+// O cartão "Plataformas": um bloco por plataforma (plataformas-ui.js). O formulário manual
+// de cada uma continua lá, com o mesmo salvar e remover daqui.
 function pintarDestinos(entregas) {
-  const raiz = clear($('#tracking-destinations'));
-  // Não conseguir ler é diferente de não haver nada configurado. Desenhar os cinco como
-  // "Não configurado" quando a leitura falhou diria ao dono do projeto que o pixel dele
-  // sumiu — exatamente o tipo de mentira que esta tela existe para não contar.
-  if (trackingDestinosErro) {
-    const aviso = document.createElement('p');
-    aviso.className = 'help';
-    aviso.textContent = `Não foi possível ler os destinos deste ambiente: ${trackingDestinosErro}`;
-    raiz.append(aviso);
-    return;
-  }
-  // Credencial salva com a entrega desligada não sai do lugar. Dizer isso aqui evita a
-  // conclusão errada mais provável: "configurei o pixel e o Facebook não recebeu nada".
-  // Só avisa quando se sabe que está desligada — não quando a capacidade é desconhecida.
-  if (conversoesHabilitadas === false) {
-    const aviso = document.createElement('p');
-    aviso.className = 'help';
-    aviso.textContent = 'A entrega de conversões está desligada neste ambiente. As credenciais abaixo ficam guardadas, mas nada é enviado às plataformas até ela ser ligada.';
-    raiz.append(aviso);
-  }
+  // Não conseguir ler é diferente de não haver nada configurado: o módulo diz que a leitura
+  // falhou em vez de desenhar as cinco como "Não configurado".
+  // Credencial salva com a entrega desligada não sai do lugar — só avisa quando se sabe que
+  // está desligada, não quando a capacidade é desconhecida.
   const podeConfigurar = studioShell.can('integration.manage');
-  for (const destino of destinosDeConversaoModel(trackingDestinos, entregas, podeConfigurar)) {
-    raiz.append(cartaoDeDestino(destino));
-  }
-}
-
-function cartaoDeDestino(destino) {
-  const caixa = document.createElement('details');
-  caixa.className = 'provider-config';
-  caixa.dataset.provider = destino.provider;
-
-  const cabecalho = document.createElement('summary');
-  const texto = document.createElement('div');
-  const titulo = document.createElement('strong');
-  titulo.textContent = destino.name;
-  const detalhe = document.createElement('small');
-  // O identificador público no cabeçalho poupa abrir o bloco só para conferir qual pixel
-  // está ali — que é a dúvida mais comum de quem cuida de vários projetos.
-  detalhe.textContent = destino.publicValue ? `${destino.description} · ${destino.publicValue}` : destino.description;
-  texto.append(titulo, detalhe);
-  const estado = document.createElement('span');
-  estado.className = `delivery-state ${{ ok: 'ok', idle: 'set', teste: 'retry' }[destino.state] ?? 'off'}`;
-  estado.textContent = destino.stateLabel;
-  cabecalho.append(texto, estado);
-  caixa.append(cabecalho, destino.editable ? formularioDeDestino(destino) : semPermissao());
-  return caixa;
-}
-
-function semPermissao() {
-  const aviso = document.createElement('p');
-  aviso.className = 'help provider-form';
-  aviso.textContent = 'Configurar destinos exige permissão de integrações. Peça a um administrador do projeto.';
-  return aviso;
-}
-
-function formularioDeDestino(destino) {
-  const form = document.createElement('form');
-  form.className = 'provider-form';
-
-  // Meta pela conexão: sem campo de token nem de pixel. "Prefiro preencher manualmente"
-  // troca este formulário pelo completo; salvar com um token colado volta a origem para o
-  // manual (D2), e o servidor apaga a referência à conexão.
-  if (destino.pelaConexao) {
-    const aviso = document.createElement('p');
-    aviso.className = 'help';
-    aviso.textContent = destino.precisaReconectar
-      ? `A conta da Meta conectada precisa ser conectada de novo: sem isso o pixel ${destino.publicValue} não recebe pela Conversions API. Use "Reconectar" no cartão "Conta da Meta", acima.`
-      : `Configurado pela conexão com o Facebook: pixel ${destino.publicValue}, com o token da conta conectada. Para trocar, use o cartão "Conta da Meta", acima.`;
-    const manual = document.createElement('button');
-    manual.type = 'button';
-    manual.className = 'button ghost';
-    manual.textContent = 'Prefiro preencher manualmente';
-    manual.onclick = () => form.replaceWith(formularioDeDestino({ ...destino, pelaConexao: false, semTokenGuardado: true, publicValue: '', fields: destino.camposManuais }));
-    form.append(aviso, manual);
-  }
-
-  if (destino.aviso) {
-    const aviso = document.createElement('p');
-    aviso.className = 'help';
-    aviso.textContent = destino.aviso;
-    form.append(aviso);
-  }
-  if (destino.semCredencial) {
-    const aviso = document.createElement('p');
-    aviso.className = 'help';
-    aviso.textContent = 'A Taboola identifica a conversão pelo clique que chega na URL da página. Não há credencial a guardar: basta ativar.';
-    form.append(aviso);
-  }
-  for (const campo of destino.fields) {
-    const rotulo = document.createElement('label');
-    rotulo.textContent = campo.required ? campo.label : `${campo.label} (opcional)`;
-    const entrada = document.createElement('input');
-    entrada.name = campo.name;
-    entrada.autocomplete = 'off';
-    if (campo.secret) {
-      entrada.type = 'password';
-      const { placeholder, exigido } = rotuloDoSegredo(destino);
-      entrada.placeholder = placeholder;
-      entrada.required = exigido;
-    } else {
-      entrada.type = 'text';
-      if (campo.public && destino.publicValue) entrada.value = destino.publicValue;
-      if (campo.teste && destino.testCode) entrada.value = destino.testCode;
-    }
-    rotulo.append(entrada);
-    const ajuda = document.createElement('p');
-    ajuda.className = 'help';
-    ajuda.textContent = campo.help;
-    form.append(rotulo, ajuda);
-  }
-
-  const acoes = document.createElement('div');
-  acoes.className = 'provider-actions';
-  const salvar = document.createElement('button');
-  salvar.className = 'button primary';
-  salvar.textContent = destino.configured ? 'Salvar' : destino.semCredencial ? 'Ativar' : 'Configurar';
-  acoes.append(salvar);
-  if (destino.configured) {
-    const remover = document.createElement('button');
-    remover.type = 'button';
-    remover.className = 'button ghost';
-    remover.textContent = 'Remover';
-    remover.onclick = action(() => removerDestino(destino.provider));
-    acoes.append(remover);
-  }
-  const erro = document.createElement('p');
-  erro.className = 'form-error';
-  erro.setAttribute('role', 'alert');
-  form.append(acoes, erro);
-  form.onsubmit = action(async (evento) => {
-    evento.preventDefault();
-    erro.textContent = '';
-    try {
-      await salvarDestino(destino, new FormData(form));
-    } catch (falha) {
-      // O erro fica ao lado do formulário que o causou, e não também num aviso passageiro
-      // no topo: a mensagem do servidor costuma dizer qual campo está fora de formato, e
-      // ela precisa continuar à vista enquanto a pessoa corrige.
-      erro.textContent = falha.message;
-    }
+  pintarPlataformas($('#tracking-destinations'), destinosDeConversaoModel(trackingDestinos, entregas, podeConfigurar), {
+    erro: trackingDestinosErro,
+    aviso: conversoesHabilitadas === false ? 'A entrega de conversões está desligada neste ambiente. As credenciais abaixo ficam guardadas, mas nada é enviado às plataformas até ela ser ligada.' : '',
+    salvar: salvarDestino,
+    remover: action((provider) => removerDestino(provider)),
   });
-  return form;
 }
 
 async function salvarDestino(destino, dados) {

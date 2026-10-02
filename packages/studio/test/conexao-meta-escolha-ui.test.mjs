@@ -203,7 +203,8 @@ test('fidelidade: o módulo e o CSS novo só usam tokens, sem style em linha', a
   for (const raio of bloco.match(/border-radius:[^;]+/g) ?? []) assert.match(raio, /var\(--radius-/);
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   assert.match(app, /confirmarSubstituicao: \(\) => confirmarAcao\(/);
-  assert.match(app, /Prefiro preencher manualmente/);
+  const plataformas = await readFile(new URL('../public/plataformas-ui.js', import.meta.url), 'utf8');
+  assert.match(plataformas, /Prefiro preencher manualmente/);
 });
 
 test('modo manual vindo da conexão: o token não diz "Guardado" e é exigido', () => {
@@ -216,11 +217,14 @@ test('modo manual vindo da conexão: o token não diz "Guardado" e é exigido', 
   assert.deepEqual(rotuloDoSegredo(novo), { placeholder: '', exigido: false });
 });
 
-test('app.js usa o rótulo do segredo do modelo e abre o manual sem token guardado', async () => {
-  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(app, /rotuloDoSegredo\(destino\)/);
-  assert.match(app, /semTokenGuardado: true/);
-  assert.doesNotMatch(app, /entrada\.placeholder = destino\.configured \? 'Guardado/);
+test('o formulário manual (plataformas-ui.js) usa o rótulo do segredo do modelo e abre o manual sem token guardado', async () => {
+  const fonte = await readFile(new URL('../public/plataformas-ui.js', import.meta.url), 'utf8');
+  assert.match(fonte, /rotuloDoSegredo\(destino\)/);
+  assert.match(fonte, /semTokenGuardado: true/);
+  for (const arquivo of ['app.js', 'plataformas-ui.js']) {
+    const codigo = await readFile(new URL(`../public/${arquivo}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(codigo, /entrada\.placeholder = destino\.configured \? 'Guardado/, arquivo);
+  }
 });
 
 // Conferência F2: os chips de alerta tinham o mesmo azul de "Conectado"; faltava a linha

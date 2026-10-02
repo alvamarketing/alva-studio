@@ -43,7 +43,7 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
       const porChave = new Map(registrados.map((item) => [item.chave, item]));
       // O que falta, na ordem em que se resolve: cada item diz o que é e onde se consegue.
       const faltando = [];
-      if (!pixelId) faltando.push({ chave: 'pixel', titulo: 'Pixel da Meta', onde: 'Configure o pixel da Meta na seção "Destinos" desta aba. Os públicos são montados com os eventos que ele recebe.' });
+      if (!pixelId) faltando.push({ chave: 'pixel', titulo: 'Pixel da Meta', onde: 'Configure o pixel da Meta no bloco "Meta", em "Plataformas", nesta aba. Os públicos são montados com os eventos que ele recebe.' });
       if (credenciais?.origem === 'connection' && !(await tokenDaConexao?.resolver(escopo.companyId).catch(() => null))) faltando.push({
         chave: 'conexao',
         titulo: 'Conta da Meta conectada',
@@ -99,7 +99,7 @@ export function criarServicoDePublicos({ repository, tracking, fetch: buscar = g
         const credenciais = await repository.credenciais(escopo);
         if (!credenciais) throw recusa('Falta o token de acesso da Meta e o ID da conta de anúncios.', 409);
         const pixelId = await pixelDoProjeto(escopo);
-        if (!pixelId) throw recusa('Falta o pixel da Meta neste projeto. Configure-o em "Destinos" antes de criar públicos.', 409);
+        if (!pixelId) throw recusa('Falta o pixel da Meta neste projeto. Configure-o no bloco "Meta", em "Plataformas", antes de criar públicos.', 409);
         const pelaConexao = credenciais.origem === 'connection';
         let acesso = { token: credenciais.token, prova: null };
         if (pelaConexao) {
