@@ -157,9 +157,11 @@ export function pintarPlataformas(raiz, modelos, { doc = raiz.ownerDocument, sal
       // O cartão da conexão desenha o próprio cabeçalho; daqui vai só o formulário manual.
       bloco.querySelector(':scope > .plataforma-formulario')?.replaceChildren(formularioDeDestino(doc, destino, { salvar, remover }));
       bloco.definirDestino?.(destino);
+      atualizarDicaDaConexao(bloco);
     } else {
       bloco.hidden = Boolean(erro);
       if (!erro) pintarBlocoSimples(doc, bloco, destino, { salvar, remover });
+      atualizarDicaDaConexao(bloco);
     }
     blocos.push(bloco);
   }
@@ -180,6 +182,7 @@ export function adotarBloco(raiz, cartao) {
     const destino = cartao.querySelector(':scope > .plataforma-formulario');
     if (formulario?.childElementCount && destino) destino.replaceChildren(...formulario.childNodes);
     if (antigo.destino) { cartao.destino = antigo.destino; cartao.definirDestino?.(antigo.destino); }
+    atualizarDicaDaConexao(cartao);
     antigo.replaceWith(cartao);
   } else {
     const avisos = raiz.querySelectorAll(':scope > .plataformas-aviso');
@@ -199,8 +202,22 @@ export function devolverBlocoSimples(cartao) {
   if (cartao.destino) {
     bloco.destino = cartao.destino;
     pintarBlocoSimples(doc, bloco, cartao.destino, raiz.pintura ?? {});
+    atualizarDicaDaConexao(bloco);
   }
   return bloco;
+}
+
+// A dica de como trocar o pixel da Meta pela conexão. "Neste projeto" só existe no bloco da
+// conexão com a conta conectada (data-conexao="escolha"); desconectado, o caminho é conectar;
+// no bloco simples (sem o app da Meta ou sem permissão), só o manual.
+const DICAS_DA_CONEXAO = {
+  escolha: 'Para trocar o pixel, use "Neste projeto", acima.',
+  desconectada: 'Para trocar o pixel pela conexão, use "Continuar com o Facebook" (ou "Reconectar"), acima.',
+  ausente: 'A conexão com o Facebook não está disponível aqui; para trocar o pixel, use "Prefiro preencher manualmente".',
+};
+export function atualizarDicaDaConexao(bloco) {
+  const texto = DICAS_DA_CONEXAO[bloco?.dataset.conexao] ?? DICAS_DA_CONEXAO.ausente;
+  for (const dica of bloco?.querySelectorAll('[data-dica-conexao]') ?? []) dica.textContent = texto;
 }
 
 // O formulário manual de um destino — o mesmo de antes de existir a grade.
@@ -215,9 +232,14 @@ export function formularioDeDestino(doc, destino, { salvar, remover } = {}) {
   // troca este formulário pelo completo; salvar com um token colado volta a origem para o
   // manual (D2), e o servidor apaga a referência à conexão.
   if (destino.pelaConexao) {
-    form.append(el(doc, 'p', 'help', destino.precisaReconectar
-      ? `A conta da Meta conectada precisa ser conectada de novo: sem isso o pixel ${destino.publicValue} não recebe pela Conversions API. Use "Reconectar", acima.`
-      : `Configurado pela conexão com o Facebook: pixel ${destino.publicValue}, com o token da conta conectada. Para trocar, use "Neste projeto", acima. Aqui fica só o código de teste.`));
+    const aviso = el(doc, 'p', 'help', destino.precisaReconectar
+      ? `A conta da Meta conectada precisa ser conectada de novo: sem isso o pixel ${destino.publicValue} não recebe pela Conversions API. `
+      : `Configurado pela conexão com o Facebook: pixel ${destino.publicValue}, com o token da conta conectada. Aqui fica só o código de teste. `);
+    // Como trocar depende do bloco em que o formulário está: atualizarDicaDaConexao.
+    const dica = el(doc, 'span', '');
+    dica.dataset.dicaConexao = '';
+    aviso.append(dica);
+    form.append(aviso);
     const manual = el(doc, 'button', 'button ghost', 'Prefiro preencher manualmente');
     manual.type = 'button';
     manual.onclick = () => form.replaceWith(formularioDeDestino(doc, { ...destino, pelaConexao: false, semTokenGuardado: true, publicValue: '', fields: destino.camposManuais }, { salvar, remover }));

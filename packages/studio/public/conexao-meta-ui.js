@@ -17,7 +17,7 @@
 
 import { criarEscolhaPesquisavel } from './escolha-pesquisavel.js';
 import { svgDaMarca } from './marcas.js';
-import { adotarBloco, alternarManual, chip as chipDe, devolverBlocoSimples, esqueletoDoBloco } from './plataformas-ui.js';
+import { adotarBloco, alternarManual, atualizarDicaDaConexao, chip as chipDe, devolverBlocoSimples, esqueletoDoBloco } from './plataformas-ui.js';
 
 function elemento(doc, tag, classe, texto) {
   const no = doc.createElement(tag);
@@ -277,6 +277,9 @@ export function cartaoDaContaMeta(doc, { carregar, iniciar, desconectar, navegar
     if (sair) sair.onclick = () => cartao.aoDesconectar();
     manual.textContent = rotuloDoManual();
     manual.disabled = abrindo;
+    // "Neste projeto" só aparece conectado e com o projeto: a dica do formulário manual acompanha.
+    cartao.dataset.conexao = estado?.conectado && !estado.precisaReconectar && projeto ? 'escolha' : 'desconectada';
+    atualizarDicaDaConexao(cartao);
     acoesDoTopo.replaceChildren(...topo);
     corpo.replaceChildren(...novo);
     corpo.hidden = !novo.length;

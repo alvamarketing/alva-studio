@@ -254,6 +254,34 @@ test('nenhum texto da tela ou do servidor aponta para "Conta da Meta" ou "Destin
   }
 });
 
+// Conferência A6: o formulário da Meta pela conexão mandava usar "Neste projeto", que só
+// existe com a conexão ligada e conectada. A dica depende do bloco em que o formulário está.
+test('Meta pela conexão: a dica de como trocar o pixel depende de "Neste projeto" existir', async () => {
+  const { cartaoDaContaMeta } = await import('../public/conexao-meta-ui.js');
+  const pelaConexao = [{ provider: 'meta', configured: true, publicConfiguration: { pixel_id: '555', token_source: 'connection' } }];
+  const dica = (raiz) => raiz.querySelector(':scope > [data-provider="meta"] [data-dica-conexao]').textContent;
+  // Bloco simples (sem o app da Meta ou sem permissão): não há "Neste projeto" nem conexão.
+  const simples = montar(pelaConexao);
+  assert.doesNotMatch(dica(simples.raiz), /Neste projeto/);
+  assert.match(dica(simples.raiz), /Prefiro preencher manualmente/);
+  simples.janela.window.close();
+  // Bloco da conexão: desconectado manda conectar; conectado manda usar "Neste projeto".
+  for (const [estado, esperado, ausente] of [[{ conectado: false }, /Continuar com o Facebook/, /Neste projeto/], [{ conectado: true, nome: 'Taian' }, /Neste projeto/, /Continuar com o Facebook/]]) {
+    const { raiz, doc, pintar, janela } = montar(pelaConexao);
+    const cartao = cartaoDaContaMeta(doc, {
+      carregar: async () => estado, iniciar: async () => ({}), desconectar: async () => ({}), navegar: () => {}, irParaManual: () => {},
+      projeto: estado.conectado ? { carregar: async () => ({ escolha: null, destino: { origem: 'connection', pixelId: '555' }, termos: null }), contas: async () => ({ contas: [] }), pixels: async () => ({ pixels: [] }), escolher: async () => ({}) } : null,
+    });
+    adotarBloco(raiz, cartao);
+    await cartao.recarregar();
+    assert.match(dica(raiz), esperado);
+    assert.doesNotMatch(dica(raiz), ausente);
+    pintar(pelaConexao);
+    assert.match(dica(raiz), esperado, 'repintar a grade mantém a dica certa');
+    janela.window.close();
+  }
+});
+
 // Conferência A3: no tema escuro o quadrado preto do TikTok sumia sobre o bloco escuro. No
 // escuro ele inverte (fundo claro, logo escuro), só com tokens que já existem.
 test('tema escuro: o quadrado do TikTok inverte com tokens existentes e continua visível', async () => {
