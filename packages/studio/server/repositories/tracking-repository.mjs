@@ -202,7 +202,8 @@ export class TrackingRepository {
   // `token_source` não é campo aceito em `configuration`. Só a escolha pela conexão grava
   // 'connection'. Regra D2: a origem é uma só — com 'connection' o token colado é apagado; um
   // token colado depois volta a origem para 'manual'.
-  async saveDestination({ companyId, projectId, environment: rawEnvironment, provider, configuration, publicConfiguration = undefined, tokenSource = undefined }) {
+  // `client`: quem já está numa transação (a escolha pela conexão) passa a dele.
+  async saveDestination({ companyId, projectId, environment: rawEnvironment, provider, configuration, publicConfiguration = undefined, tokenSource = undefined, client: clienteExterno = null }) {
     const targetEnvironment = environment(rawEnvironment);
     if (!PROVIDERS.has(provider)) throw fail('Destino de rastreamento inválido.');
     if (tokenSource !== undefined && (provider !== 'meta' || !ORIGENS_DO_TOKEN.has(tokenSource))) throw fail('Origem do token inválida.');
@@ -210,7 +211,8 @@ export class TrackingRepository {
     // A validação de formato é sobre o que chegou nesta chamada — mesclar não isenta um
     // campo enviado de obedecer o contrato do provedor, só preenche o que ficou de fora.
     if (Object.keys(configuration).some((key) => !PROVIDER_FIELDS[provider].has(key) || typeof configuration[key] !== 'string' || !PROVIDER_VALUE_RULES[provider][key]?.test(configuration[key]))) throw fail('Configuração do destino inválida.');
-    await this.database.transaction(async (client) => {
+    const naTransacao = (tarefa) => (clienteExterno ? tarefa(clienteExterno) : this.database.transaction(tarefa));
+    await naTransacao(async (client) => {
       const binding = await client.query(
         `SELECT id FROM tracking_bindings WHERE company_id = $1 AND project_id = $2 AND environment = $3 AND engine = 'conversions' FOR UPDATE`,
         [companyId, projectId, targetEnvironment],

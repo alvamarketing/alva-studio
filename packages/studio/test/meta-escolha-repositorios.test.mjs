@@ -8,6 +8,8 @@ import { TrackingRepository } from '../server/repositories/tracking-repository.m
 import { SecretVault } from '../server/repositories/publication-repository.mjs';
 import { postgresFixture } from './postgres-fixture.mjs';
 import { createProjectApi } from '../server/project-api.mjs';
+import { criarServicoDeSelecaoMeta } from '../server/meta-selecao-servico.mjs';
+import { regraDoPublico, publicoPorChave } from '../server/meta-publicos.mjs';
 
 // F2 no Postgres de verdade (descartável): migração 035, a escolha por projeto, o destino da
 // Meta com `token_source` e a credencial dos públicos pela conexão.
@@ -163,5 +165,46 @@ test('escolha da Meta por projeto (Postgres, migração 035)', async (t) => {
     // E a rota não deixa o corpo escolher a origem.
     await assert.rejects(() => chamar({ environment: 'production', configuration: { pixel_id: '999999', token_source: 'connection' } }), (erro) => erro.status === 400);
     assert.equal((await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta.pixel_id, '555');
+  });
+
+  // Regra registrada (conferência F2): trocar a ESCOLHA (conta ou pixel) invalida os públicos
+  // registrados — eles foram montados com a conta e o pixel antigos. Desconectar não é trocar
+  // a escolha e nunca apaga nada (D10, coberto acima).
+  await t.test('públicos: trocar só o pixel pela conexão (mesma conta) apaga os registros montados com o pixel antigo', async () => {
+    const escopo = await empresa();
+    const conexao = await conectar(escopo);
+    const gravarPublico = (pixel) => publicos.gravar({ ...escopo, chave: 'lead', status: 'created', metaId: '987', definicao: { nome: 'Alva · Virou lead', regra: regraDoPublico(publicoPorChave('lead'), pixel) } });
+    await publicos.usarConexao({ ...escopo, adAccountId: '111', connectionId: conexao.id, pixelId: '555' });
+    await gravarPublico('555');
+    await publicos.usarConexao({ ...escopo, adAccountId: '111', connectionId: conexao.id, pixelId: '555' });
+    assert.equal((await publicos.listar(escopo)).length, 1, 'mesma conta e mesmo pixel: ficam');
+    await publicos.usarConexao({ ...escopo, adAccountId: '111', connectionId: conexao.id, pixelId: '666' });
+    assert.equal((await publicos.listar(escopo)).length, 0, 'pixel novo: os públicos do pixel antigo saem');
+  });
+
+  // Conferência F2: as três gravações da escolha eram separadas; uma falha no meio podia
+  // apagar o token colado sem gravar a escolha.
+  await t.test('escolher é uma transação só: falha no meio não apaga o token manual', async () => {
+    const escopo = await empresa();
+    const conexao = await conectar(escopo);
+    await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '1', access_token: 'colado-capi' } });
+    await publicos.salvarCredenciais({ ...escopo, adAccountId: '1', token: 'colado-publicos' });
+    const cliente = {
+      contasDeAnuncios: async () => [{ id: '111', nome: 'Conta' }],
+      pixels: async () => [{ id: '555', nome: 'Pixel' }],
+      paginas: async () => [], termosAceitos: async () => true,
+    };
+    const selecoesQueFalham = { ler: (input) => selecoes.ler(input), salvar: async () => { throw new Error('falha injetada'); } };
+    const servico = criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes: selecoesQueFalham, tracking, publicos, transacao: (fn) => database.transaction(fn) });
+    await assert.rejects(() => servico.escolher({ ...escopo, adAccountId: '111', pixelId: '555', substituirManual: true }), /falha injetada/);
+    assert.deepEqual((await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta, { pixel_id: '1', access_token: 'colado-capi' });
+    assert.deepEqual(await publicos.credenciais(escopo), { adAccountId: '1', origem: 'manual', token: 'colado-publicos' });
+    assert.equal(await selecoes.ler(escopo), null);
+    // Sem falha, as três mudam juntas.
+    const servicoBom = criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes, tracking, publicos, transacao: (fn) => database.transaction(fn) });
+    await servicoBom.escolher({ ...escopo, adAccountId: '111', pixelId: '555', substituirManual: true });
+    assert.deepEqual((await tracking.conversionDestinations({ ...escopo, environment: 'production' })).meta, { pixel_id: '555', token_source: 'connection' });
+    assert.equal((await publicos.credenciais(escopo)).origem, 'connection');
+    assert.equal((await selecoes.ler(escopo)).conexaoId, conexao.id);
   });
 });

@@ -56,7 +56,7 @@ test('escolher: grava, configura o destino pela conexão (sem token) e os públi
   const { servico, registro } = montar();
   const estado = await servico.escolher({ ...escopo, userId: 'u1', adAccountId: '111', pixelId: '555', automatica: true });
   assert.deepEqual(registro.destinos, [{ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: '555' }, tokenSource: 'connection' }]);
-  assert.deepEqual(registro.publicos, [{ ...escopo, adAccountId: '111', connectionId: 'conn-1' }]);
+  assert.deepEqual(registro.publicos, [{ ...escopo, adAccountId: '111', connectionId: 'conn-1', pixelId: '555' }]);
   assert.equal(registro.salvos[0].adAccountNome, 'Conta Alva');
   assert.equal(registro.salvos[0].pixelNome, 'Pixel Alva');
   assert.equal(registro.salvos[0].automatica, true);

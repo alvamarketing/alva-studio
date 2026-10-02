@@ -28,8 +28,8 @@ export class MetaProjectSelectionsRepository {
     return rows[0] ? publica(rows[0]) : null;
   }
 
-  async salvar({ companyId, projectId, connectionId, adAccountId, adAccountNome = '', pixelId, pixelNome = '', automatica = false, userId = null }) {
-    const { rows } = await this.database.query(
+  async salvar({ companyId, projectId, connectionId, adAccountId, adAccountNome = '', pixelId, pixelNome = '', automatica = false, userId = null, client = null }) {
+    const { rows } = await (client ?? this.database).query(
       `INSERT INTO meta_project_selections (company_id, project_id, connection_id, ad_account_id, ad_account_name, pixel_id, pixel_name, automatic, selected_by_user_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (company_id, project_id) DO UPDATE SET

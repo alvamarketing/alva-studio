@@ -302,7 +302,10 @@ export function createApp({
   const repositorioDePublicosMeta = tracking ? new MetaAudiencesRepository(database) : null;
   const publicosMeta = tracking ? criarServicoDePublicos({ repository: repositorioDePublicosMeta, tracking, tokenDaConexao: tokenDaConexaoMeta, ...(metaOptions.fetch ? { fetch: metaOptions.fetch } : {}) }) : null;
   const metaSelecao = metaConexao && tracking
-    ? criarServicoDeSelecaoMeta({ conexoes: conexoesMeta, cliente: clienteDaConexao, selecoes: new MetaProjectSelectionsRepository(database), tracking, publicos: repositorioDePublicosMeta })
+    ? criarServicoDeSelecaoMeta({
+      conexoes: conexoesMeta, cliente: clienteDaConexao, selecoes: new MetaProjectSelectionsRepository(database), tracking, publicos: repositorioDePublicosMeta,
+      transacao: (tarefa) => database.transaction(tarefa),
+    })
     : null;
   const images = database ? new ImageRepository(database, { publicOrigin }) : null;
   const commercialOutbox = runtimeFlags.conversions && database && process.env.TRACKING_MASTER_KEY

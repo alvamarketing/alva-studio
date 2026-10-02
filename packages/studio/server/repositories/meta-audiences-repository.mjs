@@ -34,9 +34,11 @@ export class MetaAudiencesRepository {
   }
 
   // A escolha pela conexão: a conta vem da lista da Meta, o token é o da conexão. Substitui a
-  // credencial manual (o token colado é apagado — nunca as duas origens, D2). Trocar de conta
-  // apaga os públicos registrados, como no manual: os ids eram da conta antiga.
-  async usarConexao({ companyId, projectId, adAccountId, connectionId }) {
+  // credencial manual (o token colado é apagado — nunca as duas origens, D2). Trocar a
+  // escolha invalida os públicos registrados: trocar de conta (os ids eram da conta antiga)
+  // ou só o pixel (a regra guardada aponta o pixel antigo). Desconectar não passa por aqui e
+  // nunca apaga nada (D10). `client` deixa a escolha inteira numa transação só.
+  async usarConexao({ companyId, projectId, adAccountId, connectionId, pixelId = null, client = null }) {
     const run = async (client) => {
       const atual = await client.query(
         'SELECT ad_account_id FROM meta_audience_credentials WHERE company_id = $1 AND project_id = $2 FOR UPDATE', [companyId, projectId],
@@ -51,9 +53,19 @@ export class MetaAudiencesRepository {
       );
       if (atual.rows[0] && atual.rows[0].ad_account_id !== adAccountId) {
         await client.query('DELETE FROM meta_audiences WHERE company_id = $1 AND project_id = $2', [companyId, projectId]);
+      } else if (pixelId) {
+        // O pixel de cada público está na regra gravada (`definition.regra`). Registro de erro
+        // não tem regra e fica: ele não aponta pixel nenhum.
+        await client.query(
+          `DELETE FROM meta_audiences WHERE company_id = $1 AND project_id = $2
+             AND definition #>> '{regra,inclusions,rules,0,event_sources,0,id}' IS NOT NULL
+             AND definition #>> '{regra,inclusions,rules,0,event_sources,0,id}' <> $3`,
+          [companyId, projectId, String(pixelId)],
+        );
       }
     };
-    await (this.database.transaction ? this.database.transaction(run) : run(this.database));
+    if (client) await run(client);
+    else await (this.database.transaction ? this.database.transaction(run) : run(this.database));
   }
 
   // `token` ausente mantém o que está guardado (o servidor nunca o devolve, então quem corrige

@@ -20,7 +20,10 @@ function recusa(mensagem, status = 400, code) {
 
 export const CODIGO_MANUAL_EXISTENTE = 'meta_manual_existente';
 
-export function criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes, tracking, publicos, agora = () => Date.now() }) {
+// `transacao(fn)`: abre uma transação e passa o `client` a fn. As três gravações da escolha
+// (destino, públicos, escolha) acontecem nela — falha no meio não apaga o token colado sem
+// gravar a escolha. Sem ela (testes de unidade), as gravações seguem em sequência.
+export function criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes, tracking, publicos, agora = () => Date.now(), transacao = null }) {
   // A conexão com o token, pronta para chamar a Meta — ou o motivo de não estar.
   async function conexaoUtilizavel(companyId) {
     const conexao = await conexoes.comToken(companyId).catch(() => null);
@@ -144,12 +147,17 @@ export function criarServicoDeSelecaoMeta({ conexoes, cliente, selecoes, trackin
         throw recusa('Este projeto já tem pixel ou token preenchidos à mão. Confirme para trocar pelos da conexão.', 409, CODIGO_MANUAL_EXISTENTE);
       }
 
-      await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: pixel }, tokenSource: 'connection' });
-      if (publicos?.usarConexao) await publicos.usarConexao({ ...escopo, adAccountId: conta, connectionId: conexao.id });
-      await selecoes.salvar({
-        ...escopo, connectionId: conexao.id, adAccountId: conta, adAccountNome: contaEscolhida.nome,
-        pixelId: pixel, pixelNome: pixelEscolhido.nome, automatica: automatica === true, userId,
-      });
+      const gravar = async (client = undefined) => {
+        const comCliente = client ? { client } : {};
+        await tracking.saveDestination({ ...escopo, environment: 'production', provider: 'meta', configuration: { pixel_id: pixel }, tokenSource: 'connection', ...comCliente });
+        if (publicos?.usarConexao) await publicos.usarConexao({ ...escopo, adAccountId: conta, connectionId: conexao.id, pixelId: pixel, ...comCliente });
+        await selecoes.salvar({
+          ...escopo, connectionId: conexao.id, adAccountId: conta, adAccountNome: contaEscolhida.nome,
+          pixelId: pixel, pixelNome: pixelEscolhido.nome, automatica: automatica === true, userId, ...comCliente,
+        });
+      };
+      if (transacao) await transacao(gravar);
+      else await gravar();
       return servico.estado(escopo);
     },
 
