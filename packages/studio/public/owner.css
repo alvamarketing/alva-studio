@@ -1587,6 +1587,7 @@
   font-size: var(--text-sm);
 }
 .escolha-painel {
+  font-size: var(--text-md);
   position: absolute;
   z-index: 20;
   top: calc(100% + 6px);
@@ -1605,6 +1606,7 @@
 }
 .escolha-busca {
   width: 100%;
+  font-size: var(--text-md);
 }
 .escolha-lista {
   display: grid;
