@@ -61,7 +61,24 @@ const regraDoBotao = `.cta{display:inline-flex;align-items:center;gap:9px;paddin
 // que o elemento cair, para ele herdar a paleta de onde for solto, não trazer a sua.
 const regrasDeConteudo = `.alva-secao{padding:60px 7%;min-height:140px}.alva-titulo{margin:0 0 16px}.alva-texto{margin:0 0 16px;max-width:70ch}.alva-colunas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;align-items:start}.alva-imagem{display:block;max-width:100%;height:auto;border-radius:20px}.alva-secao-suave{background:#F7F9FC}.alva-secao-escura{background:#101828;color:#ffffff}.alva-secao-escura .alva-texto{color:#CDD6E3}.alva-colunas-3{grid-template-columns:repeat(3,minmax(0,1fr))}.alva-colunas>.alva-secao{padding:0;min-height:0}.alva-conteudo>.alva-secao{flex:0 0 100%;min-width:0}.alva-respiro-p{padding-top:32px;padding-bottom:32px}.alva-respiro-g{padding-top:96px;padding-bottom:96px}.alva-conteudo{row-gap:16px}.alva-espaco-p{row-gap:8px}.alva-espaco-g{row-gap:32px}.alva-conteudo-centro{justify-content:center;text-align:center}.alva-conteudo-centro .alva-texto,.alva-conteudo-centro .alva-imagem,.alva-conteudo-centro .alva-titulo,.alva-a-centro .alva-titulo{margin-left:auto;margin-right:auto}.alva-linha{display:flex;align-items:center;gap:24px}.alva-linha>.alva-bloco{flex:1 1 0;min-width:0}.alva-colunas-1-3-2-3{grid-template-columns:1fr 2fr}.alva-colunas-2-3-1-3{grid-template-columns:2fr 1fr}.alva-m-topo-p{margin-top:8px}.alva-m-topo-m{margin-top:24px}.alva-m-topo-g{margin-top:48px}.alva-m-base-p{margin-bottom:8px}.alva-m-base-m{margin-bottom:24px}.alva-m-base-g{margin-bottom:48px}.alva-pagina{display:flex;flex-wrap:wrap}.alva-pagina>*{flex:0 0 100%;min-width:0}.alva-conteudo{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:flex-start;column-gap:24px}.alva-bloco{flex:0 0 100%;min-width:0;box-sizing:border-box}.alva-l-3-4{flex-basis:calc(75% - 6px)}.alva-l-2-3{flex-basis:calc(66.666% - 8px)}.alva-l-1-2{flex-basis:calc(50% - 12px)}.alva-l-1-3{flex-basis:calc(33.333% - 16px)}.alva-l-1-4{flex-basis:calc(25% - 18px)}.alva-a-centro{text-align:center}.alva-a-centro .alva-texto,.alva-a-centro .alva-imagem{margin-left:auto;margin-right:auto}.alva-a-direita{text-align:right}.alva-a-direita .alva-texto,.alva-a-direita .alva-imagem{margin-left:auto}@supports (animation-timeline:view()){[data-alva-motion]{animation-timeline:view();animation-range:entry 0% cover 30%}}@media(max-width:760px){.alva-secao{padding:40px 6%}.alva-colunas,.alva-colunas-3{grid-template-columns:1fr}.alva-bloco{flex-basis:100%}.alva-linha{flex-direction:column;align-items:stretch}.alva-colunas-1-3-2-3,.alva-colunas-2-3-1-3{grid-template-columns:1fr}.alva-respiro-g{padding-top:56px;padding-bottom:56px}}`;
 
-export const elementosCss = paleta + regras + regraDoBotao + regrasDeConteudo + '.alva-aviso-privacidade{margin:12px 0 0;font-size:12px;line-height:1.5;opacity:.75}.alva-aviso-privacidade a{color:inherit;text-decoration:underline}';
+// O botão com "#âncora" rola suave até a seção (quem pediu menos movimento salta direto;
+// :root e não html, porque a base de html mora em templates.js — convencao-base-e-override),
+// e a seção para 16px abaixo do topo — o mesmo passo do espaço entre blocos.
+const regrasDaAncora = '@media(prefers-reduced-motion:no-preference){:root{scroll-behavior:smooth}}.alva-secao[id]{scroll-margin-top:16px}';
+
+// Os campos do formulário numa faixa que quebra linha: metade e terço ficam lado a lado no
+// computador e empilham no celular (o mesmo 760px do resto da página). A escolha única e a
+// caixa de marcar herdam a moldura e a cor de .alva-form (templates.js); aqui só o arranjo.
+// A isca contra robô sai da tela sem `display:none`, que alguns robôs sabem pular.
+const regrasDoFormulario = '.alva-form-campos{display:flex;flex-wrap:wrap;column-gap:16px}.alva-form-campos>*{flex:0 0 100%;min-width:0;box-sizing:border-box}'
+  + '.alva-form-campos>.alva-campo-metade{flex-basis:calc(50% - 8px)}.alva-form-campos>.alva-campo-terco{flex-basis:calc(33.333% - 10.667px)}'
+  + '.alva-campo-escolha{border:0;padding:0;min-width:0}.alva-campo-escolha legend{padding:0;margin:0 0 8px}'
+  + '.alva-form .alva-campo-opcao,.alva-form .alva-campo-marcar{display:flex;align-items:center;gap:8px;font-weight:400}.alva-form .alva-campo-opcao{margin:0 0 8px}'
+  + '.alva-form .alva-campo-opcao input,.alva-form .alva-campo-marcar input{flex:none;margin:0}'
+  + '.alva-isca{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}'
+  + '@media(max-width:760px){.alva-form-campos>.alva-campo-metade,.alva-form-campos>.alva-campo-terco{flex-basis:100%}}';
+
+export const elementosCss = paleta + regras + regraDoBotao + regrasDeConteudo + '.alva-aviso-privacidade{margin:12px 0 0;font-size:12px;line-height:1.5;opacity:.75}.alva-aviso-privacidade a{color:inherit;text-decoration:underline}' + regrasDaAncora + regrasDoFormulario;
 
 // A pergunta de escolha do quiz (esquema do Alva). Fica fora de `elementosCss` porque só o
 // quiz a usa. Os três estados são distintos: parado, cursor em cima (borda) e escolhido

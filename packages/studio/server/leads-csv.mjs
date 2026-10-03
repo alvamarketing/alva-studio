@@ -1,6 +1,8 @@
 function valueForCsv(value) {
   if (Array.isArray(value)) return value.map(valueForCsv).join('; ');
   if (value === null || value === undefined) return '';
+  if (value === true) return 'Sim';
+  if (value === false) return 'Não';
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);

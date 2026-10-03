@@ -52,7 +52,8 @@ export const secoesProntas = [
   {
     id: 'secao-contato',
     nome: 'Contato com formulário',
-    props: { fundo: 'suave', alinhamento: 'centro' },
+    // A âncora "contato" é para onde os botões das outras seções prontas já apontam.
+    props: { fundo: 'suave', alinhamento: 'centro', ancora: 'contato' },
     conteudo: () => [
       no('heading', { text: 'Fale com a gente', level: 2 }),
       no('text', { text: 'Deixe seu contato e respondemos em até um dia útil.' }),
@@ -66,3 +67,11 @@ export const secoesProntas = [
 ];
 
 export const TIPOS_DE_SECAO_PRONTA = new Set(secoesProntas.map((secao) => secao.id));
+
+// O formulário que entra pela biblioteca já vem com o básico de um lead. Antes ele nascia
+// vazio, e o "Campo" só era achado por acaso na biblioteca.
+export const camposPadraoDoFormulario = () => [
+  no('field', { label: 'Nome', name: 'nome', fieldType: 'text', placeholder: 'Seu nome', required: true, largura: 'inteira' }),
+  no('field', { label: 'E-mail', name: 'email', fieldType: 'email', placeholder: 'voce@exemplo.com', required: true, largura: 'inteira' }),
+  no('field', { label: 'Telefone', name: 'telefone', fieldType: 'tel', placeholder: '(11) 91234-5678', required: false, largura: 'inteira' }),
+];

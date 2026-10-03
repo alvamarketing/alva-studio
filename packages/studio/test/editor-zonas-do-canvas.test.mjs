@@ -52,3 +52,23 @@ test('a zona da seção avança sobre o respiro sem mover nada: margem negativa 
   assert.equal(estilo('.alva-conteudo').paddingBottom, '32px');
   assert.equal(estilo('.alva-conteudo').marginBottom, '-32px');
 });
+
+// Os campos do formulário: pilha com todos na linha inteira, lado a lado com metade/terço.
+const formulario = (campos) => {
+  const { window } = new JSDOM(`<!doctype html><html><head><style>${elementosCss + ZONAS_DO_CANVAS}</style></head><body>
+    <form class="alva-form"><div class="alva-form-campos" data-puck-dropzone="f:itens">${campos}</div></form></body></html>`);
+  return (seletor) => window.getComputedStyle(window.document.querySelector(seletor));
+};
+const campo = (id, classe = '') => `<div class="alva-campo${classe}" data-puck-component="${id}"><label class="answer-wrap${classe}">${id}<input></label></div>`;
+
+test('formulário com todos os campos inteiros é uma pilha no canvas', () => {
+  const estilo = formulario(campo('a') + campo('b'));
+  assert.equal(estilo('.alva-form-campos').flexDirection, 'column');
+  assert.equal(estilo('[data-puck-component="a"]').width, '100%');
+});
+
+test('campo de metade deixa a zona do formulário em linha, para ficar ao lado do outro', () => {
+  const estilo = formulario(campo('a', ' alva-campo-metade') + campo('b', ' alva-campo-metade'));
+  assert.equal(estilo('.alva-form-campos').flexDirection || 'row', 'row');
+  assert.equal(estilo('.alva-form-campos').flexWrap, 'wrap');
+});

@@ -34,7 +34,40 @@ const PROFUNDIDADE_MAXIMA = 40;
 const ESQUEMA_SEGURO = /^(?:https?:\/\/|mailto:|tel:|#|\/)/i;
 
 // Os tipos de resposta que a captura aceita — os mesmos que o servidor valida.
-const FIELD_TYPES = new Set(['text', 'email', 'tel', 'number', 'date', 'file', 'long_text']);
+const FIELD_TYPES = new Set(['text', 'email', 'tel', 'number', 'date', 'file', 'long_text', 'select', 'radio', 'checkbox']);
+const TIPOS_COM_OPCOES = new Set(['select', 'radio']);
+
+// A largura do campo dentro do formulário: lado a lado no computador, empilhados no celular.
+const LARGURAS_DO_CAMPO = Object.freeze({ inteira: '', metade: ' alva-campo-metade', terco: ' alva-campo-terco' });
+export const classeDaLarguraDoCampo = (props = {}) => LARGURAS_DO_CAMPO[props.largura] ?? '';
+export const TIPOS_DE_CAMPO_COM_OPCOES = Object.freeze(['select', 'radio']);
+
+// O campo isca: invisível para quem visita, irresistível para robô que preenche tudo. O nome
+// começa com "_", que nenhum campo da pessoa pode ter (nomeDeCampo tira) — o servidor o
+// reconhece sem confundir com resposta, e envio com ele preenchido some em silêncio.
+export const CAMPO_ISCA = '_alva_site';
+const ISCA = `<div class="alva-isca" aria-hidden="true"><label>Deixe este campo vazio<input type="text" name="${CAMPO_ISCA}" value="" tabindex="-1" autocomplete="off"></label></div>`;
+
+// Para onde levar quem enviou: só endereço http(s) completo, sem nada que feche o atributo.
+export function enderecoDeRedirecionamento(valor) {
+  const limpo = String(valor ?? '').trim();
+  if (!/^https?:\/\/[^\s"'<>\\]{1,1000}$/i.test(limpo)) return '';
+  try { return new URL(limpo).hostname ? limpo : ''; } catch { return ''; }
+}
+
+// As opções de uma lista suspensa ou escolha única: texto curto, sem vazias nem repetidas.
+function opcoesDoCampo(lista) {
+  const vistas = new Set();
+  const limpas = [];
+  for (const bruta of Array.isArray(lista) ? lista : []) {
+    const rotulo = texto(typeof bruta === 'string' ? bruta : bruta?.rotulo, 120).trim();
+    if (!rotulo || vistas.has(rotulo)) continue;
+    vistas.add(rotulo);
+    limpas.push({ rotulo });
+    if (limpas.length === 20) break;
+  }
+  return limpas;
+}
 
 function falhar(mensagem) {
   return Object.assign(new Error(mensagem), { status: 400, statusCode: 400 });
@@ -100,6 +133,19 @@ export const atributoDeRevelar = (props = {}) => {
 };
 const atributoDeMovimento = (props) => (movimentoDoBloco(props) ? ` data-alva-motion="${movimentoDoBloco(props)}"` : '');
 
+// A âncora da seção: o nome que o botão usa em "#contato" para rolar até ela. Só letra
+// minúscula sem acento, número e hífen — o que cabe num id e num endereço sem escape.
+// Digitando, o hífen do fim fica (é o espaço antes da próxima palavra); salvo, ele sai.
+export function normalizarAncora(valor, { digitando = false } = {}) {
+  const limpo = String(valor ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-').replace(/^-+/, '').slice(0, 40);
+  return digitando ? limpo : limpo.replace(/-+$/, '');
+}
+const atributoDeAncora = (props = {}) => {
+  const ancora = normalizarAncora(props.ancora);
+  return ancora ? ` id="${ancora}"` : '';
+};
+
 // A identidade de cada bloco na página publicada: é o id do nó, o mesmo que o editor guarda
 // e que sobrevive aos salvamentos. O tracker mede por ele (rolagem, tempo à vista, clique) e
 // nunca lê o conteúdo do bloco. O formato é o que o coletor aceita (server/analytics-collect.mjs
@@ -158,7 +204,7 @@ const ELEMENTOS = {
   section: {
     render: (node, desenharFilhos) => {
       const estilo = estiloDaSecao(node.props);
-      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeBloco(node)}${atributoDeMovimento(node.props)}${atributoDeRevelar(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
+      return `<section class="${classeDaSecao(node.props)}"${atributoDeAncora(node.props)}${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeBloco(node)}${atributoDeMovimento(node.props)}${atributoDeRevelar(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
     },
   },
   // A Linha: os blocos dentro dela dividem o espaço em partes iguais — soltar o segundo já
@@ -239,16 +285,34 @@ const ELEMENTOS = {
     render: (node) => {
       const { label, name, fieldType, placeholder, required } = node.props;
       const obrigatorio = required === true ? ' required' : '';
+      const classe = `answer-wrap${LARGURAS_DO_CAMPO[node.props.largura] ?? ''}`;
+      const nome = escapeHtml(name);
+      const rotulo = escapeHtml(texto(label, 200));
+      const opcoes = Array.isArray(node.props.opcoes) ? node.props.opcoes : [];
+      // A caixa de marcar manda "sim" quando marcada e nada quando não: o servidor guarda
+      // verdadeiro ou falso.
+      if (fieldType === 'checkbox') return `<label class="${classe} alva-campo-marcar"><input type="checkbox" name="${nome}" value="sim"${obrigatorio}><span>${rotulo}</span></label>`;
+      if (fieldType === 'radio') {
+        return `<fieldset class="${classe} alva-campo-escolha"><legend>${rotulo}</legend>`
+          + opcoes.map((opcao) => `<label class="alva-campo-opcao"><input type="radio" name="${nome}" value="${escapeHtml(opcao.rotulo)}"${obrigatorio}><span>${escapeHtml(opcao.rotulo)}</span></label>`).join('')
+          + '</fieldset>';
+      }
+      if (fieldType === 'select') {
+        return `<label class="${classe}">${rotulo}<select class="answer" name="${nome}"${obrigatorio}><option value="">${escapeHtml(texto(placeholder, 200).trim() || 'Selecione')}</option>`
+          + opcoes.map((opcao) => `<option value="${escapeHtml(opcao.rotulo)}">${escapeHtml(opcao.rotulo)}</option>`).join('')
+          + '</select></label>';
+      }
       const campo = fieldType === 'long_text'
-        ? `<textarea class="answer" name="${escapeHtml(name)}" placeholder="${escapeHtml(texto(placeholder, 200))}"${obrigatorio}></textarea>`
-        : `<input class="answer" name="${escapeHtml(name)}" type="${escapeHtml(fieldType)}" placeholder="${escapeHtml(texto(placeholder, 200))}"${obrigatorio}>`;
-      return `<label class="answer-wrap">${escapeHtml(texto(label, 200))}${campo}</label>`;
+        ? `<textarea class="answer" name="${nome}" placeholder="${escapeHtml(texto(placeholder, 200))}"${obrigatorio}></textarea>`
+        : `<input class="answer" name="${nome}" type="${escapeHtml(fieldType)}" placeholder="${escapeHtml(texto(placeholder, 200))}"${obrigatorio}>`;
+      return `<label class="${classe}">${rotulo}${campo}</label>`;
     },
   },
   form: {
     // `data-alva-capture-id` é como a publicação liga o formulário à captura; `.alva-form` é
-    // a folha de formulário que já existe.
-    render: (node, desenharFilhos) => `<form class="alva-form" data-alva-capture-id="${escapeHtml(texto(node.id, 80))}" action="#" method="post">${desenharFilhos(node)}<button type="submit" class="cta">${escapeHtml(texto(node.props.submitLabel, 120) || 'Enviar')}</button>${avisoDePrivacidade(node.props)}</form>`,
+    // a folha de formulário que já existe. Os campos moram numa faixa própria para poderem
+    // ficar lado a lado; a isca vem depois deles, antes do botão.
+    render: (node, desenharFilhos) => `<form class="alva-form" data-alva-capture-id="${escapeHtml(texto(node.id, 80))}" action="#" method="post"><div class="alva-form-campos">${desenharFilhos(node)}</div>${ISCA}<button type="submit" class="cta">${escapeHtml(texto(node.props.submitLabel, 120) || 'Enviar')}</button>${avisoDePrivacidade(node.props)}</form>`,
   },
 };
 
@@ -259,6 +323,8 @@ export function normalizeNode(node) {
   const type = String(node.type ?? '');
   if (!Object.hasOwn(ELEMENTOS, type)) throw falhar(`Tipo de elemento desconhecido: “${type}”.`);
   const props = node.props && typeof node.props === 'object' && !Array.isArray(node.props) ? { ...node.props } : {};
+  // Só quando existe: a seção salva antes da âncora continua igual.
+  if (type === 'section' && props.ancora !== undefined) props.ancora = normalizarAncora(props.ancora);
   if (type === 'field') {
     // O tipo de resposta é recusado aqui, na origem, e não na hora de publicar. Era assim
     // que "Data" chegava à publicação para ser recusada com a página inteira já montada.
@@ -267,6 +333,15 @@ export function normalizeNode(node) {
     props.fieldType = fieldType;
     props.name = nomeDeCampo(props.name || props.label);
     props.required = props.required === true;
+    if (props.largura !== undefined) props.largura = Object.hasOwn(LARGURAS_DO_CAMPO, props.largura) ? props.largura : 'inteira';
+    if (TIPOS_COM_OPCOES.has(fieldType)) props.opcoes = opcoesDoCampo(props.opcoes);
+  }
+  // O que acontece depois do envio. Só o que existe é normalizado: formulário salvo antes
+  // continua igual, e endereço que não seja http(s) vira vazio.
+  if (type === 'form') {
+    if (props.depoisDeEnviar !== undefined) props.depoisDeEnviar = props.depoisDeEnviar === 'redirecionar' ? 'redirecionar' : 'mensagem';
+    if (props.mensagemDeSucesso !== undefined) props.mensagemDeSucesso = texto(props.mensagemDeSucesso, 300).trim();
+    if (props.redirecionarPara !== undefined) props.redirecionarPara = enderecoDeRedirecionamento(props.redirecionarPara);
   }
   if (type === 'escolha') {
     props.pergunta = texto(props.pergunta, 300);
@@ -349,7 +424,9 @@ export function extrairCapturas(nodes) {
             label: texto(campo.props.label, 200),
             type: campo.props.fieldType,
             required: campo.props.required === true,
+            ...(TIPOS_COM_OPCOES.has(campo.props.fieldType) ? { options: campo.props.opcoes.map((opcao) => opcao.rotulo) } : {}),
           })),
+          completion: conclusaoDoFormulario(node.props),
         });
         continue;
       }
@@ -358,6 +435,32 @@ export function extrairCapturas(nodes) {
   };
   percorrer(nodes, '');
   return capturas;
+}
+
+// Depois do envio: a página de obrigado com a mensagem do formulário, ou o endereço para
+// onde levar a pessoa. Sem nada escolhido, `{}` — o obrigado de sempre.
+function conclusaoDoFormulario(props = {}) {
+  const url = enderecoDeRedirecionamento(props.redirecionarPara);
+  if (props.depoisDeEnviar === 'redirecionar' && url) return { tipo: 'redirecionar', url };
+  const mensagem = texto(props.mensagemDeSucesso, 300).trim();
+  return mensagem ? { tipo: 'mensagem', mensagem } : {};
+}
+
+// Dois campos com o mesmo nome no formulário mandariam duas respostas na mesma chave, e o
+// envio seria recusado. O segundo ganha um sufixo; o primeiro guarda o nome.
+export function nomesUnicosNoFormulario(form) {
+  const usados = new Set();
+  const descer = (node) => ({
+    ...node,
+    children: node.children.map((filho) => {
+      if (filho.type !== 'field') return descer(filho);
+      let nome = filho.props.name;
+      for (let n = 2; usados.has(nome); n += 1) nome = `${filho.props.name.slice(0, 56)}_${n}`;
+      usados.add(nome);
+      return nome === filho.props.name ? filho : { ...filho, props: { ...filho.props, name: nome } };
+    }),
+  });
+  return descer(form);
 }
 
 function camposDe(node) {

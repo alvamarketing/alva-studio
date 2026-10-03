@@ -41,6 +41,8 @@ export function Estrutura({ quiz = false }) {
   const nome = (item, nivel) => {
     if (item.type === 'heading') return curto(item.props.text) || rotulo(item);
     if (item.type === 'escolha') return curto(item.props.pergunta) || rotulo(item);
+    // O campo aparece pela pergunta ("E-mail"), não como "Campo do formulário" repetido.
+    if (item.type === 'field') return curto(item.props.label) || rotulo(item);
     if (nivel === 0) return primeiroTitulo(item) || rotulo(item);
     return rotulo(item);
   };

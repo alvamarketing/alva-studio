@@ -10,6 +10,7 @@
 
 export const SLOT = 'itens';
 import { TIPOS_DE_SECAO_PRONTA } from './secoes-prontas.js';
+import { dadosDaPagina } from './pagina-alva.js';
 
 export const CONTEINERES = new Set(['section', 'etapa', 'row', 'columns', 'form', ...TIPOS_DE_SECAO_PRONTA]);
 const UUID_NO_FIM = /([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
@@ -50,7 +51,7 @@ export function puckParaAlva(dados) {
   return {
     formato: 'alva/1',
     // O quiz leva o tipo e a captura na raiz; a landing, só o título.
-    root: { title: dados?.root?.props?.title ?? '', ...(dados?.root?.props?.tipo === 'quiz' ? { tipo: 'quiz', captureId: dados.root.props.captureId, marca: dados.root.props.marca ?? '', logo: dados.root.props.logo ?? '' } : {}) },
+    root: { title: dados?.root?.props?.title ?? '', ...dadosDaPagina(dados?.root?.props), ...(dados?.root?.props?.tipo === 'quiz' ? { tipo: 'quiz', captureId: dados.root.props.captureId, marca: dados.root.props.marca ?? '', logo: dados.root.props.logo ?? '' } : {}) },
     content: [...(dados?.root?.props?.[SLOT] ?? []), ...(dados?.content ?? [])].map(converter),
   };
 }

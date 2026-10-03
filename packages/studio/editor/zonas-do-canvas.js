@@ -25,4 +25,12 @@ export const ZONAS_DO_CANVAS = [
   '.alva-pagina>.alva-secao>.alva-conteudo[data-puck-dropzone]{padding-top:32px;padding-bottom:32px;margin-top:-32px;margin-bottom:-32px}',
   `.alva-conteudo[data-puck-dropzone]:not(:has(${LARGURAS_PARCIAIS})){flex-direction:column;flex-wrap:nowrap;justify-content:flex-start}`,
   `.alva-conteudo[data-puck-dropzone]:not(:has(${LARGURAS_PARCIAIS}))>[data-puck-component]{flex:none;width:100%}`,
+  // Os campos do formulário seguem a mesma regra: pilha enquanto todos ocupam a linha
+  // inteira, linha com quebra quando há campo de metade ou terço.
+  '.alva-form-campos[data-puck-dropzone]{height:auto}',
+  '.alva-form-campos[data-puck-dropzone]:not(:has(>.alva-campo-metade,>.alva-campo-terco)){flex-direction:column;flex-wrap:nowrap}',
+  '.alva-form-campos[data-puck-dropzone]:not(:has(>.alva-campo-metade,>.alva-campo-terco))>[data-puck-component]{flex:none;width:100%}',
+  // O "+ Campo" dentro do formulário (só no editor): o botão tracejado da Biblioteca visual.
+  '.alva-form .alva-mais-campo{display:block;width:100%;margin:0 0 16px;padding:10px 14px;border:1px dashed var(--alva-blue-light);border-radius:var(--radius-md);background:var(--alva-white);color:var(--alva-blue);font-family:var(--font-sans);font-size:var(--text-md);font-weight:600;cursor:pointer;pointer-events:auto}',
+  '.alva-form .alva-mais-campo:focus-visible{outline:2px solid var(--alva-blue);outline-offset:2px}',
 ].join('\n');

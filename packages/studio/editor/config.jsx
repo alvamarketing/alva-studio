@@ -7,11 +7,12 @@
 //
 // As escolhas de interface seguem docs/specs/2026-09-27-ux-do-editor.md: seções prontas
 // primeiro, colunas por desenho, espaçamento em escala, ajuste fino recolhido.
-import { useSyncExternalStore } from 'react';
-import { AVISO_DE_PRIVACIDADE, avisoDePrivacidade, classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, enderecoDaImagem, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { AVISO_DE_PRIVACIDADE, TIPOS_DE_CAMPO_COM_OPCOES, avisoDePrivacidade, classeDaLarguraDoCampo, classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, enderecoDaImagem, estiloDaSecao, normalizarAncora, renderConteudo } from '../public/page-schema.js';
 import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
-import { secoesProntas } from '../public/secoes-prontas.js';
-import { campoDeCor, campoDeDestino, campoDeIcone, campoDeImagem, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
+import { camposPadraoDoFormulario, secoesProntas } from '../public/secoes-prontas.js';
+import { adicionarCampo, campoDeAncora, campoDeCor, campoDeDestino, campoDeEnderecoDeDestino, campoDeIcone, campoDeImagem, campoDeLink, campoDeMaisCampo, campoDeProporcao, campoDeRemoverCampo, campoDeTextoLimitado, campoRecolhido, estiloParaReact } from './campos.jsx';
+import { useGetPuck } from '@puckeditor/core';
 import { CircleAlert, ImagePlus, LoaderCircle, SlidersHorizontal } from 'lucide-react';
 import { ICONE_DO_CAMPO } from './icones.jsx';
 import { chaveDoEnvio, estadoDoEnvio, ouvirEnvios, rotuloDoEnvio } from './envios-de-imagem.js';
@@ -75,6 +76,7 @@ const bloco = (type, label, fields, defaultProps) => ({
 
 // Seção: pronta ou vazia, é a mesma faixa com o conteúdo numa área central.
 const camposDaSecao = (enviarImagem) => ({
+  ancora: campoDeAncora('Nome da âncora (para links #)'),
   fundo: { type: 'select', label: 'Fundo pronto', labelIcon: ICONE_DO_CAMPO.fundo, options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
   corDeFundo: campoDeCor('Cor de fundo'),
   corDeFundo2: campoDeCor('Segunda cor (degradê)'),
@@ -91,16 +93,79 @@ const camposDaSecao = (enviarImagem) => ({
   [SLOT]: { type: 'slot', disallow: ['field', 'section', ...secoesProntas.map((pronta) => pronta.id)] },
 });
 const renderDaSecao = ({ puck, id: _id, [SLOT]: Itens, ...props }) => (
-  <section ref={puck.dragRef} className={classeDaSecao(props)} style={estiloParaReact(estiloDaSecao(props))}>
+  <section ref={puck.dragRef} id={normalizarAncora(props.ancora) || undefined} className={classeDaSecao(props)} style={estiloParaReact(estiloDaSecao(props))}>
     <Itens className={classeDoConteudo(props)} collisionAxis="dynamic" />
   </section>
 );
+const semAncora = ({ ancora: _ancora, ...campos }) => campos;
 const secao = (label, enviarImagem, defaultProps) => ({ label, inline: true, fields: camposDaSecao(enviarImagem), defaultProps, render: renderDaSecao });
 
 const semIds = (itens) => itens.map(({ type, props: { id: _id, ...props } }) => ({
   type,
   props: props[SLOT] ? { ...props, [SLOT]: semIds(props[SLOT]) } : props,
 }));
+
+// O painel do formulário: "+ Campo" primeiro (é o que a pessoa procura), o botão, o que
+// acontece depois do envio (mensagem ou endereço — só o campo do que foi escolhido) e o aviso.
+const camposDoFormulario = (depois) => ({
+  maisCampo: campoDeMaisCampo(),
+  submitLabel: { type: 'text', label: 'Texto do botão' },
+  depoisDeEnviar: { type: 'radio', label: 'Depois de enviar', labelIcon: ICONE_DO_CAMPO.envio, options: [{ label: 'Mostrar mensagem', value: 'mensagem' }, { label: 'Ir para um endereço', value: 'redirecionar' }] },
+  ...(depois === 'redirecionar'
+    ? { redirecionarPara: campoDeEnderecoDeDestino('Endereço de destino') }
+    : { mensagemDeSucesso: { type: 'textarea', label: 'Mensagem depois de enviar (vazio: “Recebemos suas respostas.”)' } }),
+  aviso: { type: 'textarea', label: 'Aviso de privacidade (abaixo do botão)' },
+  politica: { type: 'text', label: 'Link da política de privacidade (https://…)' },
+  [SLOT]: { type: 'slot', allow: ['field'] },
+  avancado,
+});
+
+// O painel do campo muda com o tipo: opções só para lista e escolha, exemplo só onde se
+// digita, largura só no formulário da landing (no quiz o campo ocupa a etapa).
+const TIPOS_DE_RESPOSTA = [
+  { label: 'Texto', value: 'text' }, { label: 'E-mail', value: 'email' }, { label: 'Telefone', value: 'tel' },
+  { label: 'Número', value: 'number' }, { label: 'Texto longo', value: 'long_text' },
+];
+const TIPOS_DE_RESPOSTA_DO_FORMULARIO = [
+  ...TIPOS_DE_RESPOSTA,
+  { label: 'Lista suspensa', value: 'select' }, { label: 'Escolha única (bolinhas)', value: 'radio' }, { label: 'Caixa de marcar', value: 'checkbox' },
+];
+const camposDoCampo = (tipo, quiz) => ({
+  label: { type: 'text', label: tipo === 'checkbox' ? 'Texto ao lado da caixa' : 'Pergunta' },
+  fieldType: { type: 'select', label: 'Tipo de resposta', options: quiz ? TIPOS_DE_RESPOSTA : TIPOS_DE_RESPOSTA_DO_FORMULARIO },
+  ...(TIPOS_DE_CAMPO_COM_OPCOES.includes(tipo) ? {
+    opcoes: {
+      type: 'array',
+      label: 'Opções',
+      getItemSummary: (opcao, indice) => opcao?.rotulo || `Opção ${(indice ?? 0) + 1}`,
+      defaultItemProps: { rotulo: 'Nova opção' },
+      arrayFields: { rotulo: { type: 'text', label: 'Texto da opção' } },
+    },
+  } : {}),
+  ...(tipo === 'radio' || tipo === 'checkbox' ? {} : { placeholder: { type: 'text', label: tipo === 'select' ? 'Primeira linha da lista (vazio: “Selecione”)' : 'Exemplo dentro do campo' } }),
+  required: { type: 'radio', label: tipo === 'checkbox' ? 'Obrigatório marcar' : 'Obrigatório', options: simNao },
+  ...(quiz ? {} : { largura: { type: 'radio', label: 'Largura no formulário', labelIcon: ICONE_DO_CAMPO.largura, options: [{ label: 'Inteira', value: 'inteira' }, { label: 'Metade', value: 'metade' }, { label: 'Terço', value: 'terco' }] } }),
+  name: { type: 'text', label: 'Nome do campo no lead (vazio: vem da pergunta)' },
+  remover: campoDeRemoverCampo(),
+});
+
+// O "+ Campo" dentro do formulário, no canvas: só o editor desenha; a página publicada não.
+// O clique é ouvido direto no botão: o bloco do Puck em volta segura o clique para
+// selecionar o formulário, e o onClick do React nunca chegava aqui.
+function MaisCampoNoCanvas({ formId }) {
+  const getPuck = useGetPuck();
+  const botao = useRef(null);
+  const atual = useRef(formId);
+  atual.current = formId;
+  useEffect(() => {
+    const el = botao.current;
+    if (!el) return undefined;
+    const aoClicar = (evento) => { evento.preventDefault(); evento.stopPropagation(); adicionarCampo(getPuck, atual.current); };
+    el.addEventListener('click', aoClicar);
+    return () => el.removeEventListener('click', aoClicar);
+  }, [getPuck]);
+  return <button ref={botao} type="button" className="alva-mais-campo">+ Campo</button>;
+}
 
 // As VSLs publicadas do projeto viram uma lista para escolher: digitar um identificador era
 // convite ao erro, e VSL não publicada impede a página de publicar.
@@ -109,7 +174,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
     ? [{ label: 'Escolha uma VSL', value: '' }, ...vsls.map((vsl) => ({ label: vsl.name, value: vsl.publicId }))]
     : [{ label: 'Nenhuma VSL publicada neste projeto', value: '' }];
   const prontas = Object.fromEntries(secoesProntas.map((pronta) => [pronta.id, secao(pronta.nome, enviarImagem, {
-    fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'esquerda',
+    ancora: '', fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'esquerda',
     ...pronta.props,
     // Os filhos entram já montados. Sem id: o Puck só gera id novo para quem chega sem, e
     // um id fixo aqui faria duas inserções da mesma seção dividirem os mesmos ids.
@@ -141,9 +206,14 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
         title: { type: 'text', label: quiz ? 'Título do quiz (aba do navegador)' : 'Título da página (aba do navegador)' },
         // O cabeçalho fixo do quiz (contrato: "Vamos conhecer você?"): marca e barra.
         ...(quiz ? { marca: { type: 'text', label: 'Marca no topo (vazio usa o título)' }, logo: campoDeImagem('Logo no topo (opcional)', enviarImagem) } : {}),
+        // Os dados da página que vão para o Google e para o link compartilhado (A3).
+        descricao: campoDeTextoLimitado('Descrição (Google e compartilhamento)', 160, ICONE_DO_CAMPO.descricao),
+        imagemDeCompartilhamento: campoDeImagem('Imagem ao compartilhar o link', enviarImagem),
+        icone: campoDeImagem('Ícone da aba (favicon, imagem pequena e quadrada)', enviarImagem),
+        naoIndexar: { type: 'radio', label: 'Não aparecer no Google', labelIcon: ICONE_DO_CAMPO.google, options: simNao },
         [SLOT]: { type: 'slot', allow: quiz ? ['etapa'] : ['section', ...secoesProntas.map((pronta) => pronta.id)] },
       },
-      defaultProps: { title: '', [SLOT]: [] },
+      defaultProps: { title: '', descricao: '', imagemDeCompartilhamento: '', icone: '', naoIndexar: false, [SLOT]: [] },
       render: ({ [SLOT]: Itens, title, marca, logo }) => (quiz
         ? (
           <div data-alva-quiz="true">
@@ -159,11 +229,12 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
     },
     components: {
       ...prontas,
-      section: secao('Seção vazia', enviarImagem, { fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' }),
+      section: secao('Seção vazia', enviarImagem, { ancora: '', fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' }),
       etapa: {
         label: 'Etapa',
         inline: true,
-        fields: { ...camposDaSecao(enviarImagem), [SLOT]: { type: 'slot', disallow: ['etapa', 'section', 'form', ...secoesProntas.map((pronta) => pronta.id)] } },
+        // A etapa do quiz não é destino de link: a âncora fica de fora.
+        fields: { ...semAncora(camposDaSecao(enviarImagem)), [SLOT]: { type: 'slot', disallow: ['etapa', 'section', 'form', ...secoesProntas.map((pronta) => pronta.id)] } },
         defaultProps: { fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' },
         render: ({ puck, id: _id, [SLOT]: Itens, ...props }) => (
           <section ref={puck.dragRef} className={classeDaSecao(props).replace('alva-secao', 'alva-secao alva-etapa')} style={estiloParaReact(estiloDaSecao(props))}>
@@ -226,7 +297,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       text: bloco('text', 'Texto', { text: { type: 'textarea', label: 'Texto' } }, { text: 'Uma ou duas frases que explicam, em palavras simples, por que isso importa.' }),
       button: bloco('button', 'Botão', {
         text: { type: 'text', label: 'Texto' },
-        href: { type: 'text', label: 'Link (https://…, #seção, mailto:, tel:)', labelIcon: ICONE_DO_CAMPO.link },
+        href: campoDeLink('Link (https://…, #âncora, mailto:, tel:)'),
         newTab: { type: 'radio', label: 'Abrir em nova aba', options: simNao },
         corDoBotao: campoDeCor('Cor do botão'),
         corDoBotao2: campoDeCor('Segunda cor (degradê)'),
@@ -261,20 +332,20 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       form: {
         label: 'Formulário',
         inline: true,
-        fields: {
-          submitLabel: { type: 'text', label: 'Texto do botão' },
-          aviso: { type: 'textarea', label: 'Aviso de privacidade (abaixo do botão)' },
-          politica: { type: 'text', label: 'Link da política de privacidade (https://…)' },
-          [SLOT]: { type: 'slot', allow: ['field'] },
-          avancado,
+        fields: camposDoFormulario('mensagem'),
+        resolveFields: ({ props }) => camposDoFormulario(props.depoisDeEnviar),
+        // Nasce com Nome, E-mail e Telefone (sem id: o Puck dá um a cada inserção).
+        defaultProps: {
+          submitLabel: 'Enviar', depoisDeEnviar: 'mensagem', mensagemDeSucesso: '', redirecionarPara: '', aviso: AVISO_DE_PRIVACIDADE, politica: '', avancado: {},
+          [SLOT]: camposPadraoDoFormulario().map(({ type, props }) => ({ type, props: { ...props } })),
         },
-        defaultProps: { submitLabel: 'Enviar', aviso: AVISO_DE_PRIVACIDADE, politica: '', avancado: {} },
         // A captura precisa de um UUID estável, que o Puck não dá: nasce aqui, uma vez.
         resolveData: ({ props }) => (props.captureId ? { props } : { props: { ...props, captureId: globalThis.crypto.randomUUID() } }),
-        render: ({ puck, submitLabel, [SLOT]: Itens, ...props }) => (
+        render: ({ puck, id, submitLabel, [SLOT]: Itens, ...props }) => (
           <div ref={puck.dragRef} className={classesDoBloco(props)}>
             <form className="alva-form" onSubmit={(evento) => evento.preventDefault()}>
-              <Itens />
+              <Itens className="alva-form-campos" minEmptyHeight={64} />
+              <MaisCampoNoCanvas formId={id} />
               <button type="submit" className="cta">{submitLabel || 'Enviar'}</button>
               <span style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: avisoDePrivacidade(props) }} />
             </form>
@@ -282,19 +353,18 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
         ),
       },
       field: {
-        label: 'Campo',
-        fields: {
-          label: { type: 'text', label: 'Pergunta' },
-          name: { type: 'text', label: 'Nome do campo (vai para o lead)' },
-          fieldType: { type: 'select', label: 'Tipo de resposta', options: [
-            { label: 'Texto', value: 'text' }, { label: 'E-mail', value: 'email' }, { label: 'Telefone', value: 'tel' },
-            { label: 'Número', value: 'number' }, { label: 'Texto longo', value: 'long_text' },
-          ] },
-          placeholder: { type: 'text', label: 'Exemplo dentro do campo' },
-          required: { type: 'radio', label: 'Obrigatório', options: simNao },
-        },
-        defaultProps: { label: 'Seu e-mail', name: 'email', fieldType: 'email', placeholder: 'voce@exemplo.com', required: true },
-        render: ({ puck: _puck, id: _id, ...props }) => <Miolo type="field" props={props} />,
+        label: 'Campo do formulário',
+        inline: true,
+        fields: camposDoCampo('text', quiz),
+        resolveFields: ({ props }) => camposDoCampo(props.fieldType, quiz),
+        // Lista ou escolha nova já vem com duas opções para trocar: vazia, não publicaria.
+        resolveData: ({ props }) => (TIPOS_DE_CAMPO_COM_OPCOES.includes(props.fieldType) && !(Array.isArray(props.opcoes) && props.opcoes.length)
+          ? { props: { ...props, opcoes: [{ rotulo: 'Opção 1' }, { rotulo: 'Opção 2' }] } }
+          : { props }),
+        defaultProps: { label: 'Nova pergunta', name: '', fieldType: 'text', placeholder: '', required: false, largura: 'inteira', opcoes: [] },
+        render: ({ puck, id: _id, ...props }) => (
+          <div ref={puck.dragRef} className={`alva-campo${classeDaLarguraDoCampo(props)}`}><Miolo type="field" props={props} /></div>
+        ),
       },
     },
   };

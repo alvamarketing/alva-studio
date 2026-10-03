@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { validateFormAnswers } from './form-answer-validation.mjs';
+import { CAMPO_ISCA } from '../public/page-schema.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // Os tipos que o inspetor de campo oferece. `date` e `file` faltavam aqui: a interface os
@@ -143,4 +144,15 @@ export function validatePageCaptureAnswers(capture, input) {
     } else if (typeof value !== 'string' && value !== undefined) throw fail('Campo de resposta inválido.');
   }
   return validateFormAnswers(pageCaptureValidationSchema(capture), input);
+}
+
+// O campo isca do formulário (public/page-schema.js): preenchido, o envio é de robô e some
+// em silêncio — quem chama responde como sucesso e não grava. Vazio, sai das respostas
+// antes da validação, que recusaria um campo que não é pergunta.
+export function separarIsca(input) {
+  const answers = input?.answers;
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers) || !Object.hasOwn(answers, CAMPO_ISCA)) return { isca: false, input };
+  const { [CAMPO_ISCA]: valor, ...resto } = answers;
+  const preenchida = (Array.isArray(valor) ? valor : [valor]).some((item) => String(item ?? '').trim() !== '');
+  return { isca: preenchida, input: { ...input, answers: resto } };
 }

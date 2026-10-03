@@ -6,7 +6,7 @@ import { extractVslReferences } from '../publication-snapshot.mjs';
 import { renderPublishedVslReferences, resolvePublishedVslReferences } from '../vsl-reference.mjs';
 import { WebhookDeliveryRepository } from './webhook-repository.mjs';
 import { LeadWebhookRepository } from './lead-webhook-repository.mjs';
-import { extractPageCaptureSchema, normalizePageCaptureIds, validatePageCaptureAnswers } from '../page-capture-schema.mjs';
+import { extractPageCaptureSchema, normalizePageCaptureIds, separarIsca, validatePageCaptureAnswers } from '../page-capture-schema.mjs';
 import { capturasDoEstado, documentoDaPagina, ehEstadoAlva, normalizarEstadoAlva } from '../../public/pagina-alva.js';
 
 function fail(message, statusCode) {
@@ -655,8 +655,12 @@ export class ContentRepository {
       if (rows.length !== 1) throw fail('Captura publicada não encontrada.', 404);
       const capture = rows[0].capture_schema?.forms?.find((item) => item?.captureId === captureId);
       if (!capture) throw fail('Captura publicada não encontrada.', 404);
-      const answers = validatePageCaptureAnswers(capture, input);
-      const retryEventId = requestedTrackingEventId(input);
+      // O que a página mostra depois do envio vai junto em toda resposta, inclusive à do robô.
+      const completion = capture.completion && typeof capture.completion === 'object' ? capture.completion : {};
+      const { isca, input: respostas } = separarIsca(input);
+      if (isca) return { descartado: true, completion };
+      const answers = validatePageCaptureAnswers(capture, respostas);
+      const retryEventId = requestedTrackingEventId(respostas);
       // Recarregar a página de obrigado faz o navegador reenviar o POST: mesmas respostas,
       // mesma pessoa. É o mesmo lead, e devolve-se o original em vez de contar outro.
       const visitante = chaveDoVisitante({ pageId, captureId, subjectId, remetente: remetente ?? cliente });
@@ -669,7 +673,7 @@ export class ContentRepository {
           [companyId, projectId, pageId, captureId, visitante, JSON.stringify(answers), JANELA_DE_REENVIO_MIN],
         )).rows[0]
         : null;
-      if (reenvio) return { id: reenvio.id, eventId: reenvio.tracking_event_id, answers: reenvio.answers, submittedAt: reenvio.submitted_at, reenvio: true };
+      if (reenvio) return { id: reenvio.id, eventId: reenvio.tracking_event_id, answers: reenvio.answers, submittedAt: reenvio.submitted_at, reenvio: true, completion };
       const inserted = retryEventId
         ? await client.query(
           `INSERT INTO page_submissions (company_id, project_id, page_id, page_version_id, capture_id, answers, tracking_event_id)
@@ -711,7 +715,7 @@ export class ContentRepository {
       // não precisa republicar cada página. Um lead, uma entrega: nunca os dois.
       const destino = repeated ? '' : (capture.webhook || (await this.leadWebhooks.get({ companyId, projectId }, client)).url);
       if (destino) await this.webhookDeliveries.enqueue(client, { companyId, projectId, pageId, pageSubmissionId: submission.id, url: destino, event: { eventId: submission.tracking_event_id, event: 'page.submitted', companyId, projectId, pageId, pageVersionId, captureId, submittedAt: submission.submitted_at, answers } });
-      return { id: submission.id, eventId: submission.tracking_event_id, answers: repeated ? submission.answers : answers, submittedAt: submission.submitted_at };
+      return { id: submission.id, eventId: submission.tracking_event_id, answers: repeated ? submission.answers : answers, submittedAt: submission.submitted_at, completion };
     });
   }
 

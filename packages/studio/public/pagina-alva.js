@@ -1,7 +1,7 @@
 // A página no esquema do Alva: o estado que o editor salva, o documento que vai ao ar e os
 // formulários que a publicação valida. Roda no servidor (salvar e publicar) e no editor
 // (pré-visualização) — um desenhador só, para o que se vê editando ser o que vai ao ar.
-import { AVISO_DE_PRIVACIDADE, extrairCapturas, nomeDaEscolha, normalizeNode, renderTree, escapeHtml } from './page-schema.js';
+import { AVISO_DE_PRIVACIDADE, extrairCapturas, nomeDaEscolha, nomesUnicosNoFormulario, normalizeNode, renderTree, escapeHtml } from './page-schema.js';
 import { elementosCss, escolhaCss } from './catalogo-elementos.js';
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeQuizNavigation } from './quiz-navigation.js';
@@ -26,7 +26,8 @@ export function normalizarEstadoAlva(estado, uuid = novoId) {
     const valido = limpo.type === 'form' ? UUID.test(limpo.id ?? '') : Boolean(limpo.id);
     limpo.id = valido && !vistos.has(limpo.id) ? limpo.id : uuid();
     vistos.add(limpo.id);
-    return { ...limpo, children: limpo.children.map(garantir) };
+    const montado = { ...limpo, children: limpo.children.map(garantir) };
+    return limpo.type === 'form' ? nomesUnicosNoFormulario(montado) : montado;
   };
   const titulo = String(estado?.root?.title ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200);
   // O quiz é a página inteira como uma captura só: a identidade dela mora na raiz.
@@ -38,12 +39,49 @@ export function normalizarEstadoAlva(estado, uuid = novoId) {
     : {};
   return {
     formato: FORMATO_ALVA,
-    root: { title: titulo, ...quiz },
+    root: { title: titulo, ...dadosDaPagina(estado?.root), ...quiz },
     content: (Array.isArray(estado?.content) ? estado.content : []).map(garantir),
   };
 }
 
 export const ehQuiz = (estado) => estado?.root?.tipo === 'quiz';
+
+// Os dados da página que vão para o <head>: descrição (Google e compartilhamento), imagem de
+// compartilhamento, ícone da aba e "não aparecer no Google". Só entra o que foi preenchido:
+// a página salva antes deles continua com a raiz de sempre.
+const IMAGEM_DA_PAGINA = /^(?:https?:\/\/|\/i\/)[^\s"'()\\<>]{1,1000}$/i;
+export function dadosDaPagina(raiz = {}) {
+  const descricao = String(raiz?.descricao ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 160).trim();
+  const imagem = IMAGEM_DA_PAGINA.test(String(raiz?.imagemDeCompartilhamento ?? '')) ? String(raiz.imagemDeCompartilhamento) : '';
+  const icone = IMAGEM_DA_PAGINA.test(String(raiz?.icone ?? '')) ? String(raiz.icone) : '';
+  return {
+    ...(descricao ? { descricao } : {}),
+    ...(imagem ? { imagemDeCompartilhamento: imagem } : {}),
+    ...(icone ? { icone } : {}),
+    ...(raiz?.naoIndexar === true ? { naoIndexar: true } : {}),
+  };
+}
+
+// Quem compartilha o link (WhatsApp, Facebook) busca a imagem pelo endereço completo: o
+// caminho do Studio (/i/…) ganha a origem pública. Sem origem conhecida, a tag não sai.
+const absoluto = (endereco, origem) => {
+  if (/^https?:\/\//i.test(endereco)) return endereco;
+  return /^https?:\/\/[^/\s"]+$/.test(origem) ? `${origem}${endereco}` : '';
+};
+function cabecaDaPagina(raiz, origem) {
+  const imagem = raiz.imagemDeCompartilhamento ? absoluto(raiz.imagemDeCompartilhamento, origem) : '';
+  const icone = raiz.icone ? absoluto(raiz.icone, origem) || raiz.icone : '';
+  return [
+    raiz.descricao ? `<meta name="description" content="${escapeHtml(raiz.descricao)}">` : '',
+    raiz.naoIndexar ? '<meta name="robots" content="noindex">' : '',
+    '<meta property="og:type" content="website">',
+    raiz.title ? `<meta property="og:title" content="${escapeHtml(raiz.title)}">` : '',
+    raiz.descricao ? `<meta property="og:description" content="${escapeHtml(raiz.descricao)}">` : '',
+    imagem ? `<meta property="og:image" content="${escapeHtml(imagem)}">` : '',
+    `<meta name="twitter:card" content="${imagem ? 'summary_large_image' : 'summary'}">`,
+    icone ? `<link rel="icon" href="${escapeHtml(icone)}">` : '',
+  ].join('');
+}
 
 // A publicação troca o marcador da VSL pelo player; na prévia, a troca é feita aqui, com o
 // player do próprio Studio. Sem isso, a prévia mostrava só a palavra "VSL".
@@ -92,13 +130,23 @@ export function documentoDaPagina(estado, { publicOrigin = '', previa = false } 
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">'
-    + `<title>${escapeHtml(limpo.root.title)}</title><style>${folhas}${conversaComVsl ? CSS_DE_REVELAR : ''}</style></head>`
+    + `<title>${escapeHtml(limpo.root.title)}</title>${cabecaDaPagina(limpo.root, publicOrigin)}<style>${folhas}${conversaComVsl ? CSS_DE_REVELAR : ''}</style></head>`
     + `${corpo}</html>`;
 }
 
 // O tipo de resposta do esquema no vocabulário que a validação da captura usa.
 // `text` é o tipo do parágrafo, que não tem resposta: campo de texto é `short_text`.
-const TIPO_DA_CAPTURA = Object.freeze({ text: 'short_text', email: 'email', tel: 'short_text', number: 'number', date: 'date', file: 'file', long_text: 'long_text' });
+// Lista suspensa e escolha única são a mesma resposta (uma das opções); a caixa de marcar é
+// sim ou não.
+const TIPO_DA_CAPTURA = Object.freeze({ text: 'short_text', email: 'email', tel: 'short_text', number: 'number', date: 'date', file: 'file', long_text: 'long_text', select: 'single_choice', radio: 'single_choice', checkbox: 'checkbox' });
+
+// Uma pergunta da captura. Lista sem opção nenhuma não tem resposta possível: a página não
+// publica, com o nome do campo que falta preencher.
+function perguntaDaCaptura({ name, label, type, required, options }) {
+  if (Array.isArray(options) && !options.length)
+    throw Object.assign(new Error(`O campo “${label || name}” precisa de pelo menos uma opção.`), { status: 400, statusCode: 400 });
+  return { id: name, type: TIPO_DA_CAPTURA[type], title: label, required, ...(options ? { options } : {}) };
+}
 
 export function capturasDoEstado(estado, { webhook = '' } = {}) {
   if (ehQuiz(estado)) return { forms: [capturaDoQuiz(estado, webhook)] };
@@ -106,9 +154,9 @@ export function capturasDoEstado(estado, { webhook = '' } = {}) {
     forms: extrairCapturas(estado?.content).map((captura) => ({
       captureId: captura.id,
       name: captura.name,
-      fields: captura.fields.map((campo) => ({ id: campo.name, type: TIPO_DA_CAPTURA[campo.type], title: campo.label, required: campo.required })),
+      fields: captura.fields.map(perguntaDaCaptura),
       webhook,
-      completion: {},
+      completion: captura.completion,
     })),
   };
 }
@@ -125,7 +173,7 @@ export function paginaInicial(nome = '') {
         { type: 'text', props: { text: 'Explique em duas linhas para quem é e por que agora.' }, children: [] },
         { type: 'button', props: { text: 'Quero saber mais', href: '#contato', newTab: false }, children: [] },
       ] },
-      { type: 'section', props: {}, children: [
+      { type: 'section', props: { ancora: 'contato' }, children: [
         { type: 'heading', props: { text: 'Fale com a gente', level: 2 }, children: [] },
         { type: 'form', props: { submitLabel: 'Enviar' }, children: [
           { type: 'field', props: { label: 'Nome', name: 'nome', fieldType: 'text', placeholder: 'Seu nome', required: true }, children: [] },
@@ -152,7 +200,7 @@ function capturaDoQuiz(bruto, webhook) {
     const descer = (node) => {
       for (const filho of node.children) {
         if (filho.type === 'field') {
-          elements.push({ id: filho.props.name, type: TIPO_DA_CAPTURA[filho.props.fieldType], title: String(filho.props.label ?? '').slice(0, 200), required: filho.props.required === true });
+          elements.push(perguntaDaCaptura({ name: filho.props.name, type: filho.props.fieldType, label: String(filho.props.label ?? '').slice(0, 200), required: filho.props.required === true, ...(['select', 'radio'].includes(filho.props.fieldType) ? { options: filho.props.opcoes.map((opcao) => opcao.rotulo) } : {}) }));
         } else if (filho.type === 'escolha' && filho.props.opcoes.length) {
           const id = nomeDaEscolha(filho);
           elements.push({ id, type: filho.props.multipla ? 'multiple_choice' : 'single_choice', title: filho.props.pergunta || 'Pergunta', required: filho.props.obrigatoria, options: filho.props.opcoes.map((opcao) => opcao.rotulo) });

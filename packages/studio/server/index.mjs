@@ -10,6 +10,7 @@ import { Store } from './store.mjs';
 import { Publisher } from './publisher.mjs';
 import { Auth } from './auth.mjs';
 import { renderCompletion } from './pagina-de-obrigado.mjs';
+import { enderecoDeRedirecionamento } from '../public/page-schema.js';
 import { SessionService } from './session-service.mjs';
 import { createProjectApi } from './project-api.mjs';
 import { CompanyRepository } from './repositories/company-repository.mjs';
@@ -725,7 +726,13 @@ export function createApp({
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         const nonce = publicHtmlNonce(`${publicOrigin || expectedOrigin}${path}`);
-        return res.end(renderCompletion('Obrigado!', 'Recebemos suas respostas.', { nonce, conversao: capturado?.reenvio ? null : conversaoParaOsPixels(capturado?.eventId) }));
+        // Robô (isca preenchida) recebe o mesmo obrigado, sem pixel: nada foi gravado.
+        const conversao = capturado?.reenvio || capturado?.descartado ? null : conversaoParaOsPixels(capturado?.eventId);
+        const final = capturado?.completion ?? {};
+        const destino = final.tipo === 'redirecionar' ? enderecoDeRedirecionamento(final.url) : '';
+        if (destino) return res.end(renderCompletion('Obrigado!', 'Estamos te levando para a próxima página.', { nonce, conversao, redirecionar: destino }));
+        const mensagem = final.tipo === 'mensagem' && typeof final.mensagem === 'string' && final.mensagem.trim() ? final.mensagem.trim().slice(0, 300) : 'Recebemos suas respostas.';
+        return res.end(renderCompletion('Obrigado!', mensagem, { nonce, conversao }));
       }
       if (path.startsWith('/api/') && !(await auth.state(req)).authenticated)
         throw error('Entre na sua conta para continuar.', 401);
