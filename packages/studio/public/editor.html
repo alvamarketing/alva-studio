@@ -30,6 +30,32 @@
     .alva-acao-principal { background: var(--alva-blue); border-color: var(--alva-blue); color: var(--alva-on-blue); }
     .alva-acao-pendente { background: var(--alva-warning-bg); border-color: var(--alva-warning); color: var(--alva-warning); }
     .alva-acao:focus-visible, .alva-arvore-linha:focus-visible, .alva-botao-tracejado:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
+    .alva-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 16px; background: var(--alva-white); border-bottom: 1px solid var(--alva-line); }
+    .alva-topo-pagina { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .alva-topo-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .alva-marca { display: flex; align-items: center; gap: 9px; color: var(--alva-ink); text-decoration: none; flex: none; padding-right: 12px; margin-right: 4px; border-right: 1px solid var(--alva-line); }
+    .alva-marca-simbolo { width: 17px; height: 24px; color: var(--alva-blue); }
+    .alva-marca strong { font-size: var(--text-xl); font-weight: 700; letter-spacing: .16em; }
+    .alva-marca span { color: var(--alva-muted); font-size: var(--text-lg); font-weight: 500; }
+    .alva-voltar { order: 0; }
+    .alva-topo-nome { margin: 0; font-size: var(--text-lg); font-weight: 700; color: var(--alva-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .alva-historico { display: flex; gap: 4px; }
+    .alva-alca-menu { position: absolute; top: 0; display: inline-flex; align-items: center; justify-content: center; padding: 8px; border: 1px solid var(--alva-line); border-radius: var(--radius-md); background: var(--alva-white); color: var(--alva-muted); cursor: pointer; z-index: 2; }
+    .alva-alca-menu:hover { color: var(--alva-ink); border-color: var(--alva-blue); }
+    .alva-alca-menu[aria-pressed="true"] { color: var(--alva-blue); }
+    .alva-alca-menu:focus-visible { outline: 2px solid var(--alva-blue); outline-offset: 2px; }
+    .alva-alca-menu-esquerda { left: 12px; }
+    .alva-alca-menu-direita { right: 12px; }
+    [class*="PuckCanvas-controls"] { position: relative; min-height: 38px; }
+    @media (max-width: 760px) {
+      .alva-topo { flex-wrap: wrap; padding: 8px 12px; gap: 8px; }
+      .alva-marca span { display: none; }
+      /* No celular o Puck já tem as abas de baixo (Blocos, Estrutura, Propriedades): as alças sobram. */
+      .alva-alca-menu { display: none; }
+      .alva-topo-acoes { gap: 6px; }
+      .alva-topo-acoes .alva-acao { padding: 8px 10px; font-size: var(--text-sm); }
+      .alva-salvo { font-size: 0; gap: 0; margin-right: 0; }
+    }
     .alva-menu { position: relative; }
     .alva-menu-painel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 320px; display: grid; gap: 10px; padding: 14px; background: var(--alva-white); border: 1px solid var(--alva-line); border-radius: var(--radius-lg); box-shadow: 0 16px 40px rgb(16 24 40 / 12%); font-size: var(--text-md); }
     .alva-menu-painel p, .alva-menu-painel small { margin: 0; color: var(--alva-muted); line-height: 1.5; }

@@ -2,8 +2,8 @@
 // botões do cabeçalho. Só o editor carrega isto; a página publicada não.
 import {
   AlignCenter, ArrowLeft, CircleCheck, Inbox, ListChecks, Milestone, CircleDot, Clapperboard, Eye, ClipboardList, Columns2, Columns3, GripVertical, Heading, Image, LayoutGrid,
-  Link, Mail, Megaphone, MousePointerClick, MoveHorizontal, PaintBucket, Palette, PanelTop, Quote, Rocket, Rows3,
-  Save, Sparkles, Square, Star, StretchVertical, TextCursorInput, Type, Video,
+  Link, Mail, Megaphone, MousePointerClick, MoveHorizontal, PaintBucket, Palette, PanelLeft, PanelRight, PanelTop, Quote, Redo2, Rocket, Rows3,
+  Save, Sparkles, Square, Star, StretchVertical, TextCursorInput, Type, Undo2, Video,
 } from 'lucide-react';
 
 export const ICONE_DO_BLOCO = {
@@ -40,7 +40,7 @@ export const ICONE_DO_CAMPO = {
   estrutura: <Rows3 size={16} />,
 };
 
-export { ArrowLeft, CircleCheck, CircleDot, Eye, Inbox, Rocket, Save };
+export { ArrowLeft, CircleCheck, CircleDot, Eye, Inbox, PanelLeft, PanelRight, Redo2, Rocket, Save, Undo2 };
 
 // O item da biblioteca: ícone, nome e a alça de arrastar.
 export function ItemDaBiblioteca({ name, rotulo }) {

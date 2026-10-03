@@ -10,8 +10,9 @@ import { Puck, createUsePuck, useGetPuck } from '@puckeditor/core';
 import '@puckeditor/core/puck.css';
 import { criarConfig } from './config.jsx';
 import { dicionario, larguras } from './dicionario.js';
-import { ArrowLeft, CircleCheck, CircleDot, Eye, Inbox, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
+import { CircleCheck, CircleDot, Eye, Inbox, ItemDaBiblioteca, Rocket, Save } from './icones.jsx';
 import { Estrutura } from './estrutura.jsx';
+import { Cabecalho } from './topo.jsx';
 import { ZONAS_DO_CANVAS } from './zonas-do-canvas.js';
 import { IMAGEM_VAZIA_CSS } from './imagem-vazia.js';
 import { aceitarArquivosSoltos } from './envios-de-imagem.js';
@@ -130,17 +131,10 @@ function Acoes({ pagina, aoSalvar, aoPublicar, aoSalvarWebhook, aviso, pendente,
     setOcupado(true);
     try { await tarefa(); } catch (erro) { aviso(erro.message); } finally { setOcupado(false); }
   };
-  // Ordem e pesos do topo do contrato (seção "Estrutura" do wireframe): voltar, estado do
-  // salvamento, Prévia e Publicar secundários, Salvar como ação principal.
+  // Ordem e pesos do topo do contrato (seção "Estrutura" do wireframe): estado do salvamento,
+  // Leads, Prévia e Publicar secundários, Salvar como ação principal. O voltar mora no Cabecalho.
   return (
     <>
-      <button type="button" className="alva-acao alva-acao-icone" aria-label="Voltar para as páginas" title="Voltar" onClick={() => {
-        if (pendente.current && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
-        pendente.current = false;
-        location.href = ehQuiz(pagina.editorState) ? '/#/quizzes' : '/#/paginas';
-      }}>
-        <ArrowLeft size={18} aria-hidden="true" />
-      </button>
       <span className={`alva-salvo${alterada ? ' alva-salvo-pendente' : ''}`} role="status">
         {alterada ? <><CircleDot size={16} aria-hidden="true" /> Alterações não salvas</> : <><CircleCheck size={16} aria-hidden="true" /> Salvo</>}
       </span>
@@ -232,6 +226,18 @@ function Editor() {
     await api(`/pages/${pagina.id}/publish`, 'POST', { revision: salva.revision });
     setPagina(await api(`/pages/${encodeURIComponent(pagina.id)}`));
   };
+  // O cabeçalho é um componente de identidade estável (o Puck remonta o que muda de identidade a
+  // cada render); o que muda — nome, voltar — ele lê daqui.
+  const topoAtual = useRef({});
+  topoAtual.current = {
+    nome: pagina?.name ?? '',
+    aoVoltar: () => {
+      if (pendente.current && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
+      pendente.current = false;
+      location.href = pagina && ehQuiz(pagina.editorState) ? '/#/quizzes' : '/#/paginas';
+    },
+  };
+  const Topo = useMemo(() => function Topo({ actions }) { return <Cabecalho {...topoAtual.current} acoes={actions} />; }, []);
   if (erro) return <p className="alva-erro">{erro}</p>;
   if (!pagina || !config) return <p className="alva-carregando">Abrindo a página…</p>;
   return (
@@ -247,6 +253,7 @@ function Editor() {
         overrides={{
           iframe: IframeComFolhas,
           outline: () => <Estrutura quiz={ehQuiz(pagina.editorState)} />,
+          header: Topo,
           headerActions: () => <Acoes pagina={pagina} aoSalvar={aoSalvar} aoPublicar={aoPublicar} aoSalvarWebhook={aoSalvarWebhook} aviso={aviso} pendente={pendente} alterada={alterada} />,
           drawerItem: ({ name }) => <ItemDaBiblioteca name={name} rotulo={config.components[name]?.label} />,
         }}
