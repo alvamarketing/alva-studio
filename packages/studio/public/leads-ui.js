@@ -6,6 +6,9 @@ const deliveryLabels = Object.freeze({
 
 export function displayLeadAnswer(value) {
   if (value === null || value === undefined || value === '') return '—';
+  // A caixa de marcar do formulário chega como verdadeiro ou falso.
+  if (value === true) return 'Sim';
+  if (value === false) return 'Não';
   if (Array.isArray(value)) return value.map(displayLeadAnswer).join(', ');
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);

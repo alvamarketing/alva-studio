@@ -65,7 +65,19 @@ const regrasDeConteudo = `.alva-secao{padding:60px 7%;min-height:140px}.alva-tit
 // e a seção para 16px abaixo do topo — o mesmo passo do espaço entre blocos.
 const regrasDaAncora = '@media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}.alva-secao[id]{scroll-margin-top:16px}';
 
-export const elementosCss = paleta + regras + regraDoBotao + regrasDeConteudo + '.alva-aviso-privacidade{margin:12px 0 0;font-size:12px;line-height:1.5;opacity:.75}.alva-aviso-privacidade a{color:inherit;text-decoration:underline}' + regrasDaAncora;
+// Os campos do formulário numa faixa que quebra linha: metade e terço ficam lado a lado no
+// computador e empilham no celular (o mesmo 760px do resto da página). A escolha única e a
+// caixa de marcar herdam a moldura e a cor de .alva-form (templates.js); aqui só o arranjo.
+// A isca contra robô sai da tela sem `display:none`, que alguns robôs sabem pular.
+const regrasDoFormulario = '.alva-form-campos{display:flex;flex-wrap:wrap;column-gap:16px}.alva-form-campos>*{flex:0 0 100%;min-width:0;box-sizing:border-box}'
+  + '.alva-form-campos>.alva-campo-metade{flex-basis:calc(50% - 8px)}.alva-form-campos>.alva-campo-terco{flex-basis:calc(33.333% - 10.667px)}'
+  + '.alva-campo-escolha{border:0;padding:0;min-width:0}.alva-campo-escolha legend{padding:0;margin:0 0 8px}'
+  + '.alva-form .alva-campo-opcao,.alva-form .alva-campo-marcar{display:flex;align-items:center;gap:8px;font-weight:400}.alva-form .alva-campo-opcao{margin:0 0 8px}'
+  + '.alva-form .alva-campo-opcao input,.alva-form .alva-campo-marcar input{flex:none;margin:0}'
+  + '.alva-isca{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}'
+  + '@media(max-width:760px){.alva-form-campos>.alva-campo-metade,.alva-form-campos>.alva-campo-terco{flex-basis:100%}}';
+
+export const elementosCss = paleta + regras + regraDoBotao + regrasDeConteudo + '.alva-aviso-privacidade{margin:12px 0 0;font-size:12px;line-height:1.5;opacity:.75}.alva-aviso-privacidade a{color:inherit;text-decoration:underline}' + regrasDaAncora + regrasDoFormulario;
 
 // A pergunta de escolha do quiz (esquema do Alva). Fica fora de `elementosCss` porque só o
 // quiz a usa. Os três estados são distintos: parado, cursor em cima (borda) e escolhido

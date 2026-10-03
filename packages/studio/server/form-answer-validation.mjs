@@ -46,6 +46,16 @@ export function validateFormAnswers(schema, input) {
       answers[step.id] = clean;
       continue;
     }
+    // A caixa de marcar: o navegador manda o valor dela ("sim") quando marcada e nada
+    // quando não. Guarda-se verdadeiro ou falso — nunca o texto que veio.
+    if (step.type === 'checkbox') {
+      const bruto = Array.isArray(provided[step.id]) && provided[step.id].length <= 1 ? provided[step.id][0] : provided[step.id];
+      if (bruto !== undefined && bruto !== null && bruto !== '' && !['sim', 'on', 'true'].includes(bruto)) throw fail('Resposta inválida.');
+      const marcada = ['sim', 'on', 'true'].includes(bruto);
+      if (step.required && !marcada) throw fail(`Marque “${step.title}”.`);
+      answers[step.id] = marcada;
+      continue;
+    }
     if (step.type === 'file') {
       const file = provided[step.id];
       if (!file) {

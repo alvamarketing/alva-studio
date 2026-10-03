@@ -4,7 +4,8 @@ import { AutoField, FieldLabel, createUsePuck, useGetPuck } from '@puckeditor/co
 import { ICONE_DO_CAMPO } from './icones.jsx';
 import { chaveDoEnvio, enviarImagemPara, estadoDoEnvio, limparEnvio, ouvirEnvios } from './envios-de-imagem.js';
 import { ancorasDaPagina, quantasVezesAAncoraAparece } from './ancoras.js';
-import { normalizarAncora } from '../public/page-schema.js';
+import { enderecoDeRedirecionamento, normalizarAncora } from '../public/page-schema.js';
+import { SLOT } from '../public/puck-conversao.js';
 
 const usePuckDoCampo = createUsePuck();
 
@@ -228,6 +229,88 @@ function CampoDeLink({ rotulo, valor, aoMudar, somenteLeitura }) {
       </div>
     </FieldLabel>
   );
+}
+
+// "+ Campo": acrescenta um campo no fim do formulário e já o seleciona, para a pessoa
+// trocar a pergunta e o tipo ali mesmo. Serve ao painel do formulário e ao botão do canvas.
+export function adicionarCampo(getPuck, formId) {
+  const api = getPuck();
+  const formulario = formId ? api.getItemById(formId) : null;
+  if (!formulario) return;
+  const zona = `${formId}:${SLOT}`;
+  const indice = Array.isArray(formulario.props?.[SLOT]) ? formulario.props[SLOT].length : 0;
+  api.dispatch({ type: 'insert', componentType: 'field', destinationZone: zona, destinationIndex: indice, id: `field-${globalThis.crypto.randomUUID()}` });
+  api.dispatch({ type: 'setUi', ui: { itemSelector: { zone: zona, index: indice }, rightSideBarVisible: true } });
+}
+
+export function campoDeMaisCampo() {
+  return { type: 'custom', label: 'Campos', render: () => <MaisCampo /> };
+}
+function MaisCampo() {
+  const getPuck = useGetPuck();
+  const formId = usePuckDoCampo((estado) => estado.selectedItem?.props?.id ?? null);
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      <button type="button" className="alva-botao-tracejado" style={{ margin: 0, width: '100%' }} onClick={() => adicionarCampo(getPuck, formId)}>+ Campo</button>
+      <small style={estiloDaDica}>Para mudar a pergunta, o tipo ou a largura de um campo, ou removê-lo, clique nele no formulário ou na Estrutura.</small>
+    </div>
+  );
+}
+
+// "Remover campo", no fim do painel do campo: o lixo da barra do Puck faz o mesmo, mas fica
+// longe de quem está olhando as opções do campo.
+export function campoDeRemoverCampo() {
+  return { type: 'custom', label: 'Remover', render: () => <RemoverCampo /> };
+}
+function RemoverCampo() {
+  const getPuck = useGetPuck();
+  const id = usePuckDoCampo((estado) => estado.selectedItem?.props?.id ?? null);
+  const remover = () => {
+    const api = getPuck();
+    const lugar = id ? api.getSelectorForId(id) : null;
+    if (!lugar) return;
+    api.dispatch({ type: 'remove', index: lugar.index, zone: lugar.zone });
+    api.dispatch({ type: 'setUi', ui: { itemSelector: null } });
+  };
+  return <button type="button" style={{ ...estiloDoBotao, width: '100%', color: 'var(--alva-danger)' }} onClick={remover}>Remover campo</button>;
+}
+
+// O endereço para onde levar quem enviou o formulário: só http(s), e o campo diz na hora
+// quando o que foi digitado não serve.
+export function campoDeEnderecoDeDestino(rotulo) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => {
+      const invalido = Boolean(String(value ?? '').trim()) && !enderecoDeRedirecionamento(value);
+      return (
+        <FieldLabel label={rotulo} icon={ICONE_DO_CAMPO.link} readOnly={readOnly}>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <input type="url" style={{ ...estiloDoCampo, borderColor: invalido ? 'var(--alva-danger)' : 'var(--alva-line)' }} placeholder="https://seusite.com.br/obrigado" value={value ?? ''} disabled={readOnly} aria-invalid={invalido} onChange={(evento) => onChange(evento.target.value)} />
+            {invalido
+              ? <small role="alert" style={{ ...estiloDaDica, color: 'var(--alva-danger)' }}>Use um endereço completo, começando com https:// (ou http://). Sem ele, a pessoa vê a mensagem de obrigado.</small>
+              : <small style={estiloDaDica}>Depois de enviar, a pessoa é levada para este endereço.</small>}
+          </div>
+        </FieldLabel>
+      );
+    },
+  };
+}
+
+// Um texto com limite, com a contagem à vista (a descrição da página, até 160).
+export function campoDeTextoLimitado(rotulo, limite, icone) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => (
+      <FieldLabel label={rotulo} icon={icone} readOnly={readOnly}>
+        <div style={{ display: 'grid', gap: 6 }}>
+          <textarea style={{ ...estiloDoCampo, minHeight: 84, resize: 'vertical' }} maxLength={limite} value={value ?? ''} disabled={readOnly} onChange={(evento) => onChange(evento.target.value.replace(/[\r\n]+/g, ' '))} />
+          <small style={{ ...estiloDaDica, textAlign: 'right' }}>{String(value ?? '').length}/{limite}</small>
+        </div>
+      </FieldLabel>
+    ),
+  };
 }
 
 // Para onde a opção leva: "a próxima etapa" ou uma etapa escolhida pelo nome dela (o

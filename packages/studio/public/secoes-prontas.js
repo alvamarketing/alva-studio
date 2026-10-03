@@ -67,3 +67,11 @@ export const secoesProntas = [
 ];
 
 export const TIPOS_DE_SECAO_PRONTA = new Set(secoesProntas.map((secao) => secao.id));
+
+// O formulário que entra pela biblioteca já vem com o básico de um lead. Antes ele nascia
+// vazio, e o "Campo" só era achado por acaso na biblioteca.
+export const camposPadraoDoFormulario = () => [
+  no('field', { label: 'Nome', name: 'nome', fieldType: 'text', placeholder: 'Seu nome', required: true, largura: 'inteira' }),
+  no('field', { label: 'E-mail', name: 'email', fieldType: 'email', placeholder: 'voce@exemplo.com', required: true, largura: 'inteira' }),
+  no('field', { label: 'Telefone', name: 'telefone', fieldType: 'tel', placeholder: '(11) 91234-5678', required: false, largura: 'inteira' }),
+];

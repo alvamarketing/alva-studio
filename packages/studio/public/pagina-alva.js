@@ -1,7 +1,7 @@
 // A página no esquema do Alva: o estado que o editor salva, o documento que vai ao ar e os
 // formulários que a publicação valida. Roda no servidor (salvar e publicar) e no editor
 // (pré-visualização) — um desenhador só, para o que se vê editando ser o que vai ao ar.
-import { AVISO_DE_PRIVACIDADE, extrairCapturas, nomeDaEscolha, normalizeNode, renderTree, escapeHtml } from './page-schema.js';
+import { AVISO_DE_PRIVACIDADE, extrairCapturas, nomeDaEscolha, nomesUnicosNoFormulario, normalizeNode, renderTree, escapeHtml } from './page-schema.js';
 import { elementosCss, escolhaCss } from './catalogo-elementos.js';
 import { quizRuntimeCss, quizRuntimeScript } from './quiz-runtime.js';
 import { normalizeQuizNavigation } from './quiz-navigation.js';
@@ -26,7 +26,8 @@ export function normalizarEstadoAlva(estado, uuid = novoId) {
     const valido = limpo.type === 'form' ? UUID.test(limpo.id ?? '') : Boolean(limpo.id);
     limpo.id = valido && !vistos.has(limpo.id) ? limpo.id : uuid();
     vistos.add(limpo.id);
-    return { ...limpo, children: limpo.children.map(garantir) };
+    const montado = { ...limpo, children: limpo.children.map(garantir) };
+    return limpo.type === 'form' ? nomesUnicosNoFormulario(montado) : montado;
   };
   const titulo = String(estado?.root?.title ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200);
   // O quiz é a página inteira como uma captura só: a identidade dela mora na raiz.
@@ -98,7 +99,17 @@ export function documentoDaPagina(estado, { publicOrigin = '', previa = false } 
 
 // O tipo de resposta do esquema no vocabulário que a validação da captura usa.
 // `text` é o tipo do parágrafo, que não tem resposta: campo de texto é `short_text`.
-const TIPO_DA_CAPTURA = Object.freeze({ text: 'short_text', email: 'email', tel: 'short_text', number: 'number', date: 'date', file: 'file', long_text: 'long_text' });
+// Lista suspensa e escolha única são a mesma resposta (uma das opções); a caixa de marcar é
+// sim ou não.
+const TIPO_DA_CAPTURA = Object.freeze({ text: 'short_text', email: 'email', tel: 'short_text', number: 'number', date: 'date', file: 'file', long_text: 'long_text', select: 'single_choice', radio: 'single_choice', checkbox: 'checkbox' });
+
+// Uma pergunta da captura. Lista sem opção nenhuma não tem resposta possível: a página não
+// publica, com o nome do campo que falta preencher.
+function perguntaDaCaptura({ name, label, type, required, options }) {
+  if (Array.isArray(options) && !options.length)
+    throw Object.assign(new Error(`O campo “${label || name}” precisa de pelo menos uma opção.`), { status: 400, statusCode: 400 });
+  return { id: name, type: TIPO_DA_CAPTURA[type], title: label, required, ...(options ? { options } : {}) };
+}
 
 export function capturasDoEstado(estado, { webhook = '' } = {}) {
   if (ehQuiz(estado)) return { forms: [capturaDoQuiz(estado, webhook)] };
@@ -106,9 +117,9 @@ export function capturasDoEstado(estado, { webhook = '' } = {}) {
     forms: extrairCapturas(estado?.content).map((captura) => ({
       captureId: captura.id,
       name: captura.name,
-      fields: captura.fields.map((campo) => ({ id: campo.name, type: TIPO_DA_CAPTURA[campo.type], title: campo.label, required: campo.required })),
+      fields: captura.fields.map(perguntaDaCaptura),
       webhook,
-      completion: {},
+      completion: captura.completion,
     })),
   };
 }
@@ -152,7 +163,7 @@ function capturaDoQuiz(bruto, webhook) {
     const descer = (node) => {
       for (const filho of node.children) {
         if (filho.type === 'field') {
-          elements.push({ id: filho.props.name, type: TIPO_DA_CAPTURA[filho.props.fieldType], title: String(filho.props.label ?? '').slice(0, 200), required: filho.props.required === true });
+          elements.push(perguntaDaCaptura({ name: filho.props.name, type: filho.props.fieldType, label: String(filho.props.label ?? '').slice(0, 200), required: filho.props.required === true, ...(['select', 'radio'].includes(filho.props.fieldType) ? { options: filho.props.opcoes.map((opcao) => opcao.rotulo) } : {}) }));
         } else if (filho.type === 'escolha' && filho.props.opcoes.length) {
           const id = nomeDaEscolha(filho);
           elements.push({ id, type: filho.props.multipla ? 'multiple_choice' : 'single_choice', title: filho.props.pergunta || 'Pergunta', required: filho.props.obrigatoria, options: filho.props.opcoes.map((opcao) => opcao.rotulo) });
