@@ -124,3 +124,29 @@ test('arquivo solto em cima de um bloco Imagem vai para ela; em outro lugar, o e
   parar();
   assert.equal(soltarArquivo(doc, doc.querySelector('span')).defaultPrevented, false);
 });
+
+// Conferência de 02/10/2026: o Puck de verdade LANÇA erro em getItemById quando o bloco já foi
+// apagado (nodes[id] indefinido). O envio morria ali, o estado ficava "Enviando…" para sempre e o
+// botão de anexar, desabilitado até recarregar a página.
+test('bloco apagado durante o envio: nada é gravado e o estado de envio é limpo (o Puck lança erro)', async () => {
+  const { api, getPuck, despachos } = puckFalso({ itens: [{ type: 'image', props: { id: 'img-1', src: '' } }, { type: 'heading', props: { id: 'tit-1', text: 'Oi' } }], selecionado: 'tit-1' });
+  const itens = [{ type: 'image', props: { id: 'img-1', src: '' } }];
+  api.getItemById = (id) => { const item = itens.find((outro) => outro.props.id === id); if (!item) throw new TypeError("Cannot read properties of undefined (reading 'data')"); return item; };
+  api.getSelectorForId = (id) => { const i = itens.findIndex((item) => item.props.id === id); return i < 0 ? undefined : { index: i, zone: 'secao-1:itens' }; };
+  const envio = adiado();
+  const pronto = enviarImagemPara({ getPuck, id: 'img-1', nome: 'src', arquivo: {}, enviarImagem: () => envio.promessa });
+  itens.length = 0; // a pessoa apagou a imagem enquanto o arquivo subia
+  envio.resolver('/i/x');
+  await pronto;
+  assert.equal(despachos.length, 0);
+  assert.equal(estadoDoEnvio(chaveDoEnvio('img-1', 'src')), undefined, 'não pode ficar "Enviando…" para sempre');
+});
+
+test('limparEnvio apaga o erro antigo (colar um endereço depois de um envio que falhou)', async () => {
+  const { limparEnvio } = await import('../editor/envios-de-imagem.js');
+  const { getPuck } = puckFalso({ itens: [{ type: 'image', props: { id: 'img-9', src: '' } }], selecionado: 'img-9' });
+  await enviarImagemPara({ getPuck, id: 'img-9', nome: 'src', arquivo: {}, enviarImagem: async () => { throw new Error('A imagem passa de 5 MB.'); } });
+  assert.equal(estadoDoEnvio(chaveDoEnvio('img-9', 'src'))?.fase, 'erro');
+  limparEnvio(chaveDoEnvio('img-9', 'src'));
+  assert.equal(estadoDoEnvio(chaveDoEnvio('img-9', 'src')), undefined);
+});

@@ -2,7 +2,7 @@
 import { useRef, useState, useSyncExternalStore } from 'react';
 import { AutoField, FieldLabel, createUsePuck, useGetPuck } from '@puckeditor/core';
 import { ICONE_DO_CAMPO } from './icones.jsx';
-import { chaveDoEnvio, enviarImagemPara, estadoDoEnvio, ouvirEnvios } from './envios-de-imagem.js';
+import { chaveDoEnvio, enviarImagemPara, estadoDoEnvio, limparEnvio, ouvirEnvios } from './envios-de-imagem.js';
 
 const usePuckDoCampo = createUsePuck();
 
@@ -37,10 +37,10 @@ function CampoDeImagem({ rotulo, nome, valor, aoMudar, somenteLeitura, enviarIma
         {valor ? <img src={valor} alt="" style={{ width: '100%', maxHeight: 140, objectFit: 'cover', borderRadius: 8, background: 'var(--alva-cloud)' }} /> : null}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" style={estiloDoBotao} disabled={somenteLeitura || estado === 'Enviando…'} onClick={() => arquivo.current?.click()}>Anexar do computador</button>
-          {valor ? <button type="button" style={estiloDoBotao} disabled={somenteLeitura} onClick={() => aoMudar('')}>Remover</button> : null}
+          {valor ? <button type="button" style={estiloDoBotao} disabled={somenteLeitura} onClick={() => { limparEnvio(chaveDoEnvio(dono, nome)); aoMudar(''); }}>Remover</button> : null}
         </div>
         <input ref={arquivo} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={escolher} />
-        <input type="text" style={estiloDoCampo} placeholder="ou cole o endereço (https://…)" value={valor ?? ''} disabled={somenteLeitura} onChange={(evento) => aoMudar(evento.target.value)} />
+        <input type="text" style={estiloDoCampo} placeholder="ou cole o endereço (https://…)" value={valor ?? ''} disabled={somenteLeitura} onChange={(evento) => { limparEnvio(chaveDoEnvio(dono, nome)); aoMudar(evento.target.value); }} />
         {estado ? <small role="status" style={{ color: estado === 'Enviando…' ? 'var(--alva-muted)' : 'var(--alva-danger)' }}>{estado}</small> : null}
       </div>
     </FieldLabel>

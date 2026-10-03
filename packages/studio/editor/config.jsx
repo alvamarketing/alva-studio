@@ -27,8 +27,16 @@ const ICONE_DO_ENVIO = { vazia: ImagePlus, enviando: LoaderCircle, erro: CircleA
 function ImagemVazia({ chave }) {
   const { fase, texto, dica } = rotuloDoEnvio(useSyncExternalStore(ouvirEnvios, () => estadoDoEnvio(chave)));
   const Icone = ICONE_DO_ENVIO[fase];
+  // Parado ou com erro, o espaço é um botão (Enter e Espaço selecionam o bloco, como o clique);
+  // enviando, só informa.
+  const interativo = fase !== 'enviando';
+  const pelaTecla = (evento) => {
+    if (evento.key !== 'Enter' && evento.key !== ' ') return;
+    evento.preventDefault();
+    evento.currentTarget.click();
+  };
   return (
-    <div className={`alva-imagem-vazia alva-imagem-vazia-${fase}`} role="status">
+    <div className={`alva-imagem-vazia alva-imagem-vazia-${fase}`} role={interativo ? 'button' : 'status'} tabIndex={interativo ? 0 : undefined} onKeyDown={interativo ? pelaTecla : undefined}>
       <Icone size={32} aria-hidden="true" />
       <span>{texto}</span>
       {dica ? <small>{dica}</small> : null}

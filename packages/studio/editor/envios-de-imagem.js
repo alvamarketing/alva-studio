@@ -21,6 +21,11 @@ function marcar(chave, estado) {
   if (estado) estados.set(chave, estado); else estados.delete(chave);
   avisar();
 }
+// Digitar ou remover o endereço encerra o erro de um envio anterior.
+export function limparEnvio(chave) { marcar(chave, null); }
+
+// O Puck lança erro (não devolve undefined) quando o bloco já foi apagado.
+function ler(tarefa) { try { return tarefa(); } catch { return null; } }
 
 export function rotuloDoEnvio(envio) {
   if (envio?.fase === 'enviando') return { fase: 'enviando', texto: 'Enviando…' };
@@ -41,18 +46,22 @@ export async function enviarImagemPara({ getPuck, id, nome, arquivo, enviarImage
     marcar(chave, { fase: 'erro', mensagem: erro?.message || 'Não foi possível enviar a imagem.' });
     return null;
   }
-  const api = getPuck();
-  const selecionado = api.selectedItem?.props?.id ?? null;
-  if (aoMudar && selecionado === id) aoMudar(endereco);
-  else if (id === null) {
-    const raiz = api.appState.data.root;
-    api.dispatch({ type: 'replaceRoot', root: { ...raiz, props: setDeep(raiz.props ?? {}, nome, endereco) }, recordHistory: true });
-  } else {
-    const item = api.getItemById(id);
-    const lugar = api.getSelectorForId(id);
-    if (item && lugar) api.dispatch({ type: 'replace', destinationIndex: lugar.index, destinationZone: lugar.zone, data: { ...item, props: setDeep(item.props, nome, endereco) } });
+  // Seja qual for o caminho, o estado "Enviando…" sai: preso, ele desabilita o botão até recarregar.
+  try {
+    const api = getPuck();
+    const selecionado = api.selectedItem?.props?.id ?? null;
+    if (aoMudar && selecionado === id) aoMudar(endereco);
+    else if (id === null) {
+      const raiz = api.appState.data.root;
+      api.dispatch({ type: 'replaceRoot', root: { ...raiz, props: setDeep(raiz.props ?? {}, nome, endereco) }, recordHistory: true });
+    } else {
+      const lugar = ler(() => api.getSelectorForId(id));
+      const item = lugar ? ler(() => api.getItemById(id)) : null;
+      if (item && lugar) api.dispatch({ type: 'replace', destinationIndex: lugar.index, destinationZone: lugar.zone, data: { ...item, props: setDeep(item.props, nome, endereco) } });
+    }
+  } finally {
+    marcar(chave, null);
   }
-  marcar(chave, null);
   return endereco;
 }
 
