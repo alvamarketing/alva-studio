@@ -125,7 +125,7 @@ export function paginaInicial(nome = '') {
         { type: 'text', props: { text: 'Explique em duas linhas para quem é e por que agora.' }, children: [] },
         { type: 'button', props: { text: 'Quero saber mais', href: '#contato', newTab: false }, children: [] },
       ] },
-      { type: 'section', props: {}, children: [
+      { type: 'section', props: { ancora: 'contato' }, children: [
         { type: 'heading', props: { text: 'Fale com a gente', level: 2 }, children: [] },
         { type: 'form', props: { submitLabel: 'Enviar' }, children: [
           { type: 'field', props: { label: 'Nome', name: 'nome', fieldType: 'text', placeholder: 'Seu nome', required: true }, children: [] },

@@ -52,7 +52,8 @@ export const secoesProntas = [
   {
     id: 'secao-contato',
     nome: 'Contato com formulário',
-    props: { fundo: 'suave', alinhamento: 'centro' },
+    // A âncora "contato" é para onde os botões das outras seções prontas já apontam.
+    props: { fundo: 'suave', alinhamento: 'centro', ancora: 'contato' },
     conteudo: () => [
       no('heading', { text: 'Fale com a gente', level: 2 }),
       no('text', { text: 'Deixe seu contato e respondemos em até um dia útil.' }),

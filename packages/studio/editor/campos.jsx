@@ -3,6 +3,8 @@ import { useRef, useState, useSyncExternalStore } from 'react';
 import { AutoField, FieldLabel, createUsePuck, useGetPuck } from '@puckeditor/core';
 import { ICONE_DO_CAMPO } from './icones.jsx';
 import { chaveDoEnvio, enviarImagemPara, estadoDoEnvio, limparEnvio, ouvirEnvios } from './envios-de-imagem.js';
+import { ancorasDaPagina, quantasVezesAAncoraAparece } from './ancoras.js';
+import { normalizarAncora } from '../public/page-schema.js';
 
 const usePuckDoCampo = createUsePuck();
 
@@ -168,6 +170,61 @@ function SeletorDeIcone({ rotulo, valor, aoMudar, somenteLeitura }) {
           {!visiveis.length ? <small style={{ gridColumn: '1 / -1', color: 'var(--alva-muted)' }}>Nenhum ícone com esse nome. Digite o nome abaixo.</small> : null}
         </div>
         <input type="text" style={estiloDoCampo} placeholder="ou o nome exato no Material Symbols" value={valor ?? ''} disabled={somenteLeitura} onChange={(evento) => aoMudar(evento.target.value.trim())} />
+      </div>
+    </FieldLabel>
+  );
+}
+
+// A âncora da seção: o nome que o botão usa em "#nome". Normaliza enquanto a pessoa digita
+// (o hífen do fim espera a próxima palavra) e avisa quando outra seção já usa o mesmo nome.
+const estiloDaDica = { fontSize: 12, lineHeight: 1.5, color: 'var(--alva-muted)' };
+export function campoDeAncora(rotulo) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => <CampoDeAncora rotulo={rotulo} valor={value} aoMudar={onChange} somenteLeitura={readOnly} />,
+  };
+}
+function CampoDeAncora({ rotulo, valor, aoMudar, somenteLeitura }) {
+  const dados = usePuckDoCampo((estado) => estado.appState.data);
+  const ancora = normalizarAncora(valor);
+  const repetida = quantasVezesAAncoraAparece(dados, ancora) > 1;
+  return (
+    <FieldLabel label={rotulo} icon={ICONE_DO_CAMPO.ancora} readOnly={somenteLeitura}>
+      <div style={{ display: 'grid', gap: 6 }}>
+        <input type="text" style={estiloDoCampo} placeholder="ex.: contato" maxLength={60} value={valor ?? ''} disabled={somenteLeitura}
+          onChange={(evento) => aoMudar(normalizarAncora(evento.target.value, { digitando: true }))}
+          onBlur={(evento) => { const limpa = normalizarAncora(evento.target.value); if (limpa !== evento.target.value) aoMudar(limpa); }} />
+        <small style={estiloDaDica}>{ancora ? <>Um botão com o link <strong>#{ancora}</strong> rola até esta seção.</> : 'Dê um nome para um botão poder rolar até esta seção.'}</small>
+        {repetida ? <small role="alert" style={{ ...estiloDaDica, color: 'var(--alva-warning)' }}>Outra seção desta página já usa “{ancora}”. O botão vai rolar só até a primeira — escolha outro nome.</small> : null}
+      </div>
+    </FieldLabel>
+  );
+}
+
+// O link do botão: o endereço livre de sempre, com a dica de como rolar até uma seção e,
+// havendo seções com âncora, a lista delas para escolher.
+export function campoDeLink(rotulo) {
+  return {
+    type: 'custom',
+    label: rotulo,
+    render: ({ value, onChange, readOnly }) => <CampoDeLink rotulo={rotulo} valor={value} aoMudar={onChange} somenteLeitura={readOnly} />,
+  };
+}
+function CampoDeLink({ rotulo, valor, aoMudar, somenteLeitura }) {
+  const ancoras = usePuckDoCampo((estado) => ancorasDaPagina(estado.appState.data).join('\n')).split('\n').filter(Boolean);
+  const escolhida = ancoras.find((ancora) => valor === `#${ancora}`) ?? '';
+  return (
+    <FieldLabel label={rotulo} icon={ICONE_DO_CAMPO.link} readOnly={somenteLeitura}>
+      <div style={{ display: 'grid', gap: 6 }}>
+        <input type="text" style={estiloDoCampo} placeholder="https://… ou #contato" value={valor ?? ''} disabled={somenteLeitura} onChange={(evento) => aoMudar(evento.target.value)} />
+        {ancoras.length ? (
+          <select style={estiloDoCampo} aria-label="Rolar até uma seção desta página" value={escolhida} disabled={somenteLeitura} onChange={(evento) => { if (evento.target.value) aoMudar(`#${evento.target.value}`); }}>
+            <option value="">Rolar até uma seção desta página…</option>
+            {ancoras.map((ancora) => <option key={ancora} value={ancora}>#{ancora}</option>)}
+          </select>
+        ) : null}
+        <small style={estiloDaDica}>Para rolar até uma seção, escreva #nome-da-âncora (o nome fica na seção, em “Nome da âncora”).</small>
       </div>
     </FieldLabel>
   );

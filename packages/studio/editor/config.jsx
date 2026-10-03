@@ -8,10 +8,10 @@
 // As escolhas de interface seguem docs/specs/2026-09-27-ux-do-editor.md: seções prontas
 // primeiro, colunas por desenho, espaçamento em escala, ajuste fino recolhido.
 import { useSyncExternalStore } from 'react';
-import { AVISO_DE_PRIVACIDADE, avisoDePrivacidade, classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, enderecoDaImagem, estiloDaSecao, renderConteudo } from '../public/page-schema.js';
+import { AVISO_DE_PRIVACIDADE, avisoDePrivacidade, classeDaSecao, classeDasColunas, classeDoConteudo, classesDoBloco, enderecoDaImagem, estiloDaSecao, normalizarAncora, renderConteudo } from '../public/page-schema.js';
 import { SLOT, alvaParaPuck } from '../public/puck-conversao.js';
 import { secoesProntas } from '../public/secoes-prontas.js';
-import { campoDeCor, campoDeDestino, campoDeIcone, campoDeImagem, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
+import { campoDeAncora, campoDeCor, campoDeDestino, campoDeIcone, campoDeImagem, campoDeLink, campoDeProporcao, campoRecolhido, estiloParaReact } from './campos.jsx';
 import { CircleAlert, ImagePlus, LoaderCircle, SlidersHorizontal } from 'lucide-react';
 import { ICONE_DO_CAMPO } from './icones.jsx';
 import { chaveDoEnvio, estadoDoEnvio, ouvirEnvios, rotuloDoEnvio } from './envios-de-imagem.js';
@@ -75,6 +75,7 @@ const bloco = (type, label, fields, defaultProps) => ({
 
 // Seção: pronta ou vazia, é a mesma faixa com o conteúdo numa área central.
 const camposDaSecao = (enviarImagem) => ({
+  ancora: campoDeAncora('Nome da âncora (para links #)'),
   fundo: { type: 'select', label: 'Fundo pronto', labelIcon: ICONE_DO_CAMPO.fundo, options: [{ label: 'Branco', value: 'branco' }, { label: 'Suave', value: 'suave' }, { label: 'Escuro', value: 'escuro' }] },
   corDeFundo: campoDeCor('Cor de fundo'),
   corDeFundo2: campoDeCor('Segunda cor (degradê)'),
@@ -91,10 +92,11 @@ const camposDaSecao = (enviarImagem) => ({
   [SLOT]: { type: 'slot', disallow: ['field', 'section', ...secoesProntas.map((pronta) => pronta.id)] },
 });
 const renderDaSecao = ({ puck, id: _id, [SLOT]: Itens, ...props }) => (
-  <section ref={puck.dragRef} className={classeDaSecao(props)} style={estiloParaReact(estiloDaSecao(props))}>
+  <section ref={puck.dragRef} id={normalizarAncora(props.ancora) || undefined} className={classeDaSecao(props)} style={estiloParaReact(estiloDaSecao(props))}>
     <Itens className={classeDoConteudo(props)} collisionAxis="dynamic" />
   </section>
 );
+const semAncora = ({ ancora: _ancora, ...campos }) => campos;
 const secao = (label, enviarImagem, defaultProps) => ({ label, inline: true, fields: camposDaSecao(enviarImagem), defaultProps, render: renderDaSecao });
 
 const semIds = (itens) => itens.map(({ type, props: { id: _id, ...props } }) => ({
@@ -109,7 +111,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
     ? [{ label: 'Escolha uma VSL', value: '' }, ...vsls.map((vsl) => ({ label: vsl.name, value: vsl.publicId }))]
     : [{ label: 'Nenhuma VSL publicada neste projeto', value: '' }];
   const prontas = Object.fromEntries(secoesProntas.map((pronta) => [pronta.id, secao(pronta.nome, enviarImagem, {
-    fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'esquerda',
+    ancora: '', fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'esquerda',
     ...pronta.props,
     // Os filhos entram já montados. Sem id: o Puck só gera id novo para quem chega sem, e
     // um id fixo aqui faria duas inserções da mesma seção dividirem os mesmos ids.
@@ -159,11 +161,12 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
     },
     components: {
       ...prontas,
-      section: secao('Seção vazia', enviarImagem, { fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' }),
+      section: secao('Seção vazia', enviarImagem, { ancora: '', fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' }),
       etapa: {
         label: 'Etapa',
         inline: true,
-        fields: { ...camposDaSecao(enviarImagem), [SLOT]: { type: 'slot', disallow: ['etapa', 'section', 'form', ...secoesProntas.map((pronta) => pronta.id)] } },
+        // A etapa do quiz não é destino de link: a âncora fica de fora.
+        fields: { ...semAncora(camposDaSecao(enviarImagem)), [SLOT]: { type: 'slot', disallow: ['etapa', 'section', 'form', ...secoesProntas.map((pronta) => pronta.id)] } },
         defaultProps: { fundo: 'branco', corDeFundo: '', corDeFundo2: '', imagemDeFundo: '', corDoTexto: '', respiro: 'm', espacamento: 'm', alinhamento: 'centro' },
         render: ({ puck, id: _id, [SLOT]: Itens, ...props }) => (
           <section ref={puck.dragRef} className={classeDaSecao(props).replace('alva-secao', 'alva-secao alva-etapa')} style={estiloParaReact(estiloDaSecao(props))}>
@@ -226,7 +229,7 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
       text: bloco('text', 'Texto', { text: { type: 'textarea', label: 'Texto' } }, { text: 'Uma ou duas frases que explicam, em palavras simples, por que isso importa.' }),
       button: bloco('button', 'Botão', {
         text: { type: 'text', label: 'Texto' },
-        href: { type: 'text', label: 'Link (https://…, #seção, mailto:, tel:)', labelIcon: ICONE_DO_CAMPO.link },
+        href: campoDeLink('Link (https://…, #âncora, mailto:, tel:)'),
         newTab: { type: 'radio', label: 'Abrir em nova aba', options: simNao },
         corDoBotao: campoDeCor('Cor do botão'),
         corDoBotao2: campoDeCor('Segunda cor (degradê)'),

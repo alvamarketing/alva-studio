@@ -100,6 +100,19 @@ export const atributoDeRevelar = (props = {}) => {
 };
 const atributoDeMovimento = (props) => (movimentoDoBloco(props) ? ` data-alva-motion="${movimentoDoBloco(props)}"` : '');
 
+// A âncora da seção: o nome que o botão usa em "#contato" para rolar até ela. Só letra
+// minúscula sem acento, número e hífen — o que cabe num id e num endereço sem escape.
+// Digitando, o hífen do fim fica (é o espaço antes da próxima palavra); salvo, ele sai.
+export function normalizarAncora(valor, { digitando = false } = {}) {
+  const limpo = String(valor ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-').replace(/^-+/, '').slice(0, 40);
+  return digitando ? limpo : limpo.replace(/-+$/, '');
+}
+const atributoDeAncora = (props = {}) => {
+  const ancora = normalizarAncora(props.ancora);
+  return ancora ? ` id="${ancora}"` : '';
+};
+
 // A identidade de cada bloco na página publicada: é o id do nó, o mesmo que o editor guarda
 // e que sobrevive aos salvamentos. O tracker mede por ele (rolagem, tempo à vista, clique) e
 // nunca lê o conteúdo do bloco. O formato é o que o coletor aceita (server/analytics-collect.mjs
@@ -158,7 +171,7 @@ const ELEMENTOS = {
   section: {
     render: (node, desenharFilhos) => {
       const estilo = estiloDaSecao(node.props);
-      return `<section class="${classeDaSecao(node.props)}"${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeBloco(node)}${atributoDeMovimento(node.props)}${atributoDeRevelar(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
+      return `<section class="${classeDaSecao(node.props)}"${atributoDeAncora(node.props)}${estilo ? ` style="${escapeHtml(estilo)}"` : ''}${atributoDeBloco(node)}${atributoDeMovimento(node.props)}${atributoDeRevelar(node.props)}><div class="${classeDoConteudo(node.props)}">${desenharFilhos(node)}</div></section>`;
     },
   },
   // A Linha: os blocos dentro dela dividem o espaço em partes iguais — soltar o segundo já
@@ -259,6 +272,8 @@ export function normalizeNode(node) {
   const type = String(node.type ?? '');
   if (!Object.hasOwn(ELEMENTOS, type)) throw falhar(`Tipo de elemento desconhecido: “${type}”.`);
   const props = node.props && typeof node.props === 'object' && !Array.isArray(node.props) ? { ...node.props } : {};
+  // Só quando existe: a seção salva antes da âncora continua igual.
+  if (type === 'section' && props.ancora !== undefined) props.ancora = normalizarAncora(props.ancora);
   if (type === 'field') {
     // O tipo de resposta é recusado aqui, na origem, e não na hora de publicar. Era assim
     // que "Data" chegava à publicação para ser recusada com a página inteira já montada.
