@@ -52,7 +52,8 @@ const ISCA = `<div class="alva-isca" aria-hidden="true"><label>Deixe este campo 
 export function enderecoDeRedirecionamento(valor) {
   const limpo = String(valor ?? '').trim();
   if (!/^https?:\/\/[^\s"'<>\\]{1,1000}$/i.test(limpo)) return '';
-  try { return new URL(limpo).hostname ? limpo : ''; } catch { return ''; }
+  // Sem usuário nem senha: "https://banco.com@outro.site/" parece um site e leva a outro.
+  try { const url = new URL(limpo); return url.hostname && !url.username && !url.password ? limpo : ''; } catch { return ''; }
 }
 
 // As opções de uma lista suspensa ou escolha única: texto curto, sem vazias nem repetidas.

@@ -1,4 +1,5 @@
 import { escape, quizIconFont } from '../public/quiz-elements.js';
+import { enderecoDeRedirecionamento } from '../public/page-schema.js';
 
 const CONVERSAO = /^[a-z_]{1,40}:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -21,10 +22,11 @@ function avisoDeConversao(conversao) {
 // formulário. Não é um 303: o gateway da Vercel segue redirecionamento sozinho e devolveria
 // a página de destino no lugar desta. Com os pixels a carregar, a ida espera 2 segundos para
 // o lead chegar a eles; sem, é imediata. O link fica para quem tem o refresh bloqueado.
-const DESTINO = /^https?:\/\/[^\s"'<>\\]{1,1000}$/i;
 function ida(redirecionar, conversao) {
-  if (!DESTINO.test(String(redirecionar ?? ''))) return { cabeca: '', corpo: '' };
-  const url = escape(redirecionar);
+  // A mesma validação do editor (http/https, sem usuário nem senha, nada que feche o atributo).
+  const destino = enderecoDeRedirecionamento(redirecionar);
+  if (!destino) return { cabeca: '', corpo: '' };
+  const url = escape(destino);
   return {
     cabeca: `<meta http-equiv="refresh" content="${conversao ? 2 : 0};url=${url}">`,
     corpo: `<p><a href="${url}">Continuar</a></p>`,
