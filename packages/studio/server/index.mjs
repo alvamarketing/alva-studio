@@ -397,6 +397,7 @@ export function createApp({
     '/third-party-notices.txt': ['public/third-party-notices.txt', 'text/plain'],
     '/material-symbols-outlined.LICENSE': ['public/material-symbols-outlined.LICENSE', 'text/plain'],
     '/owner.js': ['public/owner.js', 'text/javascript'],
+    '/voltar-depois-do-login.js': ['public/voltar-depois-do-login.js', 'text/javascript'],
     '/owner.css': ['public/owner.css', 'text/css'],
     '/app.js': ['public/app.js', 'text/javascript'],
     '/ui-preferences.js': ['public/ui-preferences.js', 'text/javascript'],

@@ -1,5 +1,6 @@
 import { confirmarAcao } from './confirm-dialog.js';
 import { formularioDeConvite, listaDeConvites } from './equipe-ui.js';
+import { destinoDeVolta } from './voltar-depois-do-login.js';
 export function validatePasswordConfirmation(password, confirmation) {
   if (password !== confirmation) throw new Error('As senhas não conferem. Digite novamente.');
 }
@@ -332,6 +333,9 @@ export function createOwnerUI({ api, onAuthenticated, onLoggedOut, onSettingsCha
       hideAccess();
       const userLabel = document.querySelector('#owner-name');
       if (userLabel) userLabel.textContent = session.owner?.name || 'Minha conta';
+      // Veio de uma tela separada (editor, funil) com a sessão vencida: volta para ela.
+      const voltar = destinoDeVolta(location.search);
+      if (voltar) { location.replace(voltar); return session; }
       await onAuthenticated(session);
     } else showAccess(Boolean(session.setupRequired));
     return session;

@@ -40,6 +40,8 @@ const parametros = new URLSearchParams(location.search);
 const funilId = parametros.get('funil');
 const projetoId = parametros.get('projeto');
 
+import { enderecoDeLogin } from '../public/voltar-depois-do-login.js';
+
 async function api(caminho, metodo = 'GET', dados) {
   const resposta = await fetch(`/api${caminho}`, {
     method: metodo,
@@ -47,6 +49,8 @@ async function api(caminho, metodo = 'GET', dados) {
     headers: dados ? { 'Content-Type': 'application/json' } : {},
     body: dados ? JSON.stringify(dados) : undefined,
   });
+  // Sessão vencida: vai para o login e volta para esta página depois de entrar.
+  if (resposta.status === 401) { location.replace(enderecoDeLogin(location)); return new Promise(() => {}); }
   const corpo = await resposta.json().catch(() => ({}));
   if (!resposta.ok) throw new Error(corpo.error || 'Não foi possível concluir. Tente de novo.');
   return corpo;

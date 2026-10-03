@@ -3,6 +3,7 @@
 // Abre a página pela API, edita o esquema e salva o esquema — o HTML publicado quem
 // desenha é o servidor. React mora só aqui: a página publicada é HTML puro.
 import { estadoDoPublicar } from '../public/publicacao-pendente.js';
+import { enderecoDeLogin } from '../public/voltar-depois-do-login.js';
 import { StrictMode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
@@ -32,6 +33,8 @@ async function api(caminho, metodo = 'GET', dados) {
     headers: { 'Content-Type': 'application/json' },
     ...(dados === undefined ? {} : { body: JSON.stringify(dados) }),
   });
+  // Sessão vencida: vai para o login e volta para esta página depois de entrar.
+  if (resposta.status === 401) { location.replace(enderecoDeLogin(location)); return new Promise(() => {}); }
   const corpo = await resposta.json();
   if (!resposta.ok) throw new Error(corpo.error || 'Não foi possível concluir.');
   return corpo;
