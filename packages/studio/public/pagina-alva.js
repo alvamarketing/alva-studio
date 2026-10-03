@@ -39,12 +39,49 @@ export function normalizarEstadoAlva(estado, uuid = novoId) {
     : {};
   return {
     formato: FORMATO_ALVA,
-    root: { title: titulo, ...quiz },
+    root: { title: titulo, ...dadosDaPagina(estado?.root), ...quiz },
     content: (Array.isArray(estado?.content) ? estado.content : []).map(garantir),
   };
 }
 
 export const ehQuiz = (estado) => estado?.root?.tipo === 'quiz';
+
+// Os dados da página que vão para o <head>: descrição (Google e compartilhamento), imagem de
+// compartilhamento, ícone da aba e "não aparecer no Google". Só entra o que foi preenchido:
+// a página salva antes deles continua com a raiz de sempre.
+const IMAGEM_DA_PAGINA = /^(?:https?:\/\/|\/i\/)[^\s"'()\\<>]{1,1000}$/i;
+export function dadosDaPagina(raiz = {}) {
+  const descricao = String(raiz?.descricao ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 160).trim();
+  const imagem = IMAGEM_DA_PAGINA.test(String(raiz?.imagemDeCompartilhamento ?? '')) ? String(raiz.imagemDeCompartilhamento) : '';
+  const icone = IMAGEM_DA_PAGINA.test(String(raiz?.icone ?? '')) ? String(raiz.icone) : '';
+  return {
+    ...(descricao ? { descricao } : {}),
+    ...(imagem ? { imagemDeCompartilhamento: imagem } : {}),
+    ...(icone ? { icone } : {}),
+    ...(raiz?.naoIndexar === true ? { naoIndexar: true } : {}),
+  };
+}
+
+// Quem compartilha o link (WhatsApp, Facebook) busca a imagem pelo endereço completo: o
+// caminho do Studio (/i/…) ganha a origem pública. Sem origem conhecida, a tag não sai.
+const absoluto = (endereco, origem) => {
+  if (/^https?:\/\//i.test(endereco)) return endereco;
+  return /^https?:\/\/[^/\s"]+$/.test(origem) ? `${origem}${endereco}` : '';
+};
+function cabecaDaPagina(raiz, origem) {
+  const imagem = raiz.imagemDeCompartilhamento ? absoluto(raiz.imagemDeCompartilhamento, origem) : '';
+  const icone = raiz.icone ? absoluto(raiz.icone, origem) || raiz.icone : '';
+  return [
+    raiz.descricao ? `<meta name="description" content="${escapeHtml(raiz.descricao)}">` : '',
+    raiz.naoIndexar ? '<meta name="robots" content="noindex">' : '',
+    '<meta property="og:type" content="website">',
+    raiz.title ? `<meta property="og:title" content="${escapeHtml(raiz.title)}">` : '',
+    raiz.descricao ? `<meta property="og:description" content="${escapeHtml(raiz.descricao)}">` : '',
+    imagem ? `<meta property="og:image" content="${escapeHtml(imagem)}">` : '',
+    `<meta name="twitter:card" content="${imagem ? 'summary_large_image' : 'summary'}">`,
+    icone ? `<link rel="icon" href="${escapeHtml(icone)}">` : '',
+  ].join('');
+}
 
 // A publicação troca o marcador da VSL pelo player; na prévia, a troca é feita aqui, com o
 // player do próprio Studio. Sem isso, a prévia mostrava só a palavra "VSL".
@@ -93,7 +130,7 @@ export function documentoDaPagina(estado, { publicOrigin = '', previa = false } 
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
     + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">'
-    + `<title>${escapeHtml(limpo.root.title)}</title><style>${folhas}${conversaComVsl ? CSS_DE_REVELAR : ''}</style></head>`
+    + `<title>${escapeHtml(limpo.root.title)}</title>${cabecaDaPagina(limpo.root, publicOrigin)}<style>${folhas}${conversaComVsl ? CSS_DE_REVELAR : ''}</style></head>`
     + `${corpo}</html>`;
 }
 

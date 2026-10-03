@@ -206,9 +206,14 @@ export function criarConfig({ vsls = [], enviarImagem = async () => { throw new 
         title: { type: 'text', label: quiz ? 'Título do quiz (aba do navegador)' : 'Título da página (aba do navegador)' },
         // O cabeçalho fixo do quiz (contrato: "Vamos conhecer você?"): marca e barra.
         ...(quiz ? { marca: { type: 'text', label: 'Marca no topo (vazio usa o título)' }, logo: campoDeImagem('Logo no topo (opcional)', enviarImagem) } : {}),
+        // Os dados da página que vão para o Google e para o link compartilhado (A3).
+        descricao: campoDeTextoLimitado('Descrição (Google e compartilhamento)', 160, ICONE_DO_CAMPO.descricao),
+        imagemDeCompartilhamento: campoDeImagem('Imagem ao compartilhar o link', enviarImagem),
+        icone: campoDeImagem('Ícone da aba (favicon, imagem pequena e quadrada)', enviarImagem),
+        naoIndexar: { type: 'radio', label: 'Não aparecer no Google', labelIcon: ICONE_DO_CAMPO.google, options: simNao },
         [SLOT]: { type: 'slot', allow: quiz ? ['etapa'] : ['section', ...secoesProntas.map((pronta) => pronta.id)] },
       },
-      defaultProps: { title: '', [SLOT]: [] },
+      defaultProps: { title: '', descricao: '', imagemDeCompartilhamento: '', icone: '', naoIndexar: false, [SLOT]: [] },
       render: ({ [SLOT]: Itens, title, marca, logo }) => (quiz
         ? (
           <div data-alva-quiz="true">
